@@ -1617,7 +1617,13 @@ const AddCustomer = () => {
         await fetchAllCustomers();
         await fetchTodayStats();
       } else {
-        toast.error('❌ Failed: ' + (res?.data?.message || 'Unknown error'));
+        const apiMsg = res?.data?.message || 'Unknown error';
+        const apiErrors = res?.data?.errors || {};
+        if (Object.keys(apiErrors).length > 0) {
+          setErrors(prev => ({ ...prev, ...apiErrors }));
+          focusField(Object.keys(apiErrors)[0]);
+        }
+        toast.error('❌ Failed: ' + apiMsg);
       }
     } catch (error) {
       const msg =
@@ -1626,14 +1632,26 @@ const AddCustomer = () => {
         error?.message ||
         'Unexpected error';
 
-
-      if (
+      const apiErrors = error?.response?.data?.errors || {};
+      if (Object.keys(apiErrors).length > 0) {
+        setErrors(prev => ({ ...prev, ...apiErrors }));
+        focusField(Object.keys(apiErrors)[0]);
+        toast.error('❌ ' + msg);
+      } else if (
         error?.response?.status === 409 ||
         /already.*(registered|exists)/i.test(msg) ||
-        /duplicate/i.test(msg)
+        /duplicate/i.test(msg) ||
+        /phone.*already|already.*phone/i.test(msg)
       ) {
-        setErrors(prev => ({ ...prev, email: 'Already registered the customer with this email id.' }));
-        focusField('email');
+        if (/phone|phoneNo/i.test(msg)) {
+          setErrors(prev => ({ ...prev, phoneNo: msg }));
+          focusField('phoneNo');
+          toast.error('❌ ' + msg);
+        } else {
+          setErrors(prev => ({ ...prev, email: 'Already registered the customer with this email id.' }));
+          focusField('email');
+          toast.error('❌ ' + msg);
+        }
       } else {
         toast.error('❌ Failed: ' + msg);
       }

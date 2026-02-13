@@ -587,6 +587,12 @@ export default function Loads() {
     returnCity: "",
 
     returnState: "",
+
+    // Importer/Exporter (DRAYAGE only, optional)
+    importerName: "",
+    importerAddress: "",
+    exporterName: "",
+    exporterAddress: "",
   };
 
   // === ZIP helpers (NEW) ===
@@ -2115,6 +2121,10 @@ export default function Loads() {
 
         returnZip: (loadForm.returnZip || "").trim(),
         returnLocation: (loadForm.returnAddress || "").trim(),
+        importerName: (loadForm.importerName || "").trim(),
+        importerAddress: (loadForm.importerAddress || "").trim(),
+        exporterName: (loadForm.exporterName || "").trim(),
+        exporterAddress: (loadForm.exporterAddress || "").trim(),
         origins: origins,
         destinations: destinations,
       };
@@ -2507,6 +2517,10 @@ export default function Loads() {
 
         returnZip: (loadForm.returnZip || "").trim(),
         returnLocation: (loadForm.returnAddress || "").trim(),
+        importerName: (loadForm.importerName || "").trim(),
+        importerAddress: (loadForm.importerAddress || "").trim(),
+        exporterName: (loadForm.exporterName || "").trim(),
+        exporterAddress: (loadForm.exporterAddress || "").trim(),
         origins: originsEdit,
         destinations: destinationsEdit,
       };
@@ -3108,6 +3122,10 @@ export default function Loads() {
             returnState: load.returnState || load.returnLocationState || "",
 
             returnZip: load.returnZip || load.returnLocationZip || "",
+            importerName: load.importerName || "",
+            importerAddress: load.importerAddress || "",
+            exporterName: load.exporterName || "",
+            exporterAddress: load.exporterAddress || "",
           };
         } catch {
           return {
@@ -3934,6 +3952,11 @@ export default function Loads() {
       returnCity: load.returnCity || "",
 
       returnState: load.returnState || "",
+
+      importerName: load.importerName || "",
+      importerAddress: load.importerAddress || "",
+      exporterName: load.exporterName || "",
+      exporterAddress: load.exporterAddress || "",
 
       fromZip: fromZip,
 
@@ -6894,6 +6917,77 @@ export default function Loads() {
                       )}
                     </div>
 
+                    {/* Importer / Exporter - Only for DRAYAGE */}
+                    {loadType === "DRAYAGE" && (
+                      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                        <h3 className="text-xl font-semibold text-gray-800 mb-4">
+                          Importer / Exporter
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                              Importer Name
+                            </label>
+                            <input
+                              ref={(el) =>
+                                (fieldRefs.current["importerName"] = el)
+                              }
+                              name="importerName"
+                              value={loadForm.importerName || ""}
+                              onChange={handleChange}
+                              placeholder="Importer name"
+                              className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 border-gray-200 hover:border-gray-300"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                              Importer Address
+                            </label>
+                            <input
+                              ref={(el) =>
+                                (fieldRefs.current["importerAddress"] = el)
+                              }
+                              name="importerAddress"
+                              value={loadForm.importerAddress || ""}
+                              onChange={handleChange}
+                              placeholder="Full address"
+                              className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 border-gray-200 hover:border-gray-300"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                              Exporter Name
+                            </label>
+                            <input
+                              ref={(el) =>
+                                (fieldRefs.current["exporterName"] = el)
+                              }
+                              name="exporterName"
+                              value={loadForm.exporterName || ""}
+                              onChange={handleChange}
+                              placeholder="Exporter name"
+                              className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 border-gray-200 hover:border-gray-300"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                              Exporter Address
+                            </label>
+                            <input
+                              ref={(el) =>
+                                (fieldRefs.current["exporterAddress"] = el)
+                              }
+                              name="exporterAddress"
+                              value={loadForm.exporterAddress || ""}
+                              onChange={handleChange}
+                              placeholder="Full address"
+                              className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 border-gray-200 hover:border-gray-300"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Additional Details Section */}
 
                     <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
@@ -7334,6 +7428,50 @@ export default function Loads() {
                         </p>
                       </div>
                     </div>
+
+                    {selectedLoadForAction.loadType === "DRAYAGE" &&
+                      (selectedLoadForAction.importerName ||
+                        selectedLoadForAction.importerAddress ||
+                        selectedLoadForAction.exporterName ||
+                        selectedLoadForAction.exporterAddress) && (
+                      <div className="mt-3 pt-3 border-t border-gray-200">
+                        <span className="text-gray-600 font-medium">
+                          Importer / Exporter
+                        </span>
+                        <div className="mt-2 space-y-1">
+                          {(selectedLoadForAction.importerName ||
+                            selectedLoadForAction.importerAddress) && (
+                            <>
+                              {selectedLoadForAction.importerName && (
+                                <p className="font-medium">
+                                  Importer: {selectedLoadForAction.importerName}
+                                </p>
+                              )}
+                              {selectedLoadForAction.importerAddress && (
+                                <p className="text-sm text-gray-700">
+                                  {selectedLoadForAction.importerAddress}
+                                </p>
+                              )}
+                            </>
+                          )}
+                          {(selectedLoadForAction.exporterName ||
+                            selectedLoadForAction.exporterAddress) && (
+                            <>
+                              {selectedLoadForAction.exporterName && (
+                                <p className="font-medium">
+                                  Exporter: {selectedLoadForAction.exporterName}
+                                </p>
+                              )}
+                              {selectedLoadForAction.exporterAddress && (
+                                <p className="text-sm text-gray-700">
+                                  {selectedLoadForAction.exporterAddress}
+                                </p>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )}
 
                     {selectedLoadForAction.weight && (
                       <div className="flex justify-between">
@@ -9695,6 +9833,77 @@ export default function Loads() {
                         </div>
                       )}
                     </div>
+
+                    {/* Importer / Exporter - Only for DRAYAGE */}
+                    {loadType === "DRAYAGE" && (
+                      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                        <h3 className="text-xl font-semibold text-gray-800 mb-4">
+                          Importer / Exporter
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                              Importer Name
+                            </label>
+                            <input
+                              ref={(el) =>
+                                (fieldRefs.current["importerName"] = el)
+                              }
+                              name="importerName"
+                              value={loadForm.importerName || ""}
+                              onChange={handleChange}
+                              placeholder="Importer name"
+                              className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 border-gray-200 hover:border-gray-300"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                              Importer Address
+                            </label>
+                            <input
+                              ref={(el) =>
+                                (fieldRefs.current["importerAddress"] = el)
+                              }
+                              name="importerAddress"
+                              value={loadForm.importerAddress || ""}
+                              onChange={handleChange}
+                              placeholder="Full address"
+                              className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 border-gray-200 hover:border-gray-300"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                              Exporter Name
+                            </label>
+                            <input
+                              ref={(el) =>
+                                (fieldRefs.current["exporterName"] = el)
+                              }
+                              name="exporterName"
+                              value={loadForm.exporterName || ""}
+                              onChange={handleChange}
+                              placeholder="Exporter name"
+                              className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 border-gray-200 hover:border-gray-300"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                              Exporter Address
+                            </label>
+                            <input
+                              ref={(el) =>
+                                (fieldRefs.current["exporterAddress"] = el)
+                              }
+                              name="exporterAddress"
+                              value={loadForm.exporterAddress || ""}
+                              onChange={handleChange}
+                              placeholder="Full address"
+                              className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 border-gray-200 hover:border-gray-300"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Additional Details Section */}
 
