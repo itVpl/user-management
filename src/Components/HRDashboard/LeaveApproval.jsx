@@ -1,13 +1,19 @@
 // LeaveApproval.jsx (FINAL UPDATED)
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import {
   Calendar, Clock, User, CheckCircle, XCircle, AlertCircle,
-  Search, Filter, Eye, MessageSquare
+  Search, Filter, Eye, MessageSquare, FileText, ExternalLink
 } from 'lucide-react';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
 import API_CONFIG from '../../config/api.js';
+import {
+  getRemovalRequests,
+  getRemovalRequest,
+  acceptRemovalRequest,
+  rejectRemovalRequest,
+} from '../../services/leaveApprovalService';
 
 
 // ------------------ CONFIG ------------------
@@ -302,6 +308,7 @@ const makePages = (total, current, delta = 1) => {
 
 // ------------------ COMPONENT ------------------
 const LeaveApproval = () => {
+  const [activeSection, setActiveSection] = useState('leaveRequests'); // 'leaveRequests' | 'removalRequests'
   const [leaveRequests, setLeaveRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState(''); // search NAME only
@@ -312,11 +319,21 @@ const LeaveApproval = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [recordsPerPage] = useState(10);
 
-
   const [showActionModal, setShowActionModal] = useState(false);
   const [actionType, setActionType] = useState(null);
   const [managerRemarks, setManagerRemarks] = useState('');
   const [remarksError, setRemarksError] = useState(''); // validation
+
+  // Sandwich Leave Removal requests (manager)
+  const [removalRequests, setRemovalRequests] = useState([]);
+  const [removalLoading, setRemovalLoading] = useState(false);
+  const [removalPagination, setRemovalPagination] = useState(null);
+  const [removalStatusFilter, setRemovalStatusFilter] = useState('pending');
+  const [removalPage, setRemovalPage] = useState(1);
+  const [selectedRemoval, setSelectedRemoval] = useState(null);
+  const [showRemovalDetailModal, setShowRemovalDetailModal] = useState(false);
+  const [removalActionLoading, setRemovalActionLoading] = useState(null);
+  const [removalResponseRemark, setRemovalResponseRemark] = useState('');
 
 
   // Fetch data
@@ -434,6 +451,86 @@ const LeaveApproval = () => {
 
 
   useEffect(() => { fetchLeaveRequests(); }, []);
+
+  const fetchRemovalRequests = useCallback(async (page = 1) => {
+    try {
+      setRemovalLoading(true);
+      const res = await getRemovalRequests({
+        status: removalStatusFilter === 'all' ? undefined : removalStatusFilter,
+        page,
+        limit: 10,
+      });
+      if (res.success && res.data?.requests) {
+        setRemovalRequests(res.data.requests);
+        setRemovalPagination(res.pagination || null);
+      } else {
+        setRemovalRequests([]);
+        setRemovalPagination(null);
+      }
+    } catch (err) {
+      alertify.error(err?.message || 'Failed to fetch removal requests');
+      setRemovalRequests([]);
+      setRemovalPagination(null);
+    } finally {
+      setRemovalLoading(false);
+    }
+  }, [removalStatusFilter]);
+
+  useEffect(() => {
+    if (activeSection === 'removalRequests') fetchRemovalRequests(removalPage);
+  }, [activeSection, removalPage, removalStatusFilter]);
+
+  const openRemovalDetail = async (req) => {
+    if (!req?._id) return;
+    try {
+      const res = await getRemovalRequest(req._id);
+      if (res.success && res.data) {
+        setSelectedRemoval(res.data);
+        setRemovalResponseRemark('');
+        setShowRemovalDetailModal(true);
+      }
+    } catch (e) {
+      alertify.error(e?.message || 'Failed to load request details');
+    }
+  };
+
+  const handleAcceptRemoval = async () => {
+    if (!selectedRemoval?._id) return;
+    setRemovalActionLoading('accept');
+    try {
+      await acceptRemovalRequest(selectedRemoval._id, { responseRemark: removalResponseRemark.trim() || undefined });
+      alertify.success('Request accepted. Sandwich leave has been removed.');
+      setShowRemovalDetailModal(false);
+      setSelectedRemoval(null);
+      fetchRemovalRequests(removalPage);
+    } catch (e) {
+      alertify.error(e?.message || 'Failed to accept request');
+    } finally {
+      setRemovalActionLoading(null);
+    }
+  };
+
+  const handleRejectRemoval = async () => {
+    if (!selectedRemoval?._id) return;
+    setRemovalActionLoading('reject');
+    try {
+      await rejectRemovalRequest(selectedRemoval._id, { responseRemark: removalResponseRemark.trim() || undefined });
+      alertify.success('Request rejected.');
+      setShowRemovalDetailModal(false);
+      setSelectedRemoval(null);
+      fetchRemovalRequests(removalPage);
+    } catch (e) {
+      alertify.error(e?.message || 'Failed to reject request');
+    } finally {
+      setRemovalActionLoading(null);
+    }
+  };
+
+  const formatRemovalDate = (raw) => {
+    if (!raw) return '—';
+    const d = typeof raw === 'string' ? new Date(raw) : raw;
+    return isNaN(d.getTime()) ? raw : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  };
 
 
   const getStatusBadge = (statusRaw) => {
@@ -567,6 +664,35 @@ const LeaveApproval = () => {
 
   return (
     <div className="p-6">
+      {/* Section tabs: Leave Requests | Sandwich Leave Removal */}
+      <div className="flex gap-2 mb-6 border-b border-gray-200">
+        <button
+          onClick={() => setActiveSection('leaveRequests')}
+          className={`px-4 py-3 font-medium border-b-2 transition-colors ${
+            activeSection === 'leaveRequests'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Calendar className="w-4 h-4 inline mr-2" />
+          Leave Requests
+        </button>
+        <button
+          onClick={() => setActiveSection('removalRequests')}
+          className={`px-4 py-3 font-medium border-b-2 transition-colors ${
+            activeSection === 'removalRequests'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <FileText className="w-4 h-4 inline mr-2" />
+          Sandwich Leave Removal
+        </button>
+      </div>
+
+      {/* Leave Requests section */}
+      {activeSection === 'leaveRequests' && (
+        <>
       {/* Header Stats */}
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-6">
@@ -885,7 +1011,205 @@ const LeaveApproval = () => {
           </div>
         </div>
       )}
+        </>
+      )}
 
+      {/* Sandwich Leave Removal section */}
+      {activeSection === 'removalRequests' && (
+        <>
+          <div className="bg-white rounded-2xl shadow-xl p-6 mb-6 border border-gray-100">
+            <div className="flex flex-row items-center justify-between gap-4 flex-wrap mb-4">
+              <div className="flex items-center gap-2 w-[200px]">
+                <Filter className="text-gray-400 shrink-0" size={18} />
+                <select
+                  value={removalStatusFilter}
+                  onChange={(e) => { setRemovalStatusFilter(e.target.value); setRemovalPage(1); }}
+                  className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="pending">Pending</option>
+                  <option value="accepted">Accepted</option>
+                  <option value="rejected">Rejected</option>
+                  <option value="all">All</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+            {removalLoading ? (
+              <div className="flex justify-center items-center py-16">
+                <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
+                    <tr>
+                      <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Employee</th>
+                      <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Reason</th>
+                      <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
+                      <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Submitted At</th>
+                      <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {removalRequests.map((req) => {
+                      const emp = req.employee || {};
+                      const status = (req.status || 'pending').toLowerCase();
+                      return (
+                        <tr key={req._id} className="border-b border-gray-100 hover:bg-gray-50/50">
+                          <td className="py-4 px-6">
+                            <div>
+                              <p className="font-medium text-gray-800">{emp.employeeName || '—'}</p>
+                              <p className="text-sm text-gray-500">{emp.empId || '—'} • {emp.department || '—'}</p>
+                            </div>
+                          </td>
+                          <td className="py-4 px-6 max-w-xs">
+                            <p className="text-gray-700 truncate" title={req.reason}>{req.reason || '—'}</p>
+                          </td>
+                          <td className="py-4 px-6">
+                            {status === 'pending' && <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700"><Clock size={12} /> Pending</span>}
+                            {status === 'accepted' && <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700"><CheckCircle size={12} /> Accepted</span>}
+                            {status === 'rejected' && <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700"><XCircle size={12} /> Rejected</span>}
+                          </td>
+                          <td className="py-4 px-6 text-sm text-gray-600">{formatRemovalDate(req.submittedAt)}</td>
+                          <td className="py-4 px-6">
+                            <button
+                              onClick={() => openRemovalDetail(req)}
+                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors inline-flex items-center gap-1"
+                              title="View details / Accept / Reject"
+                            >
+                              <Eye size={16} /> View
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {!removalLoading && removalRequests.length === 0 && (
+              <div className="text-center py-12">
+                <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <p className="text-gray-500 text-lg">No sandwich leave removal requests found</p>
+              </div>
+            )}
+            {removalPagination && removalPagination.totalPages > 1 && !removalLoading && (
+              <div className="flex justify-between items-center px-6 py-4 border-t border-gray-100">
+                <span className="text-sm text-gray-600">
+                  Showing {(removalPagination.currentPage - 1) * removalPagination.limit + 1} to{' '}
+                  {Math.min(removalPagination.currentPage * removalPagination.limit, removalPagination.totalCount)} of {removalPagination.totalCount}
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setRemovalPage((p) => Math.max(1, p - 1))}
+                    disabled={!removalPagination.hasPrevPage}
+                    className="px-3 py-2 text-sm font-medium rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    onClick={() => setRemovalPage((p) => p + 1)}
+                    disabled={!removalPagination.hasNextPage}
+                    className="px-3 py-2 text-sm font-medium rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* Removal request detail modal */}
+      {showRemovalDetailModal && selectedRemoval && (
+        <div className="fixed inset-0 z-50 backdrop-blur-sm bg-black/30 flex items-center justify-center p-4" onClick={() => setShowRemovalDetailModal(false)}>
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-gradient-to-r from-amber-500 to-amber-600 text-white p-6 rounded-t-3xl">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h2 className="text-xl font-bold">Sandwich Leave Removal Request</h2>
+                  <p className="text-amber-100 text-sm">HR requested to remove (waive) a sandwich leave</p>
+                </div>
+                <button onClick={() => setShowRemovalDetailModal(false)} className="text-white hover:text-amber-200 text-2xl font-bold">×</button>
+              </div>
+            </div>
+            <div className="p-6 space-y-6">
+              <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                <h3 className="text-sm font-bold text-gray-700 mb-2">Employee</h3>
+                <p className="font-medium text-gray-800">{selectedRemoval.employee?.employeeName || '—'}</p>
+                <p className="text-sm text-gray-600">{selectedRemoval.employee?.empId || '—'} • {selectedRemoval.employee?.department || '—'}</p>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                <h3 className="text-sm font-bold text-gray-700 mb-2">Sandwich leave</h3>
+                <p className="text-sm text-gray-800">Date: {selectedRemoval.sandwichLeaveSnapshot?.date ? formatRemovalDate(selectedRemoval.sandwichLeaveSnapshot.date) : '—'}</p>
+                <p className="text-sm text-gray-600">Remarks: {selectedRemoval.sandwichLeaveSnapshot?.remarks || '—'}</p>
+                <p className="text-sm text-gray-600">Days count: {selectedRemoval.sandwichLeaveSnapshot?.daysCount ?? '—'}</p>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                <h3 className="text-sm font-bold text-gray-700 mb-2">Reason for removal</h3>
+                <p className="text-gray-800">{selectedRemoval.reason || '—'}</p>
+              </div>
+              {(selectedRemoval.attachments && selectedRemoval.attachments.length > 0) && (
+                <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                  <h3 className="text-sm font-bold text-gray-700 mb-2">Attachments</h3>
+                  <ul className="space-y-1">
+                    {selectedRemoval.attachments.map((att, i) => (
+                      <li key={i}>
+                        <a href={att.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline inline-flex items-center gap-1">
+                          <ExternalLink size={14} /> {att.originalName || 'Attachment'}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                <h3 className="text-sm font-bold text-gray-700 mb-2">Submitted by</h3>
+                <p className="text-sm text-gray-800">{selectedRemoval.submittedBy?.employeeName || '—'} ({selectedRemoval.submittedBy?.empId || '—'}) • {selectedRemoval.submittedAt ? formatRemovalDate(selectedRemoval.submittedAt) : '—'}</p>
+              </div>
+              {(selectedRemoval.status === 'accepted' || selectedRemoval.status === 'rejected') && (
+                <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                  <h3 className="text-sm font-bold text-gray-700 mb-2">Response</h3>
+                  <p className="text-sm text-gray-600">By {selectedRemoval.respondedBy?.employeeName || selectedRemoval.respondedBy || '—'} at {formatRemovalDate(selectedRemoval.respondedAt)}</p>
+                  {selectedRemoval.responseRemark && <p className="text-gray-800 mt-1">{selectedRemoval.responseRemark}</p>}
+                </div>
+              )}
+              {selectedRemoval.status === 'pending' && (
+                <div className="border-t border-gray-200 pt-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Your remark (optional)</label>
+                  <textarea
+                    value={removalResponseRemark}
+                    onChange={(e) => setRemovalResponseRemark(e.target.value)}
+                    placeholder="e.g. Approved as per medical proof."
+                    rows={2}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
+                  />
+                  <div className="flex gap-2 mt-4">
+                    <button
+                      onClick={handleAcceptRemoval}
+                      disabled={removalActionLoading}
+                      className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 disabled:opacity-50"
+                    >
+                      {removalActionLoading === 'accept' ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <CheckCircle size={16} />}
+                      Accept
+                    </button>
+                    <button
+                      onClick={handleRejectRemoval}
+                      disabled={removalActionLoading}
+                      className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 disabled:opacity-50"
+                    >
+                      {removalActionLoading === 'reject' ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <XCircle size={16} />}
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Details Modal */}
       {showDetailsModal && selectedLeave && (

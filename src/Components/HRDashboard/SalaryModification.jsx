@@ -1,28 +1,27 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import {
-  Calendar,
   Users,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   Plus,
-  Trash2,
   Edit2,
   AlertCircle,
   DollarSign,
   Filter,
   Loader2,
+  Send,
+  Paperclip,
 } from 'lucide-react';
 import API_CONFIG from '../../config/api';
 import {
   getEmployeesLeaveSummary,
-  getEmployeesTakenLeaves,
   getSandwichDays,
   addSandwichLeave,
   updateSandwichLeave,
-  deleteSandwichLeave,
   getMySalary,
+  submitSandwichLeaveRemovalRequest,
 } from '../../services/salaryModificationService';
 
 // Format date for display: "6 Jan 2026 (Monday)"
@@ -62,24 +61,24 @@ const SalaryModification = () => {
   const [mySalaryLoading, setMySalaryLoading] = useState(false);
 
   // HR view state
-  const [activeTab, setActiveTab] = useState('leaveSummary'); // leaveSummary | takenLeaves | sandwichLeave
+  const [activeTab, setActiveTab] = useState('leaveSummary'); // leaveSummary | sandwichLeave
   const [leaveSummary, setLeaveSummary] = useState({ employees: [], pagination: null });
   const [leaveSummaryLoading, setLeaveSummaryLoading] = useState(false);
-  const [takenLeaves, setTakenLeaves] = useState({ employees: [], pagination: null });
-  const [takenLeavesLoading, setTakenLeavesLoading] = useState(false);
-  const [expandedEmpId, setExpandedEmpId] = useState(null);
+  const [expandedLeaveSummaryEmpId, setExpandedLeaveSummaryEmpId] = useState(null);
   const [sandwichForm, setSandwichForm] = useState({ empId: '', date: '', remarks: '' });
   const [employees, setEmployees] = useState([]);
   const [employeesLoading, setEmployeesLoading] = useState(false);
   const [sandwichSubmitting, setSandwichSubmitting] = useState(false);
   const [sandwichEditing, setSandwichEditing] = useState(null);
   const [editingLeave, setEditingLeave] = useState({ id: '', date: '', remarks: '' });
-  const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [selectedEmpForSandwich, setSelectedEmpForSandwich] = useState(null);
   const [sandwichDaysData, setSandwichDaysData] = useState(null);
   const [sandwichDaysLoading, setSandwichDaysLoading] = useState(false);
   const [leaveSummaryPage, setLeaveSummaryPage] = useState(1);
-  const [takenLeavesPage, setTakenLeavesPage] = useState(1);
+  const [removalRequest, setRemovalRequest] = useState(null);
+  const [removalReason, setRemovalReason] = useState('');
+  const [removalFiles, setRemovalFiles] = useState([]);
+  const [removalSubmitting, setRemovalSubmitting] = useState(false);
 
   const getToken = () =>
     sessionStorage.getItem('authToken') ||
@@ -179,44 +178,10 @@ const SalaryModification = () => {
     [monthYear.month, monthYear.year]
   );
 
-  const fetchTakenLeaves = useCallback(async (page = 1) => {
-    try {
-      setTakenLeavesLoading(true);
-      setError(null);
-      const data = await getEmployeesTakenLeaves({
-        month: monthYear.month,
-        year: monthYear.year,
-        page,
-        limit: 10,
-      });
-      if (data.success && data.data) {
-        setTakenLeaves({
-          employees: data.data.employees || [],
-          pagination: data.pagination || null,
-        });
-      }
-    } catch (err) {
-      if (err.status === 403) {
-        setAccessDenied(true);
-      } else {
-        setError(err.message || 'Failed to load taken leaves');
-      }
-    } finally {
-      setTakenLeavesLoading(false);
-    }
-  }, [monthYear.month, monthYear.year]);
-
-  const fetchTakenLeavesForPage = useCallback((page) => {
-    setTakenLeavesPage(page);
-    fetchTakenLeaves(page);
-  }, [fetchTakenLeaves]);
-
   useEffect(() => {
     if (isHR) {
       setLeaveSummaryPage(1);
-      setTakenLeavesPage(1);
       fetchLeaveSummary(1);
-      fetchTakenLeaves(1);
       fetchEmployees();
     } else {
       fetchMySalary();
@@ -225,7 +190,6 @@ const SalaryModification = () => {
 
   useEffect(() => {
     if (isHR && activeTab === 'leaveSummary') fetchLeaveSummary(leaveSummaryPage);
-    if (isHR && activeTab === 'takenLeaves') fetchTakenLeaves(takenLeavesPage);
   }, [isHR, activeTab]);
 
   const handleAddSandwichLeave = async (e) => {
@@ -239,7 +203,6 @@ const SalaryModification = () => {
       });
       setSandwichForm({ empId: '', date: '', remarks: '' });
       fetchLeaveSummary();
-      fetchTakenLeaves();
     } catch (err) {
       setError(err.message || err.data?.message || 'Failed to add sandwich leave');
     } finally {
@@ -259,7 +222,6 @@ const SalaryModification = () => {
       setSandwichEditing(null);
       setEditingLeave({ id: '', date: '', remarks: '' });
       fetchLeaveSummary();
-      fetchTakenLeaves();
     } catch (err) {
       setError(err.message || err.data?.message || 'Failed to update sandwich leave');
     } finally {
@@ -267,23 +229,29 @@ const SalaryModification = () => {
     }
   };
 
-  const handleDeleteSandwichLeave = async () => {
-    if (!deleteConfirm) return;
-    try {
-      await deleteSandwichLeave(deleteConfirm);
-      setDeleteConfirm(null);
-      fetchLeaveSummary();
-      fetchTakenLeaves();
-      if (selectedEmpForSandwich) fetchSandwichDays(selectedEmpForSandwich);
-    } catch (err) {
-      setError(err.message || err.data?.message || 'Failed to delete sandwich leave');
-    }
-  };
-
   const handleEmployeeSelectForSandwich = (empId) => {
     setSelectedEmpForSandwich(empId);
     if (empId) fetchSandwichDays(empId);
     else setSandwichDaysData(null);
+  };
+
+  const handleSubmitRemovalRequest = async (e) => {
+    e.preventDefault();
+    if (!removalRequest?.sandwichLeaveId || !removalReason.trim()) return;
+    try {
+      setRemovalSubmitting(true);
+      setError(null);
+      await submitSandwichLeaveRemovalRequest(removalRequest.sandwichLeaveId, removalReason.trim(), removalFiles);
+      setRemovalRequest(null);
+      setRemovalReason('');
+      setRemovalFiles([]);
+      if (selectedEmpForSandwich) fetchSandwichDays(selectedEmpForSandwich);
+      fetchLeaveSummary(leaveSummaryPage);
+    } catch (err) {
+      setError(err.message || err.data?.message || 'Failed to submit removal request');
+    } finally {
+      setRemovalSubmitting(false);
+    }
   };
 
   const monthOptions = [];
@@ -412,7 +380,6 @@ const SalaryModification = () => {
   // ─── HR View: Full Dashboard ──────────────────────────────────────────────
   const tabs = [
     { id: 'leaveSummary', label: 'Leave Summary', icon: Users },
-    { id: 'takenLeaves', label: 'Taken Leaves', icon: Calendar },
     { id: 'sandwichLeave', label: 'Sandwich Leave', icon: Plus },
   ];
 
@@ -484,27 +451,131 @@ const SalaryModification = () => {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
+                    <th className="w-9 px-2 py-3" aria-label="Expand" />
                     <th className="text-left px-4 py-3 font-semibold text-gray-700">Employee</th>
                     <th className="text-left px-4 py-3 font-semibold text-gray-700">Emp ID</th>
                     <th className="text-left px-4 py-3 font-semibold text-gray-700">Department</th>
                     <th className="text-right px-4 py-3 font-semibold text-gray-700">Approved</th>
                     <th className="text-right px-4 py-3 font-semibold text-gray-700">Sandwich</th>
-                    <th className="text-right px-4 py-3 font-semibold text-gray-700">Total for Salary</th>
-                    <th className="text-right px-4 py-3 font-semibold text-gray-700">Present</th>
+                    <th className="text-right px-4 py-3 font-semibold text-gray-700">Total Leave Days (Approved + Sandwich)</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {(leaveSummary.employees || []).map((emp) => (
-                    <tr key={emp.empId} className="border-b border-gray-100 hover:bg-gray-50">
-                      <td className="px-4 py-3 font-medium text-gray-800">{emp.employeeName}</td>
-                      <td className="px-4 py-3 text-gray-600">{emp.empId}</td>
-                      <td className="px-4 py-3 text-gray-600">{emp.department || '-'}</td>
-                      <td className="px-4 py-3 text-right">{emp.approvedLeaveDays ?? 0}</td>
-                      <td className="px-4 py-3 text-right">{Math.round((emp.sandwichLeaveDays ?? 0) / 3)}</td>
-                      <td className="px-4 py-3 text-right font-medium">{emp.totalLeaveDaysForSalary ?? 0}</td>
-                      <td className="px-4 py-3 text-right">{emp.presentDays ?? 0}</td>
-                    </tr>
-                  ))}
+                  {(leaveSummary.employees || []).map((emp) => {
+                    const attendance = emp.attendanceByLogin || {};
+                    const presentDates = attendance.presentDates || [];
+                    const absentDates = attendance.absentDates || [];
+                    const absentCount = attendance.absentCount ?? absentDates.length;
+                    const monFriLeaves = emp.leavesOnMondayOrFriday || [];
+                    const hasDetails = presentDates.length > 0 || absentDates.length > 0 || monFriLeaves.length > 0;
+                    const isExpanded = expandedLeaveSummaryEmpId === emp.empId;
+                    return (
+                      <React.Fragment key={emp.empId}>
+                        <tr className="border-b border-gray-100 hover:bg-gray-50">
+                          <td className="px-2 py-3">
+                            {hasDetails ? (
+                              <button
+                                type="button"
+                                onClick={() => setExpandedLeaveSummaryEmpId(isExpanded ? null : emp.empId)}
+                                className="p-1 rounded hover:bg-gray-200 text-gray-600"
+                                aria-expanded={isExpanded}
+                              >
+                                {isExpanded ? (
+                                  <ChevronDown className="w-4 h-4" />
+                                ) : (
+                                  <ChevronRight className="w-4 h-4" />
+                                )}
+                              </button>
+                            ) : (
+                              <span className="inline-block w-6" />
+                            )}
+                          </td>
+                          <td className="px-4 py-3 font-medium text-gray-800">{emp.employeeName}</td>
+                          <td className="px-4 py-3 text-gray-600">{emp.empId}</td>
+                          <td className="px-4 py-3 text-gray-600">{emp.department || '-'}</td>
+                          <td className="px-4 py-3 text-right">{emp.approvedLeaveDays ?? 0}</td>
+                          <td className="px-4 py-3 text-right">{Math.round((emp.sandwichLeaveDays ?? 0) / 3)}</td>
+                          <td className="px-4 py-3 text-right font-medium">{emp.totalLeaveDaysForSalary ?? 0}</td>
+                        </tr>
+                        {isExpanded && (
+                          <tr className="bg-gray-50 border-b border-gray-200">
+                            <td colSpan={7} className="px-4 py-4">
+                              <div className="grid gap-6 sm:grid-cols-1 lg:grid-cols-2">
+                                {/* Attendance by login */}
+                                <div>
+                                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                                    Attendance by login
+                                  </h4>
+                                  <div className="space-y-2 text-sm">
+                                    <p className="text-gray-700">
+                                      <span className="font-medium">Present (had login):</span>{' '}
+                                      {presentDates.length} day{presentDates.length !== 1 ? 's' : ''}
+                                    </p>
+                                    <p className="text-gray-700">
+                                      <span className="font-medium">Absent (no login):</span>{' '}
+                                      {absentCount} day{absentCount !== 1 ? 's' : ''}
+                                    </p>
+                                    {absentDates.length > 0 && (
+                                      <div className="flex flex-wrap gap-1.5 mt-2">
+                                        {absentDates.map((date) => (
+                                          <span
+                                            key={date}
+                                            className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-50 text-red-800 border border-red-100"
+                                          >
+                                            {date} – Absent
+                                          </span>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                                {/* Leaves on Monday or Friday */}
+                                <div>
+                                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                                    Leaves on Monday or Friday
+                                  </h4>
+                                  {monFriLeaves.length > 0 ? (
+                                    <div className="border border-gray-200 rounded-lg overflow-hidden">
+                                      <table className="w-full text-sm">
+                                        <thead>
+                                          <tr className="bg-gray-100 text-left">
+                                            <th className="px-3 py-2 font-semibold text-gray-600">Date</th>
+                                            <th className="px-3 py-2 font-semibold text-gray-600">Day</th>
+                                            <th className="px-3 py-2 font-semibold text-gray-600">Type</th>
+                                            <th className="px-3 py-2 font-semibold text-gray-600">Status</th>
+                                            <th className="px-3 py-2 font-semibold text-gray-600">Sandwich</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {monFriLeaves.map((lv, i) => (
+                                            <tr key={i} className="border-t border-gray-100">
+                                              <td className="px-3 py-2">{lv.date}</td>
+                                              <td className="px-3 py-2">{lv.dayOfWeek || '-'}</td>
+                                              <td className="px-3 py-2">{lv.leaveType || '-'}</td>
+                                              <td className="px-3 py-2">{lv.status || '-'}</td>
+                                              <td className="px-3 py-2">
+                                                {lv.isSandwichLeave ? (
+                                                  <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded text-xs">Yes</span>
+                                                ) : (
+                                                  '-'
+                                                )}
+                                              </td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  ) : (
+                                    <p className="text-gray-500 text-sm">No leaves on Monday or Friday.</p>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
               {(!leaveSummary.employees || leaveSummary.employees.length === 0) && !leaveSummaryLoading && (
@@ -537,114 +608,6 @@ const SalaryModification = () => {
                 <button
                   onClick={() => fetchLeaveSummaryForPage(leaveSummaryPage + 1)}
                   disabled={!leaveSummary.pagination.hasNextPage}
-                  className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 transition-colors text-sm font-medium text-gray-600"
-                >
-                  Next
-                  <ChevronRight size={16} />
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Taken Leaves Tab */}
-      {activeTab === 'takenLeaves' && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          {takenLeavesLoading ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="w-10 h-10 animate-spin text-blue-600" />
-            </div>
-          ) : (
-            <div className="divide-y divide-gray-200">
-              {(takenLeaves.employees || []).map((emp) => (
-                <div key={emp.empId}>
-                  <button
-                    onClick={() => setExpandedEmpId(expandedEmpId === emp.empId ? null : emp.empId)}
-                    className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 text-left"
-                  >
-                    <div className="flex items-center gap-2">
-                      {expandedEmpId === emp.empId ? (
-                        <ChevronDown className="w-4 h-4 text-gray-500" />
-                      ) : (
-                        <ChevronRight className="w-4 h-4 text-gray-500" />
-                      )}
-                      <span className="font-medium text-gray-800">{emp.employeeName}</span>
-                      <span className="text-gray-500 text-sm">({emp.empId})</span>
-                      <span className="text-gray-400 text-sm">• {emp.department || '-'}</span>
-                    </div>
-                    <div className="flex gap-4 text-sm">
-                      <span>Approved: {emp.approvedLeaveCount ?? 0}</span>
-                      <span>Sandwich: {Math.round((emp.sandwichLeaveCount ?? 0) / 3)}</span>
-                      <span className="font-medium">Total for Salary: {emp.totalLeaveDaysForSalary ?? 0}</span>
-                    </div>
-                  </button>
-                  {expandedEmpId === emp.empId && emp.leaves && emp.leaves.length > 0 && (
-                    <div className="bg-gray-50 px-4 py-3 pl-12">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="text-gray-600">
-                            <th className="text-left py-1">Date</th>
-                            <th className="text-left py-1">Day</th>
-                            <th className="text-left py-1">Type</th>
-                            <th className="text-left py-1">Status</th>
-                            <th className="text-left py-1">Sandwich</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {emp.leaves.map((lv, i) => (
-                            <tr key={i}>
-                              <td className="py-1.5">{formatDateWithDay(lv.date)}</td>
-                              <td className="py-1.5">{lv.dayOfWeek || '-'}</td>
-                              <td className="py-1.5">{lv.leaveType || '-'}</td>
-                              <td className="py-1.5">
-                                <span
-                                  className={`px-2 py-0.5 rounded text-xs ${
-                                    lv.isSandwichLeave ? 'bg-amber-100 text-amber-800' : 'bg-green-100 text-green-800'
-                                  }`}
-                                >
-                                  {lv.status || (lv.isSandwichLeave ? 'sandwich' : 'approved')}
-                                </span>
-                              </td>
-                              <td className="py-1.5">{lv.isSandwichLeave ? 'Yes' : '-'}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              ))}
-              {(!takenLeaves.employees || takenLeaves.employees.length === 0) && !takenLeavesLoading && (
-                <div className="text-center py-12 text-gray-500">No taken leaves for this month.</div>
-              )}
-            </div>
-          )}
-          {takenLeaves.pagination && takenLeaves.pagination.totalPages > 1 && !takenLeavesLoading && (
-            <div className="flex flex-col sm:flex-row justify-between items-center gap-4 px-4 py-4 border-t border-gray-200 bg-gray-50">
-              <div className="text-sm text-gray-600">
-                Showing {(takenLeaves.pagination.currentPage - 1) * takenLeaves.pagination.limit + 1} to{' '}
-                {Math.min(
-                  takenLeaves.pagination.currentPage * takenLeaves.pagination.limit,
-                  takenLeaves.pagination.totalCount
-                )}{' '}
-                of {takenLeaves.pagination.totalCount} entries
-              </div>
-              <div className="flex gap-2 items-center">
-                <button
-                  onClick={() => fetchTakenLeavesForPage(takenLeavesPage - 1)}
-                  disabled={!takenLeaves.pagination.hasPrevPage}
-                  className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 transition-colors text-sm font-medium text-gray-600"
-                >
-                  <ChevronLeft size={16} />
-                  Previous
-                </button>
-                <span className="text-sm text-gray-600">
-                  Page {takenLeaves.pagination.currentPage} of {takenLeaves.pagination.totalPages}
-                </span>
-                <button
-                  onClick={() => fetchTakenLeavesForPage(takenLeavesPage + 1)}
-                  disabled={!takenLeaves.pagination.hasNextPage}
                   className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 transition-colors text-sm font-medium text-gray-600"
                 >
                   Next
@@ -768,18 +731,23 @@ const SalaryModification = () => {
                               <>
                                 <button
                                   onClick={() => {
+                                    setRemovalRequest({ sandwichLeaveId: lv.sandwichLeaveId, date: lv.date });
+                                    setRemovalReason('');
+                                    setRemovalFiles([]);
+                                  }}
+                                  className="text-amber-600 hover:text-amber-800 mr-3 inline-flex items-center gap-1"
+                                  title="Request removal (for manager approval)"
+                                >
+                                  <Send className="w-4 h-4" /> Request removal
+                                </button>
+                                <button
+                                  onClick={() => {
                                     setSandwichEditing({ id: lv.sandwichLeaveId, date: lv.date });
                                     setEditingLeave({ id: lv.sandwichLeaveId, date: lv.date, remarks: '' });
                                   }}
-                                  className="text-blue-600 hover:text-blue-800 mr-3 inline-flex items-center gap-1"
+                                  className="text-blue-600 hover:text-blue-800 inline-flex items-center gap-1"
                                 >
                                   <Edit2 className="w-4 h-4" /> Edit
-                                </button>
-                                <button
-                                  onClick={() => setDeleteConfirm(lv.sandwichLeaveId)}
-                                  className="text-red-600 hover:text-red-800 inline-flex items-center gap-1"
-                                >
-                                  <Trash2 className="w-4 h-4" /> Delete
                                 </button>
                               </>
                             ) : (
@@ -797,6 +765,66 @@ const SalaryModification = () => {
               )}
             </div>
           </div>
+
+          {/* Request removal of sandwich leave – sent to Leave Approval for manager */}
+          {removalRequest && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-2">Request removal of sandwich leave</h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  This request will be sent to Leave Approval. A manager can accept (remove the sandwich leave) or reject it. Leave date: <strong>{removalRequest.date}</strong>.
+                </p>
+                <form onSubmit={handleSubmitRemovalRequest}>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Reason <span className="text-red-600">*</span></label>
+                      <textarea
+                        value={removalReason}
+                        onChange={(e) => setRemovalReason(e.target.value)}
+                        required
+                        rows={3}
+                        placeholder="e.g. Medical certificate provided; not a sandwich leave."
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <Paperclip className="w-4 h-4 inline mr-1" /> Attachments (optional)
+                      </label>
+                      <input
+                        type="file"
+                        multiple
+                        accept=".jpg,.jpeg,.png,.pdf"
+                        onChange={(e) => setRemovalFiles(Array.from(e.target.files || []))}
+                        className="w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Max 10 files, 10MB each. JPG, PNG, PDF.</p>
+                      {removalFiles.length > 0 && (
+                        <p className="text-xs text-gray-600 mt-1">{removalFiles.length} file(s) selected.</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="mt-6 flex gap-3 justify-end">
+                    <button
+                      type="button"
+                      onClick={() => { setRemovalRequest(null); setRemovalReason(''); setRemovalFiles([]); }}
+                      className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={removalSubmitting}
+                      className="px-4 py-2 bg-amber-600 text-white rounded-lg font-medium hover:bg-amber-700 disabled:opacity-50 flex items-center gap-2"
+                    >
+                      {removalSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                      Submit request
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
 
           {/* Edit Sandwich Leave Modal */}
           {sandwichEditing && (
@@ -846,30 +874,6 @@ const SalaryModification = () => {
                     </button>
                   </div>
                 </form>
-              </div>
-            </div>
-          )}
-
-          {/* Delete Confirmation Modal */}
-          {deleteConfirm && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
-                <h3 className="text-lg font-semibold text-gray-800 mb-2">Delete Sandwich Leave</h3>
-                <p className="text-gray-600 mb-6">Are you sure you want to remove this sandwich leave? (3 days deduction will be reverted.)</p>
-                <div className="flex gap-3 justify-end">
-                  <button
-                    onClick={() => setDeleteConfirm(null)}
-                    className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleDeleteSandwichLeave}
-                    className="px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700"
-                  >
-                    Delete
-                  </button>
-                </div>
               </div>
             </div>
           )}
