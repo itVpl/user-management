@@ -3,7 +3,7 @@ import axios from 'axios';
 import { GreenCheck } from '../../assets/image';
 import {
   Calendar, Clock, User, CheckCircle, XCircle, AlertCircle,
-  Search, Filter, ArrowLeft, ArrowRight
+  Search, Filter, ChevronRight, ChevronLeft
 } from 'lucide-react';
 import API_CONFIG from '../../config/api.js';
 
@@ -181,10 +181,10 @@ const HRManagementSystem = () => {
 
   const getAttendanceBadge = (status) => {
     switch ((status || '').toLowerCase()) {
-      case 'present':  return 'bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-semibold';
-      case 'half day': return 'bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-xs font-semibold';
-      case 'absent':   return 'bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-semibold';
-      default:         return 'bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-xs font-semibold';
+      case 'present':  return 'bg-green-100 text-green-700 px-4 py-1.5 rounded-full text-base font-semibold';
+      case 'half day': return 'bg-yellow-100 text-yellow-700 px-4 py-1.5 rounded-full text-base font-semibold';
+      case 'absent':   return 'bg-red-100 text-red-700 px-4 py-1.5 rounded-full text-base font-semibold';
+      default:         return 'bg-gray-100 text-gray-700 px-4 py-1.5 rounded-full text-base font-semibold';
     }
   };
 
@@ -210,7 +210,7 @@ const HRManagementSystem = () => {
   // Leave status chip (badge)
   const LeaveStatusChip = ({ status }) => {
     const s = normalizeStatus(status);
-    const base = 'inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold';
+    const base = 'inline-flex items-center gap-1 px-4 py-1.5 rounded-full text-sm font-semibold';
     const cls =
       s === 'approved'         ? 'bg-green-100 text-green-800' :
       s === 'rejected'         ? 'bg-red-100 text-red-800'     :
@@ -375,55 +375,44 @@ const HRManagementSystem = () => {
 
 
       return (
-        <div className="flex flex-wrap items-center gap-6 mb-6">
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                <Calendar className="text-blue-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Records</p>
-                <p className="text-xl font-bold text-gray-800">{total}</p>
-              </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="px-5 py-4 min-h-[96px] border border-gray-200 rounded-2xl flex items-center justify-between">
+            <div>
+              <p className="text-xl text-gray-700 font-medium">Records</p>
+              <p className="mt-4 text-2xl font-bold text-gray-800">{total}</p>
+            </div>
+            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+              <Calendar className="text-blue-600" size={20} />
             </div>
           </div>
 
-
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-                <CheckCircle className="text-green-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Present</p>
-                <p className="text-xl font-bold text-green-600">{present}</p>
-              </div>
+          <div className="px-5 py-4 min-h-[96px] border border-gray-200 rounded-2xl flex items-center justify-between">
+            <div>
+              <p className="text-xl text-gray-700 font-medium">Present</p>
+              <p className="mt-4 text-2xl font-bold text-green-600">{present}</p>
+            </div>
+            <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+              <CheckCircle className="text-green-600" size={20} />
             </div>
           </div>
 
-
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-yellow-100 rounded-xl flex items-center justify-center">
-                <Clock className="text-yellow-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Half Day</p>
-                <p className="text-xl font-bold text-yellow-600">{halfday}</p>
-              </div>
+          <div className="px-5 py-4 min-h-[96px] border border-gray-200 rounded-2xl flex items-center justify-between">
+            <div>
+              <p className="text-xl text-gray-700 font-medium">Half Day</p>
+              <p className="mt-4 text-2xl font-bold text-yellow-600">{halfday}</p>
+            </div>
+            <div className="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center">
+              <Clock className="text-yellow-600" size={20} />
             </div>
           </div>
 
-
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
-                <XCircle className="text-red-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Absent</p>
-                <p className="text-xl font-bold text-red-600">{absent}</p>
-              </div>
+          <div className="px-5 py-4 min-h-[96px] border border-gray-200 rounded-2xl flex items-center justify-between">
+            <div>
+              <p className="text-xl text-gray-700 font-medium">Absent</p>
+              <p className="mt-4 text-2xl font-bold text-red-600">{absent}</p>
+            </div>
+            <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+              <XCircle className="text-red-600" size={20} />
             </div>
           </div>
         </div>
@@ -439,55 +428,44 @@ const HRManagementSystem = () => {
 
 
       return (
-        <div className="flex flex-wrap items-center gap-6 mb-6">
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                <Calendar className="text-blue-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Total Requests</p>
-                <p className="text-xl font-bold text-gray-800">{total}</p>
-              </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="px-5 py-4 min-h-[96px] border border-gray-200 rounded-2xl flex items-center justify-between">
+            <div>
+              <p className="text-xl text-gray-700 font-medium">Total Requests</p>
+              <p className="mt-4 text-2xl font-bold text-gray-800">{total}</p>
+            </div>
+            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+              <Calendar className="text-blue-600" size={20} />
             </div>
           </div>
 
-
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-yellow-100 rounded-xl flex items-center justify-center">
-                <Clock className="text-yellow-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Pending</p>
-                <p className="text-xl font-bold text-yellow-600">{pending}</p>
-              </div>
+          <div className="px-5 py-4 min-h-[96px] border border-gray-200 rounded-2xl flex items-center justify-between">
+            <div>
+              <p className="text-xl text-gray-700 font-medium">Pending</p>
+              <p className="mt-4 text-2xl font-bold text-yellow-600">{pending}</p>
+            </div>
+            <div className="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center">
+              <Clock className="text-yellow-600" size={20} />
             </div>
           </div>
 
-
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-                <CheckCircle className="text-green-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Approved</p>
-                <p className="text-xl font-bold text-green-600">{approved}</p>
-              </div>
+          <div className="px-5 py-4 min-h-[96px] border border-gray-200 rounded-2xl flex items-center justify-between">
+            <div>
+              <p className="text-xl text-gray-700 font-medium">Approved</p>
+              <p className="mt-4 text-2xl font-bold text-green-600">{approved}</p>
+            </div>
+            <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+              <CheckCircle className="text-green-600" size={20} />
             </div>
           </div>
 
-
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
-                <XCircle className="text-red-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Rejected</p>
-                <p className="text-xl font-bold text-red-600">{rejected}</p>
-              </div>
+          <div className="px-5 py-4 min-h-[96px] border border-gray-200 rounded-2xl flex items-center justify-between">
+            <div>
+              <p className="text-xl text-gray-700 font-medium">Rejected</p>
+              <p className="mt-4 text-2xl font-bold text-red-600">{rejected}</p>
+            </div>
+            <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+              <XCircle className="text-red-600" size={20} />
             </div>
           </div>
         </div>
@@ -497,16 +475,14 @@ const HRManagementSystem = () => {
 
     // Leave Balance
     return (
-      <div className="flex flex-wrap items-center gap-6 mb-6">
-        <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-              <User className="text-blue-600" size={20} />
-            </div>
-            <div>
-              <p className="text-sm text-gray-600">Employees</p>
-              <p className="text-xl font-bold text-gray-800">{leaveBalanceFiltered.length}</p>
-            </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="px-5 py-4 min-h-[96px] border border-gray-200 rounded-2xl flex items-center justify-between">
+          <div>
+            <p className="text-xl text-gray-700 font-medium">Employees</p>
+            <p className="mt-4 text-2xl font-bold text-gray-800">{leaveBalanceFiltered.length}</p>
+          </div>
+          <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+            <User className="text-blue-600" size={20} />
           </div>
         </div>
       </div>
@@ -556,14 +532,11 @@ const HRManagementSystem = () => {
       </div>
 
 
-      {/* Header Stats — LeaveApproval-style */}
-      <StatsHeader />
+      {/* Top Section */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
+        <StatsHeader />
 
-
-      {/* Search / Filters — LeaveApproval-style */}
-      <div className="bg-white rounded-2xl shadow-xl p-6 mb-6 border border-gray-100">
         <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-          {/* Left: search */}
           <div className="relative w-full md:flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
             <input
@@ -581,12 +554,10 @@ const HRManagementSystem = () => {
                 else if (activeTab === 'leaveRequest') setLeaveSearch(e.target.value);
                 else setLeaveBalanceSearch(e.target.value);
               }}
-              className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
             />
           </div>
 
-
-          {/* Right: filters */}
           <div className="flex items-center gap-3 w-full md:w-auto">
             <Filter className="text-gray-400 hidden md:block" size={18} />
             {activeTab === 'dailyAttendance' && (
@@ -594,7 +565,7 @@ const HRManagementSystem = () => {
                 <select
                   value={attendanceStatusFilter}
                   onChange={(e) => setAttendanceStatusFilter(e.target.value)}
-                  className="px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="px-4 py-3 border border-gray-200 rounded-xl focus:outline-none bg-white text-base text-gray-800"
                 >
                   <option value="all">All Status</option>
                   <option value="present">Present</option>
@@ -605,7 +576,7 @@ const HRManagementSystem = () => {
                   type="date"
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
-                  className="px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="px-4 py-3 border border-gray-200 rounded-xl focus:outline-none bg-white text-base text-gray-800"
                 />
               </>
             )}
@@ -613,7 +584,7 @@ const HRManagementSystem = () => {
               <select
                 value={leaveStatusFilter}
                 onChange={(e) => setLeaveStatusFilter(e.target.value)}
-                className="px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="px-4 py-3 border border-gray-200 rounded-xl focus:outline-none bg-white text-base text-gray-800"
               >
                 <option value="all">All Status</option>
                 <option value="pending">Pending</option>
@@ -628,47 +599,91 @@ const HRManagementSystem = () => {
       </div>
 
 
-      {/* Tables — LeaveApproval-style */}
-      <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
-              <tr>
+      {/* Table Section */}
+      <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+        <div className="overflow-x-auto p-4">
+          <table className="w-full border-separate border-spacing-y-4">
+            <thead>
+              <tr className="text-xs md:text-sm text-gray-500">
                 {activeTab === 'dailyAttendance' && (
                   <>
-                    <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Date</th>
-                    <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Emp ID</th>
-                    <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Emp Name</th>
-                    <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Log In</th>
-                    <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Log Out</th>
-                    <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Total Hrs</th>
-                    <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
-                    <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Dept</th>
+                    <th className="font-semibold text-xs md:text-base px-8 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">
+                      Date
+                    </th>
+                    <th className="font-semibold text-xs md:text-base px-4 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">
+                      Emp ID
+                    </th>
+                    <th className="font-semibold text-xs md:text-base px-4 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">
+                      Emp Name
+                    </th>
+                    <th className="font-semibold text-xs md:text-base px-4 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">
+                      Log In
+                    </th>
+                    <th className="font-semibold text-xs md:text-base px-4 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">
+                      Log Out
+                    </th>
+                    <th className="font-semibold text-xs md:text-base px-4 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">
+                      Total Hrs
+                    </th>
+                    <th className="font-semibold text-xs md:text-base px-7 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">
+                      Status
+                    </th>
+                    <th className="font-semibold text-xs md:text-base px-4 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">
+                      Dept
+                    </th>
                   </>
                 )}
                 {activeTab === 'leaveRequest' && (
                   <>
-                    <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Date</th>
-                    <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Emp ID</th>
-                    <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Emp Name</th>
-                    <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">From</th>
-                    <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">To</th>
-                    <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Leave Type</th>
-                    <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Reason</th>
-                    <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Dept</th>
-                    {/* Status */}
-                    <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
-                    {/* Action */}
-                    <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Action</th>
+                    <th className="font-semibold text-xs md:text-base px-6 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">
+                      Date
+                    </th>
+                    <th className="font-semibold text-xs md:text-base px-4 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">
+                      Emp ID
+                    </th>
+                    <th className="font-semibold text-xs md:text-base px-6 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">
+                      Emp Name
+                    </th>
+                    <th className="font-semibold text-xs md:text-base px-4 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">
+                      From
+                    </th>
+                    <th className="font-semibold text-xs md:text-base px-4 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">
+                      To
+                    </th>
+                    <th className="whitespace-nowrap font-semibold text-xs md:text-base px-2 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">
+                      Leave Type
+                    </th>
+                    <th className="font-semibold text-xs md:text-base px-8 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">
+                      Reason
+                    </th>
+                    <th className="font-semibold text-xs md:text-base px-4 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">
+                      Dept
+                    </th>
+                    <th className="font-semibold text-xs md:text-base px-8 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">
+                      Status
+                    </th>
+                    <th className="font-semibold text-xs md:text-base py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">
+                      Action
+                    </th>
                   </>
                 )}
                 {activeTab === 'leaveBalance' && (
                   <>
-                    <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Emp ID</th>
-                    <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Emp Name</th>
-                    <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Casual Leave</th>
-                    <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Sick Leave</th>
-                    <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Total Leave</th>
+                    <th className="font-semibold text-xs md:text-base px-4 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">
+                      Emp ID
+                    </th>
+                    <th className="font-semibold text-xs md:text-base px-4 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">
+                      Emp Name
+                    </th>
+                    <th className="font-semibold text-xs md:text-base px-4 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">
+                      Casual Leave
+                    </th>
+                    <th className="font-semibold text-xs md:text-base px-4 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">
+                      Sick Leave
+                    </th>
+                    <th className="font-semibold text-xs md:text-base px-4 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">
+                      Total Leave
+                    </th>
                   </>
                 )}
               </tr>
@@ -681,7 +696,10 @@ const HRManagementSystem = () => {
                 (activeTab === 'leaveRequest' && loadingLeaves) ||
                 (activeTab === 'leaveBalance' && loadingLeaveBalance)) && (
                 <tr>
-                  <td colSpan={activeTab === 'dailyAttendance' ? 8 : activeTab === 'leaveRequest' ? 10 : 5} className="py-16">
+                  <td
+                    colSpan={activeTab === 'dailyAttendance' ? 8 : activeTab === 'leaveRequest' ? 10 : 5}
+                    className="px-4 py-12 border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg"
+                  >
                     <div className="flex flex-col items-center justify-center">
                       <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
                       <p className="text-gray-600">
@@ -698,7 +716,10 @@ const HRManagementSystem = () => {
                 (activeTab === 'leaveRequest' && leaveError) ||
                 (activeTab === 'leaveBalance' && leaveBalanceError)) && (
                 <tr>
-                  <td colSpan={activeTab === 'dailyAttendance' ? 8 : activeTab === 'leaveRequest' ? 10 : 5} className="py-12">
+                  <td
+                    colSpan={activeTab === 'dailyAttendance' ? 8 : activeTab === 'leaveRequest' ? 10 : 5}
+                    className="px-4 py-12 border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg"
+                  >
                     <div className="text-center">
                       <AlertCircle className="w-16 h-16 text-red-300 mx-auto mb-4" />
                       <p className="text-red-600">
@@ -714,7 +735,10 @@ const HRManagementSystem = () => {
               {activeTab === 'dailyAttendance' && !loadingAttendance && !attendanceError && (
                 attendanceFiltered.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="text-center py-12">
+                    <td
+                      colSpan={8}
+                      className="px-4 py-12 text-center border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg"
+                    >
                       <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                       <p className="text-gray-500 text-lg">No attendance data found.</p>
                       <p className="text-gray-400 text-sm">Try another date or search criteria.</p>
@@ -722,15 +746,31 @@ const HRManagementSystem = () => {
                   </tr>
                 ) : (
                   paginated(attendanceFiltered).map((row, idx) => (
-                    <tr key={idx} className={`border-b border-gray-100 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                      <td className="py-4 px-6 text-gray-700">{formatDate(row.date)}</td>
-                      <td className="py-4 px-6 text-blue-700 font-medium">{row.empId}</td>
-                      <td className="py-4 px-6 text-gray-800">{row.empName}</td>
-                      <td className="py-4 px-6 text-gray-700">{row.loginTime || '— — — —'}</td>
-                      <td className="py-4 px-6 text-gray-700">{row.logoutTime || '— — — —'}</td>
-                      <td className="py-4 px-6 text-gray-700">{row.totalTime || ''}</td>
-                      <td className="py-4 px-6"><span className={getAttendanceBadge(row.status)}>{row.status}</span></td>
-                      <td className="py-4 px-6 text-gray-700">{row.department}</td>
+                    <tr key={idx} className="bg-white hover:bg-gray-50 transition-colors">
+                      <td className="px-4 py-4 border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg text-gray-700 font-medium">
+                        {formatDate(row.date)}
+                      </td>
+                      <td className="px-4 py-4 border-y border-gray-200 text-gray-700 font-medium">
+                        {row.empId}
+                      </td>
+                      <td className="px-4 py-4 border-y border-gray-200 text-gray-700 font-medium">
+                        {row.empName}
+                      </td>
+                      <td className="px-4 py-4 border-y border-gray-200 text-gray-700 font-medium">
+                        {row.loginTime || '— — — —'}
+                      </td>
+                      <td className="px-4 py-4 border-y border-gray-200 text-gray-700 font-medium">
+                        {row.logoutTime || '— — — —'}
+                      </td>
+                      <td className="px-4 py-4 border-y border-gray-200 text-gray-700 font-medium">
+                        {row.totalTime || ''}
+                      </td>
+                      <td className="px-4 py-4 border-y border-gray-200">
+                        <span className={getAttendanceBadge(row.status)}>{row.status}</span>
+                      </td>
+                      <td className="px-4 py-4 border-y first:border-r border-gray-200 last:rounded-r-lg text-gray-700 font-medium">
+                        {row.department}
+                      </td>
                     </tr>
                   ))
                 )
@@ -740,7 +780,10 @@ const HRManagementSystem = () => {
               {activeTab === 'leaveRequest' && !loadingLeaves && !leaveError && (
                 leaveFiltered.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="text-center py-12">
+                    <td
+                      colSpan={10}
+                      className="px-4 py-12 text-center border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg"
+                    >
                       <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                       <p className="text-gray-500 text-lg">No leave requests found.</p>
                       <p className="text-gray-400 text-sm">When employees submit leave, they will appear here.</p>
@@ -748,23 +791,39 @@ const HRManagementSystem = () => {
                   </tr>
                 ) : (
                   paginated(leaveFiltered).map((row, idx) => (
-                    <tr key={idx} className={`border-b border-gray-100 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                      <td className="py-4 px-6 text-gray-700">{formatDate(row.appliedAt)}</td>
-                      <td className="py-4 px-6 text-blue-700 font-medium">{row.empId}</td>
-                      <td className="py-4 px-6 text-gray-800">{row.empName || 'N/A'}</td>
-                      <td className="py-4 px-6 text-gray-700">{formatDate(row.fromDate)}</td>
-                      <td className="py-4 px-6 text-gray-700">{formatDate(row.toDate)}</td>
-                      <td className="py-4 px-6 text-gray-700">{row.leaveType}</td>
-                      <td className="py-4 px-6 text-gray-700 max-w-xs">
+                    <tr key={idx} className="bg-white hover:bg-gray-50 transition-colors">
+                      <td className="px-4 py-4 border-y first:border-l border-gray-200 first:rounded-l-lg text-gray-700 whitespace-nowrap font-medium">
+                        {formatDate(row.appliedAt)}
+                      </td>
+                      <td className="px-4 py-4 border-y border-gray-200 text-gray-700 font-medium">
+                        {row.empId}
+                      </td>
+                      <td className="px-4 py-4 border-y border-gray-200 text-gray-700 font-medium whitespace-nowrap">
+                        {row.empName || 'N/A'}
+                      </td>
+                      <td className="px-4 py-4 border-y border-gray-200 text-gray-700 font-medium whitespace-nowrap">
+                        {formatDate(row.fromDate)}
+                      </td>
+                      <td className="px-4 py-4 border-y border-gray-200 text-gray-700 font-medium whitespace-nowrap">
+                        {formatDate(row.toDate)}
+                      </td>
+                      <td className="px-4 py-4 border-y border-gray-200 text-gray-700 font-medium">
+                        {row.leaveType}
+                      </td>
+                      <td className="px-4 py-4 border-y border-gray-200 text-gray-700 max-w-64 font-medium">
                         <div className="truncate" title={row.reason || 'N/A'}>
                           {row.reason || 'N/A'}
                         </div>
                       </td>
-                      <td className="py-4 px-6 text-gray-700">{row.department || 'N/A'}</td>
-                      {/* Status */}
-                      <td className="py-4 px-6"><LeaveStatusChip status={row.status} /></td>
-                      {/* Action: only if manager_approved */}
-                      <td className="py-4 px-6"><LeaveActionCell row={row} /></td>
+                      <td className="px-4 py-4 border-y border-gray-200 text-gray-700 font-medium">
+                        {row.department || 'N/A'}
+                      </td>
+                      <td className="px-4 py-4 border-y border-gray-200 whitespace-nowrap">
+                        <LeaveStatusChip status={row.status} />
+                      </td>
+                      <td className="px-4 py-4 border-y last:border-r border-gray-200 last:rounded-r-lg">
+                        <LeaveActionCell row={row} />
+                      </td>
                     </tr>
                   ))
                 )
@@ -774,7 +833,10 @@ const HRManagementSystem = () => {
               {activeTab === 'leaveBalance' && !loadingLeaveBalance && !leaveBalanceError && (
                 leaveBalanceFiltered.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="text-center py-12">
+                    <td
+                      colSpan={5}
+                      className="px-4 py-12 text-center border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg"
+                    >
                       <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                       <p className="text-gray-500 text-lg">No leave balance data available.</p>
                       <p className="text-gray-400 text-sm">Try a different search or check back later.</p>
@@ -782,12 +844,22 @@ const HRManagementSystem = () => {
                   </tr>
                 ) : (
                   paginated(leaveBalanceFiltered).map((row, idx) => (
-                    <tr key={row.empId || idx} className={`border-b border-gray-100 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                      <td className="py-4 px-6 text-blue-700 font-medium">{row.empId}</td>
-                      <td className="py-4 px-6 text-gray-800">{row.name}</td>
-                      <td className="py-4 px-6 text-gray-700">{row.casualLeave}</td>
-                      <td className="py-4 px-6 text-gray-700">{row.sickLeave}</td>
-                      <td className="py-4 px-6 text-gray-700">{row.totalLeave}</td>
+                    <tr key={row.empId || idx} className="bg-white hover:bg-gray-50 transition-colors">
+                      <td className="px-4 py-4 border-y first:border-l border-gray-200 first:rounded-l-lg text-gray-700 font-medium">
+                        {row.empId}
+                      </td>
+                      <td className="px-4 py-4 border-y border-gray-200 text-gray-700 font-medium">
+                        {row.name}
+                      </td>
+                      <td className="px-4 py-4 border-y border-gray-200 text-gray-700 font-medium">
+                        {row.casualLeave}
+                      </td>
+                      <td className="px-4 py-4 border-y border-gray-200 text-gray-700 font-medium">
+                        {row.sickLeave}
+                      </td>
+                      <td className="px-4 py-4 border-y last:border-r border-gray-200 last:rounded-r-lg text-gray-700 font-medium">
+                        {row.totalLeave}
+                      </td>
                     </tr>
                   ))
                 )
@@ -795,60 +867,58 @@ const HRManagementSystem = () => {
             </tbody>
           </table>
         </div>
-
-
-        {/* Pagination — LeaveApproval-style */}
-        {currentData.length > 0 && (
-          <div className="flex justify-between items-center mt-6 bg-white rounded-2xl p-4 border-t border-gray-100">
-            <div className="text-sm text-gray-600">
-              Showing {startIndex + 1} to {endIndex} of {currentData.length} results
-            </div>
-            {totalPages > 1 && (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                  className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-                >
-                  <ArrowLeft size={16} /> Previous
-                </button>
-
-
-                <div className="hidden md:flex items-center gap-1">
-                  {getPageNumbers().map((page, idx, arr) => {
-                    // Add ellipsis between non-consecutive pages
-                    const showEllipsisBefore = idx > 0 && page - arr[idx - 1] > 1;
-                    return (
-                      <React.Fragment key={page}>
-                        {showEllipsisBefore && (
-                          <span className="px-2 text-gray-400">...</span>
-                        )}
-                        <button
-                          onClick={() => setCurrentPage(page)}
-                          className={`px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
-                            currentPage === page ? 'bg-blue-500 text-white shadow-lg' : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'
-                          }`}
-                        >
-                          {page}
-                        </button>
-                      </React.Fragment>
-                    );
-                  })}
-                </div>
-
-
-                <button
-                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages}
-                  className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-                >
-                  Next <ArrowRight size={16} />
-                </button>
-              </div>
-            )}
-          </div>
-        )}
       </div>
+
+
+      {currentData.length > 0 && (
+        <div className="mt-4 bg-white border border-gray-200 rounded-2xl px-4 py-3 flex flex-col md:flex-row items-center justify-between gap-3">
+          <div className="text-sm text-gray-600">
+            {`Showing ${startIndex + 1} to ${endIndex} of ${currentData.length} results`}
+          </div>
+          {totalPages > 1 && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900"
+              >
+                 <ChevronLeft size={16} /> Previous
+              </button>
+
+              <div className="hidden md:flex items-center gap-1">
+                {getPageNumbers().map((page, idx, arr) => {
+                  const showEllipsisBefore = idx > 0 && page - arr[idx - 1] > 1;
+                  return (
+                    <React.Fragment key={page}>
+                      {showEllipsisBefore && (
+                        <span className="px-2 text-gray-400">...</span>
+                      )}
+                      <button
+                        onClick={() => setCurrentPage(page)}
+                        className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm transition-colors ${
+                          currentPage === page
+                            ? 'border border-gray-900 text-gray-900 font-semibold bg-white'
+                            : 'text-gray-700 hover:text-gray-900'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    </React.Fragment>
+                  );
+                })}
+              </div>
+
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900"
+              >
+                Next  <ChevronRight size={16} />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
