@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import breakReportService from '../../services/breakReportService';
-import { Clock, Filter, Search, Calendar, User, Users, Coffee, TrendingUp, RefreshCw, FileText, BarChart3, X, Eye, Activity, AlertCircle, ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
+import { Clock, Filter, Search, Calendar, User, Users, Coffee, TrendingUp, RefreshCw, FileText, BarChart3, X, Eye, Activity, AlertCircle, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
 
 /* ====================== Soft Theme (DO Design) ====================== */
 const SOFT = {
@@ -48,17 +48,17 @@ const BreakReport = () => {
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [employeeBreakData, setEmployeeBreakData] = useState([]);
 
-  // Pagination
+  // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const [recordsPerPage] = useState(10);
+  const itemsPerPage = 10;
 
   // Department options
   const departments = ['Sales', 'CMT', 'IT', 'HR', 'Finance'];
 
-  // Reset page when filters or view mode changes
+  // Reset pagination when view mode changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [filters.startDate, filters.endDate, filters.department, filters.empId, viewMode]);
+  }, [viewMode]);
 
   useEffect(() => {
     if (viewMode === 'current') {
@@ -430,58 +430,12 @@ const BreakReport = () => {
     }
   };
 
-  // Pagination helpers
-  const paginated = (arr) => {
-    const start = (currentPage - 1) * recordsPerPage;
-    const end = start + recordsPerPage;
-    return arr.slice(start, end);
-  };
-
-  const getCurrentData = () => {
-    if (viewMode === 'summary') {
-      return summaryData || [];
-    }
-    return reportData || [];
-  };
-
-  const currentData = getCurrentData();
-  const totalPages = Math.max(1, Math.ceil(currentData.length / recordsPerPage));
-  const startIndex = (currentPage - 1) * recordsPerPage;
-  const endIndex = Math.min(startIndex + recordsPerPage, currentData.length);
-
-  // Smart pagination: show limited page numbers
-  const getPageNumbers = () => {
-    const maxVisible = 7; // Maximum number of page buttons to show
-    if (totalPages <= maxVisible) {
-      return Array.from({ length: totalPages }, (_, i) => i + 1);
-    }
-    
-    const pages = [];
-    const halfVisible = Math.floor(maxVisible / 2);
-    
-    if (currentPage <= halfVisible + 1) {
-      // Near the start
-      for (let i = 1; i <= maxVisible - 1; i++) {
-        pages.push(i);
-      }
-      pages.push(totalPages);
-    } else if (currentPage >= totalPages - halfVisible) {
-      // Near the end
-      pages.push(1);
-      for (let i = totalPages - (maxVisible - 2); i <= totalPages; i++) {
-        pages.push(i);
-      }
-    } else {
-      // In the middle
-      pages.push(1);
-      for (let i = currentPage - halfVisible + 1; i <= currentPage + halfVisible - 1; i++) {
-        pages.push(i);
-      }
-      pages.push(totalPages);
-    }
-    
-    return pages;
-  };
+  // Pagination Logic
+  const currentData = viewMode === 'summary' ? (summaryData || []) : (reportData || []);
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = currentData.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(currentData.length / itemsPerPage);
 
   return (
     <div className="p-6">
@@ -634,232 +588,163 @@ const BreakReport = () => {
               <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
               <p className="text-gray-600">Loading break report...</p>
             </div>
-          ) : viewMode === 'summary' ? (
-            summaryData && summaryData.length > 0 ? (
-              <>
-              <table className="w-full">
-                <thead className="bg-gray-200">
-                  <tr>
-                    <th className="text-left py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">S.NO</th>
-                    <th className="text-left py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">EMPLOYEE</th>
-                    <th className="text-left py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">EMPLOYEE ID</th>
-                    <th className="text-left py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">DEPARTMENT</th>
-                    <th className="text-center py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">BREAK COUNT</th>
-                    <th className="text-center py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">STATUS</th>
-                    <th className="text-center py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">ACTION</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-100">
-                  {paginated(summaryData).map((item, index) => (
-                    <tr key={item.empId || index} className="transition duration-100 border-b border-gray-200 hover:bg-gray-50">
-                      <td className="px-3 py-4 whitespace-nowrap text-base font-medium text-gray-900">
-                        {startIndex + index + 1}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <User className="w-6 h-6 text-blue-600" />
-                          <div>
-                            <p className="text-base font-semibold text-gray-900">{item.employeeName || 'N/A'}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-base font-semibold text-gray-700">
-                        {item.empId || 'N/A'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-base font-semibold text-gray-700">
-                        {item.department || 'N/A'}
-                      </td>
-                      <td className="px-6 py-4 align-middle text-center">
-                        <span className="px-4 py-2 rounded-full text-sm font-semibold bg-blue-100 text-blue-700">
-                          {item.totalBreaks ?? item.breakCount ?? 0}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 align-middle text-center">
-                        {item.isCurrentlyOnBreak ? (
-                          <div className="flex flex-col items-center gap-1">
-                            <span className="px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700 flex items-center gap-1">
-                              <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                              ON BREAK
-                            </span>
-                            {item.currentBreak && (
-                              <div className="text-xs text-gray-600 mt-1">
-                                <p>Started: {new Date(item.currentBreak.startTime).toLocaleTimeString()}</p>
-                                {item.currentBreak.durationMinutes !== undefined && (
-                                  <p>Duration: {formatBreakDurationFromMinutes(item.currentBreak.durationMinutes)}</p>
+          ) : currentItems.length > 0 ? (
+            <>
+              <div className="overflow-x-auto p-4">
+                <table className="w-full border-separate border-spacing-y-4">
+                  <thead>
+                    <tr className="text-sm text-gray-500">
+                      <th className="font-semibold text-sm px-4 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">S.NO</th>
+                      <th className="font-semibold text-sm px-6 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">EMPLOYEE</th>
+                      <th className="font-semibold text-sm px-1 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">EMPLOYEE ID</th>
+                      <th className="font-semibold text-sm px-1 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">DEPARTMENT</th>
+                      {viewMode === 'summary' ? (
+                        <th className="font-semibold text-sm px-4 py-3 text-center border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">BREAK COUNT</th>
+                      ) : (
+                        <th className="font-semibold text-sm px-4 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">BREAKS</th>
+                      )}
+                      <th className="font-semibold text-sm px-4 py-3 text-center border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">STATUS</th>
+                      <th className="font-semibold text-sm px-4 py-3 text-center border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">ACTION</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {currentItems.map((item, index) => {
+                      const globalIndex = indexOfFirstItem + index + 1;
+                      // Handle data structure differences
+                      const employee = viewMode === 'summary' ? item : (item.employee || item);
+                      const empId = item.empId || employee?.empId || 'N/A';
+                      const empName = employee?.employeeName || employee?.name || 'N/A';
+                      const dept = employee?.department || item.department || 'N/A';
+                      const breaks = item.breaks || [];
+                      
+                      return (
+                        <tr key={empId || index} className="bg-white hover:bg-gray-50 transition-colors group">
+                          <td className="px-4 py-4 border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg">
+                            <span className="font-medium text-gray-700">{globalIndex}</span>
+                          </td>
+                          <td className="px-4 py-4 border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg">
+                            <div className="flex items-center gap-2">
+                                <span className="font-medium text-gray-800">{empName}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-4 border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg">
+                            <span className="font-medium text-gray-700">{empId}</span>
+                          </td>
+                          <td className="px-4 py-4 border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg">
+                            <span className="font-medium text-gray-700">{dept}</span>
+                          </td>
+                          
+                          {/* Break Details / Count */}
+                          {viewMode === 'summary' ? (
+                            <td className="px-4 py-4 border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg text-center">
+                              <span className="px-4 py-2 rounded-full text-sm font-semibold bg-blue-100 text-blue-700">
+                                {item.totalBreaks ?? item.breakCount ?? 0}
+                              </span>
+                            </td>
+                          ) : (
+                            <td className="px-4 py-4 border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg">
+                              <div className="space-y-1">
+                                <div className="mb-2">
+                                  <span className="px-3 py-1 rounded-full text-sm font-semibold bg-blue-100 text-blue-700">
+                                    {breaks.length}
+                                  </span>
+                                </div>
+                                {breaks.length > 0 ? (
+                                  breaks.slice(0, 2).map((breakItem, idx) => (
+                                    <div key={idx} className="text-sm">
+                                      <span className="font-semibold text-gray-700">
+                                        {new Date(breakItem.startTime).toLocaleDateString()} {new Date(breakItem.startTime).toLocaleTimeString()}
+                                      </span>
+                                      <span className="text-gray-500 ml-2">({formatBreakDuration(breakItem)})</span>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <span className="text-gray-400">No breaks</span>
+                                )}
+                                {breaks.length > 2 && (
+                                  <p className="text-xs text-blue-600 font-semibold">+{breaks.length - 2} more</p>
                                 )}
                               </div>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700 flex items-center gap-1">
-                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                            AVAILABLE
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 align-middle">
-                        <div className="flex items-center justify-center gap-2">
-                          <button
-                            onClick={() => handleViewEmployee(item)}
-                            className="flex items-center gap-1 bg-transparent text-blue-600 px-3 py-1 rounded text-sm hover:bg-blue-500/30 transition border border-blue-200"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                            View Details
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              </>
-            ) : (
-              <div className="px-6 py-8 text-center text-gray-500">
-                <div className="flex flex-col items-center justify-center">
-                  <Coffee className="w-12 h-12 text-gray-400 mb-3" />
-                  <p className="text-lg font-medium text-gray-600">No break data found</p>
-                  <p className="text-sm text-gray-500 mt-1">Try adjusting your filters</p>
-                </div>
-              </div>
-            )
-          ) : (
-            reportData && reportData.length > 0 ? (
-              <>
-              <table className="w-full">
-                <thead className="bg-gray-200">
-                  <tr>
-                    <th className="text-left py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">S.NO</th>
-                    <th className="text-left py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">EMPLOYEE</th>
-                    <th className="text-left py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">EMPLOYEE ID</th>
-                    <th className="text-left py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">DEPARTMENT</th>
-                    <th className="text-left py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">BREAKS</th>
-                    <th className="text-center py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">STATUS</th>
-                    <th className="text-center py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">ACTION</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-100">
-                  {paginated(reportData).map((item, index) => {
-                    const employee = item.employee || item;
-                    const breaks = item.breaks || [];
-                    return (
-                      <tr key={item.empId || employee?.empId || index} className="transition duration-100 border-b border-gray-200 hover:bg-gray-50">
-                        <td className="px-3 py-4 whitespace-nowrap text-base font-medium text-gray-900">
-                          {startIndex + index + 1}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center gap-2">
-                            <User className="w-6 h-6 text-blue-600" />
-                            <div>
-                              <p className="text-base font-semibold text-gray-900">{employee?.employeeName || employee?.name || 'N/A'}</p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-base font-semibold text-gray-700">
-                          {item.empId || employee?.empId || 'N/A'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-base font-semibold text-gray-700">
-                          {employee?.department || item.department || 'N/A'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="space-y-1">
-                            <div className="mb-2">
-                              <span className="px-3 py-1 rounded-full text-sm font-semibold bg-blue-100 text-blue-700">
-                                {breaks.length}
-                              </span>
-                            </div>
-                            {breaks.length > 0 ? (
-                              breaks.slice(0, 2).map((breakItem, idx) => (
-                                <div key={idx} className="text-sm">
-                                  <span className="font-semibold text-gray-700">
-                                    {new Date(breakItem.startTime).toLocaleDateString()} {new Date(breakItem.startTime).toLocaleTimeString()}
-                                  </span>
-                                  <span className="text-gray-500 ml-2">({formatBreakDuration(breakItem)})</span>
-                                </div>
-                              ))
-                            ) : (
-                              <span className="text-gray-400">No breaks</span>
-                            )}
-                            {breaks.length > 2 && (
-                              <p className="text-xs text-blue-600 font-semibold">+{breaks.length - 2} more</p>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 align-middle text-center">
-                          {item.isCurrentlyOnBreak ? (
-                            <div className="flex flex-col items-center gap-1">
-                              <span className="px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700 flex items-center gap-1">
-                                <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                                ON BREAK
-                              </span>
-                              {item.currentBreak && (
-                                <div className="text-xs text-gray-600 mt-1">
-                                  <p>Started: {new Date(item.currentBreak.startTime).toLocaleTimeString()}</p>
-                                  {item.currentBreak.durationMinutes !== undefined && (
-                                    <p>Duration: {formatBreakDurationFromMinutes(item.currentBreak.durationMinutes)}</p>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700 flex items-center gap-1">
-                              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                              AVAILABLE
-                            </span>
+                            </td>
                           )}
-                        </td>
-                        <td className="px-6 py-4 align-middle">
-                          <div className="flex items-center justify-center gap-2">
-                            <button
-                              onClick={() => handleViewEmployee(item)}
-                              className="flex items-center gap-1 bg-transparent text-blue-600 px-3 py-1 rounded text-sm hover:bg-blue-500/30 transition border border-blue-200"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                              View Details
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              </>
-            ) : (
-              <div className="px-6 py-8 text-center text-gray-500">
-                <div className="flex flex-col items-center justify-center">
-                  <Coffee className="w-12 h-12 text-gray-400 mb-3" />
-                  <p className="text-lg font-medium text-gray-600">No break data found</p>
-                  <p className="text-sm text-gray-500 mt-1">Try adjusting your filters</p>
+
+                          {/* Status */}
+                          <td className="px-4 py-4 border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg text-center">
+                            {item.isCurrentlyOnBreak ? (
+                              <div className="flex flex-col items-center gap-1">
+                                <span className="px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700 flex items-center gap-1 justify-center">
+                                  <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                                  ON BREAK
+                                </span>
+                                {item.currentBreak && (
+                                  <div className="text-xs text-gray-600 mt-1">
+                                    <p>Started: {new Date(item.currentBreak.startTime).toLocaleTimeString()}</p>
+                                    {item.currentBreak.durationMinutes !== undefined && (
+                                      <p>Duration: {formatBreakDurationFromMinutes(item.currentBreak.durationMinutes)}</p>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700 flex items-center gap-1 justify-center">
+                                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                AVAILABLE
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Action */}
+                          <td className="px-4 py-4 border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg text-center">
+                             <div className="flex items-center justify-center gap-2">
+                               <button
+                                 onClick={() => handleViewEmployee(item)}
+                                 className="flex items-center gap-2 border border-blue-500 text-blue-500 bg-white hover:bg-blue-500 hover:text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                               >
+                                 <Eye className="w-4 h-4" />
+                                 View Details
+                               </button>
+                             </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+               </>
+          ) : (
+            <div className="py-12 text-center">
+              <div className="flex flex-col items-center justify-center gap-4">
+                <Coffee className="w-16 h-16 text-gray-300" />
+                <div>
+                  <p className="text-gray-500 text-lg">No break data found</p>
+                  <p className="text-gray-400 text-sm">Try adjusting your filters</p>
                 </div>
               </div>
-            )
+            </div>
           )}
         </div>
+      </div>
 
-        {/* Pagination Controls */}
-        {currentData.length > 0 && totalPages > 1 && (
-          <div className="flex justify-between items-center mt-6 px-4 py-3 border border-gray-200 rounded-xl bg-white">
-            <div className="text-sm text-gray-600">
-              Showing {startIndex + 1} to {endIndex} of {currentData.length} entries
-            </div>
-            <div className="flex gap-2 items-center">
-              <button
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-                className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900"
-              >
-                <ChevronLeft size={16} />
-                Previous
-              </button>
-              <div className="hidden md:flex gap-1">
-                {getPageNumbers().map((page, idx, arr) => {
-                  const showEllipsisBefore = idx > 0 && page - arr[idx - 1] > 1;
-                  return (
-                    <React.Fragment key={page}>
-                      {showEllipsisBefore && (
-                        <span className="px-2 text-gray-400">...</span>
-                      )}
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className="flex justify-between items-center mt-6 px-4 border border-separate border-gray-200 p-2 rounded-xl">
+                  <div className="text-sm text-gray-600">
+                    Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, currentData.length)} of {currentData.length} entries
+                  </div>
+                  <div className="flex gap-2 items-center">
+                    <button
+                      onClick={() => setCurrentPage(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900"
+                    >
+                      <ChevronLeft size={16} />
+                      Previous
+                    </button>
+                    <div className="flex gap-1">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                       <button
+                        key={page}
                         onClick={() => setCurrentPage(page)}
                         className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${
                           currentPage === page
@@ -869,22 +754,19 @@ const BreakReport = () => {
                       >
                         {page}
                       </button>
-                    </React.Fragment>
-                  );
-                })}
-              </div>
-              <button
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
-                className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900"
-              >
-                Next
-                <ChevronRight size={16} />
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+                    ))}
+                    </div>
+                    <button
+                      onClick={() => setCurrentPage(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                      className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900"
+                    >
+                      Next
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                </div>
+              )}
            
 
       {/* Employee Break Details Modal */}
@@ -989,4 +871,3 @@ const BreakReport = () => {
 };
 
 export default BreakReport;
-
