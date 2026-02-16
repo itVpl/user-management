@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import breakReportService from '../../services/breakReportService';
-import { Clock, Filter, Search, Calendar, User, Users, Coffee, TrendingUp, RefreshCw, FileText, BarChart3, X, Eye, Activity, AlertCircle, ArrowLeft, ArrowRight } from 'lucide-react';
+import { Clock, Filter, Search, Calendar, User, Users, Coffee, TrendingUp, RefreshCw, FileText, BarChart3, X, Eye, Activity, AlertCircle, ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
 
 /* ====================== Soft Theme (DO Design) ====================== */
 const SOFT = {
-  header: 'rounded-2xl bg-gradient-to-r from-[#6D5DF6] via-[#7A5AF8] to-[#19C3FB] text-white px-5 py-4 shadow',
+  header: 'rounded-2xl bg-gradient-to-r from-[#6D5DF6] via-[#7A5AF8] to-[#19C3FB] text-white px-5 py-4',
   cardMint: 'p-4 rounded-2xl border bg-[#F3FBF6] border-[#B9E6C9]',
   cardPink: 'p-4 rounded-2xl border bg-[#FFF3F7] border-[#F7CADA]',
   cardBlue: 'p-4 rounded-2xl border bg-[#EEF4FF] border-[#C9D5FF]',
@@ -484,175 +484,151 @@ const BreakReport = () => {
   };
 
   return (
-    <div className="p-8 bg-gradient-to-br from-gray-50 to-blue-50 min-h-screen">
-      <div className="max-w-[95%] mx-auto">
-        {/* Header with DO Design */}
-        <div className={SOFT.header + " mb-6"}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Coffee className="w-8 h-8" />
-              <div>
-                <h1 className="text-2xl font-bold">Break Report</h1>
-                <p className="text-blue-100 text-sm">View employee break reports and analytics</p>
-              </div>
-            </div>
-          </div>
-        </div>
+    <div className="p-6">
+      <div className="w-full">
+        {/* Top Section */}
+        <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
+          
+          {/* Stats Row */}
+         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+  {/* Total Breaks */}
+  <div className="p-4 border border-gray-200 rounded-xl flex items-center justify-between">
+    <div className="flex items-center gap-4 w-full">
+      <div className="w-14 h-12 bg-blue-50 rounded-full flex items-center justify-center text-blue-600 font-bold text-2xl">
+        {statistics.totalBreaks}
+      </div>
+      <span className="text-gray-600 font-medium text-lg flex-1 text-center">Total Breaks</span>
+    </div>
+  </div>
 
-        {/* Stats Cards */}
-        <div className="flex items-center gap-6 mb-6 flex-wrap">
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100 flex-shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                <Coffee className="w-6 h-6 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 font-medium">Total Breaks</p>
-                <p className="text-xl font-bold text-gray-900">{statistics.totalBreaks}</p>
-              </div>
-            </div>
-          </div>
+  {/* Total Employees */}
+  <div className="p-4 border border-gray-200 rounded-xl flex items-center justify-between">
+    <div className="flex items-center gap-4 w-full">
+      <div className="w-12 h-12 bg-purple-50 rounded-full flex items-center justify-center text-purple-600 font-bold text-2xl">
+        {statistics.totalEmployees}
+      </div>
+      <span className="text-gray-600 font-medium text-lg flex-1 text-center">Total Employees</span>
+    </div>
+  </div>
+</div>
 
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100 flex-shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-                <Users className="w-6 h-6 text-green-600" />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 font-medium">Total Employees</p>
-                <p className="text-xl font-bold text-green-600">{statistics.totalEmployees}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* View Mode Toggle */}
-        <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100 mb-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <BarChart3 className="w-5 h-5 text-gray-600" />
-              <span className="text-sm font-semibold text-gray-700">View Mode:</span>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setViewMode('detailed')}
-                  className={`px-4 py-2 rounded-lg font-semibold transition-all ${
-                    viewMode === 'detailed'
-                      ? 'bg-blue-600 text-white shadow-md'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <FileText className="w-4 h-4" />
-                    Detailed
-                  </div>
-                </button>
-                <button
-                  onClick={() => setViewMode('summary')}
-                  className={`px-4 py-2 rounded-lg font-semibold transition-all ${
-                    viewMode === 'summary'
-                      ? 'bg-blue-600 text-white shadow-md'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <BarChart3 className="w-4 h-4" />
-                    Summary
-                  </div>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Filters Card */}
-        <div className={SOFT.cardBlue + " mb-6 p-6"}>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-3">
-                <Filter className="w-6 h-6 text-blue-600" />
-                <h2 className="text-lg font-semibold text-gray-800">Filters:</h2>
-              </div>
-              
-              <div className="flex items-center gap-4 flex-1 flex-wrap">
-                <div className="flex-1 min-w-[150px]">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
-                  <div className="relative">
-                    <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <input
-                      type="date"
-                      name="startDate"
-                      value={filters.startDate}
-                      onChange={handleFilterChange}
-                      className="w-full pl-10 pr-4 py-3 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-
-              <div className="flex-1 min-w-[150px]">
-                <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input
-                    type="date"
-                    name="endDate"
-                    value={filters.endDate}
-                    onChange={handleFilterChange}
-                    className="w-full pl-10 pr-4 py-3 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-
-              <div className="flex-1 min-w-[150px]">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Department</label>
-                <select
-                  name="department"
-                  value={filters.department}
-                  onChange={handleFilterChange}
-                  className="w-full px-4 py-3 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">All Departments</option>
-                  {departments.map((dept) => (
-                    <option key={dept} value={dept}>
-                      {dept}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex-1 min-w-[150px]">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Employee ID</label>
-                <input
-                  type="text"
+          {/* Search & View Mode Row */}
+          <div className="flex flex-col md:flex-row items-center gap-4 mb-6">
+             <div className="relative flex-1 w-full">
+                <input 
+                  type="text" 
                   name="empId"
                   value={filters.empId}
                   onChange={handleFilterChange}
-                  placeholder="e.g., EMP001"
-                  className="w-full px-4 py-3 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Search Employee ID..."
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
                 />
-              </div>
+                <Search className="absolute right-4 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+             </div>
 
-              <div className="flex items-end gap-3">
+             {/* View Mode Toggle */}
+             <div className="flex items-center gap-3 w-full md:w-auto justify-end">
+                <div className="flex bg-gray-100 p-1.5 rounded-xl">
+                    <button
+                        onClick={() => setViewMode('detailed')}
+                        className={`px-4 py-1.5 rounded-lg text-base font-medium transition-all ${
+                            viewMode === 'detailed' 
+                            ? 'bg-white text-gray-900' 
+                            : 'text-gray-500 hover:text-gray-900'
+                        }`}
+                    >
+                        Detailed
+                    </button>
+                    <button
+                        onClick={() => setViewMode('summary')}
+                        className={`px-4 py-1.5 rounded-lg text-base font-medium transition-all ${
+                            viewMode === 'summary' 
+                            ? 'bg-white text-gray-900' 
+                            : 'text-gray-500 hover:text-gray-900'
+                        }`}
+                    >
+                        Summary
+                    </button>
+                </div>
+             </div>
+          </div>
+
+          {/* Filters & Actions Row */}
+          <div className="flex flex-col xl:flex-row justify-between items-center gap-4">
+            
+            {/* Filters */}
+            <div className="flex flex-col md:flex-row gap-3 w-full xl:w-auto flex-1 items-end">
+               <div className="w-full md:flex-1">
+                  <label className="block text-xs font-semibold text-gray-500 mb-1.5 ml-1">Start Date</label>
+                  <div className="relative">
+                    <input 
+                        type="date" 
+                        name="startDate"
+                        value={filters.startDate}
+                        onChange={handleFilterChange}
+                        className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors text-sm"
+                    />
+                    <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                  </div>
+               </div>
+
+               <div className="w-full md:flex-1">
+                  <label className="block text-xs font-semibold text-gray-500 mb-1.5 ml-1">End Date</label>
+                  <div className="relative">
+                    <input 
+                        type="date" 
+                        name="endDate"
+                        value={filters.endDate}
+                        onChange={handleFilterChange}
+                        className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors text-sm"
+                    />
+                    <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                  </div>
+               </div>
+
+               <div className="w-full md:flex-1">
+                  <label className="block text-xs font-semibold text-gray-500 mb-1.5 ml-1">Department</label>
+                  <div className="relative">
+                      <select
+                        name="department"
+                        value={filters.department}
+                        onChange={handleFilterChange}
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors appearance-none text-sm"
+                      >
+                        <option value="">All Departments</option>
+                        {departments.map(dept => (
+                          <option key={dept} value={dept}>{dept}</option>
+                        ))}
+                      </select>
+                      <ChevronDown className="absolute right-4 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
+                  </div>
+               </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-3 w-full xl:w-auto justify-end mt-5">
+               <button
+                  onClick={handleClearFilters}
+                  className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-red-600 hover:bg-red-50 border border-gray-200 rounded-xl transition-colors font-medium"
+                  title="Clear Filters"
+                >
+                  <X className="w-5 h-5" />
+                  Clear
+                </button>
                 <button
                   onClick={fetchReport}
-                  className={`${MS.primaryBtn} px-6 py-3 text-base rounded-lg flex items-center justify-center gap-2 font-semibold`}
-                  style={{ height: '52px' }}
+                  className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 border border-gray-200 rounded-xl transition-colors font-medium"
+                  title="Refresh"
                 >
                   <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
                   Refresh
                 </button>
-                <button
-                  onClick={handleClearFilters}
-                  className={`${MS.subtleBtn} px-6 py-3 text-base rounded-lg font-semibold`}
-                  style={{ height: '52px' }}
-                >
-                  Clear
-                </button>
-              </div>
             </div>
           </div>
         </div>
 
         {/* Data Table Section */}
-        <div className="overflow-x-auto bg-white rounded-2xl shadow-xl border border-gray-100">
+        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-12">
               <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
@@ -736,50 +712,6 @@ const BreakReport = () => {
                   ))}
                 </tbody>
               </table>
-              {/* Pagination for Summary */}
-              {summaryData && summaryData.length > 0 && totalPages > 1 && (
-                <div className="flex justify-between items-center mt-6 bg-white rounded-2xl p-4 border-t border-gray-100">
-                  <div className="text-sm text-gray-600">
-                    Showing {startIndex + 1} to {endIndex} of {summaryData.length} results
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                      disabled={currentPage === 1}
-                      className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-                    >
-                      <ArrowLeft size={16} /> Previous
-                    </button>
-                    <div className="hidden md:flex items-center gap-1">
-                      {getPageNumbers().map((page, idx, arr) => {
-                        const showEllipsisBefore = idx > 0 && page - arr[idx - 1] > 1;
-                        return (
-                          <React.Fragment key={page}>
-                            {showEllipsisBefore && (
-                              <span className="px-2 text-gray-400">...</span>
-                            )}
-                            <button
-                              onClick={() => setCurrentPage(page)}
-                              className={`px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
-                                currentPage === page ? 'bg-blue-500 text-white shadow-lg' : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'
-                              }`}
-                            >
-                              {page}
-                            </button>
-                          </React.Fragment>
-                        );
-                      })}
-                    </div>
-                    <button
-                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                      disabled={currentPage === totalPages}
-                      className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-                    >
-                      Next <ArrowRight size={16} />
-                    </button>
-                  </div>
-                </div>
-              )}
               </>
             ) : (
               <div className="px-6 py-8 text-center text-gray-500">
@@ -891,50 +823,6 @@ const BreakReport = () => {
                   })}
                 </tbody>
               </table>
-              {/* Pagination for Detailed */}
-              {reportData && reportData.length > 0 && totalPages > 1 && (
-                <div className="flex justify-between items-center mt-6 bg-white rounded-2xl p-4 border-t border-gray-100">
-                  <div className="text-sm text-gray-600">
-                    Showing {startIndex + 1} to {endIndex} of {reportData.length} results
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                      disabled={currentPage === 1}
-                      className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-                    >
-                      <ArrowLeft size={16} /> Previous
-                    </button>
-                    <div className="hidden md:flex items-center gap-1">
-                      {getPageNumbers().map((page, idx, arr) => {
-                        const showEllipsisBefore = idx > 0 && page - arr[idx - 1] > 1;
-                        return (
-                          <React.Fragment key={page}>
-                            {showEllipsisBefore && (
-                              <span className="px-2 text-gray-400">...</span>
-                            )}
-                            <button
-                              onClick={() => setCurrentPage(page)}
-                              className={`px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
-                                currentPage === page ? 'bg-blue-500 text-white shadow-lg' : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'
-                              }`}
-                            >
-                              {page}
-                            </button>
-                          </React.Fragment>
-                        );
-                      })}
-                    </div>
-                    <button
-                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                      disabled={currentPage === totalPages}
-                      className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-                    >
-                      Next <ArrowRight size={16} />
-                    </button>
-                  </div>
-                </div>
-              )}
               </>
             ) : (
               <div className="px-6 py-8 text-center text-gray-500">
@@ -945,15 +833,64 @@ const BreakReport = () => {
                 </div>
               </div>
             )
-          
           )}
         </div>
+
+        {/* Pagination Controls */}
+        {currentData.length > 0 && totalPages > 1 && (
+          <div className="flex justify-between items-center mt-6 px-4 py-3 border border-gray-200 rounded-xl bg-white">
+            <div className="text-sm text-gray-600">
+              Showing {startIndex + 1} to {endIndex} of {currentData.length} entries
+            </div>
+            <div className="flex gap-2 items-center">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900"
+              >
+                <ChevronLeft size={16} />
+                Previous
+              </button>
+              <div className="hidden md:flex gap-1">
+                {getPageNumbers().map((page, idx, arr) => {
+                  const showEllipsisBefore = idx > 0 && page - arr[idx - 1] > 1;
+                  return (
+                    <React.Fragment key={page}>
+                      {showEllipsisBefore && (
+                        <span className="px-2 text-gray-400">...</span>
+                      )}
+                      <button
+                        onClick={() => setCurrentPage(page)}
+                        className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${
+                          currentPage === page
+                            ? 'border border-gray-900 text-gray-900 bg-white'
+                            : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    </React.Fragment>
+                  );
+                })}
+              </div>
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900"
+              >
+                Next
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
+           
 
       {/* Employee Break Details Modal */}
       {showEmployeeModal && selectedEmployee && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-md flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl border border-gray-200 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             {/* Modal Header */}
             <div className={SOFT.header}>
               <div className="flex items-center justify-between">
