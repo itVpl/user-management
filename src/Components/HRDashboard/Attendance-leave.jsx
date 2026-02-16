@@ -288,6 +288,12 @@ const HRManagementSystem = () => {
 
 
   const leaveFiltered = leaveRequestData.filter(r => {
+    // Exclude automatic half-day leaves
+    const reason = (r.reason || '').toLowerCase();
+    if (reason.includes('automatic half-day leave due to incomplete daily targets')) {
+      return false;
+    }
+    
     const matchText = (leaveSearch || '').trim().toLowerCase();
     const str = `${r.empId || ''} ${r.empName || ''} ${r.leaveType || ''} ${r.department || ''} ${r.role || ''}`.toLowerCase();
     const okSearch = matchText ? str.includes(matchText) : true;
@@ -323,6 +329,40 @@ const HRManagementSystem = () => {
   const totalPages = Math.max(1, Math.ceil(currentData.length / recordsPerPage));
   const startIndex = (currentPage - 1) * recordsPerPage;
   const endIndex   = Math.min(startIndex + recordsPerPage, currentData.length);
+
+  // Smart pagination: show limited page numbers
+  const getPageNumbers = () => {
+    const maxVisible = 7; // Maximum number of page buttons to show
+    if (totalPages <= maxVisible) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+    
+    const pages = [];
+    const halfVisible = Math.floor(maxVisible / 2);
+    
+    if (currentPage <= halfVisible + 1) {
+      // Near the start
+      for (let i = 1; i <= maxVisible - 1; i++) {
+        pages.push(i);
+      }
+      pages.push(totalPages);
+    } else if (currentPage >= totalPages - halfVisible) {
+      // Near the end
+      pages.push(1);
+      for (let i = totalPages - (maxVisible - 2); i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      // In the middle
+      pages.push(1);
+      for (let i = currentPage - halfVisible + 1; i <= currentPage + halfVisible - 1; i++) {
+        pages.push(i);
+      }
+      pages.push(totalPages);
+    }
+    
+    return pages;
+  };
 
 
   // Stats Cards (LeaveApproval-style)
@@ -597,26 +637,25 @@ const HRManagementSystem = () => {
                 {activeTab === 'dailyAttendance' && (
                   <>
                     <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Date</th>
-                    <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Employee ID</th>
-                    <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Employee Name</th>
+                    <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Emp ID</th>
+                    <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Emp Name</th>
                     <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Log In</th>
                     <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Log Out</th>
                     <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Total Hrs</th>
                     <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
                     <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Dept</th>
-                    <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Role</th>
                   </>
                 )}
                 {activeTab === 'leaveRequest' && (
                   <>
                     <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Date</th>
-                    <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Employee ID</th>
-                    <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Employee Name</th>
+                    <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Emp ID</th>
+                    <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Emp Name</th>
                     <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">From</th>
                     <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">To</th>
                     <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Leave Type</th>
+                    <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Reason</th>
                     <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Dept</th>
-                    <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Role</th>
                     {/* Status */}
                     <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
                     {/* Action */}
@@ -625,8 +664,8 @@ const HRManagementSystem = () => {
                 )}
                 {activeTab === 'leaveBalance' && (
                   <>
-                    <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Employee ID</th>
-                    <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Employee Name</th>
+                    <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Emp ID</th>
+                    <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Emp Name</th>
                     <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Casual Leave</th>
                     <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Sick Leave</th>
                     <th className="text-left py-4 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">Total Leave</th>
@@ -642,7 +681,7 @@ const HRManagementSystem = () => {
                 (activeTab === 'leaveRequest' && loadingLeaves) ||
                 (activeTab === 'leaveBalance' && loadingLeaveBalance)) && (
                 <tr>
-                  <td colSpan={activeTab === 'dailyAttendance' ? 9 : activeTab === 'leaveRequest' ? 10 : 5} className="py-16">
+                  <td colSpan={activeTab === 'dailyAttendance' ? 8 : activeTab === 'leaveRequest' ? 10 : 5} className="py-16">
                     <div className="flex flex-col items-center justify-center">
                       <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
                       <p className="text-gray-600">
@@ -659,7 +698,7 @@ const HRManagementSystem = () => {
                 (activeTab === 'leaveRequest' && leaveError) ||
                 (activeTab === 'leaveBalance' && leaveBalanceError)) && (
                 <tr>
-                  <td colSpan={activeTab === 'dailyAttendance' ? 9 : activeTab === 'leaveRequest' ? 10 : 5} className="py-12">
+                  <td colSpan={activeTab === 'dailyAttendance' ? 8 : activeTab === 'leaveRequest' ? 10 : 5} className="py-12">
                     <div className="text-center">
                       <AlertCircle className="w-16 h-16 text-red-300 mx-auto mb-4" />
                       <p className="text-red-600">
@@ -675,7 +714,7 @@ const HRManagementSystem = () => {
               {activeTab === 'dailyAttendance' && !loadingAttendance && !attendanceError && (
                 attendanceFiltered.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="text-center py-12">
+                    <td colSpan={8} className="text-center py-12">
                       <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                       <p className="text-gray-500 text-lg">No attendance data found.</p>
                       <p className="text-gray-400 text-sm">Try another date or search criteria.</p>
@@ -692,7 +731,6 @@ const HRManagementSystem = () => {
                       <td className="py-4 px-6 text-gray-700">{row.totalTime || ''}</td>
                       <td className="py-4 px-6"><span className={getAttendanceBadge(row.status)}>{row.status}</span></td>
                       <td className="py-4 px-6 text-gray-700">{row.department}</td>
-                      <td className="py-4 px-6 text-gray-700">{row.role}</td>
                     </tr>
                   ))
                 )
@@ -717,8 +755,12 @@ const HRManagementSystem = () => {
                       <td className="py-4 px-6 text-gray-700">{formatDate(row.fromDate)}</td>
                       <td className="py-4 px-6 text-gray-700">{formatDate(row.toDate)}</td>
                       <td className="py-4 px-6 text-gray-700">{row.leaveType}</td>
+                      <td className="py-4 px-6 text-gray-700 max-w-xs">
+                        <div className="truncate" title={row.reason || 'N/A'}>
+                          {row.reason || 'N/A'}
+                        </div>
+                      </td>
                       <td className="py-4 px-6 text-gray-700">{row.department || 'N/A'}</td>
-                      <td className="py-4 px-6 text-gray-700">{row.role || 'N/A'}</td>
                       {/* Status */}
                       <td className="py-4 px-6"><LeaveStatusChip status={row.status} /></td>
                       {/* Action: only if manager_approved */}
@@ -773,17 +815,25 @@ const HRManagementSystem = () => {
 
 
                 <div className="hidden md:flex items-center gap-1">
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                    <button
-                      key={page}
-                      onClick={() => setCurrentPage(page)}
-                      className={`px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
-                        currentPage === page ? 'bg-blue-500 text-white shadow-lg' : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'
-                      }`}
-                    >
-                      {page}
-                    </button>
-                  ))}
+                  {getPageNumbers().map((page, idx, arr) => {
+                    // Add ellipsis between non-consecutive pages
+                    const showEllipsisBefore = idx > 0 && page - arr[idx - 1] > 1;
+                    return (
+                      <React.Fragment key={page}>
+                        {showEllipsisBefore && (
+                          <span className="px-2 text-gray-400">...</span>
+                        )}
+                        <button
+                          onClick={() => setCurrentPage(page)}
+                          className={`px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
+                            currentPage === page ? 'bg-blue-500 text-white shadow-lg' : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      </React.Fragment>
+                    );
+                  })}
                 </div>
 
 

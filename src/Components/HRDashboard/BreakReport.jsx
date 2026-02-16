@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import breakReportService from '../../services/breakReportService';
-import { Clock, Filter, Search, Calendar, User, Users, Coffee, TrendingUp, RefreshCw, FileText, BarChart3, X, Eye, Activity, AlertCircle } from 'lucide-react';
+import { Clock, Filter, Search, Calendar, User, Users, Coffee, TrendingUp, RefreshCw, FileText, BarChart3, X, Eye, Activity, AlertCircle, ArrowLeft, ArrowRight } from 'lucide-react';
 
 /* ====================== Soft Theme (DO Design) ====================== */
 const SOFT = {
@@ -48,8 +48,17 @@ const BreakReport = () => {
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [employeeBreakData, setEmployeeBreakData] = useState([]);
 
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [recordsPerPage] = useState(10);
+
   // Department options
   const departments = ['Sales', 'CMT', 'IT', 'HR', 'Finance'];
+
+  // Reset page when filters or view mode changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters.startDate, filters.endDate, filters.department, filters.empId, viewMode]);
 
   useEffect(() => {
     if (viewMode === 'current') {
@@ -421,6 +430,59 @@ const BreakReport = () => {
     }
   };
 
+  // Pagination helpers
+  const paginated = (arr) => {
+    const start = (currentPage - 1) * recordsPerPage;
+    const end = start + recordsPerPage;
+    return arr.slice(start, end);
+  };
+
+  const getCurrentData = () => {
+    if (viewMode === 'summary') {
+      return summaryData || [];
+    }
+    return reportData || [];
+  };
+
+  const currentData = getCurrentData();
+  const totalPages = Math.max(1, Math.ceil(currentData.length / recordsPerPage));
+  const startIndex = (currentPage - 1) * recordsPerPage;
+  const endIndex = Math.min(startIndex + recordsPerPage, currentData.length);
+
+  // Smart pagination: show limited page numbers
+  const getPageNumbers = () => {
+    const maxVisible = 7; // Maximum number of page buttons to show
+    if (totalPages <= maxVisible) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+    
+    const pages = [];
+    const halfVisible = Math.floor(maxVisible / 2);
+    
+    if (currentPage <= halfVisible + 1) {
+      // Near the start
+      for (let i = 1; i <= maxVisible - 1; i++) {
+        pages.push(i);
+      }
+      pages.push(totalPages);
+    } else if (currentPage >= totalPages - halfVisible) {
+      // Near the end
+      pages.push(1);
+      for (let i = totalPages - (maxVisible - 2); i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      // In the middle
+      pages.push(1);
+      for (let i = currentPage - halfVisible + 1; i <= currentPage + halfVisible - 1; i++) {
+        pages.push(i);
+      }
+      pages.push(totalPages);
+    }
+    
+    return pages;
+  };
+
   return (
     <div className="p-8 bg-gradient-to-br from-gray-50 to-blue-50 min-h-screen">
       <div className="max-w-[95%] mx-auto">
@@ -598,6 +660,7 @@ const BreakReport = () => {
             </div>
           ) : viewMode === 'summary' ? (
             summaryData && summaryData.length > 0 ? (
+              <>
               <table className="w-full">
                 <thead className="bg-gray-200">
                   <tr>
@@ -611,10 +674,10 @@ const BreakReport = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-100">
-                  {summaryData.map((item, index) => (
+                  {paginated(summaryData).map((item, index) => (
                     <tr key={item.empId || index} className="transition duration-100 border-b border-gray-200 hover:bg-gray-50">
                       <td className="px-3 py-4 whitespace-nowrap text-base font-medium text-gray-900">
-                        {index + 1}
+                        {startIndex + index + 1}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-2">
@@ -673,6 +736,51 @@ const BreakReport = () => {
                   ))}
                 </tbody>
               </table>
+              {/* Pagination for Summary */}
+              {summaryData && summaryData.length > 0 && totalPages > 1 && (
+                <div className="flex justify-between items-center mt-6 bg-white rounded-2xl p-4 border-t border-gray-100">
+                  <div className="text-sm text-gray-600">
+                    Showing {startIndex + 1} to {endIndex} of {summaryData.length} results
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                    >
+                      <ArrowLeft size={16} /> Previous
+                    </button>
+                    <div className="hidden md:flex items-center gap-1">
+                      {getPageNumbers().map((page, idx, arr) => {
+                        const showEllipsisBefore = idx > 0 && page - arr[idx - 1] > 1;
+                        return (
+                          <React.Fragment key={page}>
+                            {showEllipsisBefore && (
+                              <span className="px-2 text-gray-400">...</span>
+                            )}
+                            <button
+                              onClick={() => setCurrentPage(page)}
+                              className={`px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
+                                currentPage === page ? 'bg-blue-500 text-white shadow-lg' : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'
+                              }`}
+                            >
+                              {page}
+                            </button>
+                          </React.Fragment>
+                        );
+                      })}
+                    </div>
+                    <button
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                      className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                    >
+                      Next <ArrowRight size={16} />
+                    </button>
+                  </div>
+                </div>
+              )}
+              </>
             ) : (
               <div className="px-6 py-8 text-center text-gray-500">
                 <div className="flex flex-col items-center justify-center">
@@ -684,6 +792,7 @@ const BreakReport = () => {
             )
           ) : (
             reportData && reportData.length > 0 ? (
+              <>
               <table className="w-full">
                 <thead className="bg-gray-200">
                   <tr>
@@ -697,13 +806,13 @@ const BreakReport = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-100">
-                  {reportData.map((item, index) => {
+                  {paginated(reportData).map((item, index) => {
                     const employee = item.employee || item;
                     const breaks = item.breaks || [];
                     return (
                       <tr key={item.empId || employee?.empId || index} className="transition duration-100 border-b border-gray-200 hover:bg-gray-50">
                         <td className="px-3 py-4 whitespace-nowrap text-base font-medium text-gray-900">
-                          {index + 1}
+                          {startIndex + index + 1}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center gap-2">
@@ -782,6 +891,51 @@ const BreakReport = () => {
                   })}
                 </tbody>
               </table>
+              {/* Pagination for Detailed */}
+              {reportData && reportData.length > 0 && totalPages > 1 && (
+                <div className="flex justify-between items-center mt-6 bg-white rounded-2xl p-4 border-t border-gray-100">
+                  <div className="text-sm text-gray-600">
+                    Showing {startIndex + 1} to {endIndex} of {reportData.length} results
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                    >
+                      <ArrowLeft size={16} /> Previous
+                    </button>
+                    <div className="hidden md:flex items-center gap-1">
+                      {getPageNumbers().map((page, idx, arr) => {
+                        const showEllipsisBefore = idx > 0 && page - arr[idx - 1] > 1;
+                        return (
+                          <React.Fragment key={page}>
+                            {showEllipsisBefore && (
+                              <span className="px-2 text-gray-400">...</span>
+                            )}
+                            <button
+                              onClick={() => setCurrentPage(page)}
+                              className={`px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
+                                currentPage === page ? 'bg-blue-500 text-white shadow-lg' : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'
+                              }`}
+                            >
+                              {page}
+                            </button>
+                          </React.Fragment>
+                        );
+                      })}
+                    </div>
+                    <button
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                      className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                    >
+                      Next <ArrowRight size={16} />
+                    </button>
+                  </div>
+                </div>
+              )}
+              </>
             ) : (
               <div className="px-6 py-8 text-center text-gray-500">
                 <div className="flex flex-col items-center justify-center">
