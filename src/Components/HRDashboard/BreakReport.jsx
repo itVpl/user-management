@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import breakReportService from '../../services/breakReportService';
-import { Clock, Filter, Search, Calendar, User, Users, Coffee, TrendingUp, RefreshCw, FileText, BarChart3, X, Eye, Activity, AlertCircle } from 'lucide-react';
+import { Clock, Filter, Search, Calendar, User, Users, Coffee, TrendingUp, RefreshCw, FileText, BarChart3, X, Eye, Activity, AlertCircle, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
 
 /* ====================== Soft Theme (DO Design) ====================== */
 const SOFT = {
-  header: 'rounded-2xl bg-gradient-to-r from-[#6D5DF6] via-[#7A5AF8] to-[#19C3FB] text-white px-5 py-4 shadow',
+  header: 'rounded-2xl bg-gradient-to-r from-[#6D5DF6] via-[#7A5AF8] to-[#19C3FB] text-white px-5 py-4',
   cardMint: 'p-4 rounded-2xl border bg-[#F3FBF6] border-[#B9E6C9]',
   cardPink: 'p-4 rounded-2xl border bg-[#FFF3F7] border-[#F7CADA]',
   cardBlue: 'p-4 rounded-2xl border bg-[#EEF4FF] border-[#C9D5FF]',
@@ -48,8 +48,17 @@ const BreakReport = () => {
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [employeeBreakData, setEmployeeBreakData] = useState([]);
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
   // Department options
   const departments = ['Sales', 'CMT', 'IT', 'HR', 'Finance'];
+
+  // Reset pagination when view mode changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [viewMode]);
 
   useEffect(() => {
     if (viewMode === 'current') {
@@ -421,385 +430,349 @@ const BreakReport = () => {
     }
   };
 
+  // Pagination Logic
+  const currentData = viewMode === 'summary' ? (summaryData || []) : (reportData || []);
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = currentData.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(currentData.length / itemsPerPage);
+
   return (
-    <div className="p-8 bg-gradient-to-br from-gray-50 to-blue-50 min-h-screen">
-      <div className="max-w-[95%] mx-auto">
-        {/* Header with DO Design */}
-        <div className={SOFT.header + " mb-6"}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Coffee className="w-8 h-8" />
-              <div>
-                <h1 className="text-2xl font-bold">Break Report</h1>
-                <p className="text-blue-100 text-sm">View employee break reports and analytics</p>
-              </div>
-            </div>
-          </div>
-        </div>
+    <div className="p-6">
+      <div className="w-full">
+        {/* Top Section */}
+        <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
+          
+          {/* Stats Row */}
+         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+  {/* Total Breaks */}
+  <div className="p-4 border border-gray-200 rounded-xl flex items-center justify-between">
+    <div className="flex items-center gap-4 w-full">
+      <div className="w-14 h-12 bg-blue-50 rounded-full flex items-center justify-center text-blue-600 font-bold text-2xl">
+        {statistics.totalBreaks}
+      </div>
+      <span className="text-gray-600 font-medium text-lg flex-1 text-center">Total Breaks</span>
+    </div>
+  </div>
 
-        {/* Stats Cards */}
-        <div className="flex items-center gap-6 mb-6 flex-wrap">
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100 flex-shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                <Coffee className="w-6 h-6 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 font-medium">Total Breaks</p>
-                <p className="text-xl font-bold text-gray-900">{statistics.totalBreaks}</p>
-              </div>
-            </div>
-          </div>
+  {/* Total Employees */}
+  <div className="p-4 border border-gray-200 rounded-xl flex items-center justify-between">
+    <div className="flex items-center gap-4 w-full">
+      <div className="w-12 h-12 bg-purple-50 rounded-full flex items-center justify-center text-purple-600 font-bold text-2xl">
+        {statistics.totalEmployees}
+      </div>
+      <span className="text-gray-600 font-medium text-lg flex-1 text-center">Total Employees</span>
+    </div>
+  </div>
+</div>
 
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100 flex-shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-                <Users className="w-6 h-6 text-green-600" />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 font-medium">Total Employees</p>
-                <p className="text-xl font-bold text-green-600">{statistics.totalEmployees}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* View Mode Toggle */}
-        <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100 mb-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <BarChart3 className="w-5 h-5 text-gray-600" />
-              <span className="text-sm font-semibold text-gray-700">View Mode:</span>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setViewMode('detailed')}
-                  className={`px-4 py-2 rounded-lg font-semibold transition-all ${
-                    viewMode === 'detailed'
-                      ? 'bg-blue-600 text-white shadow-md'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <FileText className="w-4 h-4" />
-                    Detailed
-                  </div>
-                </button>
-                <button
-                  onClick={() => setViewMode('summary')}
-                  className={`px-4 py-2 rounded-lg font-semibold transition-all ${
-                    viewMode === 'summary'
-                      ? 'bg-blue-600 text-white shadow-md'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <BarChart3 className="w-4 h-4" />
-                    Summary
-                  </div>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Filters Card */}
-        <div className={SOFT.cardBlue + " mb-6 p-6"}>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-3">
-                <Filter className="w-6 h-6 text-blue-600" />
-                <h2 className="text-lg font-semibold text-gray-800">Filters:</h2>
-              </div>
-              
-              <div className="flex items-center gap-4 flex-1 flex-wrap">
-                <div className="flex-1 min-w-[150px]">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
-                  <div className="relative">
-                    <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <input
-                      type="date"
-                      name="startDate"
-                      value={filters.startDate}
-                      onChange={handleFilterChange}
-                      className="w-full pl-10 pr-4 py-3 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-
-              <div className="flex-1 min-w-[150px]">
-                <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input
-                    type="date"
-                    name="endDate"
-                    value={filters.endDate}
-                    onChange={handleFilterChange}
-                    className="w-full pl-10 pr-4 py-3 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-
-              <div className="flex-1 min-w-[150px]">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Department</label>
-                <select
-                  name="department"
-                  value={filters.department}
-                  onChange={handleFilterChange}
-                  className="w-full px-4 py-3 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">All Departments</option>
-                  {departments.map((dept) => (
-                    <option key={dept} value={dept}>
-                      {dept}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex-1 min-w-[150px]">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Employee ID</label>
-                <input
-                  type="text"
+          {/* Search & View Mode Row */}
+          <div className="flex flex-col md:flex-row items-center gap-4 mb-6">
+             <div className="relative flex-1 w-full">
+                <input 
+                  type="text" 
                   name="empId"
                   value={filters.empId}
                   onChange={handleFilterChange}
-                  placeholder="e.g., EMP001"
-                  className="w-full px-4 py-3 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Search Employee ID..."
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
                 />
-              </div>
+                <Search className="absolute right-4 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+             </div>
 
-              <div className="flex items-end gap-3">
+             {/* View Mode Toggle */}
+             <div className="flex items-center gap-3 w-full md:w-auto justify-end">
+                <div className="flex bg-gray-100 p-1.5 rounded-xl">
+                    <button
+                        onClick={() => setViewMode('detailed')}
+                        className={`px-4 py-1.5 rounded-lg text-base font-medium transition-all ${
+                            viewMode === 'detailed' 
+                            ? 'bg-white text-gray-900' 
+                            : 'text-gray-500 hover:text-gray-900'
+                        }`}
+                    >
+                        Detailed
+                    </button>
+                    <button
+                        onClick={() => setViewMode('summary')}
+                        className={`px-4 py-1.5 rounded-lg text-base font-medium transition-all ${
+                            viewMode === 'summary' 
+                            ? 'bg-white text-gray-900' 
+                            : 'text-gray-500 hover:text-gray-900'
+                        }`}
+                    >
+                        Summary
+                    </button>
+                </div>
+             </div>
+          </div>
+
+          {/* Filters & Actions Row */}
+          <div className="flex flex-col xl:flex-row justify-between items-center gap-4">
+            
+            {/* Filters */}
+            <div className="flex flex-col md:flex-row gap-3 w-full xl:w-auto flex-1 items-end">
+               <div className="w-full md:flex-1">
+                  <label className="block text-xs font-semibold text-gray-500 mb-1.5 ml-1">Start Date</label>
+                  <div className="relative">
+                    <input 
+                        type="date" 
+                        name="startDate"
+                        value={filters.startDate}
+                        onChange={handleFilterChange}
+                        className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors text-sm"
+                    />
+                    <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                  </div>
+               </div>
+
+               <div className="w-full md:flex-1">
+                  <label className="block text-xs font-semibold text-gray-500 mb-1.5 ml-1">End Date</label>
+                  <div className="relative">
+                    <input 
+                        type="date" 
+                        name="endDate"
+                        value={filters.endDate}
+                        onChange={handleFilterChange}
+                        className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors text-sm"
+                    />
+                    <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                  </div>
+               </div>
+
+               <div className="w-full md:flex-1">
+                  <label className="block text-xs font-semibold text-gray-500 mb-1.5 ml-1">Department</label>
+                  <div className="relative">
+                      <select
+                        name="department"
+                        value={filters.department}
+                        onChange={handleFilterChange}
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors appearance-none text-sm"
+                      >
+                        <option value="">All Departments</option>
+                        {departments.map(dept => (
+                          <option key={dept} value={dept}>{dept}</option>
+                        ))}
+                      </select>
+                      <ChevronDown className="absolute right-4 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
+                  </div>
+               </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-3 w-full xl:w-auto justify-end mt-5">
+               <button
+                  onClick={handleClearFilters}
+                  className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-red-600 hover:bg-red-50 border border-gray-200 rounded-xl transition-colors font-medium"
+                  title="Clear Filters"
+                >
+                  <X className="w-5 h-5" />
+                  Clear
+                </button>
                 <button
                   onClick={fetchReport}
-                  className={`${MS.primaryBtn} px-6 py-3 text-base rounded-lg flex items-center justify-center gap-2 font-semibold`}
-                  style={{ height: '52px' }}
+                  className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 border border-gray-200 rounded-xl transition-colors font-medium"
+                  title="Refresh"
                 >
                   <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
                   Refresh
                 </button>
-                <button
-                  onClick={handleClearFilters}
-                  className={`${MS.subtleBtn} px-6 py-3 text-base rounded-lg font-semibold`}
-                  style={{ height: '52px' }}
-                >
-                  Clear
-                </button>
-              </div>
             </div>
           </div>
         </div>
 
         {/* Data Table Section */}
-        <div className="overflow-x-auto bg-white rounded-2xl shadow-xl border border-gray-100">
+        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-12">
               <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
               <p className="text-gray-600">Loading break report...</p>
             </div>
-          ) : viewMode === 'summary' ? (
-            summaryData && summaryData.length > 0 ? (
-              <table className="w-full">
-                <thead className="bg-gray-200">
-                  <tr>
-                    <th className="text-left py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">S.NO</th>
-                    <th className="text-left py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">EMPLOYEE</th>
-                    <th className="text-left py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">EMPLOYEE ID</th>
-                    <th className="text-left py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">DEPARTMENT</th>
-                    <th className="text-center py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">BREAK COUNT</th>
-                    <th className="text-center py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">STATUS</th>
-                    <th className="text-center py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">ACTION</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-100">
-                  {summaryData.map((item, index) => (
-                    <tr key={item.empId || index} className="transition duration-100 border-b border-gray-200 hover:bg-gray-50">
-                      <td className="px-3 py-4 whitespace-nowrap text-base font-medium text-gray-900">
-                        {index + 1}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <User className="w-6 h-6 text-blue-600" />
-                          <div>
-                            <p className="text-base font-semibold text-gray-900">{item.employeeName || 'N/A'}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-base font-semibold text-gray-700">
-                        {item.empId || 'N/A'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-base font-semibold text-gray-700">
-                        {item.department || 'N/A'}
-                      </td>
-                      <td className="px-6 py-4 align-middle text-center">
-                        <span className="px-4 py-2 rounded-full text-sm font-semibold bg-blue-100 text-blue-700">
-                          {item.totalBreaks ?? item.breakCount ?? 0}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 align-middle text-center">
-                        {item.isCurrentlyOnBreak ? (
-                          <div className="flex flex-col items-center gap-1">
-                            <span className="px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700 flex items-center gap-1">
-                              <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                              ON BREAK
-                            </span>
-                            {item.currentBreak && (
-                              <div className="text-xs text-gray-600 mt-1">
-                                <p>Started: {new Date(item.currentBreak.startTime).toLocaleTimeString()}</p>
-                                {item.currentBreak.durationMinutes !== undefined && (
-                                  <p>Duration: {formatBreakDurationFromMinutes(item.currentBreak.durationMinutes)}</p>
+          ) : currentItems.length > 0 ? (
+            <>
+              <div className="overflow-x-auto p-4">
+                <table className="w-full border-separate border-spacing-y-4">
+                  <thead>
+                    <tr className="text-sm text-gray-500">
+                      <th className="font-semibold text-sm px-4 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">S.NO</th>
+                      <th className="font-semibold text-sm px-4 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">EMPLOYEE</th>
+                      <th className="font-semibold text-sm px-1 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">EMPLOYEE ID</th>
+                      <th className="font-semibold text-sm px-1 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">DEPARTMENT</th>
+                      {viewMode === 'summary' ? (
+                        <th className="font-semibold text-sm px-4 py-3 text-center border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">BREAK COUNT</th>
+                      ) : (
+                        <th className="font-semibold text-sm px-4 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">BREAKS</th>
+                      )}
+                      <th className="font-semibold text-sm px-4 py-3 text-center border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">STATUS</th>
+                      <th className="font-semibold text-sm px-4 py-3 text-center border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">ACTION</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {currentItems.map((item, index) => {
+                      const globalIndex = indexOfFirstItem + index + 1;
+                      // Handle data structure differences
+                      const employee = viewMode === 'summary' ? item : (item.employee || item);
+                      const empId = item.empId || employee?.empId || 'N/A';
+                      const empName = employee?.employeeName || employee?.name || 'N/A';
+                      const dept = employee?.department || item.department || 'N/A';
+                      const breaks = item.breaks || [];
+                      
+                      return (
+                        <tr key={empId || index} className="bg-white hover:bg-gray-50 transition-colors group">
+                          <td className="px-4 py-4 border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg">
+                            <span className="font-medium text-gray-700">{globalIndex}</span>
+                          </td>
+                          <td className="px-4 py-4 border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg">
+                            <div className="flex items-center gap-2">
+                                <span className="font-medium text-gray-800">{empName}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-4 border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg">
+                            <span className="font-medium text-gray-700">{empId}</span>
+                          </td>
+                          <td className="px-4 py-4 border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg">
+                            <span className="font-medium text-gray-700">{dept}</span>
+                          </td>
+                          
+                          {/* Break Details / Count */}
+                          {viewMode === 'summary' ? (
+                            <td className="px-4 py-4 border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg text-center">
+                              <span className="px-4 py-2 rounded-full text-sm font-semibold bg-blue-100 text-blue-700">
+                                {item.totalBreaks ?? item.breakCount ?? 0}
+                              </span>
+                            </td>
+                          ) : (
+                            <td className="px-4 py-4 border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg">
+                              <div className="space-y-1">
+                                <div className="mb-2">
+                                  <span className="px-3 py-1 rounded-full text-sm font-semibold bg-blue-100 text-blue-700">
+                                    {breaks.length}
+                                  </span>
+                                </div>
+                                {breaks.length > 0 ? (
+                                  breaks.slice(0, 2).map((breakItem, idx) => (
+                                    <div key={idx} className="text-sm">
+                                      <span className="font-semibold text-gray-700">
+                                        {new Date(breakItem.startTime).toLocaleDateString()} {new Date(breakItem.startTime).toLocaleTimeString()}
+                                      </span>
+                                      <span className="text-gray-500 ml-2">({formatBreakDuration(breakItem)})</span>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <span className="text-gray-400">No breaks</span>
+                                )}
+                                {breaks.length > 2 && (
+                                  <p className="text-xs text-blue-600 font-semibold">+{breaks.length - 2} more</p>
                                 )}
                               </div>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700 flex items-center gap-1">
-                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                            AVAILABLE
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 align-middle">
-                        <div className="flex items-center justify-center gap-2">
-                          <button
-                            onClick={() => handleViewEmployee(item)}
-                            className="flex items-center gap-1 bg-transparent text-blue-600 px-3 py-1 rounded text-sm hover:bg-blue-500/30 transition border border-blue-200"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                            View Details
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <div className="px-6 py-8 text-center text-gray-500">
-                <div className="flex flex-col items-center justify-center">
-                  <Coffee className="w-12 h-12 text-gray-400 mb-3" />
-                  <p className="text-lg font-medium text-gray-600">No break data found</p>
-                  <p className="text-sm text-gray-500 mt-1">Try adjusting your filters</p>
-                </div>
-              </div>
-            )
-          ) : (
-            reportData && reportData.length > 0 ? (
-              <table className="w-full">
-                <thead className="bg-gray-200">
-                  <tr>
-                    <th className="text-left py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">S.NO</th>
-                    <th className="text-left py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">EMPLOYEE</th>
-                    <th className="text-left py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">EMPLOYEE ID</th>
-                    <th className="text-left py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">DEPARTMENT</th>
-                    <th className="text-left py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">BREAKS</th>
-                    <th className="text-center py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">STATUS</th>
-                    <th className="text-center py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">ACTION</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-100">
-                  {reportData.map((item, index) => {
-                    const employee = item.employee || item;
-                    const breaks = item.breaks || [];
-                    return (
-                      <tr key={item.empId || employee?.empId || index} className="transition duration-100 border-b border-gray-200 hover:bg-gray-50">
-                        <td className="px-3 py-4 whitespace-nowrap text-base font-medium text-gray-900">
-                          {index + 1}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center gap-2">
-                            <User className="w-6 h-6 text-blue-600" />
-                            <div>
-                              <p className="text-base font-semibold text-gray-900">{employee?.employeeName || employee?.name || 'N/A'}</p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-base font-semibold text-gray-700">
-                          {item.empId || employee?.empId || 'N/A'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-base font-semibold text-gray-700">
-                          {employee?.department || item.department || 'N/A'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="space-y-1">
-                            <div className="mb-2">
-                              <span className="px-3 py-1 rounded-full text-sm font-semibold bg-blue-100 text-blue-700">
-                                {breaks.length}
-                              </span>
-                            </div>
-                            {breaks.length > 0 ? (
-                              breaks.slice(0, 2).map((breakItem, idx) => (
-                                <div key={idx} className="text-sm">
-                                  <span className="font-semibold text-gray-700">
-                                    {new Date(breakItem.startTime).toLocaleDateString()} {new Date(breakItem.startTime).toLocaleTimeString()}
-                                  </span>
-                                  <span className="text-gray-500 ml-2">({formatBreakDuration(breakItem)})</span>
-                                </div>
-                              ))
-                            ) : (
-                              <span className="text-gray-400">No breaks</span>
-                            )}
-                            {breaks.length > 2 && (
-                              <p className="text-xs text-blue-600 font-semibold">+{breaks.length - 2} more</p>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 align-middle text-center">
-                          {item.isCurrentlyOnBreak ? (
-                            <div className="flex flex-col items-center gap-1">
-                              <span className="px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700 flex items-center gap-1">
-                                <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                                ON BREAK
-                              </span>
-                              {item.currentBreak && (
-                                <div className="text-xs text-gray-600 mt-1">
-                                  <p>Started: {new Date(item.currentBreak.startTime).toLocaleTimeString()}</p>
-                                  {item.currentBreak.durationMinutes !== undefined && (
-                                    <p>Duration: {formatBreakDurationFromMinutes(item.currentBreak.durationMinutes)}</p>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700 flex items-center gap-1">
-                              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                              AVAILABLE
-                            </span>
+                            </td>
                           )}
-                        </td>
-                        <td className="px-6 py-4 align-middle">
-                          <div className="flex items-center justify-center gap-2">
-                            <button
-                              onClick={() => handleViewEmployee(item)}
-                              className="flex items-center gap-1 bg-transparent text-blue-600 px-3 py-1 rounded text-sm hover:bg-blue-500/30 transition border border-blue-200"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                              View Details
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            ) : (
-              <div className="px-6 py-8 text-center text-gray-500">
-                <div className="flex flex-col items-center justify-center">
-                  <Coffee className="w-12 h-12 text-gray-400 mb-3" />
-                  <p className="text-lg font-medium text-gray-600">No break data found</p>
-                  <p className="text-sm text-gray-500 mt-1">Try adjusting your filters</p>
+
+                          {/* Status */}
+                          <td className="px-4 py-4 border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg text-center">
+                            {item.isCurrentlyOnBreak ? (
+                              <div className="flex flex-col items-center gap-1">
+                                <span className="px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700 flex items-center gap-1 justify-center">
+                                  <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                                  ON BREAK
+                                </span>
+                                {item.currentBreak && (
+                                  <div className="text-xs text-gray-600 mt-1">
+                                    <p>Started: {new Date(item.currentBreak.startTime).toLocaleTimeString()}</p>
+                                    {item.currentBreak.durationMinutes !== undefined && (
+                                      <p>Duration: {formatBreakDurationFromMinutes(item.currentBreak.durationMinutes)}</p>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700 flex items-center gap-1 justify-center">
+                                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                AVAILABLE
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Action */}
+                          <td className="px-4 py-4 border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg text-center">
+                             <div className="flex items-center justify-center gap-2">
+                               <button
+                                 onClick={() => handleViewEmployee(item)}
+                                 className="flex items-center gap-2 border border-blue-500 text-blue-500 bg-white hover:bg-blue-500 hover:text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                               >
+                                 <Eye className="w-4 h-4" />
+                                 View Details
+                               </button>
+                             </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+               </>
+          ) : (
+            <div className="py-12 text-center">
+              <div className="flex flex-col items-center justify-center gap-4">
+                <Coffee className="w-16 h-16 text-gray-300" />
+                <div>
+                  <p className="text-gray-500 text-lg">No break data found</p>
+                  <p className="text-gray-400 text-sm">Try adjusting your filters</p>
                 </div>
               </div>
-            )
-          
+            </div>
           )}
         </div>
       </div>
 
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className="flex justify-between items-center mt-6 px-4 border border-separate border-gray-200 p-2 rounded-xl">
+                  <div className="text-sm text-gray-600">
+                    Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, currentData.length)} of {currentData.length} entries
+                  </div>
+                  <div className="flex gap-2 items-center">
+                    <button
+                      onClick={() => setCurrentPage(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900"
+                    >
+                      <ChevronLeft size={16} />
+                      Previous
+                    </button>
+                    <div className="flex gap-1">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                      <button
+                        key={page}
+                        onClick={() => setCurrentPage(page)}
+                        className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${
+                          currentPage === page
+                            ? 'border border-gray-900 text-gray-900 bg-white'
+                            : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    ))}
+                    </div>
+                    <button
+                      onClick={() => setCurrentPage(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                      className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900"
+                    >
+                      Next
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                </div>
+              )}
+           
+
       {/* Employee Break Details Modal */}
       {showEmployeeModal && selectedEmployee && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-md flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl border border-gray-200 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             {/* Modal Header */}
             <div className={SOFT.header}>
               <div className="flex items-center justify-between">
