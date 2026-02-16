@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import GroupIcon from '@mui/icons-material/Group';
 import InfoOutlineSharpIcon from '@mui/icons-material/InfoOutlineSharp';
@@ -12,6 +13,7 @@ import API_CONFIG from '../../config/api';
 // import firstIcon from "../../assets/Icon.svg"
 
 const Dashboard = () => {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('Dashboard');
   const [attendanceData, setAttendanceData] = useState(null);
   const [presentDaysCount, setPresentDaysCount] = useState(0);
@@ -581,9 +583,6 @@ const Dashboard = () => {
      }}>
   <div className="flex items-center justify-between mb-6">
     <h3 className="text-xl font-bold text-gray-800">Pending Loads</h3>
-    <button className="text-gray-500 hover:text-gray-700 text-sm font-medium px-4 py-2 border border-gray-300 rounded-lg">
-      View All
-    </button>
   </div>
 
   <div className="overflow-x-auto">
@@ -735,7 +734,12 @@ const Dashboard = () => {
     {/* Header */}
     <div className="flex items-center justify-between px-6 pt-4 mb-3">
       <h3 className="text-xl font-bold text-gray-800">Call Performance</h3>
-      <button className="text-blue-500 text-sm font-medium">View</button>
+      <button 
+        onClick={() => navigate('/call-dashboard')}
+        className="text-blue-500 text-sm font-medium hover:text-blue-700"
+      >
+        View
+      </button>
     </div>
 
     {/* Completed */}
@@ -927,7 +931,10 @@ const Dashboard = () => {
      }}>
   <div className="flex items-center justify-between mb-6">
     <h3 className="text-xl font-bold text-gray-800">Recent Delivery Orders</h3>
-    <button className="text-gray-500 hover:text-gray-700 text-sm font-medium px-4 py-2 border border-gray-300 rounded-lg">
+    <button 
+      onClick={() => navigate('/delivery-order')}
+      className="text-gray-500 hover:text-gray-700 text-sm font-medium px-4 py-2 border border-gray-300 rounded-lg"
+    >
       View All
     </button>
   </div>
@@ -1144,7 +1151,12 @@ const Dashboard = () => {
     {/* Header */}
     <div className="flex items-center justify-between px-6 pt-4 mb-3">
       <h3 className="text-xl font-bold text-gray-800">Call Performance</h3>
-      <button className="text-blue-500 text-sm font-medium">View</button>
+      <button 
+        onClick={() => navigate('/call-dashboard')}
+        className="text-blue-500 text-sm font-medium hover:text-blue-700"
+      >
+        View
+      </button>
     </div>
 
     {/* Completed */}
