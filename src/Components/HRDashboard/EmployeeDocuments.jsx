@@ -36,6 +36,7 @@ const EmployeeDocuments = () => {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDocumentTypeModal, setShowDocumentTypeModal] = useState(false);
+  const [showSignatureUploadModal, setShowSignatureUploadModal] = useState(false);
   const [documentType, setDocumentType] = useState('offer_letter'); // 'offer_letter', 'letter_of_intent', 'salary_slip', 'fnf'
   
   // Filters
@@ -260,94 +261,167 @@ const EmployeeDocuments = () => {
   // Get status badge
   const getStatusBadge = (status) => {
     const statusConfig = {
-      draft: { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Draft' },
-      finalized: { bg: 'bg-green-100', text: 'text-green-700', label: 'Finalized' },
-      archived: { bg: 'bg-red-100', text: 'text-red-700', label: 'Archived' },
+      draft: {
+        bg: 'bg-blue-50',
+        text: 'text-blue-700',
+        border: 'border-blue-100',
+        label: 'Draft',
+      },
+      finalized: {
+        bg: 'bg-green-50',
+        text: 'text-green-700',
+        border: 'border-green-100',
+        label: 'Finalized',
+      },
+      archived: {
+        bg: 'bg-gray-100',
+        text: 'text-gray-700',
+        border: 'border-gray-200',
+        label: 'Archived',
+      },
     };
 
     const config = statusConfig[status] || statusConfig.draft;
 
     return (
-      <span className={`px-2 py-1 rounded-full text-xs font-medium ${config.bg} ${config.text}`}>
+      <span
+        className={`inline-flex items-center px-4 py-1.5 rounded-full text-sm font-medium border ${config.bg} ${config.text} ${config.border}`}
+      >
         {config.label}
       </span>
     );
   };
 
+  const handlePageChange = (page) => {
+    if (page < 1 || page > pagination.totalPages) return;
+    setPagination((prev) => ({ ...prev, currentPage: page }));
+  };
+
+  const getPageNumbers = () => {
+    const { totalPages, currentPage } = pagination;
+    const maxVisible = 7;
+
+    if (totalPages <= maxVisible) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+
+    const pages = [];
+    const halfVisible = Math.floor(maxVisible / 2);
+
+    if (currentPage <= halfVisible + 1) {
+      for (let i = 1; i <= maxVisible - 1; i++) {
+        pages.push(i);
+      }
+      pages.push(totalPages);
+    } else if (currentPage >= totalPages - halfVisible) {
+      pages.push(1);
+      for (let i = totalPages - (maxVisible - 2); i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      pages.push(1);
+      for (let i = currentPage - halfVisible + 1; i <= currentPage + halfVisible - 1; i++) {
+        pages.push(i);
+      }
+      pages.push(totalPages);
+    }
+
+    return pages;
+  };
+
   return (
-    <div className="p-6 bg-gray-50 min-h-screen">
-      {/* Header */}
+    <div className="p-6">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Employee Documents</h1>
-        <p className="text-gray-600">Manage HR documents including offer letters, LOIs, salary slips, and FNF documents</p>
+        <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-1">Employee Documents</h1>
+        <p className="text-gray-600 text-sm md:text-base">
+          Manage HR documents including offer letters, LOIs, salary slips, and FNF documents
+        </p>
       </div>
 
-      {/* Tabs */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
-        <div className="flex border-b border-gray-200">
-          <button
-            onClick={() => setActiveTab('documents')}
-            className={`px-6 py-3 font-medium text-sm transition-colors ${
-              activeTab === 'documents'
-                ? 'text-blue-600 border-b-2 border-blue-600'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              <FileText className="w-4 h-4" />
-              Documents
-            </div>
-          </button>
-          <button
-            onClick={() => setActiveTab('signatures')}
-            className={`px-6 py-3 font-medium text-sm transition-colors ${
-              activeTab === 'signatures'
-                ? 'text-blue-600 border-b-2 border-blue-600'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              <Upload className="w-4 h-4" />
-              Signatures
-            </div>
-          </button>
-          <button
-            onClick={() => {
-              setShowDocumentTypeModal(true);
-            }}
-            className="ml-auto px-6 py-3 font-medium text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-lg m-2 transition-colors"
-          >
-            <div className="flex items-center gap-2">
-              <Plus className="w-4 h-4" />
-              Create Document
-            </div>
-          </button>
+      <div className="bg-white rounded-2xl border border-gray-200 mb-6">
+        <div className="flex items-center justify-between px-4">
+          <div className="flex items-center gap-6">
+            <button
+              onClick={() => setActiveTab('documents')}
+              className={`relative flex items-center gap-2 px-1 py-4 text-xl font-medium transition-colors ${
+                activeTab === 'documents' ? 'text-blue-600' : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <FileText
+                className={`w-4 h-4 ${
+                  activeTab === 'documents' ? 'text-blue-600' : 'text-gray-500'
+                }`}
+              />
+              <span>Documents</span>
+              {activeTab === 'documents' && (
+                <span className="absolute -bottom-px left-0 right-0 h-0.5 bg-blue-600 rounded-full" />
+              )}
+            </button>
+
+            <button
+              onClick={() => setActiveTab('signatures')}
+              className={`relative flex items-center gap-2 px-1 py-4 text-xl font-medium transition-colors ${
+                activeTab === 'signatures' ? 'text-blue-600' : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <Upload
+                className={`w-4 h-4 ${
+                  activeTab === 'signatures' ? 'text-blue-600' : 'text-gray-500'
+                }`}
+              />
+              <span>Signatures</span>
+              {activeTab === 'signatures' && (
+                <span className="absolute -bottom-px left-0 right-0 h-0.5 bg-blue-600 rounded-full" />
+              )}
+            </button>
+          </div>
+
+          {activeTab === 'documents' ? (
+            <button
+              onClick={() => {
+                setShowDocumentTypeModal(true);
+              }}
+              className="px-5 py-2.5 my-2 inline-flex items-center gap-2 rounded-full text-base font-semibold text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-colors"
+            >
+              <Plus className="w-6 h-6" />
+              <span>Create Document</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                setShowSignatureUploadModal(true);
+              }}
+              className="px-5 py-2.5 my-2 inline-flex items-center gap-2 rounded-full text-base font-semibold text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-colors"
+            >
+              <Plus className="w-6 h-6" />
+              <span>Upload Signature</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Content */}
       {activeTab === 'documents' && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-          {/* Filters */}
-          <div className="p-4 border-b border-gray-200">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              {/* Search */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <input
-                  type="text"
-                  placeholder="Search documents..."
-                  value={filters.search}
-                  onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
+        <>
+          <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-4">
+            <div className="relative w-full mb-4">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 w-5 h-5" />
+              <input
+                type="text"
+                placeholder="Search documents..."
+                value={filters.search}
+                onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+                className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-2xl text-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              />
+            </div>
 
-              {/* Document Type Filter */}
+            <div className="flex flex-col md:flex-row gap-4">
               <select
                 value={filters.documentType}
-                onChange={(e) => setFilters({ ...filters, documentType: e.target.value })}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                onChange={(e) => {
+                  setFilters({ ...filters, documentType: e.target.value });
+                  setPagination((prev) => ({ ...prev, currentPage: 1 }));
+                }}
+                className="w-full md:w-auto md:flex-1 px-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 focus:bg-white focus:outline-none"
               >
                 <option value="">All Types</option>
                 <option value="offer_letter">Offer Letter</option>
@@ -356,11 +430,13 @@ const EmployeeDocuments = () => {
                 <option value="fnf">FNF</option>
               </select>
 
-              {/* Status Filter */}
               <select
                 value={filters.status}
-                onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                onChange={(e) => {
+                  setFilters({ ...filters, status: e.target.value });
+                  setPagination((prev) => ({ ...prev, currentPage: 1 }));
+                }}
+                className="w-full md:w-auto md:flex-1 px-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 focus:bg-white focus:outline-none"
               >
                 <option value="">All Status</option>
                 <option value="draft">Draft</option>
@@ -368,138 +444,186 @@ const EmployeeDocuments = () => {
                 <option value="archived">Archived</option>
               </select>
 
-              {/* Employee ID Filter */}
               <input
                 type="text"
                 placeholder="Employee ID"
                 value={filters.employeeId}
-                onChange={(e) => setFilters({ ...filters, employeeId: e.target.value })}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                onChange={(e) => {
+                  setFilters({ ...filters, employeeId: e.target.value });
+                  setPagination((prev) => ({ ...prev, currentPage: 1 }));
+                }}
+                className="w-full md:w-auto md:flex-1 px-4 py-3 border border-gray-200 text-lg rounded-2xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
               />
             </div>
           </div>
 
-          {/* Documents Table */}
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader className="w-8 h-8 animate-spin text-blue-600" />
-            </div>
-          ) : filteredDocuments.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-gray-500">
-              <FileText className="w-12 h-12 mb-4 text-gray-400" />
-              <p className="text-lg font-medium">No documents found</p>
-              <p className="text-sm">Create a new document to get started</p>
-            </div>
-          ) : (
-            <>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50 border-b border-gray-200">
+          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+            <div className="overflow-x-auto p-4">
+              <table className="min-w-full border-separate border-spacing-y-4">
+                <thead>
+                  <tr className="bg-gray-50">
+                    <th className="px-10 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y first:border-l border-gray-200 rounded-l-lg text-left">
+                      Type
+                    </th>
+                    <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200 text-left">
+                      Employee
+                    </th>
+                    <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200 text-center">
+                      Status
+                    </th>
+                    <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200 text-center">
+                      Created
+                    </th>
+                    <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y last:border-r border-gray-200 rounded-r-lg text-center">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading ? (
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                      <td
+                        colSpan="5"
+                        className="px-4 py-12 text-center border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg"
+                      >
+                        <div className="flex flex-col items-center justify-center">
+                          <Loader className="w-8 h-8 animate-spin text-blue-600 mb-4" />
+                          <p className="text-gray-600">Loading documents...</p>
+                        </div>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredDocuments.map((doc) => (
-                      <tr key={doc.documentId} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
+                  ) : filteredDocuments.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan="5"
+                        className="px-4 py-12 text-center border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg"
+                      >
+                        <FileText className="w-10 h-10 mb-3 text-gray-400 mx-auto" />
+                        <p className="text-gray-500 text-lg">No documents found</p>
+                        <p className="text-gray-400 text-sm">Try adjusting filters or create a new document.</p>
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredDocuments.map((doc) => (
+                      <tr key={doc.documentId} className="bg-white hover:bg-gray-50 transition-colors">
+                        <td className="px-4 py-4 border-y first:border-l border-gray-200 first:rounded-l-lg align-middle">
                           <div className="flex items-center gap-2">
                             {getDocumentTypeIcon(doc.documentType)}
-                            <span className="text-sm font-medium text-gray-900">
+                            <span className="text-base font-medium text-gray-900">
                               {getDocumentTypeLabel(doc.documentType)}
                             </span>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">{doc.employeeName}</div>
-                            <div className="text-sm text-gray-500">{doc.employeeId}</div>
+                        <td className="px-4 py-4 border-y border-gray-200 align-middle">
+                          <div className="flex flex-col items-start">
+                            <div className="text-base font-medium text-gray-900">{doc.employeeName}</div>
+                            <div className="text-sm text-gray-700">{doc.employeeId}</div>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-4 py-4 border-y border-gray-200 align-middle text-center">
                           {getStatusBadge(doc.status)}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <td className="px-4 py-4 border-y border-gray-200 text-base text-gray-900 font-medium align-middle text-center">
                           {new Date(doc.createdAt).toLocaleDateString()}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <div className="flex items-center gap-2">
+                        <td className="px-4 py-4 border-y last:border-r border-gray-200 last:rounded-r-lg align-middle text-center">
+                          <div className="flex items-center justify-center gap-4">
                             <button
                               onClick={() => handleViewDocument(doc.documentId)}
-                              className="text-blue-600 hover:text-blue-900 p-1"
+                              className="inline-flex items-center justify-center w-9 h-9 rounded-full border border-blue-200 text-blue-600 hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-colors cursor-pointer"
                               title="View"
                             >
-                              <Eye className="w-4 h-4" />
+                              <Eye className="w-5 h-5" />
                             </button>
                             <button
-                              onClick={() => handleGeneratePDF(doc.documentId, doc.documentType, doc.employeeName)}
-                              className="text-green-600 hover:text-green-900 p-1"
+                              onClick={() =>
+                                handleGeneratePDF(doc.documentId, doc.documentType, doc.employeeName)
+                              }
+                              className="inline-flex items-center justify-center w-9 h-9 rounded-full border border-green-200 text-green-600 hover:bg-green-600 hover:text-white hover:border-green-600 transition-colors cursor-pointer"
                               title="Download PDF"
                             >
-                              <Download className="w-4 h-4" />
+                              <Download className="w-5 h-5" />
                             </button>
                             <button
                               onClick={() => handleSendPDF(doc.documentId)}
-                              className="text-indigo-600 hover:text-indigo-900 p-1"
+                              className="inline-flex items-center justify-center w-9 h-9 rounded-full border border-indigo-200 text-indigo-600 hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition-colors cursor-pointer"
                               title="Send PDF to employee"
                             >
-                              <Mail className="w-4 h-4" />
+                              <Mail className="w-5 h-5" />
                             </button>
                             <button
                               onClick={() => handleDeleteDocument(doc.documentId)}
-                              className="text-red-600 hover:text-red-900 p-1"
+                              className="inline-flex items-center justify-center w-9 h-9 rounded-full border border-red-200 text-red-600 hover:bg-red-600 hover:text-white hover:border-red-600 transition-colors cursor-pointer"
                               title="Delete"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Trash2 className="w-5 h-5" />
                             </button>
                           </div>
                         </td>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
 
-              {/* Pagination */}
-              {pagination.totalPages > 1 && (
-                <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
-                  <div className="text-sm text-gray-700">
-                    Showing page {pagination.currentPage} of {pagination.totalPages} ({pagination.totalDocuments} total)
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setPagination({ ...pagination, currentPage: pagination.currentPage - 1 })}
-                      disabled={pagination.currentPage === 1}
-                      className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                    >
-                      Previous
-                    </button>
-                    <button
-                      onClick={() => setPagination({ ...pagination, currentPage: pagination.currentPage + 1 })}
-                      disabled={pagination.currentPage === pagination.totalPages}
-                      className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                    >
-                      Next
-                    </button>
-                  </div>
+          {pagination.totalPages > 1 && (
+            <div className="mt-4 flex justify-between items-center px-4 border border-gray-200 p-2 rounded-xl bg-white">
+              <div className="text-sm text-gray-600">
+                Showing page {pagination.currentPage} of {pagination.totalPages} ({pagination.totalDocuments} documents)
+              </div>
+              <div className="flex gap-2 items-center">
+                <button
+                  onClick={() => handlePageChange(pagination.currentPage - 1)}
+                  disabled={pagination.currentPage === 1}
+                  className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900"
+                >
+                  Previous
+                </button>
+                <div className="flex gap-1">
+                  {getPageNumbers().map((page, idx, arr) => {
+                    const showEllipsisBefore = idx > 0 && page - arr[idx - 1] > 1;
+                    return (
+                      <React.Fragment key={page}>
+                        {showEllipsisBefore && <span className="px-2 text-gray-400">...</span>}
+                        <button
+                          onClick={() => handlePageChange(page)}
+                          className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${
+                            pagination.currentPage === page
+                              ? 'border border-gray-900 text-gray-900 bg-white'
+                              : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      </React.Fragment>
+                    );
+                  })}
                 </div>
-              )}
-            </>
+                <button
+                  onClick={() => handlePageChange(pagination.currentPage + 1)}
+                  disabled={pagination.currentPage === pagination.totalPages}
+                  className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
           )}
-        </div>
+        </>
       )}
 
       {activeTab === 'signatures' && (
-        <SignatureManagement />
+        <SignatureManagement
+          showUploadModal={showSignatureUploadModal}
+          setShowUploadModal={setShowSignatureUploadModal}
+        />
       )}
 
       {/* Document Type Selection Modal */}
       {showDocumentTypeModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 backdrop-blur-sm bg-black/30 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full">
             {/* Header */}
             <div className="p-6 border-b border-gray-200 flex items-center justify-between">
