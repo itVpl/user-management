@@ -896,13 +896,13 @@ export default function CandidateShortlist() {
                       <span className="text-gray-900 font-semibold">{candidate.experience}</span>
                     </td>
                     <td className="px-4 py-4 border-y border-gray-200">
-                      <span className={`inline-flex items-center gap-1 px-4 py-1.5 rounded-full text-gray-900 font-semibold ${getStatusColor(candidate.status)}`}>
+                      <span className={`inline-flex items-center gap-1 px-4 py-1.5 rounded-full text-gray-600 font-semibold ${getStatusColor(candidate.status)}`}>
                         {getStatusIcon(candidate.status)}
                         {candidate.status}
                       </span>
                     </td>
                     <td className="px-4 py-4 border-y border-gray-200">
-                      <span className={`inline-flex items-center gap-1 px-4 py-1.5 rounded-full text-gray-900 font-semibold ${getVideoStatusColor(candidate.videoInterviewStatus)}`}>
+                      <span className={`inline-flex items-center gap-1 px-4 py-1.5 rounded-full text-gray-600 font-semibold ${getVideoStatusColor(candidate.videoInterviewStatus)}`}>
                         {getVideoStatusIcon(candidate.videoInterviewStatus)}
                         {candidate.videoInterviewStatus}
                       </span>
