@@ -1,16 +1,20 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
+import { Search } from "lucide-react";
 import API_CONFIG from '../../config/api.js';
 const DocumentsVerification = () => {
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
 
   const statusStyles = {
-    Pending: "bg-yellow-400 text-black",
-    Rejected: "bg-red-500 text-white",
-    Approved: "bg-green-600 text-white",
+    Pending: "border border-yellow-300 text-yellow-700 bg-yellow-50 hover:bg-yellow-400 hover:text-white transition-colors",
+    Rejected: "border border-red-300 text-red-700 bg-red-50 hover:bg-red-500 hover:text-white transition-colors",
+    Approved: "border border-green-300 text-green-700 bg-green-50 hover:bg-green-500 hover:text-white transition-colors",
   };
 
 
@@ -80,6 +84,57 @@ const DocumentsVerification = () => {
 
     fetchEmployees();
   }, []);
+
+  const filteredEmployees = employees.filter(emp => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return true;
+    const str = `${emp.id || ''} ${emp.name || ''} ${emp.status || ''} ${emp.verifiedBy || ''}`.toLowerCase();
+    return str.includes(term);
+  });
+
+  const totalPages = Math.max(1, Math.ceil(filteredEmployees.length / itemsPerPage));
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = Math.min(startIndex + itemsPerPage, filteredEmployees.length);
+  const currentEmployees = filteredEmployees.slice(startIndex, endIndex);
+
+  const handlePageChange = (page) => {
+    if (page < 1 || page > totalPages) return;
+    setCurrentPage(page);
+  };
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  const getPageNumbers = () => {
+    const maxVisible = 7;
+    if (totalPages <= maxVisible) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+
+    const pages = [];
+    const halfVisible = Math.floor(maxVisible / 2);
+
+    if (currentPage <= halfVisible + 1) {
+      for (let i = 1; i <= maxVisible - 1; i++) {
+        pages.push(i);
+      }
+      pages.push(totalPages);
+    } else if (currentPage >= totalPages - halfVisible) {
+      pages.push(1);
+      for (let i = totalPages - (maxVisible - 2); i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      pages.push(1);
+      for (let i = currentPage - halfVisible + 1; i <= currentPage + halfVisible - 1; i++) {
+        pages.push(i);
+      }
+      pages.push(totalPages);
+    }
+
+    return pages;
+  };
 
 
  const handleApprove = async () => {
@@ -168,89 +223,150 @@ const DocumentsVerification = () => {
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Documents Verification</h1>
+      <h1 className="text-xl md:text-2xl font-bold text-gray-800 mb-4">Documents Verification</h1>
 
+      <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
+        <div className="relative w-full">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+          <input
+            type="text"
+            placeholder="Search by ID, name, status..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+          />
+        </div>
+      </div>
 
-      <table className="w-full bg-white shadow-md rounded-md overflow-hidden">
-        <thead className="bg-gray-100 text-left">
-          <tr>
-            <th className="p-3">Employee ID</th>
-            <th className="p-3">Employee Name</th>
-            <th className="p-3">Uploaded Date</th>
-            <th className="p-3">Status</th>
-            <th className="p-3">Verified By</th>
-            <th className="p-3">Action</th>
-          </tr>
-        </thead>
-        <tbody>
-  {loading ? (
-    <tr>
-      <td colSpan="6" className="py-12">
-        <div className="flex flex-col justify-center items-center bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl shadow-lg py-16 mx-4">
-          <div className="relative">
-            <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
-            <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-b-purple-600 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1s' }}></div>
+      <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+        <div className="overflow-x-auto p-4">
+          <table className="min-w-full text-left border-separate border-spacing-y-4">
+            <thead>
+              <tr className="bg-gray-50">
+                <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y first:border-l border-gray-200 rounded-l-lg">
+                  Employee ID
+                </th>
+                <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                  Employee Name
+                </th>
+                <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                  Uploaded Date
+                </th>
+                <th className="px-8 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                  Status
+                </th>
+                <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                  Verified By
+                </th>
+                <th className="px-6 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y last:border-r border-gray-200 rounded-r-lg">
+                  Action
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td
+                    colSpan="6"
+                    className="px-4 py-12 text-center border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg"
+                  >
+                    <div className="flex flex-col items-center justify-center">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+                      <p className="text-gray-600">Loading documents...</p>
+                    </div>
+                  </td>
+                </tr>
+              ) : currentEmployees.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan="6"
+                    className="px-4 py-12 text-center border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg"
+                  >
+                    <p className="text-gray-500 text-lg">No documents found.</p>
+                    <p className="text-gray-400 text-sm">Try a different search or check back later.</p>
+                  </td>
+                </tr>
+              ) : (
+                currentEmployees.map((emp) => (
+                  <tr key={emp._id} className="bg-white hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-4 border-y first:border-l border-gray-200 first:rounded-l-lg text-gray-900 font-semibold">
+                      {emp.id}
+                    </td>
+                    <td className="px-4 py-4 border-y border-gray-200 text-gray-700 font-medium">
+                      {emp.name}
+                    </td>
+                    <td className="px-4 py-4 border-y border-gray-200 text-gray-700 font-medium">
+                      {emp.date}
+                    </td>
+                    <td className="px-4 py-4 border-y border-gray-200">
+                      <span className={`inline-flex items-center px-4 py-1.5 rounded-full text-sm font-semibold ${statusStyles[emp.status]}`}>
+                        {emp.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-4 border-y border-gray-200 text-gray-700 font-medium">
+                      {emp.verifiedBy}
+                    </td>
+                    <td className="px-4 py-4 border-y last:border-r border-gray-200 last:rounded-r-lg">
+                      <button
+                        onClick={() => setSelectedEmployee(emp)}
+                        className="inline-flex items-center justify-center px-4 py-1.5 rounded-full text-sm font-semibold border border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-colors cursor-pointer"
+                      >
+                        Preview
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {filteredEmployees.length > 0 && totalPages > 1 && (
+        <div className="mt-4 flex justify-between items-center px-4 border border-gray-200 p-2 rounded-xl bg-white">
+          <div className="text-sm text-gray-600">
+            Showing {startIndex + 1} to {endIndex} of {filteredEmployees.length} employees
           </div>
-          <div className="mt-6 text-center">
-            <p className="text-xl font-semibold text-gray-800 mb-2">Loading Documents...</p>
-            <p className="text-sm text-gray-600">Please wait while we fetch employee documents</p>
+          <div className="flex gap-2 items-center">
+            <button
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900"
+            >
+              Previous
+            </button>
+            <div className="flex gap-1">
+              {getPageNumbers().map((page, idx, arr) => {
+                const showEllipsisBefore = idx > 0 && page - arr[idx - 1] > 1;
+                return (
+                  <React.Fragment key={page}>
+                    {showEllipsisBefore && (
+                      <span className="px-2 text-gray-400">...</span>
+                    )}
+                    <button
+                      onClick={() => handlePageChange(page)}
+                      className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${
+                        currentPage === page
+                          ? 'border border-gray-900 text-gray-900 bg-white'
+                          : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  </React.Fragment>
+                );
+              })}
+            </div>
+            <button
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900"
+            >
+              Next
+            </button>
           </div>
         </div>
-      </td>
-    </tr>
-  ) : (
-    employees.map((emp) => (
-      <tr key={emp._id} className="border-t">
-        <td className="p-3">{emp.id}</td>
-        <td className="p-3">{emp.name}</td>
-        <td className="p-3">{emp.date}</td>
-        <td className="p-3">
-          <span className={`px-2 py-1 rounded ${statusStyles[emp.status]}`}>
-            {emp.status}
-          </span>
-        </td>
-        <td className="p-3">{emp.verifiedBy}</td>
-        <td className="p-3">
-          <button
-            onClick={() => setSelectedEmployee(emp)}
-            className="bg-blue-500 text-white px-3 py-1 rounded"
-          >
-            Preview
-          </button>
-        </td>
-      </tr>
-    ))
-  )}
-</tbody>
-
-
-        {/* <tbody>
-         
-          {employees.map((emp) => (
-            <tr key={emp._id} className="border-t">
-              <td className="p-3">{emp.id}</td>
-              <td className="p-3">{emp.name}</td>
-              <td className="p-3">{emp.date}</td>
-              <td className="p-3">
-                <span className={`px-2 py-1 rounded ${statusStyles[emp.status]}`}>
-                  {emp.status}
-                </span>
-              </td>
-              <td className="p-3">{emp.verifiedBy}</td>
-              <td className="p-3">
-                <button
-                  onClick={() => setSelectedEmployee(emp)}
-                  className="bg-blue-500 text-white px-3 py-1 rounded"
-                >
-                  Preview
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody> */}
-      </table>
-
-
+      )}
       {/* Modal */}
       {selectedEmployee && (
         <div
