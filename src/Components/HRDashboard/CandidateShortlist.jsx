@@ -55,7 +55,7 @@ export default function CandidateShortlist() {
   const [dateFilter, setDateFilter] = useState('');
   const [loading, setLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 8; // Temporarily reduced for testing
+  const itemsPerPage = 5; // Temporarily reduced for testing
 
   // Form state
   const [formData, setFormData] = useState({
@@ -244,6 +244,36 @@ export default function CandidateShortlist() {
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const currentCandidates = filteredCandidates.slice(startIndex, endIndex);
+
+  const getPageNumbers = () => {
+    const maxVisible = 7;
+    if (totalPages <= maxVisible) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+
+    const pages = [];
+    const halfVisible = Math.floor(maxVisible / 2);
+
+    if (currentPage <= halfVisible + 1) {
+      for (let i = 1; i <= maxVisible - 1; i++) {
+        pages.push(i);
+      }
+      pages.push(totalPages);
+    } else if (currentPage >= totalPages - halfVisible) {
+      pages.push(1);
+      for (let i = totalPages - (maxVisible - 2); i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      pages.push(1);
+      for (let i = currentPage - halfVisible + 1; i <= currentPage + halfVisible - 1; i++) {
+        pages.push(i);
+      }
+      pages.push(totalPages);
+    }
+
+    return pages;
+  };
 
   // Debug logging
 
@@ -690,7 +720,7 @@ export default function CandidateShortlist() {
   if (apiLoading) {
     return (
       <div className="p-6">
-        <div className="flex flex-col justify-center items-center h-96 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl shadow-lg">
+        <div className="flex flex-col justify-center items-center h-96 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl">
           <div className="relative">
             <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
             <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-b-purple-600 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1s' }}></div>
@@ -707,111 +737,140 @@ export default function CandidateShortlist() {
   return (
     <div className="p-6">
       <style>{scrollbarHideStyles}</style>
-      {/* Header */}
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center gap-6">
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+      {/* Top section */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
+        <div className="space-y-5">
+          {/* First line: cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="px-5 py-4 min-h-[96px] border border-gray-200 rounded-2xl flex items-center justify-between">
+              <div>
+                <p className="text-base md:text-xl text-gray-700 font-medium">Total Candidates</p>
+                <p className="mt-3 text-2xl font-bold text-gray-800">{statistics.totalCandidates}</p>
+              </div>
+              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
                 <User className="text-blue-600" size={20} />
               </div>
-              <div>
-                <p className="text-sm text-gray-600">Total Candidates</p>
-                <p className="text-xl font-bold text-gray-800">{statistics.totalCandidates}</p>
-              </div>
             </div>
-          </div>
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-                <CheckCircle className="text-green-600" size={20} />
-              </div>
+
+            <div className="px-5 py-4 min-h-[96px] border border-gray-200 rounded-2xl flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Shortlisted</p>
-                <p className="text-xl font-bold text-green-600">
+                <p className="text-base md:text-xl text-gray-700 font-medium">Shortlisted</p>
+                <p className="mt-3 text-2xl font-bold text-green-600">
                   {statistics.shortlisted}
                 </p>
               </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-yellow-100 rounded-xl flex items-center justify-center">
-                <Eye className="text-yellow-600" size={20} />
+              <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                <CheckCircle className="text-green-600" size={20} />
               </div>
+            </div>
+
+            <div className="px-5 py-4 min-h-[96px] border border-gray-200 rounded-2xl flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Interviewed</p>
-                <p className="text-xl font-bold text-yellow-600">
+                <p className="text-base md:text-xl text-gray-700 font-medium">Interviewed</p>
+                <p className="mt-3 text-2xl font-bold text-yellow-600">
                   {statistics.interviewed}
                 </p>
               </div>
+              <div className="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center">
+                <Eye className="text-yellow-600" size={20} />
+              </div>
             </div>
           </div>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-            <input
-              type="text"
-              placeholder="Search candidates..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
+
+          {/* Second line: search + refresh on right */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative flex-1 min-w-[240px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+              <input
+                type="text"
+                placeholder="Search candidates..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+              />
+            </div>
+
+            <button
+              onClick={fetchCandidates}
+              disabled={apiLoading}
+              className="flex items-center gap-2 px-5 py-2.5 border border-gray-200 rounded-2xl bg-white text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 cursor-pointer"
+              title="Refresh candidates"
+            >
+              <RefreshCw size={18} className={apiLoading ? 'animate-spin' : ''} />
+              Refresh
+            </button>
           </div>
-          <div className="relative">
-            <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-            <input
-              type="date"
-              value={dateFilter}
-              onChange={(e) => setDateFilter(e.target.value)}
-              className="w-48 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Filter by date"
-            />
+
+          {/* Third line: calendar + export/add on right */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="relative w-full sm:w-64 md:w-72">
+              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+              <input
+                type="date"
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                placeholder="Filter by date"
+              />
+            </div>
+
+            <div className="flex flex-wrap gap-3 justify-end flex-1">
+              <button
+                onClick={handleExcelExport}
+                disabled={filteredCandidates.length === 0}
+                className="flex items-center gap-2 px-5 py-2.5 border border-gray-200 rounded-2xl bg-white text-gray-700
+  hover:bg-gray-800 hover:text-white hover:border-gray-800
+  transition-all duration-200 cursor-pointer
+  disabled:opacity-50 disabled:hover:bg-white disabled:hover:text-gray-700 disabled:hover:border-gray-200"
+                title="Export to Excel"
+              >
+                <Download size={18} /> Export Excel
+              </button>
+
+              <button
+                onClick={() => setShowAddForm(true)}
+                className="flex items-center gap-2 px-6 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors cursor-pointer"
+              >
+                <PlusCircle size={20} /> Add Candidate
+              </button>
+            </div>
           </div>
-          <button
-            onClick={fetchCandidates}
-            disabled={apiLoading}
-            className="flex items-center justify-center w-10 h-10 bg-gray-500 hover:bg-gray-600 rounded-lg text-white shadow transition disabled:opacity-50"
-            title="Refresh candidates"
-          >
-            <RefreshCw size={18} className={apiLoading ? 'animate-spin' : ''} />
-          </button>
-          <button
-            onClick={handleExcelExport}
-            disabled={filteredCandidates.length === 0}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 rounded-lg text-white font-semibold shadow hover:from-green-600 hover:to-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Export to Excel"
-          >
-            <Download size={18} /> Export Excel
-          </button>
-          <button
-            onClick={() => setShowAddForm(true)}
-            className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg text-white font-semibold shadow hover:from-blue-600 hover:to-blue-700 transition"
-          >
-            <PlusCircle size={20} /> Add Candidate
-          </button>
         </div>
       </div>
 
       {/* Candidates Table */}
-      <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
-              <tr>
-                <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">Name</th>
-                <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">Profile</th>
-                <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">Experience</th>
-                <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
-                <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">Video Interview</th>
-                <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">Actions</th>
+      <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+        <div className="overflow-x-auto p-4">
+          <table className="min-w-full text-left border-separate border-spacing-y-4">
+            <thead>
+              <tr className="bg-gray-50">
+                <th className="px-5 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y first:border-l border-gray-200 rounded-l-lg">
+                  Name
+                </th>
+                <th className="px-15 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                  Profile
+                </th>
+                <th className="px-1 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                  Experience
+                </th>
+                <th className="px-10 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                  Status
+                </th>
+                <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                  Video Interview
+                </th>
+                <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y last:border-r border-gray-200 rounded-r-lg">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody>
               {apiLoading ? (
                 <tr>
-                  <td colSpan="6" className="py-12">
+                  <td
+                    colSpan="6"
+                    className="px-4 py-12 text-center border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg"
+                  >
                     <div className="flex justify-center items-center">
                       <div className="text-center">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
@@ -821,42 +880,41 @@ export default function CandidateShortlist() {
                   </td>
                 </tr>
               ) : (
-                currentCandidates.map((candidate, index) => (
-                  <tr key={candidate.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                    <td className="py-3 px-4">
+                currentCandidates.map((candidate) => (
+                  <tr key={candidate.id} className="bg-white hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-4 border-y first:border-l border-gray-200 first:rounded-l-lg">
                       <div>
-                        <div className="font-medium text-gray-700">{candidate.name}</div>
+                        <div className="text-gray-900 font-semibold">{candidate.name}</div>
                         <div className="text-sm text-gray-500">{candidate.email}</div>
-                        <div className="text-xs text-gray-400">{candidate.phone}</div>
+                        <div className="text-sm text-gray-400">{candidate.phone}</div>
                       </div>
                     </td>
-                    <td className="py-3 px-4">
-                      <span className="font-medium text-gray-700">{candidate.profile}</span>
+                    <td className="px-4 py-4 border-y border-gray-200">
+                      <span className="text-gray-900 font-semibold">{candidate.profile}</span>
                     </td>
-                    <td className="py-3 px-4">
-                      <span className="font-medium text-gray-700">{candidate.experience}</span>
+                    <td className="px-4 py-4 border-y border-gray-200">
+                      <span className="text-gray-900 font-semibold">{candidate.experience}</span>
                     </td>
-                    <td className="py-3 px-4">
-                      <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${getStatusColor(candidate.status)}`}>
+                    <td className="px-4 py-4 border-y border-gray-200">
+                      <span className={`inline-flex items-center gap-1 px-4 py-1.5 rounded-full text-gray-900 font-semibold ${getStatusColor(candidate.status)}`}>
                         {getStatusIcon(candidate.status)}
                         {candidate.status}
                       </span>
                     </td>
-
-                    <td className="py-3 px-4">
-                      <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${getVideoStatusColor(candidate.videoInterviewStatus)}`}>
+                    <td className="px-4 py-4 border-y border-gray-200">
+                      <span className={`inline-flex items-center gap-1 px-4 py-1.5 rounded-full text-gray-900 font-semibold ${getVideoStatusColor(candidate.videoInterviewStatus)}`}>
                         {getVideoStatusIcon(candidate.videoInterviewStatus)}
                         {candidate.videoInterviewStatus}
                       </span>
                     </td>
+                    <td className="px-4 py-4 border-y last:border-r border-gray-200 last:rounded-r-lg">
+                     <button
+  onClick={() => handleViewCandidate(candidate.id)}
+  className="bg-transparent text-blue-600 border border-blue-600 px-6 py-1 rounded-lg font-medium hover:bg-blue-600 hover:text-white transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-300 cursor-pointer"
+>
+  View
+</button>
 
-                    <td className="py-3 px-4">
-                      <button
-                        onClick={() => handleViewCandidate(candidate.id)}
-                        className="bg-transparent hover:bg-gray-100 text-blue-600 hover:text-blue-800 px-3 py-1 rounded-lg text-sm font-medium transition-colors border border-blue-200 hover:border-blue-300"
-                      >
-                        View
-                      </button>
                     </td>
                   </tr>
                 ))
@@ -866,7 +924,7 @@ export default function CandidateShortlist() {
         </div>
 
         {filteredCandidates.length === 0 && (
-          <div className="text-center py-12">
+          <div className="text-center py-12 border-t border-gray-100">
             <User className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <p className="text-gray-500 text-lg">
               {searchTerm ? 'No candidates found matching your search' : 'No candidates in shortlist'}
@@ -879,44 +937,49 @@ export default function CandidateShortlist() {
       </div>
 
       {/* Pagination */}
-      {filteredCandidates.length > 0 && (
-        <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+      {filteredCandidates.length > 0 && totalPages > 1 && (
+        <div className="mt-4 flex justify-between items-center px-4 border border-gray-200 p-2 rounded-xl bg-white">
           <div className="text-sm text-gray-600">
             Showing {startIndex + 1} to {Math.min(endIndex, filteredCandidates.length)} of {filteredCandidates.length} candidates
-            <span className="ml-2 text-xs text-gray-400">
-              (Page {currentPage} of {totalPages}, Items per page: {itemsPerPage})
-            </span>
           </div>
-          {filteredCandidates.length > itemsPerPage && (
-            <div className="flex gap-2">
-              <button
-                onClick={() => handlePageChange(currentPage - 1)}
-                disabled={currentPage === 1}
-                className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
-              >
-                Previous
-              </button>
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                <button
-                  key={page}
-                  onClick={() => handlePageChange(page)}
-                  className={`px-3 py-2 border rounded-lg transition-colors ${currentPage === page
-                    ? 'bg-blue-500 text-white border-blue-500'
-                    : 'border-gray-300 hover:bg-gray-50'
-                    }`}
-                >
-                  {page}
-                </button>
-              ))}
-              <button
-                onClick={() => handlePageChange(currentPage + 1)}
-                disabled={currentPage === totalPages}
-                className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
-              >
-                Next
-              </button>
+          <div className="flex gap-2 items-center">
+            <button
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900"
+            >
+              Previous
+            </button>
+            <div className="flex gap-1">
+              {getPageNumbers().map((page, idx, arr) => {
+                const showEllipsisBefore = idx > 0 && page - arr[idx - 1] > 1;
+                return (
+                  <React.Fragment key={page}>
+                    {showEllipsisBefore && (
+                      <span className="px-2 text-gray-400">...</span>
+                    )}
+                    <button
+                      onClick={() => handlePageChange(page)}
+                      className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${
+                        currentPage === page
+                          ? 'border border-gray-900 text-gray-900 bg-white'
+                          : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  </React.Fragment>
+                );
+              })}
             </div>
-          )}
+            <button
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900"
+            >
+              Next
+            </button>
+          </div>
         </div>
       )}
 
