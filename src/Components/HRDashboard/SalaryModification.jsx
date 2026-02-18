@@ -9,10 +9,10 @@ import {
   Edit2,
   AlertCircle,
   DollarSign,
-  Filter,
   Loader2,
   Send,
   Paperclip,
+  Search,
 } from 'lucide-react';
 import API_CONFIG from '../../config/api';
 import {
@@ -24,7 +24,6 @@ import {
   submitSandwichLeaveRemovalRequest,
 } from '../../services/salaryModificationService';
 
-// Format date for display: "6 Jan 2026 (Monday)"
 const formatDateWithDay = (dateStr) => {
   if (!dateStr) return '-';
   const d = new Date(dateStr);
@@ -33,17 +32,47 @@ const formatDateWithDay = (dateStr) => {
   return d.toLocaleDateString('en-US', options);
 };
 
-// Format YYYY-MM from Date
 const toMonthYear = (d) => {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
   return { month: `${y}-${m}`, year: y };
 };
 
-// Get current month/year
 const getCurrentMonthYear = () => {
   const now = new Date();
   return toMonthYear(now);
+};
+
+const getPageNumbers = (currentPage, totalPages) => {
+  if (!currentPage || !totalPages) return [];
+
+  const maxVisible = 7;
+  if (totalPages <= maxVisible) {
+    return Array.from({ length: totalPages }, (_, i) => i + 1);
+  }
+
+  const pages = [];
+  const halfVisible = Math.floor(maxVisible / 2);
+
+  if (currentPage <= halfVisible + 1) {
+    for (let i = 1; i <= maxVisible - 1; i += 1) {
+      pages.push(i);
+    }
+    pages.push(totalPages);
+  } else if (currentPage >= totalPages - halfVisible) {
+    pages.push(1);
+    for (let i = totalPages - (maxVisible - 2); i <= totalPages; i += 1) {
+      pages.push(i);
+    }
+  } else {
+    pages.push(1);
+    for (let i = currentPage - halfVisible + 1; i <= currentPage + halfVisible - 1; i += 1) {
+      pages.push(i);
+    }
+    pages.push(totalPages);
+  }
+
+  return pages;
 };
 
 const SalaryModification = () => {
@@ -79,6 +108,23 @@ const SalaryModification = () => {
   const [removalReason, setRemovalReason] = useState('');
   const [removalFiles, setRemovalFiles] = useState([]);
   const [removalSubmitting, setRemovalSubmitting] = useState(false);
+  const [leaveSummarySearch, setLeaveSummarySearch] = useState('');
+
+  const leaveSummaryPages =
+    leaveSummary.pagination && leaveSummary.pagination.totalPages > 0
+      ? getPageNumbers(leaveSummary.pagination.currentPage, leaveSummary.pagination.totalPages)
+      : [];
+
+  const filteredLeaveSummaryEmployees = (leaveSummary.employees || []).filter((emp) => {
+    const query = leaveSummarySearch.trim().toLowerCase();
+    if (!query) return true;
+    const values = [
+      emp.employeeName,
+      emp.empId,
+      emp.department,
+    ];
+    return values.some((val) => (val || '').toString().toLowerCase().includes(query));
+  });
 
   const getToken = () =>
     sessionStorage.getItem('authToken') ||
@@ -385,42 +431,72 @@ const SalaryModification = () => {
 
   return (
     <div className="p-6">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold text-gray-800">Salary Modification</h1>
-        <div className="flex items-center gap-2">
-          <Filter className="w-5 h-5 text-gray-500" />
-          <select
-            value={monthYear.month}
-            onChange={(e) => {
-              const [y] = e.target.value.split('-').map(Number);
-              setMonthYear({ month: e.target.value, year: y });
-            }}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          >
-            {monthOptions.slice(0, 24).map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+      <div className="mb-6 bg-white rounded-2xl border border-gray-200 p-4 md:p-5">
+        <div className="flex flex-col md:flex-row md:items-center gap-4">
+          <div className="flex flex-1 flex-wrap gap-4">
+            {tabs.map((tb) => {
+              const Icon = tb.icon;
+              const isActive = activeTab === tb.id;
+              return (
+                <button
+                  key={tb.id}
+                  onClick={() => setActiveTab(tb.id)}
+                  className={`min-w-[400px] flex items-center justify-between px-6 py-3 rounded-2xl border transition-all text-left ${
+                    isActive
+                      ? 'border-blue-600 bg-blue-50'
+                      : 'border-gray-200 bg-white hover:border-blue-300 hover:bg-gray-50'
+                  }`}
+                >
+                  <span
+                    className={`text-lg font-medium ${
+                      isActive ? 'text-blue-800' : 'text-gray-900'
+                    }`}
+                  >
+                    {tb.label}
+                  </span>
+                  <span
+                    className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                      isActive ? 'bg-blue-600 text-white' : 'bg-gray-50 text-gray-500'
+                    }`}
+                  >
+                    <Icon className="w-6 h-6" />
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <div>
+            <select
+              value={monthYear.month}
+              onChange={(e) => {
+                const [y] = e.target.value.split('-').map(Number);
+                setMonthYear({ month: e.target.value, year: y });
+              }}
+              className="border border-gray-300 rounded-2xl min-w-[220px] px-5 py-4 text-base font-medium bg-gray-50 focus:bg-white"
+            >
+              {monthOptions.slice(0, 24).map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
-      </div>
 
-      <div className="flex gap-2 mb-4 border-b border-gray-200">
-        {tabs.map((tb) => (
-          <button
-            key={tb.id}
-            onClick={() => setActiveTab(tb.id)}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-t-lg font-medium text-sm transition-colors ${
-              activeTab === tb.id
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
-          >
-            <tb.icon className="w-4 h-4" />
-            {tb.label}
-          </button>
-        ))}
+        {activeTab === 'leaveSummary' && (
+          <div className="mt-6">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+              <input
+                type="text"
+                placeholder="Search by employee name, Emp ID or department"
+                value={leaveSummarySearch}
+                onChange={(e) => setLeaveSummarySearch(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 border text-base border-gray-200 rounded-2xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {error && (
@@ -434,34 +510,49 @@ const SalaryModification = () => {
       )}
 
       {/* Info badge: 1 sandwich leave = 3 days */}
-      <div className="mb-4 flex items-center gap-2 text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm">
+      <div className="mb-4 flex items-center gap-2 text-red-700 bg-red-50 border border-red-200 rounded-lg px-4 py-2 text-lg">
         <AlertCircle className="w-4 h-4 flex-shrink-0" />
         <span>1 sandwich leave = 3 days for salary deduction</span>
       </div>
 
       {/* Leave Summary Tab */}
       {activeTab === 'leaveSummary' && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
           {leaveSummaryLoading ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="w-10 h-10 animate-spin text-blue-600" />
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b border-gray-200">
+            <div className="overflow-x-auto p-4">
+              <table className="min-w-full text-sm border-separate border-spacing-y-4">
+                <thead>
                   <tr>
-                    <th className="w-9 px-2 py-3" aria-label="Expand" />
-                    <th className="text-left px-4 py-3 font-semibold text-gray-700">Employee</th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-700">Emp ID</th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-700">Department</th>
-                    <th className="text-right px-4 py-3 font-semibold text-gray-700">Approved</th>
-                    <th className="text-right px-4 py-3 font-semibold text-gray-700">Sandwich</th>
-                    <th className="text-right px-4 py-3 font-semibold text-gray-700">Total Leave Days (Approved + Sandwich)</th>
+                    <th
+                      className="w-9 px-4 py-3 border-y border-l border-gray-200 rounded-l-2xl bg-gray-50"
+                      aria-label="Expand"
+                    />
+                    <th className="text-left px-6 py-3 border-y border-gray-200 bg-gray-50 text-base font-semibold text-gray-700">
+                      Employee
+                    </th>
+                    <th className="text-left px-6 py-3 border-y border-gray-200 bg-gray-50 text-base font-semibold text-gray-700">
+                      Emp ID
+                    </th>
+                    <th className="text-left px-6 py-3 border-y border-gray-200 bg-gray-50 text-base font-semibold text-gray-700">
+                      Department
+                    </th>
+                    <th className="text-right px-6 py-3 border-y border-gray-200 bg-gray-50 text-base font-semibold text-gray-700">
+                      Approved
+                    </th>
+                    <th className="text-right px-6 py-3 border-y border-gray-200 bg-gray-50 text-base font-semibold text-gray-700">
+                      Sandwich
+                    </th>
+                    <th className="text-right px-6 py-3 border-y border-r border-gray-200 rounded-r-2xl bg-gray-50 text-base font-semibold text-gray-700">
+                      Total Leave Days (Approved + Sandwich)
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {(leaveSummary.employees || []).map((emp) => {
+                  {filteredLeaveSummaryEmployees.map((emp) => {
                     const attendance = emp.attendanceByLogin || {};
                     const presentDates = attendance.presentDates || [];
                     const absentDates = attendance.absentDates || [];
@@ -471,11 +562,12 @@ const SalaryModification = () => {
                     const isExpanded = expandedLeaveSummaryEmpId === emp.empId;
                     return (
                       <React.Fragment key={emp.empId}>
-                        <tr className="border-b border-gray-100 hover:bg-gray-50">
-                          <td className="px-2 py-3">
+                        <tr className="bg-white hover:bg-gray-50 transition-colors">
+                          <td className="px-4 py-3 border-y border-l border-gray-200 rounded-l-2xl align-middle">
                             {hasDetails ? (
                               <button
                                 type="button"
+                                title='Expand and see details'
                                 onClick={() => setExpandedLeaveSummaryEmpId(isExpanded ? null : emp.empId)}
                                 className="p-1 rounded hover:bg-gray-200 text-gray-600"
                                 aria-expanded={isExpanded}
@@ -490,12 +582,24 @@ const SalaryModification = () => {
                               <span className="inline-block w-6" />
                             )}
                           </td>
-                          <td className="px-4 py-3 font-medium text-gray-800">{emp.employeeName}</td>
-                          <td className="px-4 py-3 text-gray-600">{emp.empId}</td>
-                          <td className="px-4 py-3 text-gray-600">{emp.department || '-'}</td>
-                          <td className="px-4 py-3 text-right">{emp.approvedLeaveDays ?? 0}</td>
-                          <td className="px-4 py-3 text-right">{Math.round((emp.sandwichLeaveDays ?? 0) / 3)}</td>
-                          <td className="px-4 py-3 text-right font-medium">{emp.totalLeaveDaysForSalary ?? 0}</td>
+                          <td className="px-6 py-3 border-y border-gray-200 text-left font-semibold text-gray-900 align-middle">
+                            {emp.employeeName}
+                          </td>
+                          <td className="px-6 py-3 border-y border-gray-200 text-left font-semibold text-gray-900 align-middle">
+                            {emp.empId}
+                          </td>
+                          <td className="px-6 py-3 border-y border-gray-200 text-left font-semibold text-gray-900 align-middle">
+                            {emp.department || '-'}
+                          </td>
+                          <td className="px-13 py-3 border-y border-gray-200 text-right font-semibold text-gray-900 align-middle">
+                            {emp.approvedLeaveDays ?? 0}
+                          </td>
+                          <td className="px-13 py-3 border-y border-gray-200 text-right font-semibold text-gray-900 align-middle">
+                            {Math.round((emp.sandwichLeaveDays ?? 0) / 3)}
+                          </td>
+                          <td className="px-6 py-3 border-y border-r border-gray-200 text-right font-semibold text-gray-900 rounded-r-2xl align-middle">
+                            {emp.totalLeaveDaysForSalary ?? 0}
+                          </td>
                         </tr>
                         {isExpanded && (
                           <tr className="bg-gray-50 border-b border-gray-200">
@@ -578,51 +682,75 @@ const SalaryModification = () => {
                   })}
                 </tbody>
               </table>
-              {(!leaveSummary.employees || leaveSummary.employees.length === 0) && !leaveSummaryLoading && (
-                <div className="text-center py-12 text-gray-500">No leave data for this month.</div>
+              {leaveSummarySearch.trim() && filteredLeaveSummaryEmployees.length === 0 && !leaveSummaryLoading && (
+                <div className="text-center py-12 text-gray-500">No matching records for this search.</div>
               )}
+              {!leaveSummarySearch.trim() &&
+                (!leaveSummary.employees || leaveSummary.employees.length === 0) &&
+                !leaveSummaryLoading && (
+                  <div className="text-center py-12 text-gray-500">No leave data for this month.</div>
+                )}
             </div>
           )}
-          {leaveSummary.pagination && leaveSummary.pagination.totalPages > 1 && !leaveSummaryLoading && (
-            <div className="flex flex-col sm:flex-row justify-between items-center gap-4 px-4 py-4 border-t border-gray-200 bg-gray-50">
-              <div className="text-sm text-gray-600">
-                Showing {(leaveSummary.pagination.currentPage - 1) * leaveSummary.pagination.limit + 1} to{' '}
-                {Math.min(
-                  leaveSummary.pagination.currentPage * leaveSummary.pagination.limit,
-                  leaveSummary.pagination.totalCount
-                )}{' '}
-                of {leaveSummary.pagination.totalCount} entries
-              </div>
-              <div className="flex gap-2 items-center">
-                <button
-                  onClick={() => fetchLeaveSummaryForPage(leaveSummaryPage - 1)}
-                  disabled={!leaveSummary.pagination.hasPrevPage}
-                  className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 transition-colors text-sm font-medium text-gray-600"
-                >
-                  <ChevronLeft size={16} />
-                  Previous
-                </button>
-                <span className="text-sm text-gray-600">
-                  Page {leaveSummary.pagination.currentPage} of {leaveSummary.pagination.totalPages}
-                </span>
-                <button
-                  onClick={() => fetchLeaveSummaryForPage(leaveSummaryPage + 1)}
-                  disabled={!leaveSummary.pagination.hasNextPage}
-                  className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 transition-colors text-sm font-medium text-gray-600"
-                >
-                  Next
-                  <ChevronRight size={16} />
-                </button>
-              </div>
+        </div>
+      )}
+
+      {activeTab === 'leaveSummary' &&
+        leaveSummary.pagination &&
+        leaveSummary.pagination.totalPages > 1 &&
+        !leaveSummaryLoading && (
+        <div className="mt-4 flex justify-between items-center px-4 border border-gray-200 p-2 rounded-xl bg-white">
+          <div className="text-sm text-gray-600">
+            Showing {(leaveSummary.pagination.currentPage - 1) * leaveSummary.pagination.limit + 1} to{' '}
+            {Math.min(
+              leaveSummary.pagination.currentPage * leaveSummary.pagination.limit,
+              leaveSummary.pagination.totalCount
+            )}{' '}
+            of {leaveSummary.pagination.totalCount} entries
+          </div>
+          <div className="flex gap-2 items-center">
+            <button
+              onClick={() => fetchLeaveSummaryForPage(leaveSummaryPage - 1)}
+              disabled={!leaveSummary.pagination.hasPrevPage}
+              className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900"
+            >
+              Previous
+            </button>
+            <div className="flex gap-1">
+              {leaveSummaryPages.map((page, idx, arr) => {
+                const showEllipsisBefore = idx > 0 && page - arr[idx - 1] > 1;
+                return (
+                  <React.Fragment key={page}>
+                    {showEllipsisBefore && <span className="px-2 text-gray-400">...</span>}
+                    <button
+                      onClick={() => fetchLeaveSummaryForPage(page)}
+                      className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${
+                        leaveSummary.pagination.currentPage === page
+                          ? 'border border-gray-900 text-gray-900 bg-white'
+                          : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  </React.Fragment>
+                );
+              })}
             </div>
-          )}
+            <button
+              onClick={() => fetchLeaveSummaryForPage(leaveSummaryPage + 1)}
+              disabled={!leaveSummary.pagination.hasNextPage}
+              className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900"
+            >
+              Next
+            </button>
+          </div>
         </div>
       )}
 
       {/* Sandwich Leave Tab */}
       {activeTab === 'sandwichLeave' && (
         <div className="space-y-6">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h3 className="text-lg font-semibold text-gray-800 mb-4">Add Sandwich Leave</h3>
             <form onSubmit={handleAddSandwichLeave} className="flex flex-wrap gap-4 items-end">
               <div className="min-w-[200px]">
@@ -673,7 +801,7 @@ const SalaryModification = () => {
           </div>
 
           {/* View/Manage Sandwich Days by Employee */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <h3 className="text-lg font-semibold text-gray-800 px-6 py-4 border-b border-gray-200">
               View & Manage Sandwich Days by Employee
             </h3>
@@ -769,7 +897,7 @@ const SalaryModification = () => {
           {/* Request removal of sandwich leave – sent to Leave Approval for manager */}
           {removalRequest && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6">
+              <div className="bg-white rounded-xl max-w-lg w-full p-6">
                 <h3 className="text-lg font-semibold text-gray-800 mb-2">Request removal of sandwich leave</h3>
                 <p className="text-sm text-gray-600 mb-4">
                   This request will be sent to Leave Approval. A manager can accept (remove the sandwich leave) or reject it. Leave date: <strong>{removalRequest.date}</strong>.
@@ -829,7 +957,7 @@ const SalaryModification = () => {
           {/* Edit Sandwich Leave Modal */}
           {sandwichEditing && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+              <div className="bg-white rounded-xl max-w-md w-full p-6">
                 <h3 className="text-lg font-semibold text-gray-800 mb-4">Edit Sandwich Leave</h3>
                 <form onSubmit={handleUpdateSandwichLeave}>
                   <div className="space-y-4">
@@ -879,27 +1007,39 @@ const SalaryModification = () => {
           )}
 
           {/* Employees with Sandwich Leaves */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
             <h3 className="text-lg font-semibold text-gray-800 px-6 py-4 border-b border-gray-200">
               Employees with Sandwich Leaves
             </h3>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50">
+            <div className="overflow-x-auto p-4">
+              <table className="min-w-full text-sm border-separate border-spacing-y-4">
+                <thead>
                   <tr>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-700">Employee</th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-700">Emp ID</th>
-                    <th className="text-right px-4 py-3 font-semibold text-gray-700">Sandwich Leave Days</th>
+                    <th className="text-left px-6 py-3 border-y border-l border-gray-200 rounded-l-2xl bg-gray-50 text-base font-semibold text-gray-700">
+                      Employee
+                    </th>
+                    <th className="text-left px-6 py-3 border-y border-gray-200 bg-gray-50 text-base font-semibold text-gray-700">
+                      Emp ID
+                    </th>
+                    <th className="text-right px-6 py-3 border-y border-r border-gray-200 rounded-r-2xl bg-gray-50 text-base font-semibold text-gray-700">
+                      Sandwich Leave Days
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {(leaveSummary.employees || [])
                     .filter((e) => (e.sandwichLeaveDays || 0) > 0)
                     .map((emp) => (
-                      <tr key={emp.empId} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="px-4 py-3 font-medium text-gray-800">{emp.employeeName}</td>
-                        <td className="px-4 py-3 text-gray-600">{emp.empId}</td>
-                        <td className="px-4 py-3 text-right font-medium text-amber-700">{Math.round((emp.sandwichLeaveDays ?? 0) / 3)}</td>
+                      <tr key={emp.empId} className="bg-white hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-3 border-y border-l border-gray-200 text-sm font-semibold text-gray-900 rounded-l-2xl align-middle">
+                          {emp.employeeName}
+                        </td>
+                        <td className="px-6 py-3 border-y border-gray-200 text-sm text-gray-900 align-middle font-semibold">
+                          {emp.empId}
+                        </td>
+                        <td className="px-6 py-3 border-y border-r border-gray-200 text-sm text-right font-semibold text-amber-900 rounded-r-2xl align-middle">
+                          {Math.round((emp.sandwichLeaveDays ?? 0) / 3)}
+                        </td>
                       </tr>
                     ))}
                 </tbody>
