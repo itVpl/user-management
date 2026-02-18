@@ -4,11 +4,10 @@ import employeeDocumentsService from '../../../services/employeeDocumentsService
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
 
-const SignatureManagement = () => {
+const SignatureManagement = ({ showUploadModal, setShowUploadModal }) => {
   const [signatures, setSignatures] = useState([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadData, setUploadData] = useState({
     file: null,
     signatureName: '',
@@ -112,32 +111,34 @@ const SignatureManagement = () => {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-      {/* Header */}
-      <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+    <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+      <div className="p-6 border-b border-gray-100 flex items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-gray-900">Signature Management</h2>
-          <p className="text-sm text-gray-600 mt-1">Upload and manage signatures for use in documents</p>
+          <h2 className="text-lg md:text-xl font-bold text-gray-900">Signature Management</h2>
+          <p className="text-sm text-gray-600 mt-1">
+            Upload and manage reusable signatures for your HR documents
+          </p>
         </div>
-        <button
-          onClick={() => setShowUploadModal(true)}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-        >
-          <Plus className="w-4 h-4" />
-          Upload Signature
-        </button>
       </div>
 
-      {/* Signatures Grid */}
       {loading ? (
         <div className="flex items-center justify-center py-12">
           <Loader className="w-8 h-8 animate-spin text-blue-600" />
         </div>
       ) : signatures.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 text-gray-500">
-          <ImageIcon className="w-12 h-12 mb-4 text-gray-400" />
-          <p className="text-lg font-medium">No signatures uploaded</p>
-          <p className="text-sm">Upload your first signature to get started</p>
+        <div className="flex flex-col items-center justify-center py-16 text-gray-500">
+          <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center mb-4">
+            <ImageIcon className="w-8 h-8 text-blue-500" />
+          </div>
+          <p className="text-lg font-semibold text-gray-900 mb-1">No signatures uploaded</p>
+          <p className="text-sm text-gray-600 mb-4">Upload a signature to start using it in documents</p>
+          <button
+            onClick={() => setShowUploadModal(true)}
+            className="px-4 py-2 inline-flex items-center gap-2 rounded-full text-sm font-semibold text-blue-600 border border-blue-200 hover:bg-blue-50 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Upload Signature</span>
+          </button>
         </div>
       ) : (
         <div className="p-6">
@@ -145,29 +146,33 @@ const SignatureManagement = () => {
             {signatures.map((signature) => (
               <div
                 key={signature.signatureId}
-                className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+                className="border border-gray-200 rounded-2xl p-4 hover:shadow-md hover:border-blue-100 transition-all"
               >
-                <div className="mb-4">
+                <div className="mb-4 bg-gray-50 rounded-xl border border-gray-200 flex items-center justify-center h-32">
                   <img
                     src={signature.signatureUrl}
                     alt={signature.signatureName || 'Signature'}
-                    className="w-full h-32 object-contain bg-gray-50 rounded border border-gray-200"
+                    className="max-h-28 object-contain"
                   />
                 </div>
-                <div className="mb-2">
-                  <h3 className="font-medium text-gray-900">
-                    {signature.signatureName || 'Unnamed Signature'}
-                  </h3>
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div>
+                    <h3 className="font-semibold text-gray-900">
+                      {signature.signatureName || 'Unnamed Signature'}
+                    </h3>
+                    <div className="text-xs text-gray-500 mt-1">
+                      Uploaded {new Date(signature.uploadedAt).toLocaleDateString()}
+                    </div>
+                  </div>
                   {signature.signatureType && (
-                    <p className="text-sm text-gray-500 capitalize">{signature.signatureType}</p>
+                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 capitalize">
+                      {signature.signatureType}
+                    </span>
                   )}
-                </div>
-                <div className="text-xs text-gray-400 mb-4">
-                  Uploaded: {new Date(signature.uploadedAt).toLocaleDateString()}
                 </div>
                 <button
                   onClick={() => handleDelete(signature.signatureId)}
-                  className="w-full px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors flex items-center justify-center gap-2"
+                  className="w-full px-4 py-2 bg-red-50 text-red-600 rounded-full hover:bg-red-100 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
                 >
                   <Trash2 className="w-4 h-4" />
                   Delete
@@ -180,7 +185,7 @@ const SignatureManagement = () => {
 
       {/* Upload Modal */}
       {showUploadModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 backdrop-blur-sm bg-black/30 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
             {/* Modal Header */}
             <div className="p-6 border-b border-gray-200 flex items-center justify-between">

@@ -384,7 +384,7 @@ const DocumentForm = ({ documentType, documentId, onClose, onSuccess }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+    <div className="fixed inset-0 backdrop-blur-sm bg-black/30 flex items-center justify-center z-50 p-4 overflow-y-auto">
       <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full my-8">
         {/* Header */}
         <div className="p-6 border-b border-gray-200 flex items-center justify-between">
