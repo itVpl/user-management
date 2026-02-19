@@ -60,7 +60,7 @@ export default function TaskScheduling() {
 
   // pagination
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 9;
+  const itemsPerPage = 5;
 
 
   // refs for “entire text field clickable”
@@ -329,68 +329,111 @@ export default function TaskScheduling() {
 
 
       {/* Top Stats + Filters */}
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center gap-6">
+      <div className="mb-6 bg-white rounded-2xl border border-gray-200 p-4 flex flex-col gap-4">
+        <div className="flex flex-wrap gap-3 justify-between">
           {[
-            { key: 'all', label: 'Total Tasks', color: 'blue', icon: <FaCalendarAlt className="text-blue-600" size={20} />, value: statistics.total },
-            { key: 'low', label: 'Low Priority', color: 'green', icon: <FaFlag className="text-green-600" size={20} />, value: tasks.filter(t => t.priority === 'low').length },
-            { key: 'medium', label: 'Medium Priority', color: 'blue', icon: <FaFlag className="text-blue-600" size={20} />, value: tasks.filter(t => t.priority === 'medium').length },
-            { key: 'high', label: 'High Priority', color: 'orange', icon: <FaFlag className="text-orange-600" size={20} />, value: tasks.filter(t => t.priority === 'high').length },
-            { key: 'urgent', label: 'Urgent Priority', color: 'red', icon: <FaFlag className="text-red-600" size={20} />, value: tasks.filter(t => t.priority === 'urgent').length },
-          ].map((c) => (
-            <div
-              key={c.key}
-              className={`bg-white rounded-2xl shadow-xl p-4 border border-gray-100 cursor-pointer transition-all duration-200 hover:shadow-2xl hover:scale-105 ${priorityFilter === c.key ? `ring-2 ring-${c.color}-500 bg-${c.color}-50` : ''
+            {
+              key: 'all',
+              label: 'Total Tasks',
+              icon: FaCalendarAlt,
+              iconBg: 'bg-blue-50',
+              iconColor: 'text-blue-600',
+              activeClass: 'ring-2 ring-blue-500 bg-blue-50',
+              value: statistics.total,
+            },
+            {
+              key: 'low',
+              label: 'Low Priority',
+              icon: FaFlag,
+              iconBg: 'bg-green-50',
+              iconColor: 'text-green-600',
+              activeClass: 'ring-2 ring-green-500 bg-green-50',
+              value: tasks.filter(t => t.priority === 'low').length,
+            },
+            {
+              key: 'medium',
+              label: 'Medium Priority',
+              icon: FaFlag,
+              iconBg: 'bg-blue-50',
+              iconColor: 'text-blue-600',
+              activeClass: 'ring-2 ring-blue-500 bg-blue-50',
+              value: tasks.filter(t => t.priority === 'medium').length,
+            },
+            {
+              key: 'high',
+              label: 'High Priority',
+              icon: FaExclamationTriangle,
+              iconBg: 'bg-orange-50',
+              iconColor: 'text-orange-500',
+              activeClass: 'ring-2 ring-orange-500 bg-orange-50',
+              value: tasks.filter(t => t.priority === 'high').length,
+            },
+            {
+              key: 'urgent',
+              label: 'Urgent Priority',
+              icon: FaClock,
+              iconBg: 'bg-red-50',
+              iconColor: 'text-red-500',
+              activeClass: 'ring-2 ring-red-500 bg-red-50',
+              value: tasks.filter(t => t.priority === 'urgent').length,
+            },
+          ].map((c) => {
+            const Icon = c.icon;
+            const isActive = priorityFilter === c.key;
+            return (
+              <div
+                key={c.key}
+                className={`flex-1 min-w-[180px] max-w-[230px] rounded-2xl px-4 py-3 border border-gray-200 cursor-pointer transition-all duration-200 hover:bg-gray-50 ${
+                  isActive ? c.activeClass : 'bg-white'
                 }`}
-              onClick={() => setPriorityFilter(c.key)}
-            >
-              <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 bg-${c.color}-100 rounded-xl flex items-center justify-center`}>
-                  {c.icon}
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">{c.label}</p>
-                  <p className={`text-xl font-bold ${c.color === 'green' ? 'text-green-600' :
-                    c.color === 'orange' ? 'text-orange-600' :
-                      c.color === 'red' ? 'text-red-600' :
-                        'text-blue-600'
-                    }`}>{c.value}</p>
+                onClick={() => setPriorityFilter(c.key)}
+              >
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-lg font-medium text-gray-600">{c.label}</p>
+                    <p className="mt-2 text-2xl font-bold text-gray-900">{c.value}</p>
+                  </div>
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${c.iconBg}`}>
+                    <Icon className={c.iconColor} size={18} />
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
 
-        <div className="flex items-center gap-4">
-          <div className="relative">
-            <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="relative flex-1">
+            <FaSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
             <input
               type="text"
               placeholder="Search tasks..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg"
             />
           </div>
           <button
+            type="button"
             onClick={() => {
               setFormData({ taskTitle: '', taskDescription: '', scheduledDateTime: '', priority: 'select' });
               setErrors({});
               setSubmitAttempted(false);
               setShowCreateModal(true);
             }}
-            className="flex items-center gap-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white px-4 py-2 rounded-lg shadow-lg hover:from-blue-600 hover:to-blue-700 transition-all duration-200 font-semibold"
+            className="inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-lg font-semibold transition-colors duration-200"
           >
-            <FaPlus size={16} />
-            Create Task
+            
+            <span>Create Task</span>
+            <FaPlus size={14} />
           </button>
         </div>
       </div>
 
 
       {/* Tasks Table */}
-      <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+      <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
         {loading ? (
           <div className="text-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
@@ -399,61 +442,74 @@ export default function TaskScheduling() {
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
+            <div className="overflow-x-auto p-4">
+              <table className="min-w-full text-sm border-separate border-spacing-y-4">
+                <thead>
                   <tr>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Task Title</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Description</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Scheduled Date</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Time</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Priority</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Actions</th>
+                    <th className="px-6 py-3 border-y border-l border-gray-200 rounded-l-2xl bg-gray-50 text-sm font-semibold text-gray-700 uppercase tracking-wide text-left">
+                      Task Title
+                    </th>
+                    <th className="px-4 py-3 border-y border-gray-200 bg-gray-50 text-sm font-semibold text-gray-700 uppercase tracking-wide text-left">
+                      Description
+                    </th>
+                    <th className="px-6 py-3 border-y border-gray-200 bg-gray-50 text-sm font-semibold text-gray-700 uppercase tracking-wide text-left">
+                      Scheduled Date
+                    </th>
+                    <th className="px-6 py-3 border-y border-gray-200 bg-gray-50 text-sm font-semibold text-gray-700 uppercase tracking-wide text-left">
+                      Time
+                    </th>
+                    <th className="px-6 py-3 border-y border-gray-200 bg-gray-50 text-sm font-semibold text-gray-700 uppercase tracking-wide text-left">
+                      Priority
+                    </th>
+                    <th className="pl-6 pr-18 py-3 border-y border-r border-gray-200 rounded-r-2xl bg-gray-50 text-sm font-semibold text-gray-700 uppercase tracking-wide text-right">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {currentTasks.map((task, index) => (
-                    <tr key={task._id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                      <td className="py-2 px-3">
+                  {currentTasks.map((task) => (
+                    <tr key={task._id} className="bg-white hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-3 border-y border-l border-gray-200 rounded-l-2xl align-middle text-left">
                         <div className="flex items-center gap-2">
-                          <span className="font-medium text-gray-700">{task.taskTitle}</span>
+                          <span className="font-semibold text-gray-900">{task.taskTitle}</span>
                           {isOverdue(task.scheduledDateTime, task.status) && (
                             <FaExclamationTriangle className="text-red-500" size={14} title="Overdue" />
                           )}
                         </div>
                       </td>
-                      <td className="py-2 px-3">
-                        <span className="text-sm text-gray-600 max-w-xs truncate block">
+                      <td className="px-6 py-3 border-y border-gray-200 align-middle text-left">
+                        <span className="font-semibold text-gray-900 truncate block">
                           {task.taskDescription}
                         </span>
                       </td>
-                      <td className="py-2 px-3">
+                      <td className="px-6 py-3 border-y border-gray-200 align-middle text-left">
                         <div className="flex items-center gap-1">
-                          <FaCalendar className="text-gray-400" size={12} />
-                          <span className="text-sm text-gray-700">{formatDateTime(task.scheduledDateTime).date}</span>
+                          {/* <FaCalendar className="text-gray-400" size={12} /> */}
+                          <span className="font-semibold text-gray-900">{formatDateTime(task.scheduledDateTime).date}</span>
                         </div>
                       </td>
-                      <td className="py-2 px-3">
+                      <td className="px-6 py-3 border-y border-gray-200 align-middle text-left">
                         <div className="flex items-center gap-1">
-                          <FaClock className="text-gray-400" size={12} />
-                          <span className="text-sm text-gray-700">{formatDateTime(task.scheduledDateTime).time}</span>
+                          {/* <FaClock className="text-gray-400" size={12} /> */}
+                          <span className="font-semibold text-gray-900">{formatDateTime(task.scheduledDateTime).time}</span>
                         </div>
                       </td>
-                      <td className="py-2 px-3">
-                        <span className={`text-xs px-3 py-1 rounded-full font-bold ${getPriorityColor(task.priority)}`}>
-                          <FaFlag className="inline mr-1" size={10} />
+                      <td className="px-6 py-3 border-y border-gray-200 align-middle">
+                        <span className={`font-semibold text-gray-900 text-base px-3 py-1 rounded-full ${getPriorityColor(task.priority)}`}>
+                          {/* <FaFlag className="inline mr-1" size={10} /> */}
                           {task.priority}
                         </span>
                       </td>
-                      <td className="py-2 px-3">
-                        <div className="flex items-center gap-3">
-                          <button
-                            onClick={() => openDeleteModal(task._id)}
-                            className="text-red-600 hover:text-red-800 transition-colors"
-                            title="Delete task"
-                          >
-                            <FaTrash size={16} />
-                          </button>
+                      <td className="pl-6 pr-10 py-3 border-y border-r border-gray-200 text-right rounded-r-2xl align-middle">
+                        <div className="inline-flex items-center justify-end gap-3">
+                         <button
+  onClick={() => openDeleteModal(task._id)}
+  className="text-red-600 border border-red-600 px-4 py-1.5 rounded-md text-sm font-medium transition-all duration-200 ease-in-out hover:bg-red-600 hover:text-white hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-1 cursor-pointer"
+  title="Delete task"
+>
+  Delete Task
+</button>
+
                         </div>
                       </td>
                     </tr>
@@ -485,33 +541,38 @@ export default function TaskScheduling() {
 
       {/* Pagination */}
       {filteredTasks.length > 0 && (
-        <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+        <div className="mt-4 flex justify-between items-center px-4 border border-gray-200 p-2 rounded-xl bg-white">
           <div className="text-sm text-gray-600">
             Showing {startIndex + 1} to {Math.min(endIndex, filteredTasks.length)} of {filteredTasks.length} tasks
             {(searchTerm || priorityFilter !== 'all') && ` (filtered from ${tasks.length} total)`}
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
             <button
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
               disabled={currentPage === 1}
-              className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+              className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900"
             >
               Previous
             </button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-              <button
-                key={page}
-                onClick={() => setCurrentPage(page)}
-                className={`px-3 py-2 border rounded-lg transition-colors ${currentPage === page ? 'bg-blue-500 text-white border-blue-500' : 'border-gray-300 hover:bg-gray-50'
+            <div className="flex gap-1">
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                <button
+                  key={page}
+                  onClick={() => setCurrentPage(page)}
+                  className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${
+                    currentPage === page
+                      ? 'border border-gray-900 text-gray-900 bg-white'
+                      : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
                   }`}
-              >
-                {page}
-              </button>
-            ))}
+                >
+                  {page}
+                </button>
+              ))}
+            </div>
             <button
               onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
               disabled={currentPage === totalPages}
-              className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+              className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900"
             >
               Next
             </button>
@@ -527,7 +588,7 @@ export default function TaskScheduling() {
           // onClick={() => !createLoading && setShowCreateModal(false)}
         >
           <div
-            className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+            className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-gray-200"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl">
@@ -702,7 +763,7 @@ export default function TaskScheduling() {
                 <button
                   type="submit"
                   disabled={createLoading}
-                  className="px-6 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg shadow-lg hover:from-blue-600 hover:to-blue-700 transition-all duration-200 font-semibold disabled:opacity-60 flex items-center gap-2"
+                  className="px-6 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all duration-200 font-semibold disabled:opacity-60 flex items-center gap-2"
                 >
                   {createLoading && (
                     <span className="inline-block h-4 w-4 border-2 border-white border-b-transparent rounded-full animate-spin" />
@@ -727,7 +788,7 @@ export default function TaskScheduling() {
           onClick={() => !deleteLoading && setShowDeleteModal(false)}
         >
           <div
-            className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+            className="bg-white rounded-2xl w-full max-w-md overflow-hidden border border-gray-200"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-5 border-b bg-gray-50">
