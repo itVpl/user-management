@@ -38,6 +38,9 @@ const Layout = () => {
   const [expandedFollowUpId, setExpandedFollowUpId] = useState(null);
   const [fullFollowUpData, setFullFollowUpData] = useState({});
   const [totalFollowUpsCount, setTotalFollowUpsCount] = useState(0);
+  const [showPendingNotification, setShowPendingNotification] = useState(false);
+  const [pendingDecisionCount, setPendingDecisionCount] = useState(0);
+  const [notificationShown, setNotificationShown] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   
@@ -48,6 +51,15 @@ const Layout = () => {
       try {
         const userData = JSON.parse(userString);
         setUser(userData);
+        
+        // Check if user is VPL100 - redirect to docs-upload
+        const empId = userData?.empId || userData?.employeeId || '';
+        if (empId === 'VPL100') {
+          // Redirect to docs-upload if on dashboard or root
+          if (location.pathname === '/dashboard' || location.pathname === '/') {
+            navigate('/docs-upload', { replace: true });
+          }
+        }
         
         // Check department - handle both string and object formats
         const department = typeof userData?.department === 'string' 
@@ -64,7 +76,7 @@ const Layout = () => {
         console.error("Error parsing user data:", error);
       }
     }
-  }, []);
+  }, [location.pathname, navigate]);
 
   // Fetch follow-ups for Sales users
   const fetchFollowUps = async () => {
@@ -145,6 +157,54 @@ const Layout = () => {
     }
   }, [user]);
 
+  // Check for pending decisions for superadmin
+  useEffect(() => {
+    const checkPendingDecisions = async () => {
+      if (user) {
+        const userRole = user.role || user.userType || 'employee';
+        
+        // Check if notification was already shown today using localStorage
+        const today = new Date().toISOString().split('T')[0];
+        const notificationKey = `pending_notification_shown_${today}`;
+        const alreadyShownToday = localStorage.getItem(notificationKey);
+        
+        if (userRole === 'superadmin' && !alreadyShownToday) {
+          try {
+            const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+            if (token) {
+              const response = await axios.get(
+                `${API_CONFIG.BASE_URL}/api/v1/employee-reviews/statistics/overview`,
+                { headers: { 'Authorization': `Bearer ${token}` } }
+              );
+
+              if (response.data.success) {
+                const stats = response.data.data.overview || {};
+                const pendingCount = stats.pendingReviews || stats.totalPending || 0;
+                
+                if (pendingCount > 0) {
+                  setPendingDecisionCount(pendingCount);
+                  setShowPendingNotification(true);
+                  setNotificationShown(true);
+                  // Mark as shown today
+                  localStorage.setItem(notificationKey, 'true');
+                }
+              }
+            }
+          } catch (error) {
+            console.error('Error fetching pending decisions:', error);
+          }
+        }
+      }
+    };
+
+    // Add a small delay to ensure user is fully loaded
+    const timer = setTimeout(() => {
+      checkPendingDecisions();
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [user]);
+
   // Use both assignment notification hooks only for CMT users
   const { newDOAssignment, clearNotification: clearDONotification } = useDOAssignmentNotification(
     user?.empId || user?.employeeId || null,
@@ -171,13 +231,67 @@ const Layout = () => {
     }
   }, [isCMTUser, user, newDOAssignment, newAssignment]);
 
+  // Check if user is VPL100
+  const isVPL100 = user && (user.empId === 'VPL100' || user.employeeId === 'VPL100');
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Sidebar />
-      <Topbar />
-      <main className="ml-20 md:ml-[296px] mr-5 pt-24 px-4 pb-4"> {/* Increased pt-20 to pt-24 to account for TopBar at top-6 + h-16 */}
+      {!isVPL100 && <Topbar />}
+      <main className={`${isVPL100 ? 'ml-20 md:ml-[296px] mr-5 pt-4 px-4 pb-4' : 'ml-20 md:ml-[296px] mr-5 pt-24 px-4 pb-4'}`}> {/* Increased pt-20 to pt-24 to account for TopBar at top-6 + h-16 */} 
         <Outlet />
       </main>
+
+      {/* Employee Review Notification for Superadmin - Fixed at bottom right */}
+      {showPendingNotification && pendingDecisionCount > 0 && user && (user.role === 'superadmin' || user.userType === 'superadmin') && (
+        <div className="fixed bottom-6 right-6 z-[10000] max-w-sm">
+          <div className="bg-white rounded-lg shadow-2xl border-2 border-blue-500 p-4 animate-slide-up">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <Clock size={20} className="text-blue-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm font-bold text-gray-800 mb-1">New Joinee Employee Review</h3>
+                <p className="text-xs text-gray-600 mb-2">
+                  You have <span className="text-blue-600 font-bold">{pendingDecisionCount}</span> pending employee review{pendingDecisionCount > 1 ? 's' : ''} awaiting your decision.
+                </p>
+                <p className="text-xs text-gray-600 mb-3">
+                  Would you like to review them now?
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowPendingNotification(false);
+                    }}
+                    className="flex-1 px-3 py-1.5 text-xs border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors font-semibold"
+                  >
+                    Later
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowPendingNotification(false);
+                      navigate('/reviews/dashboard');
+                    }}
+                    className="flex-1 px-3 py-1.5 text-xs bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-colors font-semibold"
+                  >
+                    Review Now
+                  </button>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowPendingNotification(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 {/*      
       {showFoodModal && (
         <FoodPreferenceModal onClose={() => setShowFoodModal(false)} user={user} />
@@ -219,7 +333,7 @@ const Layout = () => {
       )}
 
       {/* Right Side Drawer for Sales Department - Available on all screens */}
-      {isSalesUser && (
+      {isSalesUser && !isVPL100 && (
         <RightSideDrawer
           isOpen={isDrawerOpen}
           onClose={() => setIsDrawerOpen(!isDrawerOpen)}
