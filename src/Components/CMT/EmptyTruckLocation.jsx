@@ -91,7 +91,7 @@ const SearchableDropdown = ({
       </div>
 
       {isOpen && !disabled && !loading && (
-        <div className="absolute z-[9999] w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-2xl max-h-60 overflow-hidden">
+    <div className="absolute z-[9999] w-full mt-1 bg-white border border-gray-300 rounded-lg max-h-60 overflow-hidden">
           {/* Search Input */}
           <div className="p-2 border-b border-gray-200">
             <div className="relative">
@@ -177,6 +177,8 @@ const EmptyTruckLocation = () => {
     notes: '',
     status: 'empty'
   });
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
 
   useEffect(() => {
     fetchAllTrucks();
@@ -227,10 +229,11 @@ const EmptyTruckLocation = () => {
     }
   };
 
-  const fetchAllTrucks = async () => {
+  const fetchAllTrucks = async (overrideFilters) => {
+    const appliedFilters = overrideFilters || filters;
     setLoading(true);
     try {
-      const response = await emptyTruckLocationService.getAllTrucksCMT(filters);
+      const response = await emptyTruckLocationService.getAllTrucksCMT(appliedFilters);
       if (response.success) {
         setTrucks(response.data || []);
       }
@@ -323,21 +326,20 @@ const EmptyTruckLocation = () => {
   };
 
   const handleApplyFilters = () => {
-    if (searchVehicleNo.trim()) {
-      handleSearchByVehicle();
-    } else {
-      fetchAllTrucks();
-    }
+    setCurrentPage(1);
+    fetchAllTrucks();
   };
 
   const handleClearFilters = () => {
-    setFilters({
+    const clearedFilters = {
       city: '',
       state: '',
       truckerId: ''
-    });
+    };
+    setFilters(clearedFilters);
     setSearchVehicleNo('');
-    fetchAllTrucks();
+    setCurrentPage(1);
+    fetchAllTrucks(clearedFilters);
   };
 
   const handleViewHistory = (truck) => {
@@ -512,6 +514,53 @@ const EmptyTruckLocation = () => {
     }
   };
 
+  const filteredTrucks = trucks.filter((truck) => {
+    const term = searchVehicleNo.trim().toLowerCase();
+    if (!term) return true;
+    const composite = `${truck.vehicleNo || ''} ${truck.vehicleId?.vehicleType || ''} ${truck.truckerId?.compName || ''} ${truck.location?.city || ''} ${truck.location?.state || ''} ${truck.status || ''}`.toLowerCase();
+    return composite.includes(term);
+  });
+
+  const totalPages = Math.max(1, Math.ceil(filteredTrucks.length / itemsPerPage));
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = Math.min(startIndex + itemsPerPage, filteredTrucks.length);
+  const currentTrucks = filteredTrucks.slice(startIndex, endIndex);
+
+  const handlePageChange = (page) => {
+    if (page < 1 || page > totalPages) return;
+    setCurrentPage(page);
+  };
+
+  const getPageNumbers = () => {
+    const maxVisible = 7;
+    if (totalPages <= maxVisible) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+
+    const pages = [];
+    const halfVisible = Math.floor(maxVisible / 2);
+
+    if (currentPage <= halfVisible + 1) {
+      for (let i = 1; i <= maxVisible - 1; i++) {
+        pages.push(i);
+      }
+      pages.push(totalPages);
+    } else if (currentPage >= totalPages - halfVisible) {
+      pages.push(1);
+      for (let i = totalPages - (maxVisible - 2); i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      pages.push(1);
+      for (let i = currentPage - halfVisible + 1; i <= currentPage + halfVisible - 1; i++) {
+        pages.push(i);
+      }
+      pages.push(totalPages);
+    }
+
+    return pages;
+  };
+
   const getStatusBadge = (status) => {
     const statusMap = {
       empty: { bg: 'bg-[#DFF6DD]', text: 'text-[#107C10]', label: 'Empty' },
@@ -529,52 +578,36 @@ const EmptyTruckLocation = () => {
 
   return (
     <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center gap-6">
-          {/* Total Trucks Card */}
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                <Truck className="text-blue-600" size={20} />
+     
+
+      {/* Filters Section */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6" style={{ overflow: 'visible' }}>
+
+        {/* Stats Row */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          {/* Total Trucks */}
+          <div className="p-4 border border-gray-200 rounded-xl flex items-center justify-between">
+            <div className="flex items-center gap-4 w-full">
+              <div className="w-14 h-12 bg-blue-50 rounded-full flex items-center justify-center text-blue-600 font-bold text-2xl">
+                {trucks.length}
               </div>
-              <div>
-                <p className="text-sm text-gray-600">Total Trucks</p>
-                <p className="text-xl font-bold text-gray-800">{trucks.length}</p>
-              </div>
+              <span className="text-gray-600 font-medium text-lg flex-1 text-center">Total Trucks</span>
             </div>
           </div>
 
-          {/* Empty Trucks Card */}
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-                <svg className="w-6 h-6 text-green-600" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path>
-                </svg>
+          {/* Empty Trucks */}
+          <div className="p-4 border border-gray-200 rounded-xl flex items-center justify-between">
+            <div className="flex items-center gap-4 w-full">
+              <div className="w-12 h-12 bg-green-50 rounded-full flex items-center justify-center text-green-600 font-bold text-2xl">
+                {trucks.filter(truck => truck.status === 'empty').length}
               </div>
-              <div>
-                <p className="text-sm text-gray-600">Empty Trucks</p>
-                <p className="text-xl font-bold text-green-600">
-                  {trucks.filter(truck => truck.status === 'empty').length}
-                </p>
-              </div>
+              <span className="text-gray-600 font-medium text-lg flex-1 text-center">Empty Trucks</span>
             </div>
           </div>
         </div>
 
-        {/* Add Location Button */}
-        <button
-          onClick={handleAddClick}
-          className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg text-white font-semibold shadow hover:from-blue-600 hover:to-blue-700 transition"
-        >
-          <Plus size={20} /> Add Location
-        </button>
-      </div>
-
-      {/* Filters Section */}
-      <div className="bg-white rounded-2xl shadow-xl border border-gray-100 mb-6" style={{ overflow: 'visible' }}>
         {/* Filter Header */}
-        <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b border-gray-200">
+        {/* <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b border-gray-200">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
               <Filter className="w-5 h-5 text-blue-600" />
@@ -584,30 +617,47 @@ const EmptyTruckLocation = () => {
               <p className="text-xs text-gray-500 mt-0.5">Find trucks by location, vehicle, or trucker</p>
             </div>
           </div>
-        </div>
+        </div> */}
 
         {/* Filter Content */}
-        <div className="p-6 overflow-visible">
-          <div className="flex items-end gap-4 flex-wrap relative">
+        <div className="pt-0 overflow-visible">
+          {/* Vehicle search + Add Location */}
+          <div className="flex flex-col sm:flex-row sm:items-end gap-3">
             {/* Vehicle Number */}
             <div className="flex-1 min-w-[200px]">
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              {/* <label className="block text-sm font-semibold text-gray-700 mb-2">
                 <Search className="inline w-4 h-4 mr-1.5 text-gray-500" />
                 Vehicle Number
-              </label>
+              </label> */}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
                 <input
                   type="text"
                   value={searchVehicleNo}
                   onChange={(e) => setSearchVehicleNo(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleSearchByVehicle()}
-                  placeholder="e.g., MH12AB1234"
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white hover:border-gray-400 transition-colors"
+                  placeholder="Search Vehicle Number"
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors text-base"
                 />
               </div>
             </div>
 
+            {/* Add Location Button */}
+            <button
+              onClick={handleAddClick}
+              className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors cursor-pointer"
+            >
+              <Plus size={18} strokeWidth={4} />
+              <span>Add Location</span>
+            </button>
+          </div>
+
+          
+        </div>
+      </div>
+
+       <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6" style={{ overflow: 'visible' }}>
+           {/* Remaining Filters + Actions */}
+          <div className="flex flex-wrap items-end gap-4">
             {/* City */}
             <div className="flex-1 min-w-[180px]">
               <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -620,7 +670,7 @@ const EmptyTruckLocation = () => {
                 value={filters.city}
                 onChange={handleFilterChange}
                 placeholder="Enter city name"
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white hover:border-gray-400 transition-colors"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors text-base"
               />
             </div>
 
@@ -636,7 +686,7 @@ const EmptyTruckLocation = () => {
                 value={filters.state}
                 onChange={handleFilterChange}
                 placeholder="Enter state name"
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white hover:border-gray-400 transition-colors"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors text-base"
               />
             </div>
 
@@ -663,54 +713,73 @@ const EmptyTruckLocation = () => {
                 className="w-full"
               />
             </div>
-          </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-100">
-            <button
-              onClick={handleClearFilters}
-              className="px-5 py-2.5 bg-white border-2 border-gray-300 hover:border-gray-400 hover:bg-gray-50 text-gray-700 rounded-lg font-semibold transition-all duration-200 flex items-center gap-2 shadow-sm"
-            >
-              <X className="w-4 h-4" />
-              Clear Filters
-            </button>
-            <button
-              onClick={handleApplyFilters}
-              className="px-6 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-lg font-semibold transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-xl"
-            >
-              <Search className="w-4 h-4" />
-              Apply Filters
-            </button>
+            {/* Action Buttons */}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleClearFilters}
+                className="flex items-center gap-2 px-4 py-3 text-gray-600 hover:text-red-600 hover:bg-red-50 border border-gray-200 rounded-xl transition-colors font-medium"
+              >
+                <X className="w-4 h-4" />
+                Clear Filters
+              </button>
+              <button
+                onClick={handleApplyFilters}
+                className="flex items-center gap-2 px-4 py-3 text-gray-600 hover:text-blue-600 hover:bg-blue-50 border border-gray-200 rounded-xl transition-colors font-medium"
+              >
+                <Search className="w-4 h-4" />
+                Apply Filters
+              </button>
+            </div>
           </div>
-        </div>
-      </div>
+          </div>
+      
 
       {/* Data Table Section */}
-      <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+      <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-12">
             <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
             <p className="text-gray-600">Loading trucks...</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
-                <tr>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">S.NO</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">VEHICLE NO</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">VEHICLE TYPE</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">TRUCKER</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">LOCATION</th>
-                  <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">STATUS</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">LAST UPDATED</th>
-                  <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">ACTION</th>
+          <div className="overflow-x-auto p-4">
+            <table className="min-w-full text-left border-separate border-spacing-y-4">
+              <thead>
+                <tr className="bg-gray-50">
+                  <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y first:border-l border-gray-200 rounded-l-lg align-middle">
+                    S.No
+                  </th>
+                  <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200 align-middle">
+                    Vehicle No
+                  </th>
+                  <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200 align-middle">
+                    Vehicle Type
+                  </th>
+                  <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200 align-middle">
+                    Trucker
+                  </th>
+                  <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200 align-middle">
+                    Location
+                  </th>
+                  <th className="px-8 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200 text-center align-middle">
+                    Status
+                  </th>
+                  <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200 align-middle">
+                    Last Updated
+                  </th>
+                  <th className="px-6 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y last:border-r border-gray-200 rounded-r-lg text-center align-middle">
+                    Action
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {trucks.length === 0 ? (
+                {filteredTrucks.length === 0 ? (
                   <tr>
-                    <td colSpan="8" className="px-6 py-12 text-center">
+                    <td
+                      colSpan="8"
+                      className="px-4 py-12 text-center border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg"
+                    >
                       <Truck className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                       <p className="text-gray-500 text-lg">
                         {searchVehicleNo || filters.city || filters.state || filters.truckerId
@@ -725,26 +794,30 @@ const EmptyTruckLocation = () => {
                     </td>
                   </tr>
                 ) : (
-                  trucks.map((truck, index) => (
-                    <tr key={truck._id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                      <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">{index + 1}</span>
+                  currentTrucks.map((truck, index) => (
+                    <tr key={truck._id} className="bg-white hover:bg-gray-50 transition-colors">
+                      <td className="px-4 py-4 border-y first:border-l border-gray-200 first:rounded-l-lg align-middle">
+                        <span className="font-medium text-gray-700">{startIndex + index + 1}</span>
                       </td>
-                      <td className="py-2 px-3">
+                      <td className="px-4 py-4 border-y border-gray-200 align-middle">
                         <span className="font-medium text-gray-700">{truck.vehicleNo}</span>
                       </td>
-                      <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">{truck.vehicleId?.vehicleType || 'N/A'}</span>
+                      <td className="px-4 py-4 border-y border-gray-200 align-middle">
+                        <span className="font-medium text-gray-700">
+                          {truck.vehicleId?.vehicleType || 'N/A'}
+                        </span>
                       </td>
-                      <td className="py-2 px-3">
+                      <td className="px-4 py-4 border-y border-gray-200 align-middle">
                         <div>
-                          <span className="font-medium text-gray-700">{truck.truckerId?.compName || 'N/A'}</span>
+                          <span className="font-medium text-gray-700">
+                            {truck.truckerId?.compName || 'N/A'}
+                          </span>
                           {truck.truckerId?.mc_dot_no && (
                             <p className="text-sm text-gray-500 mt-1">MC: {truck.truckerId.mc_dot_no}</p>
                           )}
                         </div>
                       </td>
-                      <td className="py-2 px-3">
+                      <td className="px-4 py-4 border-y border-gray-200 align-middle">
                         <div>
                           <span className="font-medium text-gray-700">
                             {truck.location?.city || 'N/A'}, {truck.location?.state || 'N/A'}
@@ -757,28 +830,30 @@ const EmptyTruckLocation = () => {
                           )}
                         </div>
                       </td>
-                      <td className="py-2 px-3 text-center">
+                      <td className="px-4 py-4 border-y border-gray-200 text-center align-middle">
                         {getStatusBadge(truck.status)}
                       </td>
-                      <td className="py-2 px-3">
+                      <td className="px-4 py-4 border-y border-gray-200 align-middle">
                         <div>
-                          <span className="font-medium text-gray-700">{new Date(truck.lastUpdatedAt).toLocaleDateString()}</span>
+                          <span className="font-medium text-gray-700">
+                            {new Date(truck.lastUpdatedAt).toLocaleDateString()}
+                          </span>
                           <p className="text-sm text-gray-500 mt-1">
                             {new Date(truck.lastUpdatedAt).toLocaleTimeString()}
                           </p>
                         </div>
                       </td>
-                      <td className="py-2 px-3">
-                        <div className="flex gap-2">
+                      <td className="px-4 py-4 border-y last:border-r border-gray-200 last:rounded-r-lg align-middle">
+                        <div className="flex gap-2 justify-center">
                           <button
                             onClick={() => handleViewHistory(truck)}
-                            className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                            className="inline-flex items-center justify-center px-5 py-1.5 rounded-full text-sm font-medium border border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-colors cursor-pointer"
                           >
                             History
                           </button>
                           <button
                             onClick={() => handleUpdateClick(truck)}
-                            className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                            className="inline-flex items-center justify-center px-5 py-1.5 rounded-full text-sm font-medium border border-green-300 text-green-700 bg-green-50 hover:bg-green-600 hover:text-white hover:border-green-600 transition-colors cursor-pointer"
                           >
                             Update
                           </button>
@@ -793,10 +868,55 @@ const EmptyTruckLocation = () => {
         )}
       </div>
 
+      {filteredTrucks.length > 0 && totalPages > 1 && (
+        <div className="mt-4 flex justify-between items-center px-4 border border-gray-200 p-2 rounded-xl bg-white">
+          <div className="text-sm text-gray-600">
+            Showing {startIndex + 1} to {endIndex} of {filteredTrucks.length} trucks
+          </div>
+          <div className="flex gap-2 items-center">
+            <button
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900"
+            >
+              Previous
+            </button>
+            <div className="flex gap-1">
+              {getPageNumbers().map((page, idx, arr) => {
+                const showEllipsisBefore = idx > 0 && page - arr[idx - 1] > 1;
+                return (
+                  <React.Fragment key={page}>
+                    {showEllipsisBefore && (
+                      <span className="px-2 text-gray-400">...</span>
+                    )}
+                    <button
+                      onClick={() => handlePageChange(page)}
+                      className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${
+                        currentPage === page
+                          ? 'border border-gray-900 text-gray-900 bg-white'
+                          : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  </React.Fragment>
+                );
+              })}
+            </div>
+            <button
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
       {/* Update Modal */}
       {showUpdateModal && (
         <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[95vh] overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[95vh] overflow-y-auto">
             {/* Modal Header */}
             <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl">
               <div className="flex items-center justify-between">
@@ -986,7 +1106,7 @@ const EmptyTruckLocation = () => {
       {/* Add Modal */}
       {showAddModal && (
         <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[95vh] overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[95vh] overflow-y-auto">
             {/* Modal Header */}
             <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl">
               <div className="flex items-center justify-between">
@@ -1219,7 +1339,7 @@ const EmptyTruckLocation = () => {
       {/* History Modal */}
       {showHistoryModal && selectedTruck && (
         <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-6xl w-full max-h-[95vh] overflow-y-auto">
             {/* Modal Header */}
             <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl">
               <div className="flex items-center justify-between">
@@ -1246,7 +1366,7 @@ const EmptyTruckLocation = () => {
               `}</style>
               <div className="space-y-6">
                 {/* SECTION 1: Current Location */}
-                <div className="bg-gradient-to-br from-blue-50 to-white p-6 rounded-lg border border-gray-200 shadow">
+                <div className="bg-gradient-to-br from-blue-50 to-white p-6 rounded-lg border border-gray-200">
                   <div className="flex items-center gap-2 mb-4">
                     <MapPin className="text-blue-500" size={20} />
                     <h4 className="text-lg font-bold text-blue-700">Current Location</h4>
@@ -1313,7 +1433,7 @@ const EmptyTruckLocation = () => {
 
                 {/* SECTION 2: Update History */}
                 {selectedTruck.updateHistory && selectedTruck.updateHistory.length > 0 ? (
-                  <div className="bg-gradient-to-br from-green-50 to-white p-6 rounded-lg border border-gray-200 shadow">
+                  <div className="bg-gradient-to-br from-green-50 to-white p-6 rounded-lg border border-gray-200">
                     <div className="flex items-center gap-2 mb-4">
                       <History className="text-green-500" size={20} />
                       <h4 className="text-lg font-bold text-green-700">
