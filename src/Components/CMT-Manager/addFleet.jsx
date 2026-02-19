@@ -44,7 +44,7 @@ export default function AddFleet() {
 
     // Pagination states
     const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 9;
+    const itemsPerPage = 5;
 
     // Fetch fleets from API
     const fetchFleets = async () => {
@@ -530,65 +530,84 @@ export default function AddFleet() {
 
     return (
         <div className="p-6 bg-gray-50 min-h-screen">
-            {/* Stats and Actions */}
-            <div className="flex justify-between items-center mb-6">
-                <div className="flex items-center gap-6">
-                    <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                                <FaTruck className="text-blue-600" size={20} />
-                            </div>
-                            <div>
-                                <p className="text-sm text-gray-600">Total Fleet</p>
-                                <p className="text-xl font-bold text-gray-800">{fleets.length}</p>
-                            </div>
+            {/* Stats, Search and Actions */}
+            <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    {/* Total Fleet */}
+                    <div className="p-4 border border-gray-200 rounded-xl flex items-center justify-between">
+                        <div>
+                            <p className="text-xl font-medium mb-3">Total Fleet</p>
+                            <p className="text-2xl font-bold text-gray-800">{fleets.length}</p>
+                        </div>
+                        <div className="w-14 h-14 bg-blue-50 rounded-full flex items-center justify-center">
+                            <FaTruck className="text-blue-600" size={25} />
                         </div>
                     </div>
-                    <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-                                <FaCheckCircle className="text-green-600" size={20} />
-                            </div>
-                            <div>
-                                <p className="text-sm text-gray-600">Available</p>
-                                <p className="text-xl font-bold text-gray-800">{fleets.filter(f => f.status === 'available').length}</p>
-                            </div>
+
+                    {/* Available Fleet */}
+                    <div className="p-4 border border-gray-200 rounded-xl flex items-center justify-between">
+                        <div>
+                            <p className="text-xl font-medium mb-3">Available</p>
+                            <p className="text-2xl font-bold text-gray-800">
+                                {fleets.filter(f => f.status === 'available').length}
+                            </p>
+                        </div>
+                        <div className="w-14 h-14 bg-green-50 rounded-full flex items-center justify-center">
+                            <FaCheckCircle className="text-green-600" size={25} />
                         </div>
                     </div>
                 </div>
-                <div className="flex items-center gap-4">
-                    <div className="relative">
-                        <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                        <input
-                            type="text"
-                            placeholder="Search fleet..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
+
+                <div className="flex flex-col md:flex-row md:items-center gap-3">
+                    <div className="flex-1 min-w-[220px]">
+                        <div className="relative">
+                            <FaSearch
+                                className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                                size={18}
+                            />
+                            <input
+                                type="text"
+                                placeholder="Search fleet..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg"
+                            />
+                        </div>
                     </div>
-                    <button
-                        onClick={handleAddFleet}
-                        className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-all duration-200 flex items-center gap-2"
-                    >
-                        <FaPlus size={16} />
-                        Add Fleet
-                    </button>
-                    <button
-                        onClick={fetchFleets}
-                        disabled={loading}
-                        className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                        </svg>
-                        {loading ? 'Refreshing...' : 'Refresh'}
-                    </button>
+                    <div className="flex flex-wrap gap-2 justify-start md:justify-end">
+                        <button
+                            onClick={fetchFleets}
+                            disabled={loading}
+                            className="inline-flex items-center justify-center px-4 py-2.5 rounded-lg border border-gray-300 text-lg cursor-pointer text-gray-900 bg-white hover:bg-blue-800 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                            <svg
+                                className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`}
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                                />
+                            </svg>
+                            {loading ? 'Refreshing...' : 'Refresh'}
+                        </button>
+                        <button
+                            onClick={handleAddFleet}
+                            className="inline-flex items-center justify-center px-8 py-2.5 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors text-lg cursor-pointer"
+                        >
+                            <FaPlus size={16} className="mr-2" />
+                            Add Fleet
+                        </button>
+                    </div>
                 </div>
             </div>
 
             {/* Fleet Table */}
-            <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
                 {loading ? (
                     <div className="text-center py-12">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
@@ -596,106 +615,135 @@ export default function AddFleet() {
                         <p className="text-gray-400 text-sm">Please wait while we fetch the data</p>
                     </div>
                 ) : (
-                    <>
-                        <div className="overflow-x-auto">
-                            <table className="w-full">
-                                 <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
-                                     <tr>
-                                         <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-16">S.No</th>
-                                         <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-32">Vehicle No</th>
-                                         <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-40">Make/Model</th>
-                                         <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-24">Type</th>
-                                         <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-24">Year</th>
-                                         <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-32">Created By</th>
-                                         <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-24">Action</th>
-                                     </tr>
-                                 </thead>
-                                <tbody>
-                                    {currentFleets.map((vehicle, index) => (
-                                        <tr key={vehicle.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                                            <td className="py-2 px-3">
-                                                <span className="font-medium text-gray-700">{vehicle.sNo}</span>
+                    <div className="overflow-x-auto p-4">
+                        <table className="min-w-full text-left border-separate border-spacing-y-4">
+                            <thead>
+                                <tr className="bg-gray-50">
+                                    <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y first:border-l border-gray-200 rounded-l-lg">
+                                        S.No
+                                    </th>
+                                    <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                                        Vehicle No
+                                    </th>
+                                    <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                                        Make / Model
+                                    </th>
+                                    <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                                        Type
+                                    </th>
+                                    <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                                        Year
+                                    </th>
+                                    <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                                        Created By
+                                    </th>
+                                    <th className="px-6 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y last:border-r border-gray-200 rounded-r-lg">
+                                        Action
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {filteredFleets.length === 0 ? (
+                                    <tr>
+                                        <td
+                                            colSpan="7"
+                                            className="px-4 py-12 text-center border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg"
+                                        >
+                                            <FaTruck className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                                            <p className="text-gray-500 text-lg">
+                                                {searchTerm ? 'No fleet found matching your search' : 'No fleet found'}
+                                            </p>
+                                            <p className="text-gray-400 text-sm">
+                                                {searchTerm ? 'Try adjusting your search terms' : 'No fleet available'}
+                                            </p>
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    currentFleets.map((vehicle, index) => (
+                                        <tr key={vehicle.id} className="bg-white hover:bg-gray-50 transition-colors">
+                                            <td className="px-4 py-4 border-y first:border-l border-gray-200 first:rounded-l-lg">
+                                                <span className="font-medium text-gray-700">
+                                                    {startIndex + index + 1}
+                                                </span>
                                             </td>
-                                            <td className="py-2 px-3">
+                                            <td className="px-4 py-4 border-y border-gray-200">
                                                 <span className="font-medium text-gray-700">{vehicle.vehicleNo}</span>
                                             </td>
-                                            <td className="py-2 px-3">
+                                            <td className="px-4 py-4 border-y border-gray-200">
                                                 <div>
                                                     <span className="font-medium text-gray-700">{vehicle.make}</span>
-                                                    <p className="text-xs text-gray-500">{vehicle.model}</p>
+                                                    <p className="text-sm text-gray-500">{vehicle.model}</p>
                                                 </div>
                                             </td>
-                                            <td className="py-2 px-3">
-                                                <span className="font-medium text-gray-700 text-sm">{vehicle.vehicleType}</span>
+                                            <td className="px-4 py-4 border-y border-gray-200">
+                                                <span className="font-medium text-gray-700">
+                                                    {vehicle.vehicleType}
+                                                </span>
                                             </td>
-                                            <td className="py-2 px-3">
+                                            <td className="px-4 py-4 border-y border-gray-200">
                                                 <span className="font-medium text-gray-700">{vehicle.modelYear}</span>
                                             </td>
-                                            <td className="py-2 px-3">
+                                            <td className="px-4 py-4 border-y border-gray-200">
                                                 <div>
-                                                    <span className="font-medium text-gray-700 text-sm">{vehicle.addedBy?.employeeName || 'N/A'}</span>
-                                                    <p className="text-xs text-gray-500">{vehicle.addedBy?.empId || 'N/A'}</p>
+                                                    <span className="font-medium text-gray-700">
+                                                        {vehicle.addedBy?.employeeName || 'N/A'}
+                                                    </span>
+                                                    <p className="text-sm text-gray-500">
+                                                        {vehicle.addedBy?.empId || 'N/A'}
+                                                    </p>
                                                 </div>
                                             </td>
-                                            <td className="py-2 px-3">
+                                            <td className="px-4 py-4 border-y last:border-r border-gray-200 last:rounded-r-lg">
                                                 <button
                                                     onClick={() => handleViewFleet(vehicle)}
-                                                    className="px-3 py-1 text-blue-600 text-xs rounded-md transition-colors border border-blue-300 hover:bg-blue-50"
+                                                    className="inline-flex items-center justify-center px-4 py-1.5 rounded-full text-base font-semibold border border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-colors cursor-pointer"
                                                 >
                                                     View
                                                 </button>
                                             </td>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                        {filteredFleets.length === 0 && (
-                            <div className="text-center py-12">
-                                <FaTruck className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                                <p className="text-gray-500 text-lg">
-                                    {searchTerm ? 'No fleet found matching your search' : 'No fleet found'}
-                                </p>
-                                <p className="text-gray-400 text-sm">
-                                    {searchTerm ? 'Try adjusting your search terms' : 'No fleet available'}
-                                </p>
-                            </div>
-                        )}
-                    </>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
                 )}
             </div>
 
             {/* Pagination */}
             {totalPages > 1 && filteredFleets.length > 0 && (
-                <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+                <div className="mt-4 flex justify-between items-center px-4 border border-gray-200 p-2 rounded-xl bg-white">
                     <div className="text-sm text-gray-600">
                         Showing {startIndex + 1} to {Math.min(endIndex, filteredFleets.length)} of {filteredFleets.length} fleets
                         {searchTerm && ` (filtered from ${fleets.length} total)`}
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 items-center">
                         <button
                             onClick={() => handlePageChange(currentPage - 1)}
                             disabled={currentPage === 1}
-                            className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+                            className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900"
                         >
                             Previous
                         </button>
-                        {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                            <button
-                                key={page}
-                                onClick={() => handlePageChange(page)}
-                                className={`px-3 py-2 border rounded-lg transition-colors ${currentPage === page
-                                    ? 'bg-blue-500 text-white border-blue-500'
-                                    : 'border-gray-300 hover:bg-gray-50'
+                        <div className="flex gap-1">
+                            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                                <button
+                                    key={page}
+                                    onClick={() => handlePageChange(page)}
+                                    className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${
+                                        currentPage === page
+                                            ? 'border border-gray-900 text-gray-900 bg-white'
+                                            : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
                                     }`}
-                            >
-                                {page}
-                            </button>
-                        ))}
+                                >
+                                    {page}
+                                </button>
+                            ))}
+                        </div>
                         <button
                             onClick={() => handlePageChange(currentPage + 1)}
                             disabled={currentPage === totalPages}
-                            className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+                            className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900"
                         >
                             Next
                         </button>
