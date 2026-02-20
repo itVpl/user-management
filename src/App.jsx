@@ -108,6 +108,12 @@ const EmployeeDocuments = lazy(() => import("./Components/HRDashboard/EmployeeDo
 const SalaryModification = lazy(() => import("./Components/HRDashboard/SalaryModification.jsx"));
 const EmployeeFeedback = lazy(() => import("./Components/HRDashboard/EmployeeFeedback.jsx"));
 const EmployeeFeedbackReport = lazy(() => import("./Components/HRDashboard/EmployeeFeedbackReport.jsx"));
+const TodoList = lazy(() => import("./Components/TodoList/TodoList.jsx"));
+const EmployeeReviewDashboard = lazy(() => import("./Components/EmployeeReview/EmployeeReviewDashboard.jsx"));
+const ReviewSubmissionForm = lazy(() => import("./Components/EmployeeReview/ReviewSubmissionForm.jsx"));
+const DirectorReviewDetails = lazy(() => import("./Components/EmployeeReview/DirectorReviewDetails.jsx"));
+const DocsUpload = lazy(() => import("./Components/DocsUpload/DocsUpload.jsx"));
+const VPL100Redirect = lazy(() => import("./Components/Dashboard/VPL100Redirect.jsx"));
 
 
 // Chat Message System Imports - keep as regular imports (needed globally)
@@ -704,9 +710,14 @@ function App() {
           <Route path="salary-modification" element={<SalaryModification />} />
           <Route path="employee-feedback" element={<EmployeeFeedback />} />
           <Route path="employee-feedback-report" element={<EmployeeFeedbackReport />} />
+          <Route path="reviews/dashboard" element={<EmployeeReviewDashboard />} />
+          <Route path="reviews/submit/:reviewId" element={<ReviewSubmissionForm />} />
+          <Route path="reviews/details/:reviewId" element={<DirectorReviewDetails />} />
           <Route path="trucker-reassign" element={<TruckerReassign />} />
           <Route path="followUpReport" element={<FollowUpReport />} />
           <Route path="RateRequestReport" element={<RateRequestReport />} />
+          <Route path="todo-list" element={<TodoList />} />
+          <Route path="docs-upload" element={<DocsUpload />} />
           
           {/* QA (Quality Assurance) Routes */}
           <Route path="qa/dashboard" element={<QADashboard />} />
@@ -718,7 +729,7 @@ function App() {
           <Route path="qa/call-report" element={<QACallReport />} />
           
           {/* Catch-all for nested protected routes */}
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          <Route path="*" element={<VPL100Redirect />} />
         </Route>
 
         {/* Fallback route */}

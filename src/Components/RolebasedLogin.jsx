@@ -14,13 +14,20 @@ import FinanceDashboard from "./Finance/FinanceDashboard";
 import QADashboard from "./QA/QADashboard";
 
 const RoleBasedDashboard = () => {
-  const userData = sessionStorage.getItem("user");
+  const userData = sessionStorage.getItem("user") || localStorage.getItem("user");
 
   if (!userData) {
     return <Navigate to="/" />;
   }
 
   const user = JSON.parse(userData);
+  const empId = user?.empId || user?.employeeId || '';
+  
+  // Block dashboard access for VPL100 - redirect to docs-upload
+  if (empId === 'VPL100') {
+    return <Navigate to="/docs-upload" replace />;
+  }
+  
   const role = user?.role;
   const department = user?.department;
 

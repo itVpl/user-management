@@ -72,9 +72,10 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "HR Document Verification",
       "Employee Documents",
       "Employees Hygine",
-      "Employee Hygiene"
+      "Employee Hygiene",
+      "Docs Upload"
     ],
-    "Recruitment": ["Candidate Shortlist", "Employee Feedback", "Employee Feedback Report"],
+    "Recruitment": ["Candidate Shortlist", "Employee Feedback", "Employee Feedback Report", "Employee Review"],
     "Office Management": [
       "Office Inventory",
       "Office Expenses",
@@ -83,7 +84,8 @@ const DEPARTMENT_MODULE_CATEGORIES = {
     "Tasks": [
       "Task",
       "Task Schedule",
-      "Daily Task"
+      "Daily Task",
+      "TO-DO List"
     ],
     "Team Management": [
       "Team",
@@ -455,6 +457,7 @@ const menuItems = [
   { name: "Candidate Shortlist", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/candidate-shortlist" },
   { name: "Employee Feedback", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/employee-feedback" },
   { name: "Employee Feedback Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/employee-feedback-report" },
+  { name: "Employee Review", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/reviews/dashboard" },
   { name: "Target Reports", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/target-reports" },
   { name: "Rate Request", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/RateRequest" },
   { name: "Rate Approved", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/RateApproved" },
@@ -479,6 +482,7 @@ const menuItems = [
   { name: "Trucker Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/TruckerReport" },
   { name: "All Leads", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/AllLeads" },
   { name: "Task Schedule", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/TaskScheduling" },
+  { name: "TO-DO List", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/todo-list" },
   { name: "CMT Dept Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/CmtDeptReport" },
   { name: "Sales Dept Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/SalesDeptReport" },
   { name: "Break Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/break-report" },
@@ -504,6 +508,7 @@ const menuItems = [
   { name: "Emp Login Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/emp-login-report" },
   { name: "Assigned Rate Request", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/assigned-rate-request" },
   { name: "Sub Company", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/SubCompanies" },
+  { name: "Docs Upload", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/docs-upload" },
   
   
 ];
@@ -640,6 +645,7 @@ const Sidebar = () => {
   const [loading, setLoading] = useState(true);
   const [userDepartment, setUserDepartment] = useState(null);
   const [userRole, setUserRole] = useState(null); // Store user role
+  const [isVPL100, setIsVPL100] = useState(false); // Track if user is VPL100
   
   // Time Display and Break/Meeting states
   const [loginTime, setLoginTime] = useState(() => {
@@ -866,6 +872,22 @@ const Sidebar = () => {
             ['Dashboard', 'Tracking'].includes(item.name)
           );
           setFilteredMenuItems(basicMenus);
+          setLoading(false);
+          return;
+        }
+
+        // Check if user is VPL100 - special handling
+        const empId = user?.empId || user?.employeeId || '';
+        const isVPL100User = empId === 'VPL100';
+        setIsVPL100(isVPL100User);
+        
+        if (isVPL100User) {
+          // For VPL100, show only logout - no other menus
+          setFilteredMenuItems([]);
+          setDepartmentMenuItems([]);
+          setReportMenuItems([]);
+          setDepartmentCategories({});
+          setReportCategories({});
           setLoading(false);
           return;
         }
@@ -1460,7 +1482,33 @@ const Sidebar = () => {
           {/* Scrollable Menu Section */}
           <div className="overflow-y-auto h-[640px] px-1 pr-2 scrollbar-hide">
             <nav className={`flex flex-col gap-1 text-sm ${isExpanded ? "items-start" : "items-center"}`}>
-              {filteredMenuItems.length > 0 || departmentMenuItems.length > 0 ? (
+              {/* VPL100 - Show only Docs Upload */}
+              {isVPL100 ? (
+                <NavLink
+                  to="/docs-upload"
+                  title={!isExpanded ? "Docs Upload" : ""}
+                  className={({ isActive }) =>
+                    `sidebar-item flex items-center ${isExpanded ? "sidebar-item-expanded justify-start" : "justify-center mx-1"} gap-3 p-3 transition-all ${isActive ? "sidebar-item-active text-white" : "text-gray-700"}`
+                  }
+                  style={({ isActive }) => (isActive ? { backgroundColor: activeBgColor } : {})}
+                  end
+                >
+                  {({ isActive }) => (
+                    <>
+                      <div className="relative">
+                        <img
+                          src={isActive ? WhiteRevenueStatic : BlueRevenueStatic}
+                          alt="Docs Upload"
+                          className="w-5 h-5"
+                        />
+                      </div>
+                      <span className={`${isExpanded ? "inline" : "hidden"} font-medium`}>
+                        Docs Upload
+                      </span>
+                    </>
+                  )}
+                </NavLink>
+              ) : (filteredMenuItems.length > 0 || departmentMenuItems.length > 0) ? (
                 <>
                   {(() => {
                     // Define hasDeptCategories outside the map for use in multiple places
@@ -1663,7 +1711,7 @@ const Sidebar = () => {
 
         <div className="flex-none px-4 py-4 border-t border-gray-200">
           {/* Time Display Section */}
-          {isExpanded && (
+          {!isVPL100 && isExpanded && (
             <div className="mb-2">
               <div className="bg-white border border-gray-300 rounded-full px-3 py-2 flex items-center justify-between">
                 <div className="flex items-center">
@@ -1681,7 +1729,7 @@ const Sidebar = () => {
           )}
 
           {/* Break/Meeting Section */}
-          {isExpanded && (
+          {!isVPL100 && isExpanded && (
             <div className="mb-3">
               <div className="relative" id="break-dropdown">
                 <button
@@ -1788,15 +1836,17 @@ const Sidebar = () => {
             </div>
           )}
 
-          <NavLink
-            to="/"
-            className={`sidebar-item flex items-center gap-3 p-3 text-gray-700 cursor-pointer transition-all mb-1 ${isExpanded ? "mx-0" : "justify-center"}`}
-          >
-            <img src={DashboardImage} alt="Back to Home" className="w-5 h-5" />
-            <span className={`${isExpanded ? "inline" : "hidden"} font-medium`}>
-              Back to Home
-            </span>
-          </NavLink>
+          {!isVPL100 && (
+            <NavLink
+              to="/"
+              className={`sidebar-item flex items-center gap-3 p-3 text-gray-700 cursor-pointer transition-all mb-1 ${isExpanded ? "mx-0" : "justify-center"}`}
+            >
+              <img src={DashboardImage} alt="Back to Home" className="w-5 h-5" />
+              <span className={`${isExpanded ? "inline" : "hidden"} font-medium`}>
+                Back to Home
+              </span>
+            </NavLink>
+          )}
           <div 
             className={`sidebar-item flex items-center gap-3 p-3 text-gray-700 cursor-pointer transition-all ${isExpanded ? "mx-0" : "justify-center"}`}
             onClick={handleLogoutClick}
