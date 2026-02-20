@@ -33,9 +33,19 @@ export default function CarrierApproval() {
   const [showCarrierModal, setShowCarrierModal] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
 
   const currentPage = pagination.currentPage;
   const itemsPerPage = 10;
+
+  // Debounce search term - wait 500ms after user stops typing
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
 
   // Get current user's department
@@ -55,15 +65,22 @@ export default function CarrierApproval() {
 
   const currentUserDepartment = useMemo(() => getCurrentUserDepartment(), []);
 
-  // Fetch carriers on mount and when page changes (search is handled client-side)
+  // Fetch carriers on mount, when page changes, or when debounced search term changes
   useEffect(() => {
     dispatch(fetchTruckers({ 
       page: currentPage, 
       limit: itemsPerPage, 
-      search: null,
+      search: debouncedSearchTerm.trim() || null,
       forceRefresh: false 
     }));
-  }, [dispatch, currentPage, itemsPerPage]);
+  }, [dispatch, currentPage, itemsPerPage, debouncedSearchTerm]);
+
+  // Reset to page 1 when debounced search term changes
+  useEffect(() => {
+    if (currentPage !== 1 && debouncedSearchTerm.trim()) {
+      dispatch(setCurrentPage(1));
+    }
+  }, [debouncedSearchTerm]);
 
   // Show error messages
   useEffect(() => {
@@ -136,8 +153,15 @@ export default function CarrierApproval() {
     return pages;
   };
 
-  // Use carriers from API and apply client-side search across key fields
+  // Use carriers from API - search is handled server-side now
+  // Client-side filtering is kept as immediate visual feedback while debounce waits
   const filteredCarriers = useMemo(() => {
+    // If debounced search matches current search, API has already filtered - use as is
+    if (debouncedSearchTerm === searchTerm) {
+      return carriers;
+    }
+    
+    // If user is still typing (debounce pending), do client-side filtering for immediate feedback
     const term = norm(searchTerm);
     if (!term) return carriers;
 
@@ -160,7 +184,7 @@ export default function CarrierApproval() {
         phone.includes(term)
       );
     });
-  }, [carriers, searchTerm]);
+  }, [carriers, searchTerm, debouncedSearchTerm]);
 
   const currentCarriers = filteredCarriers;
 
@@ -293,7 +317,7 @@ export default function CarrierApproval() {
       dispatch(fetchTruckers({ 
         page: currentPage, 
         limit: itemsPerPage, 
-        search: searchTerm || null,
+        search: debouncedSearchTerm || null,
         forceRefresh: true 
       }));
     } catch (err) {
