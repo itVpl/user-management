@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useRef } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { FaArrowLeft, FaDownload, FaEye, FaFileAlt } from 'react-icons/fa';
 import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, Eye, Search } from 'lucide-react';
@@ -35,7 +35,7 @@ export default function CarrierApproval() {
   const [searchTerm, setSearchTerm] = useState('');
 
   const currentPage = pagination.currentPage;
-  const itemsPerPage = pagination.itemsPerPage || 15;
+  const itemsPerPage = 10;
 
 
   // Get current user's department
@@ -55,54 +55,14 @@ export default function CarrierApproval() {
 
   const currentUserDepartment = useMemo(() => getCurrentUserDepartment(), []);
 
-  // Debounced search effect - fetch when search term changes
-  const searchDebounceTimerRef = useRef(null);
-  
+  // Fetch carriers on mount and when page changes (search is handled client-side)
   useEffect(() => {
-    // Clear previous timer
-    if (searchDebounceTimerRef.current) {
-      clearTimeout(searchDebounceTimerRef.current);
-    }
-
-    searchDebounceTimerRef.current = setTimeout(() => {
-      // Reset to page 1 when searching
-      if (searchTerm && searchTerm.trim()) {
-        dispatch(setCurrentPage(1));
-        dispatch(fetchTruckers({ 
-          page: 1, 
-          limit: itemsPerPage, 
-          search: searchTerm.trim(),
-          forceRefresh: true
-        }));
-      } else if (!searchTerm) {
-        // If search is cleared, fetch current page without search
-        dispatch(fetchTruckers({ 
-          page: currentPage, 
-          limit: itemsPerPage, 
-          search: null,
-          forceRefresh: true
-        }));
-      }
-    }, 500); // 500ms debounce
-
-    return () => {
-      if (searchDebounceTimerRef.current) {
-        clearTimeout(searchDebounceTimerRef.current);
-      }
-    };
-  }, [searchTerm, dispatch, itemsPerPage, currentPage]);
-
-  // Fetch carriers when page changes (only if no active search)
-  useEffect(() => {
-    // Only fetch on page change if there's no search term
-    if (!searchTerm || !searchTerm.trim()) {
-      dispatch(fetchTruckers({ 
-        page: currentPage, 
-        limit: itemsPerPage, 
-        search: null,
-        forceRefresh: false 
-      }));
-    }
+    dispatch(fetchTruckers({ 
+      page: currentPage, 
+      limit: itemsPerPage, 
+      search: null,
+      forceRefresh: false 
+    }));
   }, [dispatch, currentPage, itemsPerPage]);
 
   // Show error messages
@@ -145,8 +105,64 @@ export default function CarrierApproval() {
 
   const isImageFile = (fileType) => ['PNG', 'JPG', 'JPEG', 'GIF', 'WEBP'].includes((fileType || '').toUpperCase());
 
-  // Use carriers directly from API (server-side search)
-  const currentCarriers = carriers;
+  const getPageNumbers = () => {
+    const totalPages = pagination.totalPages;
+    const maxVisible = 7;
+    if (totalPages <= maxVisible) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+
+    const pages = [];
+    const halfVisible = Math.floor(maxVisible / 2);
+
+    if (currentPage <= halfVisible + 1) {
+      for (let i = 1; i <= maxVisible - 1; i++) {
+        pages.push(i);
+      }
+      pages.push(totalPages);
+    } else if (currentPage >= totalPages - halfVisible) {
+      pages.push(1);
+      for (let i = totalPages - (maxVisible - 2); i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      pages.push(1);
+      for (let i = currentPage - halfVisible + 1; i <= currentPage + halfVisible - 1; i++) {
+        pages.push(i);
+      }
+      pages.push(totalPages);
+    }
+
+    return pages;
+  };
+
+  // Use carriers from API and apply client-side search across key fields
+  const filteredCarriers = useMemo(() => {
+    const term = norm(searchTerm);
+    if (!term) return carriers;
+
+    return carriers.filter((c) => {
+      const idFull = norm(c.userId);
+      const idShort = norm(c.userId?.slice(-6));
+      const type = norm(c.carrierType);
+      const status = norm(c.status);
+      const company = norm(c.compName);
+      const email = norm(c.email);
+      const phone = norm(c.phoneNo);
+
+      return (
+        idFull.includes(term) ||
+        idShort.includes(term) ||
+        type.includes(term) ||
+        status.includes(term) ||
+        company.includes(term) ||
+        email.includes(term) ||
+        phone.includes(term)
+      );
+    });
+  }, [carriers, searchTerm]);
+
+  const currentCarriers = filteredCarriers;
 
   const handlePageChange = (page) => {
     if (page < 1 || page > pagination.totalPages) return;
@@ -370,6 +386,13 @@ export default function CarrierApproval() {
   // Card counters (use statistics from Redux)
   const totalCarriers = statistics.totalTruckers || carriers.length;
 
+  // Pagination display helpers
+  const totalItems = pagination.totalItems || totalCarriers;
+  const startIndex = totalItems === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
+  const endIndex = totalItems === 0
+    ? 0
+    : Math.min((currentPage - 1) * itemsPerPage + currentCarriers.length, totalItems);
+
 
   return (
     <div className="p-6">
@@ -384,56 +407,47 @@ export default function CarrierApproval() {
           </div>
         </div>
       )}
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center gap-6">
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-                <Truck className="text-green-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Total Carriers</p>
-                <p className="text-xl font-bold text-gray-800">{totalCarriers}</p>
-              </div>
+      <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div className="p-4 border border-gray-200 rounded-xl flex items-center justify-between">
+            <div>
+              <p className="text-xl font-medium mb-3">Total Carriers</p>
+              <p className="text-2xl font-bold text-gray-800">{totalCarriers}</p>
+            </div>
+            <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+              <Truck className="text-green-600" size={25} />
             </div>
           </div>
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                <CheckCircle className="text-blue-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Approved</p>
-                <p className="text-xl font-bold text-blue-600">{approvedCount}</p>
-              </div>
+          <div className="p-4 border border-gray-200 rounded-xl flex items-center justify-between">
+            <div>
+              <p className="text-xl font-medium mb-3">Approved</p>
+              <p className="text-2xl font-bold text-blue-600">{approvedCount}</p>
+            </div>
+            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+              <CheckCircle className="text-blue-600" size={25} />
             </div>
           </div>
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-yellow-100 rounded-xl flex items-center justify-center">
-                <Clock className="text-yellow-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Pending</p>
-                <p className="text-xl font-bold text-yellow-600">{pendingCount}</p>
-              </div>
+          <div className="p-4 border border-gray-200 rounded-xl flex items-center justify-between">
+            <div>
+              <p className="text-xl font-medium mb-3">Pending</p>
+              <p className="text-2xl font-bold text-yellow-600">{pendingCount}</p>
+            </div>
+            <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center">
+              <Clock className="text-yellow-600" size={25} />
             </div>
           </div>
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-                <Calendar className="text-purple-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Today</p>
-                <p className="text-xl font-bold text-purple-600">{todayCount}</p>
-              </div>
+          <div className="p-4 border border-gray-200 rounded-xl flex items-center justify-between">
+            <div>
+              <p className="text-xl font-medium mb-3">Today</p>
+              <p className="text-2xl font-bold text-purple-600">{todayCount}</p>
+            </div>
+            <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
+              <Calendar className="text-purple-600" size={25} />
             </div>
           </div>
         </div>
 
-
-        <div className="flex items-center gap-4">
+        <div className="flex-1">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
             <input
@@ -441,7 +455,7 @@ export default function CarrierApproval() {
               placeholder="Search carriers..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              className="w-full pl-9 pr-4 py-3 text-lg border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
         </div>
@@ -516,188 +530,211 @@ export default function CarrierApproval() {
           </div>
         </div>
       ) : (
-        <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
-                <tr>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier ID</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Company Name</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">MC/DOT No</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Email</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Phone</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier Type</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Created</th>
-                  <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Action</th>
+        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+          <div className="overflow-x-auto p-4">
+            <table className="min-w-full text-left border-separate border-spacing-y-4">
+              <thead>
+                <tr className="bg-gray-50">
+                  <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y first:border-l border-gray-200 rounded-l-lg white whitespace-nowrap">
+                    Carrier ID
+                  </th>
+                  <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                    Company Name
+                  </th>
+                  <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                    MC/DOT No
+                  </th>
+                  <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                    Email
+                  </th>
+                  <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                    Phone
+                  </th>
+                  <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200 whitespace-nowrap">
+                    Carrier Type
+                  </th>
+                  <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                    Status
+                  </th>
+                  <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                    Created
+                  </th>
+                  <th className="px-6 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y last:border-r border-gray-200 rounded-r-lg">
+                    Action
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {currentCarriers.map((carrier, index) => (
-                  <tr key={carrier.userId} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                    <td className="py-2 px-3">
-                      <span className="font-medium text-gray-700">{carrier.userId?.slice(-6) || 'N/A'}</span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <div>
-                        <p className="font-medium text-gray-700">{carrier.compName}</p>
-                        <p className="text-sm text-gray-600">{carrier.city}, {carrier.state}</p>
-                      </div>
-                    </td>
-                    <td className="py-2 px-3">
-                      <span className="font-mono text-sm text-gray-600">{carrier.mc_dot_no}</span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <span className="text-sm text-gray-700">{carrier.email}</span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <span className="text-sm text-gray-700">{carrier.phoneNo}</span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <span className="font-medium text-gray-700">{carrier.carrierType}</span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${statusColor(carrier.status)}`}>
-                        {isApproved(carrier.status) && <CheckCircle size={14} />}
-                        {isRejected(carrier.status) && <XCircle size={14} />}
-                        {isPending(carrier.status) && <Clock size={14} />}
-                        {carrier.status || 'Pending'}
-                      </span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <div>
-                        <p className="text-sm text-gray-800">{carrier.addedAt ? new Date(carrier.addedAt).toLocaleDateString() : '—'}</p>
-                        <p className="text-xs text-gray-500">by {carrier.addedBy?.employeeName || 'System'}</p>
-                      </div>
-                    </td>
-                    <td className="py-2 px-3">
-                      <button
-                        onClick={() => handleViewCarrier(carrier)}
-                        className="bg-transparent text-blue-600 px-3 py-1 rounded text-sm hover:bg-blue-500/30 transition border border-blue-200"
-                      >
-                        View
-                      </button>
+                {currentCarriers.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan="9"
+                      className="px-4 py-12 text-center border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg"
+                    >
+                      <Truck className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                      <p className="text-gray-500 text-lg">
+                        {searchTerm ? 'No carriers found matching your search' : 'No carriers found'}
+                      </p>
+                      <p className="text-gray-400 text-sm">
+                        {searchTerm
+                          ? 'Try adjusting your search terms'
+                          : 'Carriers will appear here once they register'}
+                      </p>
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  currentCarriers.map((carrier, index) => (
+                    <tr key={carrier.userId} className="bg-white hover:bg-gray-50 transition-colors">
+                      <td className="px-4 py-4 border-y first:border-l border-gray-200 first:rounded-l-lg">
+                        <span className="font-medium text-gray-700">
+                          {carrier.userId?.slice(-6) || 'N/A'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4 border-y border-gray-200">
+                        <div>
+  {/* Company Name with Custom Tooltip */}
+  <div className="relative group w-[100px]">
+    <p className="font-medium text-gray-700 truncate">
+      {carrier.compName}
+    </p>
+
+    {/* Tooltip */}
+    <div className="absolute left-0 top-full mt-1 hidden group-hover:block 
+                    bg-gray-800 text-white text-xs px-2 py-1 
+                    rounded shadow-lg whitespace-nowrap z-20">
+      {carrier.compName}
+    </div>
+  </div>
+
+  {/* City & State */}
+  <div className="relative group max-w-[100px]">
+  <p className="text-sm text-gray-600 truncate block">
+    {carrier.city}, {carrier.state}
+  </p>
+
+  {/* Tooltip */}
+  <div className="absolute left-0 top-full mt-1 hidden group-hover:block 
+                  bg-gray-800 text-white text-xs px-2 py-1 
+                  rounded shadow-lg whitespace-nowrap z-20">
+    {carrier.city}, {carrier.state}
+  </div>
+</div>
+
+</div>
+
+                      </td>
+                      <td className="px-4 py-4 border-y border-gray-200">
+                        <span className="font-mono text-sm text-gray-600">{carrier.mc_dot_no}</span>
+                      </td>
+                     <td className="px-4 py-4 border-y border-gray-200">
+  <div className="relative group max-w-[100px]">
+    
+    <span className="text-sm text-gray-700 truncate block">
+      {carrier.email}
+    </span>
+
+    {/* Tooltip */}
+    <div className="absolute left-0 top-full mt-1 hidden group-hover:block 
+                    bg-gray-800 text-white text-xs px-2 py-1 
+                    rounded shadow-lg whitespace-nowrap z-20">
+      {carrier.email}
+    </div>
+
+  </div>
+</td>
+
+                      <td className="px-4 py-4 border-y border-gray-200">
+                        <span className="text-sm text-gray-700">{carrier.phoneNo}</span>
+                      </td>
+                      <td className="px-4 py-4 border-y border-gray-200">
+                        <span className="font-medium text-gray-700">{carrier.carrierType}</span>
+                      </td>
+                      <td className="px-4 py-4 border-y border-gray-200">
+                        <span
+                          className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${statusColor(
+                            carrier.status
+                          )}`}
+                        >
+                          {isApproved(carrier.status) && <CheckCircle size={14} />}
+                          {isRejected(carrier.status) && <XCircle size={14} />}
+                          {isPending(carrier.status) && <Clock size={14} />}
+                          {carrier.status || 'Pending'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4 border-y border-gray-200">
+                        <div>
+                          <p className="text-sm text-gray-800">
+                            {carrier.addedAt
+                              ? new Date(carrier.addedAt).toLocaleDateString()
+                              : '—'}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            by {carrier.addedBy?.employeeName || 'System'}
+                          </p>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 border-y last:border-r border-gray-200 last:rounded-r-lg">
+                        <button
+                          onClick={() => handleViewCarrier(carrier)}
+                          className="inline-flex items-center justify-center px-4 py-1.5 rounded-full text-sm font-semibold border border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-colors cursor-pointer"
+                        >
+                          View
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
-
-
-          {currentCarriers.length === 0 && (
-            <div className="text-center py-12">
-              <Truck className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500 text-lg">
-                {searchTerm ? 'No carriers found matching your search' : 'No carriers found'}
-              </p>
-              <p className="text-gray-400 text-sm">
-                {searchTerm ? 'Try adjusting your search terms' : 'Carriers will appear here once they register'}
-              </p>
-            </div>
-          )}
         </div>
       )}
 
 
       {/* Pagination */}
-      {pagination.totalPages > 1 && currentCarriers.length > 0 && (
-        <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+      {pagination.totalPages > 0 && currentCarriers.length > 0 && (
+        <div className="mt-4 flex justify-between items-center px-4 border border-gray-200 p-2 rounded-xl bg-white">
           <div className="text-sm text-gray-600">
-            Showing page {pagination.currentPage} of {pagination.totalPages} ({pagination.totalItems} total carriers)
-            {searchTerm && ` (${currentCarriers.length} filtered on this page)`}
+            {searchTerm && searchTerm.trim()
+              ? `Showing ${currentCarriers.length} carrier(s) filtered by "${searchTerm.trim()}"`
+              : `Showing ${startIndex} to ${endIndex} of ${totalItems} total carriers`}
           </div>
-
-          <div className="flex items-center gap-2 bg-white rounded-xl shadow-lg border border-gray-200 p-2">
+          <div className="flex gap-2 items-center">
             <button
               onClick={() => handlePageChange(currentPage - 1)}
               disabled={currentPage === 1}
-              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+              className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900 cursor-pointer"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
               Previous
             </button>
-
-            <div className="flex items-center gap-1">
-              {/* Always show first page if not near the beginning */}
-              {currentPage > 4 && pagination.totalPages > 7 && (
-                <>
-                  <button
-                    onClick={() => handlePageChange(1)}
-                    className="px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 text-gray-700 hover:bg-blue-50 hover:text-blue-600"
-                  >
-                    1
-                  </button>
-                  {currentPage > 5 && (
-                    <span className="px-2 text-gray-500">...</span>
-                  )}
-                </>
-              )}
-
-              {/* Show page numbers around current page */}
-              {(() => {
-                const pages = [];
-                let startPage = Math.max(1, currentPage - 2);
-                let endPage = Math.min(pagination.totalPages, currentPage + 2);
-
-                // Adjust if we're near the beginning
-                if (currentPage <= 3) {
-                  startPage = 1;
-                  endPage = Math.min(5, pagination.totalPages);
-                }
-
-                // Adjust if we're near the end
-                if (currentPage >= pagination.totalPages - 2) {
-                  startPage = Math.max(1, pagination.totalPages - 4);
-                  endPage = pagination.totalPages;
-                }
-
-                for (let i = startPage; i <= endPage; i++) {
-                  pages.push(i);
-                }
-
-                return pages.map((pageNum) => (
-                  <button
-                    key={pageNum}
-                    onClick={() => handlePageChange(pageNum)}
-                    className={`px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
-                      currentPage === pageNum
-                        ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg'
-                        : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'
-                    }`}
-                  >
-                    {pageNum}
-                  </button>
-                ));
-              })()}
-
-              {/* Always show last page if not near the end */}
-              {currentPage < pagination.totalPages - 3 && pagination.totalPages > 7 && (
-                <>
-                  {currentPage < pagination.totalPages - 4 && (
-                    <span className="px-2 text-gray-500">...</span>
-                  )}
-                  <button
-                    onClick={() => handlePageChange(pagination.totalPages)}
-                    className="px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 text-gray-700 hover:bg-blue-50 hover:text-blue-600"
-                  >
-                    {pagination.totalPages}
-                  </button>
-                </>
-              )}
+            <div className="flex gap-1">
+              {getPageNumbers().map((pageNum, idx, arr) => {
+                const showEllipsisBefore = idx > 0 && pageNum - arr[idx - 1] > 1;
+                return (
+                  <React.Fragment key={pageNum}>
+                    {showEllipsisBefore && (
+                      <span className="px-2 text-gray-400">...</span>
+                    )}
+                    <button
+                      onClick={() => handlePageChange(pageNum)}
+                      className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${
+                        currentPage === pageNum
+                          ? 'border border-gray-900 text-gray-900 bg-white'
+                          : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  </React.Fragment>
+                );
+              })}
             </div>
-
             <button
               onClick={() => handlePageChange(currentPage + 1)}
               disabled={currentPage === pagination.totalPages}
-              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+              className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900 cursor-pointer"
             >
               Next
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
             </button>
           </div>
         </div>
