@@ -49,7 +49,7 @@ export default function AssignDo() {
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 9;
+  const itemsPerPage = 5;
 
   // Fetch assignments from API
   const fetchAssignments = async () => {
@@ -321,6 +321,40 @@ export default function AssignDo() {
     setCurrentPage(page);
   };
 
+  const getPaginationRange = () => {
+    const siblingCount = 1;
+    const totalPageNumbers = siblingCount * 2 + 5;
+
+    if (totalPages <= totalPageNumbers) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+
+    const leftSiblingIndex = Math.max(currentPage - siblingCount, 1);
+    const rightSiblingIndex = Math.min(currentPage + siblingCount, totalPages);
+
+    const showLeftEllipsis = leftSiblingIndex > 2;
+    const showRightEllipsis = rightSiblingIndex < totalPages - 1;
+
+    if (!showLeftEllipsis && showRightEllipsis) {
+      const leftItemCount = 3 + siblingCount * 2;
+      const leftRange = Array.from({ length: leftItemCount }, (_, i) => i + 1);
+      return [...leftRange, 'ellipsis', totalPages];
+    }
+
+    if (showLeftEllipsis && !showRightEllipsis) {
+      const rightItemCount = 3 + siblingCount * 2;
+      const start = totalPages - rightItemCount + 1;
+      const rightRange = Array.from({ length: rightItemCount }, (_, i) => start + i);
+      return [1, 'ellipsis', ...rightRange];
+    }
+
+    const middleRange = Array.from(
+      { length: rightSiblingIndex - leftSiblingIndex + 1 },
+      (_, i) => leftSiblingIndex + i
+    );
+    return [1, 'ellipsis', ...middleRange, 'ellipsis', totalPages];
+  };
+
   // Reset to first page when search term changes
   useEffect(() => {
     setCurrentPage(1);
@@ -389,35 +423,35 @@ export default function AssignDo() {
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       {/* Stats and Actions */}
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center gap-6">
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                <FaBox className="text-blue-600" size={20} />
-              </div>
+      <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="bg-white rounded-2xl px-6 py-4 border border-gray-200 w-full max-w-xs">
+            <div className="flex items-center justify-between gap-4">
               <div>
-                <p className="text-sm text-gray-600">Total DO Assignments</p>
-                <p className="text-xl font-bold text-gray-800">{assignments.length}</p>
+                <p className="text-xl font-medium">Total DO Assignments</p>
+                <p className="text-2xl font-bold text-gray-900 mt-2">{assignments.length}</p>
+              </div>
+              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center border border-green-200">
+                <FaBox className="text-green-600" size={20} />
               </div>
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="relative">
-            <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+        <div className="mt-5 flex flex-wrap items-center gap-4">
+          <div className="relative flex-1 min-w-[240px]">
+            <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
             <input
               type="text"
               placeholder="Search DOs..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
           <button
             onClick={fetchAssignments}
             disabled={loading}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="bg-white text-gray-700 px-4 py-2.5 rounded-xl border border-blue-300 hover:bg-blue-500 hover:text-white transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
             <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -428,7 +462,7 @@ export default function AssignDo() {
       </div>
 
       {/* Assignments Table */}
-      <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+      <div className="bg-white rounded-2xl border border-gray-200 p-4">
         {loading ? (
           <div className="text-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
@@ -438,19 +472,19 @@ export default function AssignDo() {
         ) : (
           <>
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
+              <table className="w-full border-separate border-spacing-y-3">
+                <thead className="bg-white">
                   <tr>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-16">S.No</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-24">DO ID</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-40">Load Numbers</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-40">Carrier</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-24">Load Type</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-24">Assignment Status</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-48">CMT Assignment</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-40">Date & Time</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-24">DO Status</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-24">Action</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-500 uppercase tracking-wide w-16 bg-gray-50 border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">S.No</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-500 uppercase tracking-wide w-24 bg-gray-50 border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">DO ID</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-500 uppercase tracking-wide w-40 bg-gray-50 border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">Load Numbers</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-500 uppercase tracking-wide w-40 bg-gray-50 border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">Carrier</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-500 uppercase tracking-wide w-24 bg-gray-50 border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">Load Type</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-500 uppercase tracking-wide w-24 bg-gray-50 border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">Assignment Status</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-500 uppercase tracking-wide w-48 bg-gray-50 border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">CMT Assignment</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-500 uppercase tracking-wide w-40 bg-gray-50 border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">Date & Time</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-500 uppercase tracking-wide w-24 bg-gray-50 border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">DO Status</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-500 uppercase tracking-wide w-24 bg-gray-50 border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -459,57 +493,86 @@ export default function AssignDo() {
                     const destinationInfo = getDestinationInfo(assignment.loadReference);
                     
                     return (
-                      <tr key={assignment.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                        <td className="py-2 px-3">
+                      <tr key={assignment.id} className="text-sm">
+                        <td className="py-3 px-4 bg-white border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">
                           <span className="font-medium text-gray-700">{assignment.sNo}</span>
                         </td>
-                        <td className="py-2 px-3">
+                        <td className="py-3 px-4 bg-white border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">
                           <span className="font-medium text-gray-700">{assignment.doId ? `DO-${assignment.doId.slice(-5)}` : 'N/A'}</span>
                         </td>
-                        <td className="py-2 px-3">
-                          <span className="font-medium text-gray-700 text-sm">{getLoadNumbersString(assignment.loadNumbers)}</span>
+                        <td className="py-3 px-4 bg-white border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">
+                          <span className="font-medium text-gray-700">{getLoadNumbersString(assignment.loadNumbers)}</span>
                         </td>
-                        <td className="py-2 px-3">
-                          <div>
-                            <span className="font-medium text-gray-700 text-sm">{assignment.carrier?.name || 'N/A'}</span>
-                            <p className="text-xs text-gray-500">{assignment.carrier?.email || ''}</p>
-                          </div>
+                        <td className="py-3 px-4 bg-white border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">
+                        <div className="space-y-1">
+
+{/* Carrier Name */}
+<div className="relative group max-w-[100px]">
+  <span className="font-medium text-gray-700 truncate block">
+    {assignment.carrier?.name || 'N/A'}
+  </span>
+
+  {assignment.carrier?.name && (
+    <div className="absolute left-0 top-full mt-1 hidden group-hover:block 
+                    bg-gray-800 text-white text-xs px-2 py-1 
+                    rounded shadow-lg whitespace-nowrap z-50">
+      {assignment.carrier?.name}
+    </div>
+  )}
+</div>
+
+{/* Carrier Email */}
+{assignment.carrier?.email && (
+  <div className="relative group max-w-[100px]">
+    <p className="text-sm text-gray-500 truncate block">
+      {assignment.carrier.email}
+    </p>
+
+    <div className="absolute left-0 top-full mt-1 hidden group-hover:block 
+                    bg-gray-800 text-white text-xs px-2 py-1 
+                    rounded shadow-lg whitespace-nowrap z-50">
+      {assignment.carrier.email}
+    </div>
+  </div>
+)}
+
+</div>
                         </td>
-                        <td className="py-2 px-3">
+                        <td className="py-3 px-4 bg-white border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">
                           <span className="font-medium text-gray-700">{assignment.loadType}</span>
                         </td>
-                        <td className="py-2 px-3">
-                          <span className={`text-xs px-3 py-1 rounded-full font-bold ${getStatusColor(assignment.assignmentStatus)}`}>
+                        <td className="py-3 px-4 bg-white border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">
+                          <span className={`text-sm px-3 py-1 rounded-full font-medium ${getStatusColor(assignment.assignmentStatus)}`}>
                             {assignment.assignmentStatus.replace(/_/g, ' ')}
                           </span>
                         </td>
-                        <td className="py-2 px-3">
+                        <td className="py-3 px-4 bg-white border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">
                           {assignment.assignedToCMT ? (
                             <div>
-                              <span className="font-medium text-gray-700 text-sm">{assignment.assignedToCMT.employeeName}</span>
-                              <p className="text-xs text-gray-500">{assignment.assignedToCMT.empId}</p>
+                              <span className="font-medium text-gray-700">{assignment.assignedToCMT.employeeName}</span>
+                              <p className="text-sm text-gray-500">{assignment.assignedToCMT.empId}</p>
                               {/* <p className="text-xs text-gray-500">Assigned by: {assignment.assignedToCMT.assignedBy?.employeeName}</p> */}
                             </div>
                           ) : (
-                            <span className="text-gray-400 text-sm">Not Assigned</span>
+                            <span className="text-gray-500 text-sm">Not Assigned</span>
                           )}
                         </td>
-                        <td className="py-2 px-3">
+                        <td className="py-3 px-4 bg-white border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">
                           <div>
-                            <span className="font-medium text-gray-700 text-sm">{formatDateTime(assignment.date).date}</span>
-                            <p className="text-xs text-gray-500">{formatDateTime(assignment.date).time}</p>
+                            <span className="font-medium text-gray-700">{formatDateTime(assignment.date).date}</span>
+                            <p className="text-sm text-gray-500">{formatDateTime(assignment.date).time}</p>
                           </div>
                         </td>
-                        <td className="py-2 px-3">
-                          <span className={`text-xs px-3 py-1 rounded-full font-bold ${getStatusColor(assignment.loadReferenceStatus)}`}>
+                        <td className="py-3 px-4 bg-white border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">
+                          <span className={`text-sm px-3 py-1 rounded-full font-medium ${getStatusColor(assignment.loadReferenceStatus)}`}>
                             {assignment.loadReferenceStatus}
                           </span>
                         </td>
-                        <td className="py-2 px-3">
+                        <td className="py-3 px-4 bg-white border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">
                           <button
                             onClick={() => handleReAssign(assignment)}
                             disabled={reassignSubmitting}
-                            className={`px-3 py-1 text-orange-600 text-xs rounded-md transition-colors border border-orange-300 hover:bg-orange-50 ${
+                            className={`px-3 py-1.5 font-medium whitespace-nowrap text-orange-700 text-sm rounded-md transition-colors border border-orange-300 hover:bg-orange-500 hover:text-white cursor-pointer ${
                               reassignSubmitting 
                                 ? 'opacity-50 cursor-not-allowed' 
                                 : ''
@@ -541,35 +604,40 @@ export default function AssignDo() {
 
       {/* Pagination */}
       {totalPages > 1 && filteredAssignments.length > 0 && (
-        <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-          <div className="text-sm text-gray-600">
+        <div className="flex flex-wrap items-center justify-between gap-3 mt-6 bg-white rounded-2xl px-5 py-4 border border-gray-200">
+          <div className="text-[13px] text-gray-600">
             Showing {startIndex + 1} to {Math.min(endIndex, filteredAssignments.length)} of {filteredAssignments.length} assignments
             {searchTerm && ` (filtered from ${assignments.length} total)`}
           </div>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-1 text-[13px] text-gray-700">
             <button
               onClick={() => handlePageChange(currentPage - 1)}
               disabled={currentPage === 1}
-              className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+              className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900 cursor-pointer"
             >
               Previous
             </button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-              <button
-                key={page}
-                onClick={() => handlePageChange(page)}
-                className={`px-3 py-2 border rounded-lg transition-colors ${currentPage === page
-                  ? 'bg-blue-500 text-white border-blue-500'
-                  : 'border-gray-300 hover:bg-gray-50'
+            {getPaginationRange().map((page, index) => (
+              page === 'ellipsis' ? (
+                <span key={`ellipsis-${index}`} className="px-2 select-none">...</span>
+              ) : (
+                <button
+                  key={page}
+                  onClick={() => handlePageChange(page)}
+                  className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                    currentPage === page
+                      ? 'border border-gray-900 text-gray-900'
+                      : 'text-gray-700 hover:bg-gray-100'
                   }`}
-              >
-                {page}
-              </button>
+                >
+                  {page}
+                </button>
+              )
             ))}
             <button
               onClick={() => handlePageChange(currentPage + 1)}
               disabled={currentPage === totalPages}
-              className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+              className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900 cursor-pointer"
             >
               Next
             </button>

@@ -50,7 +50,7 @@ export default function AssignLoad() {
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 9;
+  const itemsPerPage = 5;
 
   // Fetch loads from API
   const fetchLoads = async () => {
@@ -381,6 +381,40 @@ export default function AssignLoad() {
     setCurrentPage(page);
   };
 
+  const getPaginationRange = () => {
+    const siblingCount = 1;
+    const totalPageNumbers = siblingCount * 2 + 5;
+
+    if (totalPages <= totalPageNumbers) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+
+    const leftSiblingIndex = Math.max(currentPage - siblingCount, 1);
+    const rightSiblingIndex = Math.min(currentPage + siblingCount, totalPages);
+
+    const showLeftEllipsis = leftSiblingIndex > 2;
+    const showRightEllipsis = rightSiblingIndex < totalPages - 1;
+
+    if (!showLeftEllipsis && showRightEllipsis) {
+      const leftItemCount = 3 + siblingCount * 2;
+      const leftRange = Array.from({ length: leftItemCount }, (_, i) => i + 1);
+      return [...leftRange, 'ellipsis', totalPages];
+    }
+
+    if (showLeftEllipsis && !showRightEllipsis) {
+      const rightItemCount = 3 + siblingCount * 2;
+      const start = totalPages - rightItemCount + 1;
+      const rightRange = Array.from({ length: rightItemCount }, (_, i) => start + i);
+      return [1, 'ellipsis', ...rightRange];
+    }
+
+    const middleRange = Array.from(
+      { length: rightSiblingIndex - leftSiblingIndex + 1 },
+      (_, i) => leftSiblingIndex + i
+    );
+    return [1, 'ellipsis', ...middleRange, 'ellipsis', totalPages];
+  };
+
   // Reset to first page when search term changes
   useEffect(() => {
     setCurrentPage(1);
@@ -437,35 +471,35 @@ export default function AssignLoad() {
     <div className="p-6 bg-gray-50 min-h-screen">
 
       {/* Stats and Actions */}
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center gap-6">
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                <FaBox className="text-blue-600" size={20} />
-              </div>
+      <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="bg-white rounded-2xl px-6 py-4 border border-gray-200 w-full max-w-xs">
+            <div className="flex items-center justify-between gap-4">
               <div>
-                <p className="text-sm text-gray-600">Total Load</p>
-                <p className="text-xl font-bold text-gray-800">{loads.length}</p>
+                <p className="text-xl font-medium">Total Load</p>
+                <p className="text-2xl font-bold text-gray-900 mt-2">{loads.length}</p>
+              </div>
+              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center border border-green-200">
+                <FaBox className="text-green-600" size={20} />
               </div>
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="relative">
-            <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+        <div className="mt-5 flex flex-wrap items-center gap-4">
+          <div className="relative flex-1 min-w-[240px]">
+            <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
             <input
               type="text"
               placeholder="Search loads..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full pl-10 pr-4 py-2.5 border border-gray-200 text-base rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
           <button
             onClick={fetchLoads}
             disabled={loading}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="cursor-pointer text-base bg-white text-gray-700 px-4 py-2.5 rounded-xl border border-blue-300 hover:bg-blue-500 hover:text-white transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -476,7 +510,7 @@ export default function AssignLoad() {
       </div>
 
       {/* Loads Table */}
-      <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+      <div className="bg-white rounded-2xl border border-gray-200 p-4">
         {loading ? (
           <div className="text-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
@@ -486,80 +520,80 @@ export default function AssignLoad() {
         ) : (
           <>
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
+              <table className="w-full border-separate border-spacing-y-3">
+                <thead className="bg-white">
                   <tr>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-16">S.No</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-24">Load ID</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-40">Pickup</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-40">Delivery</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-20">Weight</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-24">Rate</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-24">Status</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-48">CMT Assignment</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-40">Date & Time</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-32">Approval</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide w-24">Action</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-500 uppercase tracking-wide w-16 bg-gray-50 border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">S.No</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-500 uppercase tracking-wide w-24 bg-gray-50 border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">Load ID</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-500 uppercase tracking-wide w-40 bg-gray-50 border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">Pickup</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-500 uppercase tracking-wide w-40 bg-gray-50 border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">Delivery</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-500 uppercase tracking-wide w-20 bg-gray-50 border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">Weight</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-500 uppercase tracking-wide w-24 bg-gray-50 border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">Rate</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-500 uppercase tracking-wide w-24 bg-gray-50 border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">Status</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-500 uppercase tracking-wide w-48 bg-gray-50 border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">CMT Assignment</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-500 uppercase tracking-wide w-40 bg-gray-50 border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">Date & Time</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-500 uppercase tracking-wide w-32 bg-gray-50 border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">Approval</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-500 uppercase tracking-wide w-24 bg-gray-50 border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {currentLoads.map((load, index) => (
-                    <tr key={load.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                      <td className="py-2 px-3">
+                    <tr key={load.id} className="text-sm">
+                      <td className="py-3 px-4 bg-white border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">
                         <span className="font-medium text-gray-700">{load.sNo}</span>
                       </td>
-                      <td className="py-2 px-3">
+                      <td className="py-3 px-4 bg-white border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">
                         <span className="font-medium text-gray-700">{load.loadId ? `L-${load.loadId.slice(-5)}` : 'N/A'}</span>
                       </td>
-                      <td className="py-2 px-3">
+                      <td className="py-3 px-4 bg-white border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">
                         <div>
-                          <span className="font-medium text-gray-700 text-sm">{load.pickupAddress}</span>
-                          <p className="text-xs text-gray-500">{load.pickupState}</p>
+                          <span className="font-medium text-gray-700">{load.pickupAddress}</span>
+                          <p className="text-sm text-gray-500">{load.pickupState}</p>
                         </div>
                       </td>
-                      <td className="py-2 px-3">
+                      <td className="py-3 px-4 bg-white border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">
                         <div>
-                          <span className="font-medium text-gray-700 text-sm">{load.deliveryAddress}</span>
-                          <p className="text-xs text-gray-500">{load.deliveryState}</p>
+                          <span className="font-medium text-gray-700">{load.deliveryAddress}</span>
+                          <p className="text-sm text-gray-500">{load.deliveryState}</p>
                         </div>
                       </td>
-                      <td className="py-2 px-3">
+                      <td className="py-3 px-4 bg-white border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">
                         <span className="font-medium text-gray-700">{load.weight} lbs</span>
                       </td>
-                      <td className="py-2 px-3">
-                        <span className="font-bold text-green-600">{formatCurrency(load.rate)}</span>
+                      <td className="py-3 px-4 bg-white border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">
+                        <span className="font-medium text-green-700">{formatCurrency(load.rate)}</span>
                       </td>
-                      <td className="py-2 px-3">
-                        <span className={`text-xs px-3 py-1 rounded-full font-bold ${getStatusColor(load.status)}`}>
+                      <td className="py-3 px-4 bg-white border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">
+                        <span className={`text-sm px-3 py-1 rounded-full font-medium ${getStatusColor(load.status)}`}>
                           {load.status.replace('_', ' ')}
                         </span>
                       </td>
-                      <td className="py-2 px-3">
+                      <td className="py-3 px-4 bg-white border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">
                         {load.cmtAssignment ? (
                           <div>
-                            <span className="font-medium text-gray-700 text-sm">{load.cmtAssignment.displayName || load.cmtAssignment.empName}</span>
-                            <p className="text-xs text-gray-500">{load.cmtAssignment.empId}</p>
+                            <span className="font-medium text-gray-700">{load.cmtAssignment.displayName || load.cmtAssignment.empName}</span>
+                            <p className="text-sm text-gray-500">{load.cmtAssignment.empId}</p>
                           </div>
                         ) : (
-                          <span className="text-gray-400 text-sm">Not Assigned</span>
+                          <span className="text-gray-500 text-sm">Not Assigned</span>
                         )}
                       </td>
-                      <td className="py-2 px-3">
+                      <td className="py-3 px-4 bg-white border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">
                         <div>
-                          <span className="font-medium text-gray-700 text-sm">{formatDateTime(load.createdAt).date}</span>
-                          <p className="text-xs text-gray-500">{formatDateTime(load.createdAt).time}</p>
+                          <span className="font-medium text-gray-700">{formatDateTime(load.createdAt).date}</span>
+                          <p className="text-sm text-gray-500">{formatDateTime(load.createdAt).time}</p>
                         </div>
                       </td>
-                      <td className="py-2 px-3">
-                        <span className={`text-xs px-3 py-1 rounded-full font-bold ${getApprovalStatusColor(load.loadApprovalStatus)}`}>
+                      <td className="py-3 px-4 bg-white border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">
+                        <span className={`text-sm px-3 py-1 rounded-full font-medium ${getApprovalStatusColor(load.loadApprovalStatus)}`}>
                           {load.loadApprovalStatus}
                         </span>
                       </td>
-                      <td className="py-2 px-3">
+                      <td className="py-3 px-4 bg-white border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">
                         <button
                           onClick={() => handleReAssign(load)}
                           disabled={reassignSubmitting}
-                          className={`px-3 py-1 text-orange-600 text-xs rounded-md transition-colors border border-orange-300 hover:bg-orange-50 ${
+                          className={`px-3 py-1.5 font-medium text-orange-700 text-sm rounded-md transition-colors border border-orange-300 hover:bg-orange-500 hover:text-white cursor-pointer whitespace-nowrap ${
                             reassignSubmitting 
                               ? 'opacity-50 cursor-not-allowed' 
                               : ''
@@ -590,35 +624,40 @@ export default function AssignLoad() {
 
       {/* Pagination */}
       {totalPages > 1 && filteredLoads.length > 0 && (
-        <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-          <div className="text-sm text-gray-600">
+        <div className="flex flex-wrap items-center justify-between gap-3 mt-6 bg-white rounded-2xl px-5 py-4 border border-gray-200">
+          <div className="text-[13px] text-gray-600">
             Showing {startIndex + 1} to {Math.min(endIndex, filteredLoads.length)} of {filteredLoads.length} loads
             {searchTerm && ` (filtered from ${loads.length} total)`}
           </div>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-1 text-[13px] text-gray-700">
             <button
               onClick={() => handlePageChange(currentPage - 1)}
               disabled={currentPage === 1}
-              className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+              className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900 cursor-pointer"
             >
               Previous
             </button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-              <button
-                key={page}
-                onClick={() => handlePageChange(page)}
-                className={`px-3 py-2 border rounded-lg transition-colors ${currentPage === page
-                  ? 'bg-blue-500 text-white border-blue-500'
-                  : 'border-gray-300 hover:bg-gray-50'
+            {getPaginationRange().map((page, index) => (
+              page === 'ellipsis' ? (
+                <span key={`ellipsis-${index}`} className="px-2 select-none">...</span>
+              ) : (
+                <button
+                  key={page}
+                  onClick={() => handlePageChange(page)}
+                  className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                    currentPage === page
+                      ? 'border border-gray-900 text-gray-900'
+                      : 'text-gray-700 hover:bg-gray-100'
                   }`}
-              >
-                {page}
-              </button>
+                >
+                  {page}
+                </button>
+              )
             ))}
             <button
               onClick={() => handlePageChange(currentPage + 1)}
               disabled={currentPage === totalPages}
-              className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+              className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900 cursor-pointer"
             >
               Next
             </button>
@@ -629,7 +668,7 @@ export default function AssignLoad() {
       {/* View Details Modal */}
       {showViewModal && selectedLoad && (
         <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-y-auto scrollbar-hide">
+          <div className="bg-white rounded-3xl max-w-6xl w-full max-h-[90vh] overflow-y-auto scrollbar-hide">
             {/* Header */}
             <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl">
               <div className="flex justify-between items-center">
@@ -796,8 +835,8 @@ export default function AssignLoad() {
       {/* Re-Assign Modal */}
       {reassignModal.visible && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity duration-300">
-          <div className="bg-white/90 backdrop-blur-lg rounded-3xl shadow-2xl w-full max-w-2xl p-8 border border-orange-100">
-            <div className="bg-gradient-to-r from-orange-600 to-red-500 text-white px-6 py-4 rounded-xl shadow mb-6 flex justify-between items-center">
+          <div className="bg-white/90 backdrop-blur-lg rounded-3xl w-full max-w-2xl p-8 border border-orange-100">
+            <div className="bg-gradient-to-r from-orange-600 to-red-500 text-white px-6 py-4 rounded-xl mb-6 flex justify-between items-center">
               <div>
                 <h2 className="text-2xl font-semibold flex items-center gap-2">
                   Re-Assign Load
@@ -991,7 +1030,7 @@ export default function AssignLoad() {
                 className={`px-6 py-3 rounded-lg font-semibold text-white transition-all duration-200 ${
                   reassignSubmitting
                     ? 'bg-gray-400 cursor-not-allowed'
-                    : 'bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 shadow-lg hover:shadow-xl'
+                    : 'bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700'
                 }`}
               >
                 {reassignSubmitting ? (

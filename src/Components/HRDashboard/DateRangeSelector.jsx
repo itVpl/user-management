@@ -131,7 +131,7 @@ const DateRangeSelector = ({ dateRange, setDateRange }) => {
           setIsOpen(!isOpen);
           setIsCustom(false);
         }}
-        className="flex items-center justify-between px-3 py-2 border border-gray-300 rounded-lg text-base w-56 bg-white shadow-sm hover:border-blue-500 transition"
+        className="flex items-center justify-between px-3 py-2 border border-gray-300 rounded-lg text-base w-56 bg-white hover:border-gray-400 transition cursor-pointer"
       >
         <span className="flex items-center gap-2 truncate">
           <Calendar size={20} className="text-gray-500" />
@@ -147,13 +147,13 @@ const DateRangeSelector = ({ dateRange, setDateRange }) => {
 
       {/* --- Preset Dropdown --- */}
       {isOpen && (
-        <div className="absolute z-20 mt-1 w-56 bg-white border border-black rounded-lg shadow-xl right-0">
+        <div className="absolute z-20 mt-1 w-56 bg-white border border-gray-200 rounded-lg right-0">
           <ul className="py-1">
             {dateOptions.map((option) => (
               <li
                 key={option.key}
                 onClick={() => handleSelect(option.key)}
-                className={`px-3 py-2 text-sm text-gray-700 cursor-pointer hover:bg-indigo-50 hover:text-indigo-700 ${
+                className={`px-3 py-2 text-base text-gray-700 cursor-pointer hover:bg-indigo-50 hover:text-indigo-700 ${
                   option.key === "CustomRange" ? "border-t border-gray-300 mt-1 pt-2" : ""
                 }`}
               >
@@ -166,7 +166,7 @@ const DateRangeSelector = ({ dateRange, setDateRange }) => {
 
       {/* --- Custom Date Picker --- */}
       {isCustom && (
-        <div className="absolute z-30 mt-2 bg-white border border-gray-200 rounded-xl shadow-2xl p-4 right-0">
+        <div className="absolute z-30 mt-2 bg-white border border-gray-200 rounded-xl p-4 right-0">
           <DateRange
             editableDateInputs={true}
             onChange={(item) => setRange([item.selection])}
