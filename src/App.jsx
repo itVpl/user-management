@@ -113,6 +113,7 @@ const EmployeeReviewDashboard = lazy(() => import("./Components/EmployeeReview/E
 const ReviewSubmissionForm = lazy(() => import("./Components/EmployeeReview/ReviewSubmissionForm.jsx"));
 const DirectorReviewDetails = lazy(() => import("./Components/EmployeeReview/DirectorReviewDetails.jsx"));
 const DocsUpload = lazy(() => import("./Components/DocsUpload/DocsUpload.jsx"));
+const MonthlyPerformanceReviewDashboard = lazy(() => import("./Components/MonthlyPerformanceReview/MonthlyPerformanceReviewDashboard.jsx"));
 const VPL100Redirect = lazy(() => import("./Components/Dashboard/VPL100Redirect.jsx"));
 
 
@@ -711,6 +712,7 @@ function App() {
           <Route path="employee-feedback" element={<EmployeeFeedback />} />
           <Route path="employee-feedback-report" element={<EmployeeFeedbackReport />} />
           <Route path="reviews/dashboard" element={<EmployeeReviewDashboard />} />
+          <Route path="monthly-performance-reviews" element={<MonthlyPerformanceReviewDashboard />} />
           <Route path="reviews/submit/:reviewId" element={<ReviewSubmissionForm />} />
           <Route path="reviews/details/:reviewId" element={<DirectorReviewDetails />} />
           <Route path="trucker-reassign" element={<TruckerReassign />} />

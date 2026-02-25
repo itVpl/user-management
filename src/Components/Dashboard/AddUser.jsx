@@ -646,44 +646,46 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
 
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 backdrop-blur-sm overflow-hidden"
+      className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
       onClick={onClose}
     >
+      <style>{`
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+      `}</style>
       <div
-        className="bg-white rounded-3xl shadow-2xl w-[98%] max-w-7xl h-[95vh] flex flex-col overflow-hidden"
+        className="bg-white rounded-3xl max-w-6xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800 text-white p-8 rounded-t-3xl flex-shrink-0">
+        {/* Header - same as DeliveryOrder Add form */}
+        <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl">
           <div className="flex justify-between items-center">
-            <div>
-              <h2 className="text-3xl font-bold mb-2">Add New User</h2>
-              <p className="text-blue-100 text-lg">Fill in the details to create a new user account</p>
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-xl font-bold">Add New User</h2>
+                <p className="text-blue-100">Fill in the details to create a new user account</p>
+              </div>
             </div>
             <button
               onClick={onClose}
-              className="text-white hover:text-red-200 text-4xl font-bold transition-all duration-300 hover:scale-110"
+              className="text-white hover:text-gray-200 text-2xl font-bold"
             >
               ×
             </button>
           </div>
         </div>
 
-
-        {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto scrollbar-hide ">
-          <form noValidate onSubmit={handleSubmit} className="p-8 space-y-10">
+        {/* Form - same structure as DeliveryOrder */}
+        <form noValidate onSubmit={handleSubmit} className="p-6 space-y-6">
             {/* Employee Details */}
-            <div className="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 rounded-2xl p-8 shadow-xl border border-blue-200">
-              <div className="flex items-center mb-8">
-                <div className="w-12 h-12 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full flex items-center justify-center mr-4 shadow-lg">
-                  <span className="text-white font-bold text-lg">1</span>
-                </div>
-                <div>
-                  <h3 className="text-2xl font-bold text-gray-800">👥 Employee Details</h3>
-                  <p className="text-gray-600">Basic information about the employee</p>
-                </div>
-              </div>
+            <div className="bg-white p-4 rounded-lg border border-gray-200">
+              <h3 className="text-lg font-semibold text-blue-800 mb-4">Employee Details</h3>
               <div className="grid grid-cols-3 gap-6">
                 {initialFields.slice(0, 13).map((field) => {
                   const isPwd = field.name === 'password' || field.name === 'confirmPassword';
@@ -816,16 +818,8 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
 
 
             {/* Identity Docs */}
-            <div className="bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 rounded-2xl p-8 shadow-xl border border-green-200">
-              <div className="flex items-center mb-8">
-                <div className="w-12 h-12 bg-gradient-to-r from-green-600 to-emerald-600 rounded-full flex items-center justify-center mr-4 shadow-lg">
-                  <span className="text-white font-bold text-lg">2</span>
-                </div>
-                <div>
-                  <h3 className="text-2xl font-bold text-gray-800">🆔 Identity Documents</h3>
-                  <p className="text-gray-600">Upload required identity verification documents</p>
-                </div>
-              </div>
+            <div className="bg-white p-4 rounded-lg border border-gray-200">
+              <h3 className="text-lg font-semibold text-blue-800 mb-4">Identity Documents</h3>
               <div className="grid grid-cols-3 gap-6">
                 {ID_DOCS.map((doc) => (
                   <div key={doc.key} className="space-y-3">
@@ -876,16 +870,8 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
 
 
             {/* Previous Company Docs */}
-            <div className="bg-gradient-to-br from-purple-50 via-pink-50 to-rose-50 rounded-2xl p-8 shadow-xl border border-purple-200">
-              <div className="flex items-center mb-8">
-                <div className="w-12 h-12 bg-gradient-to-r from-purple-600 to-pink-600 rounded-full flex items-center justify-center mr-4 shadow-lg">
-                  <span className="text-white font-bold text-lg">3</span>
-                </div>
-                <div>
-                  <h3 className="text-2xl font-bold text-gray-800">🏢 Previous Company Documents</h3>
-                  <p className="text-gray-600">Documents from previous employment</p>
-                </div>
-              </div>
+            <div className="bg-white p-4 rounded-lg border border-gray-200">
+              <h3 className="text-lg font-semibold text-blue-800 mb-4">Previous Company Documents</h3>
               <div className="grid grid-cols-2 gap-6">
                 {[
                   { key: 'releaseLetter', label: 'Release Letter', icon: '📄' },
@@ -963,18 +949,8 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
 
 
             {/* Banking Details */}
-            <div className="bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50 rounded-2xl p-8 shadow-xl border border-orange-200">
-              <div className="flex items-center mb-8">
-                <div className="w-12 h-12 bg-gradient-to-r from-orange-600 to-yellow-600 rounded-full flex items-center justify-center mr-4 shadow-lg">
-                  <span className="text-white font-bold text-lg">4</span>
-                </div>
-                <div>
-                  <h3 className="text-2xl font-bold text-gray-800">🏦 Banking Details</h3>
-                  <p className="text-gray-600">Bank account information for salary processing</p>
-                </div>
-              </div>
-
-
+            <div className="bg-white p-4 rounded-lg border border-gray-200">
+              <h3 className="text-lg font-semibold text-blue-800 mb-4">Banking Details</h3>
               <div className="grid grid-cols-3 gap-6">
                 {initialFields.slice(13).map((field) => {
                   const isNumeric = field.name === 'accountNumber' || field.name === 'basicSalary';
@@ -1031,11 +1007,6 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
                       />
                       {errors[field.name] && <p className="text-red-600 text-xs">{errors[field.name]}</p>}
 
-
-
-
-
-
                     </div>
                   );
                 })}
@@ -1043,19 +1014,9 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
             </div>
 
 
-            {/* Debug: File Upload Status */}
-            <div className="bg-gradient-to-br from-gray-50 via-slate-50 to-zinc-50 rounded-2xl p-6 shadow-xl border border-gray-200">
-              <div className="flex items-center mb-4">
-                <div className="w-10 h-10 bg-gradient-to-r from-gray-600 to-slate-600 rounded-full flex items-center justify-center mr-3 shadow-lg">
-                  <span className="text-white font-bold text-sm">🔍</span>
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-gray-800">File Upload Status</h3>
-                  <p className="text-gray-600 text-sm">Check which files are ready for upload</p>
-                </div>
-              </div>
-
-
+            {/* File Upload Status */}
+            <div className="bg-white p-4 rounded-lg border border-gray-200">
+              <h3 className="text-lg font-semibold text-blue-800 mb-4">File Upload Status</h3>
               <div className="grid grid-cols-2 gap-4">
                 {Object.entries(files).map(([key, file]) => {
                   if (!file || (Array.isArray(file) && file.length === 0)) return null;
@@ -1100,13 +1061,13 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
             </div>
 
 
-            {/* Submit */}
-            <div className="flex justify-end space-x-6 pt-8 border-t-2 border-gray-200">
+            {/* Submit - same as DeliveryOrder form */}
+            <div className="flex justify-end space-x-6 pt-6 border-t border-gray-200">
               <button
                 type="button"
                 onClick={onClose}
                 disabled={isSubmitting}
-                className={`px-10 py-4 border-2 border-gray-300 text-gray-700 rounded-xl font-bold transition-all duration-300 shadow-lg hover:shadow-xl ${isSubmitting
+                className={`px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold transition-all duration-300 ${isSubmitting
                   ? 'opacity-50 cursor-not-allowed'
                   : 'hover:bg-gray-50 hover:border-gray-400'
                   }`}
@@ -1116,9 +1077,9 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className={`px-10 py-4 bg-gradient-to-r from-blue-600 via-purple-600 to-blue-700 text-white rounded-xl font-bold transition-all duration-300 shadow-xl hover:shadow-2xl ${isSubmitting
+                className={`px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl font-semibold transition-all duration-300 ${isSubmitting
                   ? 'opacity-50 cursor-not-allowed'
-                  : 'hover:from-blue-700 hover:via-purple-700 hover:to-blue-800 transform hover:scale-105'
+                  : 'hover:from-blue-600 hover:to-blue-700'
                   }`}
               >
                 {isSubmitting ? (
@@ -1130,7 +1091,6 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
               </button>
             </div>
           </form>
-        </div>
       </div>
 
 

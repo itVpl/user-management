@@ -75,7 +75,7 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Employee Hygiene",
       "Docs Upload"
     ],
-    "Recruitment": ["Candidate Shortlist", "Employee Feedback", "Employee Feedback Report", "Employee Review"],
+    "Recruitment": ["Candidate Shortlist", "Employee Feedback", "Employee Feedback Report", "Employee Review", "Monthly Performance Reviews"],
     "Office Management": [
       "Office Inventory",
       "Office Expenses",
@@ -458,6 +458,7 @@ const menuItems = [
   { name: "Employee Feedback", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/employee-feedback" },
   { name: "Employee Feedback Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/employee-feedback-report" },
   { name: "Employee Review", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/reviews/dashboard" },
+  { name: "Monthly Performance Reviews", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/monthly-performance-reviews" },
   { name: "Target Reports", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/target-reports" },
   { name: "Rate Request", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/RateRequest" },
   { name: "Rate Approved", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/RateApproved" },

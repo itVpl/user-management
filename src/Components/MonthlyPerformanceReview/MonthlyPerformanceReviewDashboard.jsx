@@ -12,14 +12,17 @@ import {
   User,
   Building,
   Calendar,
-  Send
+  Send,
+  TrendingUp,
+  TrendingDown,
+  Minus
 } from 'lucide-react';
 import API_CONFIG from '../../config/api.js';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
-import StatisticsCard from './components/StatisticsCard';
-import RatingInput from './components/RatingInput';
-import ReviewSection from './components/ReviewSection';
+import StatisticsCard from '../EmployeeReview/components/StatisticsCard';
+import RatingInput from '../EmployeeReview/components/RatingInput';
+import ReviewSection from '../EmployeeReview/components/ReviewSection';
 
 // Searchable Dropdown Component
 const SearchableDropdown = ({
@@ -146,21 +149,23 @@ const SearchableDropdown = ({
   );
 };
 
-export default function EmployeeReviewDashboard() {
+export default function MonthlyPerformanceReviewDashboard() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [reviews, setReviews] = useState([]);
   const [statistics, setStatistics] = useState({
     totalPending: 0,
-    totalApproved: 0,
-    totalRejected: 0,
-    totalReviews: 0
+    totalCompleted: 0,
+    totalReviews: 0,
+    averageRating: 0
   });
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
   const [statusFilter, setStatusFilter] = useState('pending_manager_review');
   const [departmentFilter, setDepartmentFilter] = useState('all');
+  const [monthFilter, setMonthFilter] = useState('all');
+  const [yearFilter, setYearFilter] = useState(new Date().getFullYear().toString());
   const [searchTerm, setSearchTerm] = useState('');
   const [userRole, setUserRole] = useState(null);
   const [userEmpId, setUserEmpId] = useState(null);
@@ -169,50 +174,36 @@ export default function EmployeeReviewDashboard() {
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [modalType, setModalType] = useState('view'); // 'view' or 'form'
   const [reviewDetails, setReviewDetails] = useState(null);
-  const [directorDecision, setDirectorDecision] = useState('');
-  const [directorDecisionComments, setDirectorDecisionComments] = useState('');
-  const [directorErrors, setDirectorErrors] = useState({});
-  const [submittingDecision, setSubmittingDecision] = useState(false);
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [formData, setFormData] = useState({
-    performance: {
-      taskCompletion: { rating: 0, comments: '' },
-      qualityOfWork: { rating: 0, comments: '' },
-      meetingDeadlines: { rating: 0, comments: '' },
-      initiative: { rating: 0, comments: '' }
-    },
-    communication: {
-      verbal: { rating: 0, comments: '' },
-      written: { rating: 0, comments: '' },
-      teamCollaboration: { rating: 0, comments: '' },
-      clientInteraction: { rating: 0, comments: '' }
-    },
-    technicalSkills: {
-      jobSpecificSkills: { rating: 0, comments: '' },
-      learningAbility: { rating: 0, comments: '' },
-      problemSolving: { rating: 0, comments: '' },
-      adaptability: { rating: 0, comments: '' }
-    },
-    behavioral: {
-      punctuality: { rating: 0, comments: '' },
-      professionalism: { rating: 0, comments: '' },
-      attitude: { rating: 0, comments: '' },
-      culturalFit: { rating: 0, comments: '' }
-    },
-    overallAssessment: {
-      overallRating: 0,
-      strengths: '',
-      areasForImprovement: '',
-      overallComments: '',
-      managerRecommendation: ''
-    }
-  });
   const [formErrors, setFormErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [loadingReviewData, setLoadingReviewData] = useState(false);
-  const [attachmentFile, setAttachmentFile] = useState(null);
 
   const itemsPerPage = 20;
+
+  // Generate month options
+  const monthOptions = [
+    { value: 'all', label: 'All Months' },
+    { value: '1', label: 'January' },
+    { value: '2', label: 'February' },
+    { value: '3', label: 'March' },
+    { value: '4', label: 'April' },
+    { value: '5', label: 'May' },
+    { value: '6', label: 'June' },
+    { value: '7', label: 'July' },
+    { value: '8', label: 'August' },
+    { value: '9', label: 'September' },
+    { value: '10', label: 'October' },
+    { value: '11', label: 'November' },
+    { value: '12', label: 'December' }
+  ];
+
+  // Generate year options (current year and previous 2 years)
+  const currentYear = new Date().getFullYear();
+  const yearOptions = [
+    { value: currentYear.toString(), label: currentYear.toString() },
+    { value: (currentYear - 1).toString(), label: (currentYear - 1).toString() },
+    { value: (currentYear - 2).toString(), label: (currentYear - 2).toString() }
+  ];
 
   // Get user role and empId (VPL004 has director access)
   useEffect(() => {
@@ -226,7 +217,7 @@ export default function EmployeeReviewDashboard() {
         setUserEmpId(empId);
         // Set default filter based on role
         if (role === 'superadmin' || empId === 'VPL004') {
-          setStatusFilter('pending_director_review');
+          setStatusFilter('all');
         }
       } catch (error) {
         console.error('Error parsing user data:', error);
@@ -236,6 +227,45 @@ export default function EmployeeReviewDashboard() {
   }, []);
 
   const hasDirectorAccess = userRole === 'superadmin' || userEmpId === 'VPL004';
+
+  // Form data structure
+  const [formData, setFormData] = useState({
+    performance: {
+      taskCompletion: { rating: 0, comments: '' },
+      qualityOfWork: { rating: 0, comments: '' },
+      meetingDeadlines: { rating: 0, comments: '' },
+      productivity: { rating: 0, comments: '' },
+      goalAchievement: { rating: 0, comments: '' }
+    },
+    communication: {
+      verbal: { rating: 0, comments: '' },
+      written: { rating: 0, comments: '' },
+      teamCollaboration: { rating: 0, comments: '' },
+      clientInteraction: { rating: 0, comments: '' },
+      reporting: { rating: 0, comments: '' }
+    },
+    technicalSkills: {
+      jobSpecificSkills: { rating: 0, comments: '' },
+      learningDevelopment: { rating: 0, comments: '' },
+      problemSolving: { rating: 0, comments: '' },
+      adaptability: { rating: 0, comments: '' },
+      technicalApplication: { rating: 0, comments: '' }
+    },
+    behavioral: {
+      punctuality: { rating: 0, comments: '' },
+      professionalism: { rating: 0, comments: '' },
+      attitude: { rating: 0, comments: '' },
+      teamwork: { rating: 0, comments: '' },
+      initiative: { rating: 0, comments: '' }
+    },
+    overallAssessment: {
+      overallRating: 0,
+      strengths: '',
+      areasForImprovement: '',
+      overallComments: '',
+      goalsForNextMonth: ''
+    }
+  });
 
   // Fetch pending reviews (Manager - admin role)
   const fetchPendingReviews = async () => {
@@ -250,9 +280,15 @@ export default function EmployeeReviewDashboard() {
       if (statusFilter !== 'pending_manager_review') {
         params.append('status', statusFilter);
       }
+      if (monthFilter !== 'all') {
+        params.append('month', monthFilter);
+      }
+      if (yearFilter) {
+        params.append('year', yearFilter);
+      }
 
       const response = await axios.get(
-        `${API_CONFIG.BASE_URL}/api/v1/employee-reviews/pending?${params.toString()}`,
+        `${API_CONFIG.BASE_URL}/api/v1/monthly-performance-reviews/pending?${params.toString()}`,
         { headers: { 'Authorization': `Bearer ${token}` } }
       );
 
@@ -264,34 +300,6 @@ export default function EmployeeReviewDashboard() {
     } catch (error) {
       console.error('Error fetching pending reviews:', error);
       alertify.error('Failed to load pending reviews');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Fetch my submissions (Manager - admin role) - All Status
-  const fetchMySubmissions = async () => {
-    try {
-      setLoading(true);
-      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-      const params = new URLSearchParams({
-        page: currentPage.toString(),
-        limit: itemsPerPage.toString()
-      });
-
-      const response = await axios.get(
-        `${API_CONFIG.BASE_URL}/api/v1/employee-reviews/my-submissions?${params.toString()}`,
-        { headers: { 'Authorization': `Bearer ${token}` } }
-      );
-
-      if (response.data.success) {
-        setReviews(response.data.data.reviews || []);
-        setTotalPages(response.data.pagination?.totalPages || 1);
-        setTotalItems(response.data.pagination?.totalCount || 0);
-      }
-    } catch (error) {
-      console.error('Error fetching my submissions:', error);
-      alertify.error('Failed to load submissions');
     } finally {
       setLoading(false);
     }
@@ -313,9 +321,15 @@ export default function EmployeeReviewDashboard() {
       if (departmentFilter !== 'all') {
         params.append('department', departmentFilter);
       }
+      if (monthFilter !== 'all') {
+        params.append('month', monthFilter);
+      }
+      if (yearFilter) {
+        params.append('year', yearFilter);
+      }
 
       const response = await axios.get(
-        `${API_CONFIG.BASE_URL}/api/v1/employee-reviews/all?${params.toString()}`,
+        `${API_CONFIG.BASE_URL}/api/v1/monthly-performance-reviews/all?${params.toString()}`,
         { headers: { 'Authorization': `Bearer ${token}` } }
       );
 
@@ -325,8 +339,9 @@ export default function EmployeeReviewDashboard() {
         setTotalItems(response.data.data.pagination?.totalCount || 0);
         setStatistics(response.data.data.statistics || {
           totalPending: 0,
-          totalApproved: 0,
-          totalRejected: 0
+          totalCompleted: 0,
+          totalReviews: 0,
+          averageRating: 0
         });
       }
     } catch (error) {
@@ -341,17 +356,29 @@ export default function EmployeeReviewDashboard() {
   const fetchStatistics = async () => {
     try {
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+      const params = new URLSearchParams();
+      if (monthFilter !== 'all') {
+        params.append('startMonth', monthFilter);
+        params.append('endMonth', monthFilter);
+      }
+      if (yearFilter) {
+        params.append('year', yearFilter);
+      }
+      if (departmentFilter !== 'all') {
+        params.append('department', departmentFilter);
+      }
+
       const response = await axios.get(
-        `${API_CONFIG.BASE_URL}/api/v1/employee-reviews/statistics/overview`,
+        `${API_CONFIG.BASE_URL}/api/v1/monthly-performance-reviews/statistics/overview?${params.toString()}`,
         { headers: { 'Authorization': `Bearer ${token}` } }
       );
 
       if (response.data.success) {
         const stats = response.data.data.overview || {
           totalReviews: 0,
+          completedReviews: 0,
           pendingReviews: 0,
-          approvedReviews: 0,
-          rejectedReviews: 0
+          averageRating: 0
         };
         setStatistics(stats);
       }
@@ -367,12 +394,12 @@ export default function EmployeeReviewDashboard() {
       fetchAllReviews();
       fetchStatistics();
     }
-  }, [currentPage, statusFilter, departmentFilter, userRole, hasDirectorAccess]);
+  }, [currentPage, statusFilter, departmentFilter, monthFilter, yearFilter, userRole, hasDirectorAccess]);
 
   // Reset to page 1 when filter changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [statusFilter]);
+  }, [statusFilter, departmentFilter, monthFilter, yearFilter]);
 
   // Search handler
   useEffect(() => {
@@ -397,7 +424,6 @@ export default function EmployeeReviewDashboard() {
     }
   };
 
-
   const handleReviewClick = async (review) => {
     if (userRole === 'admin') {
       // For pending reviews, show form in modal
@@ -405,14 +431,14 @@ export default function EmployeeReviewDashboard() {
       setModalType('form');
       setShowReviewModal(true);
       // Fetch review data for form
-      await fetchReviewDataForForm(review._id);
+      await fetchReviewDataForForm(review.reviewId || review._id);
     } else if (hasDirectorAccess) {
       // For director (superadmin or VPL004), show details in modal
       setSelectedReview(review);
       setModalType('view');
       setShowReviewModal(true);
       // Fetch review details
-      await fetchReviewDetailsForDirector(review._id);
+      await fetchReviewDetailsForDirector(review.reviewId || review._id);
     }
   };
 
@@ -422,13 +448,23 @@ export default function EmployeeReviewDashboard() {
       setLoadingReviewData(true);
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
       const response = await axios.get(
-        `${API_CONFIG.BASE_URL}/api/v1/employee-reviews/${reviewId}`,
+        `${API_CONFIG.BASE_URL}/api/v1/monthly-performance-reviews/${reviewId}`,
         { headers: { 'Authorization': `Bearer ${token}` } }
       );
 
       if (response.data.success) {
         const review = response.data.data.review;
         setSelectedReview(review);
+        // If review already has data, populate form
+        if (review.performance || review.communication || review.technicalSkills || review.behavioral) {
+          setFormData({
+            performance: review.performance || formData.performance,
+            communication: review.communication || formData.communication,
+            technicalSkills: review.technicalSkills || formData.technicalSkills,
+            behavioral: review.behavioral || formData.behavioral,
+            overallAssessment: review.overallAssessment || formData.overallAssessment
+          });
+        }
       } else {
         alertify.error('Failed to load review data');
       }
@@ -446,16 +482,12 @@ export default function EmployeeReviewDashboard() {
       setLoadingReviewData(true);
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
       const response = await axios.get(
-        `${API_CONFIG.BASE_URL}/api/v1/employee-reviews/${reviewId}/details`,
+        `${API_CONFIG.BASE_URL}/api/v1/monthly-performance-reviews/${reviewId}/details`,
         { headers: { 'Authorization': `Bearer ${token}` } }
       );
 
       if (response.data.success) {
         setReviewDetails(response.data.data.review);
-        // Reset decision form
-        setDirectorDecision('');
-        setDirectorDecisionComments('');
-        setDirectorErrors({});
       } else {
         alertify.error('Failed to load review details');
       }
@@ -541,9 +573,9 @@ export default function EmployeeReviewDashboard() {
       if (!newErrors.overallAssessment) newErrors.overallAssessment = {};
       newErrors.overallAssessment.areasForImprovement = 'Areas for improvement are required';
     }
-    if (!formData.overallAssessment.managerRecommendation) {
+    if (!formData.overallAssessment.goalsForNextMonth.trim()) {
       if (!newErrors.overallAssessment) newErrors.overallAssessment = {};
-      newErrors.overallAssessment.managerRecommendation = 'Manager recommendation is required';
+      newErrors.overallAssessment.goalsForNextMonth = 'Goals for next month are required';
     }
 
     setFormErrors(newErrors);
@@ -562,37 +594,55 @@ export default function EmployeeReviewDashboard() {
       setSubmitting(true);
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
       
-      // Create FormData for file upload
-      const submitData = new FormData();
-      
-      // JSON objects ko stringify karke send karein
-      submitData.append('performance', JSON.stringify(formData.performance));
-      submitData.append('communication', JSON.stringify(formData.communication));
-      submitData.append('technicalSkills', JSON.stringify(formData.technicalSkills));
-      submitData.append('behavioral', JSON.stringify(formData.behavioral));
-      submitData.append('overallAssessment', JSON.stringify(formData.overallAssessment));
-      
-      // Attachment (optional)
-      if (attachmentFile) {
-        submitData.append('attachment', attachmentFile);
-      }
-      
       const response = await axios.post(
-        `${API_CONFIG.BASE_URL}/api/v1/employee-reviews/${selectedReview._id}/submit`,
-        submitData,
-        { 
-          headers: { 
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'multipart/form-data'
-          } 
-        }
+        `${API_CONFIG.BASE_URL}/api/v1/monthly-performance-reviews/${selectedReview.reviewId || selectedReview._id}/submit`,
+        formData,
+        { headers: { 'Authorization': `Bearer ${token}` } }
       );
 
       if (response.data.success) {
-        alertify.success('Review submitted successfully');
+        alertify.success('Monthly review submitted successfully');
         setShowReviewModal(false);
         setSelectedReview(null);
-        setAttachmentFile(null);
+        // Reset form data
+        setFormData({
+          performance: {
+            taskCompletion: { rating: 0, comments: '' },
+            qualityOfWork: { rating: 0, comments: '' },
+            meetingDeadlines: { rating: 0, comments: '' },
+            productivity: { rating: 0, comments: '' },
+            goalAchievement: { rating: 0, comments: '' }
+          },
+          communication: {
+            verbal: { rating: 0, comments: '' },
+            written: { rating: 0, comments: '' },
+            teamCollaboration: { rating: 0, comments: '' },
+            clientInteraction: { rating: 0, comments: '' },
+            reporting: { rating: 0, comments: '' }
+          },
+          technicalSkills: {
+            jobSpecificSkills: { rating: 0, comments: '' },
+            learningDevelopment: { rating: 0, comments: '' },
+            problemSolving: { rating: 0, comments: '' },
+            adaptability: { rating: 0, comments: '' },
+            technicalApplication: { rating: 0, comments: '' }
+          },
+          behavioral: {
+            punctuality: { rating: 0, comments: '' },
+            professionalism: { rating: 0, comments: '' },
+            attitude: { rating: 0, comments: '' },
+            teamwork: { rating: 0, comments: '' },
+            initiative: { rating: 0, comments: '' }
+          },
+          overallAssessment: {
+            overallRating: 0,
+            strengths: '',
+            areasForImprovement: '',
+            overallComments: '',
+            goalsForNextMonth: ''
+          }
+        });
+        setFormErrors({});
         // Refresh the reviews list
         fetchPendingReviews();
       } else {
@@ -606,55 +656,11 @@ export default function EmployeeReviewDashboard() {
     }
   };
 
-  // Handle director decision submission
-  const handleDirectorDecisionSubmit = async () => {
-    if (!directorDecision) {
-      setDirectorErrors({ decision: 'Please select a decision' });
-      alertify.error('Please select a decision');
-      return;
-    }
-
-    try {
-      setSubmittingDecision(true);
-      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-      
-      const response = await axios.put(
-        `${API_CONFIG.BASE_URL}/api/v1/employee-reviews/${selectedReview._id}/decision`,
-        {
-          decision: directorDecision,
-          decisionComments: directorDecisionComments.trim()
-        },
-        { headers: { 'Authorization': `Bearer ${token}` } }
-      );
-
-      if (response.data.success) {
-        alertify.success(`Employee ${directorDecision === 'continue' ? 'approved' : 'terminated'} successfully`);
-        setShowReviewModal(false);
-        setSelectedReview(null);
-        setReviewDetails(null);
-        setShowConfirmModal(false);
-        // Refresh the reviews list
-        if (hasDirectorAccess) {
-          fetchAllReviews();
-          fetchStatistics();
-        }
-      } else {
-        alertify.error(response.data.message || 'Failed to submit decision');
-      }
-    } catch (error) {
-      console.error('Error submitting decision:', error);
-      alertify.error(error.response?.data?.message || 'Failed to submit decision');
-    } finally {
-      setSubmittingDecision(false);
-    }
-  };
-
   const getStatusBadge = (status) => {
     const statusMap = {
       'pending_manager_review': { label: 'Pending Review', style: 'border border-yellow-300 text-yellow-700 bg-yellow-50 hover:bg-yellow-400 hover:text-white transition-colors' },
-      'pending_director_review': { label: 'Pending Decision', style: 'border border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-500 hover:text-white transition-colors' },
-      'approved': { label: 'Approved', style: 'border border-green-300 text-green-700 bg-green-50 hover:bg-green-500 hover:text-white transition-colors' },
-      'rejected': { label: 'Rejected', style: 'border border-red-300 text-red-700 bg-red-50 hover:bg-red-500 hover:text-white transition-colors' }
+      'completed': { label: 'Completed', style: 'border border-green-300 text-green-700 bg-green-50 hover:bg-green-500 hover:text-white transition-colors' },
+      'cancelled': { label: 'Cancelled', style: 'border border-red-300 text-red-700 bg-red-50 hover:bg-red-500 hover:text-white transition-colors' }
     };
     const statusInfo = statusMap[status] || { label: status, style: 'border border-gray-300 text-gray-700 bg-gray-50' };
     return (
@@ -672,6 +678,13 @@ export default function EmployeeReviewDashboard() {
     } catch {
       return dateString;
     }
+  };
+
+  const formatMonthYear = (month, year) => {
+    if (!month || !year) return 'N/A';
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'];
+    return `${monthNames[month - 1]} ${year}`;
   };
 
   const renderRatingSection = (title, data) => {
@@ -746,9 +759,9 @@ export default function EmployeeReviewDashboard() {
     return pages;
   };
 
-  // Filter reviews based on search term (client-side filtering for my-submissions)
+  // Filter reviews based on search term (client-side filtering)
   const filteredReviews = useMemo(() => {
-    if (!searchTerm.trim() || statusFilter !== 'all') {
+    if (!searchTerm.trim()) {
       return reviews;
     }
     const term = searchTerm.toLowerCase();
@@ -757,7 +770,11 @@ export default function EmployeeReviewDashboard() {
       const empName = (review.employeeName || review.employee?.employeeName || '').toLowerCase();
       const dept = (review.department || review.employee?.department || '').toLowerCase();
       const status = (review.status || '').toLowerCase();
-      return empId.includes(term) || empName.includes(term) || dept.includes(term) || status.includes(term);
+      const monthYear = formatMonthYear(
+        review.reviewPeriod?.month || review.reviewPeriod?.month,
+        review.reviewPeriod?.year || review.reviewPeriod?.year
+      ).toLowerCase();
+      return empId.includes(term) || empName.includes(term) || dept.includes(term) || status.includes(term) || monthYear.includes(term);
     });
   }, [reviews, searchTerm]);
 
@@ -780,10 +797,10 @@ export default function EmployeeReviewDashboard() {
   // Manager View (admin role)
   const ManagerView = () => (
     <div className="p-6">
-      <h1 className="text-xl md:text-2xl font-bold text-gray-800 mb-4">Employee Review</h1>
+      <h1 className="text-xl md:text-2xl font-bold text-gray-800 mb-4">Monthly Performance Reviews</h1>
 
       <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="relative w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
             <input
@@ -799,9 +816,26 @@ export default function EmployeeReviewDashboard() {
             value={statusFilter}
             onChange={setStatusFilter}
             options={[
-              { value: 'pending_manager_review', label: 'Pending Review' }
+              { value: 'pending_manager_review', label: 'Pending Review' },
+              { value: 'completed', label: 'Completed' }
             ]}
             placeholder="Filter by Status"
+            className="w-full"
+          />
+
+          <SearchableDropdown
+            value={monthFilter}
+            onChange={setMonthFilter}
+            options={monthOptions}
+            placeholder="Filter by Month"
+            className="w-full"
+          />
+
+          <SearchableDropdown
+            value={yearFilter}
+            onChange={setYearFilter}
+            options={yearOptions}
+            placeholder="Filter by Year"
             className="w-full"
           />
         </div>
@@ -822,7 +856,7 @@ export default function EmployeeReviewDashboard() {
                   Department
                 </th>
                 <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
-                  Days Since Joining
+                  Review Period
                 </th>
                 <th className="px-8 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
                   Status
@@ -852,13 +886,13 @@ export default function EmployeeReviewDashboard() {
                     className="px-4 py-12 text-center border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg"
                   >
                     <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                    <p className="text-gray-500 text-lg">No pending reviews</p>
-                    <p className="text-gray-400 text-sm mt-2">All employees have been reviewed</p>
+                    <p className="text-gray-500 text-lg">No reviews found</p>
+                    <p className="text-gray-400 text-sm mt-2">Try adjusting your filters</p>
                   </td>
                 </tr>
               ) : (
                 displayReviews.map((review) => (
-                  <tr key={review._id} className="bg-white hover:bg-gray-50 transition-colors">
+                  <tr key={review._id || review.reviewId} className="bg-white hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-4 border-y first:border-l border-gray-200 first:rounded-l-lg text-gray-900 font-semibold">
                       {review.employeeEmpId || review.employee?.employeeEmpId || 'N/A'}
                     </td>
@@ -869,7 +903,7 @@ export default function EmployeeReviewDashboard() {
                       {review.department || review.employee?.department || 'N/A'}
                     </td>
                     <td className="px-4 py-4 border-y border-gray-200 text-gray-700 font-medium">
-                      {review.daysSinceJoining || 0} days
+                      {formatMonthYear(review.reviewPeriod?.month, review.reviewPeriod?.year)}
                     </td>
                     <td className="px-4 py-4 border-y border-gray-200">
                       {getStatusBadge(review.status)}
@@ -879,7 +913,7 @@ export default function EmployeeReviewDashboard() {
                         onClick={() => handleReviewClick(review)}
                         className="inline-flex items-center justify-center px-4 py-1.5 rounded-full text-sm font-semibold border border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-colors cursor-pointer"
                       >
-                        Review
+                        {review.status === 'completed' ? 'View' : 'Review'}
                       </button>
                     </td>
                   </tr>
@@ -941,35 +975,42 @@ export default function EmployeeReviewDashboard() {
   // Director View (superadmin role)
   const DirectorView = () => (
     <div className="p-6">
-      <h1 className="text-xl md:text-2xl font-bold text-gray-800 mb-4">Employee Review</h1>
+      <h1 className="text-xl md:text-2xl font-bold text-gray-800 mb-4">Monthly Performance Reviews</h1>
 
       {/* Statistics Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+        <StatisticsCard
+          title="Total Reviews"
+          value={statistics.totalReviews || 0}
+          icon={FileText}
+          color="blue"
+          subtitle="All Reviews"
+        />
         <StatisticsCard
           title="Pending"
           value={statistics.pendingReviews || statistics.totalPending || 0}
           icon={Clock}
           color="yellow"
-          subtitle="Pending Decisions"
+          subtitle="Pending Reviews"
         />
         <StatisticsCard
-          title="Approved"
-          value={statistics.approvedReviews || statistics.totalApproved || 0}
+          title="Completed"
+          value={statistics.completedReviews || statistics.totalCompleted || 0}
           icon={CheckCircle}
           color="green"
-          subtitle="Approved"
+          subtitle="Completed Reviews"
         />
         <StatisticsCard
-          title="Rejected"
-          value={statistics.rejectedReviews || statistics.totalRejected || 0}
-          icon={XCircle}
-          color="red"
-          subtitle="Rejected"
+          title="Average Rating"
+          value={statistics.averageRating ? Number(statistics.averageRating).toFixed(1) : '0.0'}
+          icon={Star}
+          color="purple"
+          subtitle="Overall Average"
         />
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <div className="relative w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
             <input
@@ -985,9 +1026,9 @@ export default function EmployeeReviewDashboard() {
             value={statusFilter}
             onChange={setStatusFilter}
             options={[
-              { value: 'pending_director_review', label: 'Pending Decision' },
-              { value: 'approved', label: 'Approved' },
-              { value: 'rejected', label: 'Rejected' }
+              { value: 'all', label: 'All Status' },
+              { value: 'pending_manager_review', label: 'Pending Review' },
+              { value: 'completed', label: 'Completed' }
             ]}
             placeholder="Filter by Status"
             className="w-full"
@@ -1001,6 +1042,22 @@ export default function EmployeeReviewDashboard() {
               ...departments.map(dept => ({ value: dept, label: dept }))
             ]}
             placeholder="Filter by Department"
+            className="w-full"
+          />
+
+          <SearchableDropdown
+            value={monthFilter}
+            onChange={setMonthFilter}
+            options={monthOptions}
+            placeholder="Filter by Month"
+            className="w-full"
+          />
+
+          <SearchableDropdown
+            value={yearFilter}
+            onChange={setYearFilter}
+            options={yearOptions}
+            placeholder="Filter by Year"
             className="w-full"
           />
         </div>
@@ -1021,7 +1078,10 @@ export default function EmployeeReviewDashboard() {
                   Department
                 </th>
                 <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
-                  Submitted Date
+                  Review Period
+                </th>
+                <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                  Rating
                 </th>
                 <th className="px-8 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
                   Status
@@ -1035,7 +1095,7 @@ export default function EmployeeReviewDashboard() {
               {loading ? (
                 <tr>
                   <td
-                    colSpan="6"
+                    colSpan="7"
                     className="px-4 py-12 text-center border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg"
                   >
                     <div className="flex flex-col items-center justify-center">
@@ -1047,7 +1107,7 @@ export default function EmployeeReviewDashboard() {
               ) : displayReviews.length === 0 ? (
                 <tr>
                   <td
-                    colSpan="6"
+                    colSpan="7"
                     className="px-4 py-12 text-center border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg"
                   >
                     <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
@@ -1057,7 +1117,7 @@ export default function EmployeeReviewDashboard() {
                 </tr>
               ) : (
                 displayReviews.map((review) => (
-                  <tr key={review._id} className="bg-white hover:bg-gray-50 transition-colors">
+                  <tr key={review._id || review.reviewId} className="bg-white hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-4 border-y first:border-l border-gray-200 first:rounded-l-lg text-gray-900 font-semibold">
                       {review.employeeEmpId || review.employee?.employeeEmpId || 'N/A'}
                     </td>
@@ -1068,7 +1128,29 @@ export default function EmployeeReviewDashboard() {
                       {review.department || review.employee?.department || 'N/A'}
                     </td>
                     <td className="px-4 py-4 border-y border-gray-200 text-gray-700 font-medium">
-                      {formatDate(review.submittedAt)}
+                      {formatMonthYear(review.reviewPeriod?.month, review.reviewPeriod?.year)}
+                    </td>
+                    <td className="px-4 py-4 border-y border-gray-200">
+                      {review.overallAssessment?.overallRating ? (
+                        <div className="flex items-center gap-1">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <Star
+                              key={star}
+                              size={14}
+                              className={`${
+                                star <= review.overallAssessment.overallRating
+                                  ? 'fill-yellow-400 text-yellow-400'
+                                  : 'fill-gray-200 text-gray-300'
+                              }`}
+                            />
+                          ))}
+                          <span className="text-sm font-bold text-gray-800 ml-1">
+                            {review.overallAssessment.overallRating}/5
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-gray-400 text-sm">N/A</span>
+                      )}
                     </td>
                     <td className="px-4 py-4 border-y border-gray-200">
                       {getStatusBadge(review.status)}
@@ -1160,9 +1242,6 @@ export default function EmployeeReviewDashboard() {
               setShowReviewModal(false);
               setSelectedReview(null);
               setReviewDetails(null);
-              setDirectorDecision('');
-              setDirectorDecisionComments('');
-              setDirectorErrors({});
               setModalType('view');
             }
           }}
@@ -1180,10 +1259,10 @@ export default function EmployeeReviewDashboard() {
                   </div>
                   <div>
                     <h2 className="text-lg sm:text-xl font-bold">
-                      {modalType === 'form' ? 'Submit Review' : 'Review Details'}
+                      {modalType === 'form' ? 'Submit Monthly Review' : 'Review Details'}
                     </h2>
                     <p className="text-blue-100 text-xs sm:text-sm">
-                      {selectedReview.employeeName || selectedReview.employee?.employeeName || 'N/A'}
+                      {selectedReview.employeeName || selectedReview.employee?.employeeName || 'N/A'} - {formatMonthYear(selectedReview.reviewPeriod?.month, selectedReview.reviewPeriod?.year)}
                     </p>
                   </div>
                 </div>
@@ -1198,36 +1277,39 @@ export default function EmployeeReviewDashboard() {
                         taskCompletion: { rating: 0, comments: '' },
                         qualityOfWork: { rating: 0, comments: '' },
                         meetingDeadlines: { rating: 0, comments: '' },
-                        initiative: { rating: 0, comments: '' }
+                        productivity: { rating: 0, comments: '' },
+                        goalAchievement: { rating: 0, comments: '' }
                       },
                       communication: {
                         verbal: { rating: 0, comments: '' },
                         written: { rating: 0, comments: '' },
                         teamCollaboration: { rating: 0, comments: '' },
-                        clientInteraction: { rating: 0, comments: '' }
+                        clientInteraction: { rating: 0, comments: '' },
+                        reporting: { rating: 0, comments: '' }
                       },
                       technicalSkills: {
                         jobSpecificSkills: { rating: 0, comments: '' },
-                        learningAbility: { rating: 0, comments: '' },
+                        learningDevelopment: { rating: 0, comments: '' },
                         problemSolving: { rating: 0, comments: '' },
-                        adaptability: { rating: 0, comments: '' }
+                        adaptability: { rating: 0, comments: '' },
+                        technicalApplication: { rating: 0, comments: '' }
                       },
                       behavioral: {
                         punctuality: { rating: 0, comments: '' },
                         professionalism: { rating: 0, comments: '' },
                         attitude: { rating: 0, comments: '' },
-                        culturalFit: { rating: 0, comments: '' }
+                        teamwork: { rating: 0, comments: '' },
+                        initiative: { rating: 0, comments: '' }
                       },
                       overallAssessment: {
                         overallRating: 0,
                         strengths: '',
                         areasForImprovement: '',
                         overallComments: '',
-                        managerRecommendation: ''
+                        goalsForNextMonth: ''
                       }
                     });
                     setFormErrors({});
-                    setAttachmentFile(null);
                   }}
                   className="text-white hover:text-gray-200 text-xl sm:text-2xl font-bold"
                 >
@@ -1270,8 +1352,10 @@ export default function EmployeeReviewDashboard() {
                     <div className="flex items-center gap-3">
                       <Calendar size={20} className="text-blue-600" />
                       <div>
-                        <p className="text-sm text-gray-600">Days Since Joining</p>
-                        <p className="font-semibold text-gray-800">{selectedReview.daysSinceJoining || 0} days</p>
+                        <p className="text-sm text-gray-600">Review Period</p>
+                        <p className="font-semibold text-gray-800">
+                          {formatMonthYear(selectedReview.reviewPeriod?.month, selectedReview.reviewPeriod?.year)}
+                        </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
@@ -1293,7 +1377,8 @@ export default function EmployeeReviewDashboard() {
                     { key: 'taskCompletion', label: 'Task Completion' },
                     { key: 'qualityOfWork', label: 'Quality of Work' },
                     { key: 'meetingDeadlines', label: 'Meeting Deadlines' },
-                    { key: 'initiative', label: 'Initiative' }
+                    { key: 'productivity', label: 'Productivity' },
+                    { key: 'goalAchievement', label: 'Goal Achievement' }
                   ]}
                   formData={formData.performance}
                   onChange={(field, type, value) => handleFieldChange('performance', field, type, value)}
@@ -1307,7 +1392,8 @@ export default function EmployeeReviewDashboard() {
                     { key: 'verbal', label: 'Verbal Communication' },
                     { key: 'written', label: 'Written Communication' },
                     { key: 'teamCollaboration', label: 'Team Collaboration' },
-                    { key: 'clientInteraction', label: 'Client Interaction' }
+                    { key: 'clientInteraction', label: 'Client Interaction' },
+                    { key: 'reporting', label: 'Reporting' }
                   ]}
                   formData={formData.communication}
                   onChange={(field, type, value) => handleFieldChange('communication', field, type, value)}
@@ -1319,9 +1405,10 @@ export default function EmployeeReviewDashboard() {
                   title="Technical Skills"
                   fields={[
                     { key: 'jobSpecificSkills', label: 'Job-Specific Skills' },
-                    { key: 'learningAbility', label: 'Learning Ability' },
+                    { key: 'learningDevelopment', label: 'Learning & Development' },
                     { key: 'problemSolving', label: 'Problem Solving' },
-                    { key: 'adaptability', label: 'Adaptability' }
+                    { key: 'adaptability', label: 'Adaptability' },
+                    { key: 'technicalApplication', label: 'Technical Application' }
                   ]}
                   formData={formData.technicalSkills}
                   onChange={(field, type, value) => handleFieldChange('technicalSkills', field, type, value)}
@@ -1335,7 +1422,8 @@ export default function EmployeeReviewDashboard() {
                     { key: 'punctuality', label: 'Punctuality' },
                     { key: 'professionalism', label: 'Professionalism' },
                     { key: 'attitude', label: 'Attitude' },
-                    { key: 'culturalFit', label: 'Cultural Fit' }
+                    { key: 'teamwork', label: 'Teamwork' },
+                    { key: 'initiative', label: 'Initiative' }
                   ]}
                   formData={formData.behavioral}
                   onChange={(field, type, value) => handleFieldChange('behavioral', field, type, value)}
@@ -1411,49 +1499,23 @@ export default function EmployeeReviewDashboard() {
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Manager Recommendation <span className="text-red-500">*</span>
+                        Goals for Next Month <span className="text-red-500">*</span>
                       </label>
-                      <select
-                        value={formData.overallAssessment.managerRecommendation}
-                        onChange={(e) => handleOverallChange('managerRecommendation', e.target.value)}
+                      <textarea
+                        value={formData.overallAssessment.goalsForNextMonth}
+                        onChange={(e) => handleOverallChange('goalsForNextMonth', e.target.value)}
                         className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 ${
-                          formErrors.overallAssessment?.managerRecommendation
+                          formErrors.overallAssessment?.goalsForNextMonth
                             ? 'border-red-500 focus:ring-red-200 bg-red-50 error-field'
                             : 'border-gray-300 focus:ring-blue-500'
                         }`}
-                      >
-                        <option value="">Select Recommendation</option>
-                        <option value="continue">Continue Employment</option>
-                        <option value="terminate">Terminate</option>
-                        <option value="extend_probation">Extend Probation</option>
-                      </select>
-                      {formErrors.overallAssessment?.managerRecommendation && (
-                        <p className="mt-1 text-xs text-red-600">{formErrors.overallAssessment.managerRecommendation}</p>
+                        placeholder="Set goals for the next month..."
+                        rows={4}
+                      />
+                      {formErrors.overallAssessment?.goalsForNextMonth && (
+                        <p className="mt-1 text-xs text-red-600">{formErrors.overallAssessment.goalsForNextMonth}</p>
                       )}
                     </div>
-                  </div>
-                </div>
-
-                {/* Attachment Section */}
-                <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
-                  <h3 className="text-lg font-bold text-gray-800 mb-4 pb-2 border-b border-gray-200">
-                    Attachment
-                  </h3>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Attachment <span className="text-gray-500 text-xs">(Optional)</span>
-                    </label>
-                    <input
-                      type="file"
-                      onChange={(e) => setAttachmentFile(e.target.files[0] || null)}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                      accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                    />
-                    {attachmentFile && (
-                      <p className="mt-2 text-sm text-gray-600">
-                        Selected: <span className="font-medium">{attachmentFile.name}</span>
-                      </p>
-                    )}
                   </div>
                 </div>
 
@@ -1472,36 +1534,39 @@ export default function EmployeeReviewDashboard() {
                             taskCompletion: { rating: 0, comments: '' },
                             qualityOfWork: { rating: 0, comments: '' },
                             meetingDeadlines: { rating: 0, comments: '' },
-                            initiative: { rating: 0, comments: '' }
+                            productivity: { rating: 0, comments: '' },
+                            goalAchievement: { rating: 0, comments: '' }
                           },
                           communication: {
                             verbal: { rating: 0, comments: '' },
                             written: { rating: 0, comments: '' },
                             teamCollaboration: { rating: 0, comments: '' },
-                            clientInteraction: { rating: 0, comments: '' }
+                            clientInteraction: { rating: 0, comments: '' },
+                            reporting: { rating: 0, comments: '' }
                           },
                           technicalSkills: {
                             jobSpecificSkills: { rating: 0, comments: '' },
-                            learningAbility: { rating: 0, comments: '' },
+                            learningDevelopment: { rating: 0, comments: '' },
                             problemSolving: { rating: 0, comments: '' },
-                            adaptability: { rating: 0, comments: '' }
+                            adaptability: { rating: 0, comments: '' },
+                            technicalApplication: { rating: 0, comments: '' }
                           },
                           behavioral: {
                             punctuality: { rating: 0, comments: '' },
                             professionalism: { rating: 0, comments: '' },
                             attitude: { rating: 0, comments: '' },
-                            culturalFit: { rating: 0, comments: '' }
+                            teamwork: { rating: 0, comments: '' },
+                            initiative: { rating: 0, comments: '' }
                           },
                           overallAssessment: {
                             overallRating: 0,
                             strengths: '',
                             areasForImprovement: '',
                             overallComments: '',
-                            managerRecommendation: ''
+                            goalsForNextMonth: ''
                           }
                         });
                         setFormErrors({});
-                        setAttachmentFile(null);
                       }}
                       className="w-full sm:w-auto px-4 sm:px-6 py-2 sm:py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors text-sm sm:text-base"
                     >
@@ -1562,9 +1627,9 @@ export default function EmployeeReviewDashboard() {
                       </div>
                       <div className="flex items-center gap-2">
                         <Calendar size={16} className="text-gray-600" />
-                        <span className="text-gray-600">Date of Joining:</span>
+                        <span className="text-gray-600">Review Period:</span>
                         <span className="font-semibold text-gray-800">
-                          {formatDate(reviewDetails.employee?.dateOfJoining || reviewDetails.dateOfJoining)}
+                          {formatMonthYear(reviewDetails.reviewPeriod?.month, reviewDetails.reviewPeriod?.year)}
                         </span>
                       </div>
                     </div>
@@ -1579,7 +1644,7 @@ export default function EmployeeReviewDashboard() {
                       <div className="flex items-center gap-2">
                         <span className="text-gray-600">Name:</span>
                         <span className="font-semibold text-gray-800">
-                          {reviewDetails.manager?.employeeName || reviewDetails.managerName || 'N/A'}
+                          {reviewDetails.manager?.managerName || reviewDetails.managerName || 'N/A'}
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
@@ -1653,478 +1718,15 @@ export default function EmployeeReviewDashboard() {
                         </div>
 
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Manager Recommendation</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Goals for Next Month</label>
                           <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold ${
-                              reviewDetails.overallAssessment.managerRecommendation === 'continue'
-                                ? 'bg-green-100 text-green-800'
-                                : reviewDetails.overallAssessment.managerRecommendation === 'terminate'
-                                ? 'bg-red-100 text-red-800'
-                                : 'bg-yellow-100 text-yellow-800'
-                            }`}>
-                              {reviewDetails.overallAssessment.managerRecommendation === 'continue'
-                                ? 'Continue Employment'
-                                : reviewDetails.overallAssessment.managerRecommendation === 'terminate'
-                                ? 'Terminate'
-                                : 'Extend Probation'}
-                            </span>
+                            <p className="text-gray-700">{reviewDetails.overallAssessment.goalsForNextMonth || 'N/A'}</p>
                           </div>
                         </div>
                       </div>
                     </div>
                   )}
-
-                  {/* Attachment Section */}
-                  <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
-                    <h3 className="text-lg font-bold text-gray-800 mb-4 pb-2 border-b border-gray-200">
-                      Attachment
-                    </h3>
-                    <div>
-                      {reviewDetails.attachment ? (() => {
-                        // Handle different attachment formats (string, object, etc.)
-                        let attachmentPath = '';
-                        if (typeof reviewDetails.attachment === 'string') {
-                          attachmentPath = reviewDetails.attachment;
-                        } else if (reviewDetails.attachment && typeof reviewDetails.attachment === 'object') {
-                          attachmentPath = reviewDetails.attachment.path || 
-                                          reviewDetails.attachment.url || 
-                                          reviewDetails.attachment.fileUrl || 
-                                          reviewDetails.attachment.file || 
-                                          '';
-                        }
-                        
-                        if (!attachmentPath) {
-                          return <p className="text-gray-500 text-sm">No attachment provided</p>;
-                        }
-                        
-                        const attachmentUrl = typeof attachmentPath === 'string' && attachmentPath.startsWith('http')
-                          ? attachmentPath
-                          : `${API_CONFIG.BASE_URL}/${String(attachmentPath).replace(/^\//, '')}`;
-                        const fileName = String(attachmentPath).split('/').pop() || 'Attachment';
-                        return (
-                          <a
-                            href={attachmentUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors"
-                          >
-                            <FileText size={18} />
-                            <span className="font-medium">View Attachment</span>
-                            <span className="text-xs text-gray-600">({fileName})</span>
-                          </a>
-                        );
-                      })() : (
-                        <p className="text-gray-500 text-sm">No attachment provided</p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Director Decision Section */}
-                  {reviewDetails.status === 'pending_director_review' && (
-                    <div className="bg-white rounded-xl border-2 border-blue-200 p-4 sm:p-6">
-                      <h3 className="text-lg font-bold text-gray-800 mb-4 pb-2 border-b border-gray-200">
-                        Director Decision
-                      </h3>
-                      <div className="space-y-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Decision <span className="text-red-500">*</span>
-                          </label>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setDirectorDecision('continue');
-                                setDirectorErrors({});
-                              }}
-                              className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition-all ${
-                                directorDecision === 'continue'
-                                  ? 'border-green-500 bg-green-50 text-green-700'
-                                  : 'border-gray-300 bg-white text-gray-700 hover:border-green-300'
-                              }`}
-                            >
-                              <CheckCircle size={20} />
-                              <span className="font-semibold">Continue Employment</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setDirectorDecision('terminate');
-                                setDirectorErrors({});
-                              }}
-                              className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition-all ${
-                                directorDecision === 'terminate'
-                                  ? 'border-red-500 bg-red-50 text-red-700'
-                                  : 'border-gray-300 bg-white text-gray-700 hover:border-red-300'
-                              }`}
-                            >
-                              <XCircle size={20} />
-                              <span className="font-semibold">Terminate</span>
-                            </button>
-                          </div>
-                          {directorErrors.decision && (
-                            <p className="mt-1 text-xs text-red-600">{directorErrors.decision}</p>
-                          )}
-                        </div>
-
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Decision Comments
-                          </label>
-                          <textarea
-                            value={directorDecisionComments}
-                            onChange={(e) => setDirectorDecisionComments(e.target.value)}
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            placeholder="Enter comments about your decision..."
-                            rows={4}
-                          />
-                        </div>
-
-                        <div className="flex flex-col sm:flex-row justify-end gap-3 sm:gap-4 pt-4 border-t border-gray-200">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setShowReviewModal(false);
-                              setSelectedReview(null);
-                              setReviewDetails(null);
-                              setDirectorDecision('');
-                              setDirectorDecisionComments('');
-                            }}
-                            className="w-full sm:w-auto px-4 sm:px-6 py-2 sm:py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors text-sm sm:text-base"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (!directorDecision) {
-                                setDirectorErrors({ decision: 'Please select a decision' });
-                                alertify.error('Please select a decision');
-                                return;
-                              }
-                              setShowConfirmModal(true);
-                            }}
-                            disabled={submittingDecision || !directorDecision}
-                            className={`w-full sm:w-auto px-4 sm:px-6 py-2 sm:py-3 rounded-lg font-semibold transition-colors text-sm sm:text-base ${
-                              directorDecision === 'continue'
-                                ? 'bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700'
-                                : directorDecision === 'terminate'
-                                ? 'bg-gradient-to-r from-red-500 to-red-600 text-white hover:from-red-600 hover:to-red-700'
-                                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                            } ${submittingDecision ? 'opacity-50 cursor-not-allowed' : ''}`}
-                          >
-                            {submittingDecision ? (
-                              <span className="flex items-center justify-center gap-2">
-                                <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
-                                Submitting...
-                              </span>
-                            ) : (
-                              <span className="flex items-center justify-center gap-2">
-                                {directorDecision === 'continue' ? <CheckCircle size={18} /> : <XCircle size={18} />}
-                                Submit Decision
-                              </span>
-                            )}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Already Decided */}
-                  {reviewDetails.status !== 'pending_director_review' && reviewDetails.directorDecision && (
-                    <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
-                      <h3 className="text-lg font-bold text-gray-800 mb-4 pb-2 border-b border-gray-200">
-                        Director Decision
-                      </h3>
-                      <div className="space-y-3">
-                        <div>
-                          <span className="text-sm font-medium text-gray-600">Decision: </span>
-                          <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold ${
-                            reviewDetails.directorDecision.decision === 'continue'
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-red-100 text-red-800'
-                          }`}>
-                            {reviewDetails.directorDecision.decision === 'continue' ? (
-                              <>
-                                <CheckCircle size={16} />
-                                Continue Employment
-                              </>
-                            ) : (
-                              <>
-                                <XCircle size={16} />
-                                Terminated
-                              </>
-                            )}
-                          </span>
-                        </div>
-                        {reviewDetails.directorDecision.decisionComments && (
-                          <div>
-                            <span className="text-sm font-medium text-gray-600">Comments: </span>
-                            <p className="text-gray-700 mt-1">{reviewDetails.directorDecision.decisionComments}</p>
-                          </div>
-                        )}
-                        <div>
-                          <span className="text-sm font-medium text-gray-600">Decided by: </span>
-                          <span className="text-gray-700">
-                            {reviewDetails.directorDecision.decidedBy?.employeeName || 'N/A'}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-sm font-medium text-gray-600">Decided at: </span>
-                          <span className="text-gray-700">{formatDate(reviewDetails.directorDecision.decidedAt)}</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
                 </div>
-              </div>
-              ) : (
-                <div className="p-12 text-center">
-                  <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-                  <p className="mt-4 text-gray-600">Loading review details...</p>
-                </div>
-              )
-            ) : (
-              // Manager View Content (for admin role)
-              <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
-                {/* Employee & Manager Info */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 border border-blue-200">
-                    <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
-                      <User size={18} />
-                      Employee Information
-                    </h3>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex items-center gap-2">
-                        <span className="text-gray-600">Name:</span>
-                        <span className="font-semibold text-gray-800">
-                          {selectedReview.employeeName || selectedReview.employee?.employeeName || 'N/A'}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-gray-600">ID:</span>
-                        <span className="font-semibold text-gray-800">
-                          {selectedReview.employeeEmpId || selectedReview.employee?.employeeEmpId || 'N/A'}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Building size={16} className="text-gray-600" />
-                        <span className="text-gray-600">Department:</span>
-                        <span className="font-semibold text-gray-800">
-                          {selectedReview.department || selectedReview.employee?.department || 'N/A'}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Calendar size={16} className="text-gray-600" />
-                        <span className="text-gray-600">Days Since Joining:</span>
-                        <span className="font-semibold text-gray-800">
-                          {selectedReview.daysSinceJoining || 0} days
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-4 border border-green-200">
-                    <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
-                      <User size={18} />
-                      Review Information
-                    </h3>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex items-center gap-2">
-                        <span className="text-gray-600">Status:</span>
-                        {getStatusBadge(selectedReview.status)}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Calendar size={16} className="text-gray-600" />
-                        <span className="text-gray-600">Submitted:</span>
-                        <span className="font-semibold text-gray-800">
-                          {formatDate(selectedReview.submittedAt)}
-                        </span>
-                      </div>
-                      {selectedReview.overallAssessment?.overallRating && (
-                        <div className="flex items-center gap-2">
-                          <span className="text-gray-600">Overall Rating:</span>
-                          <div className="flex items-center gap-1">
-                            {[1, 2, 3, 4, 5].map((star) => (
-                              <Star
-                                key={star}
-                                size={16}
-                                className={`${
-                                  star <= selectedReview.overallAssessment.overallRating
-                                    ? 'fill-yellow-400 text-yellow-400'
-                                    : 'fill-gray-200 text-gray-300'
-                                }`}
-                              />
-                            ))}
-                            <span className="text-sm font-bold text-gray-800 ml-1">
-                              {selectedReview.overallAssessment.overallRating}/5
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Review Sections */}
-                {renderRatingSection('Performance Metrics', selectedReview.performance)}
-                {renderRatingSection('Communication Skills', selectedReview.communication)}
-                {renderRatingSection('Technical Skills', selectedReview.technicalSkills)}
-                {renderRatingSection('Behavioral Assessment', selectedReview.behavioral)}
-
-                {/* Overall Assessment */}
-                {selectedReview.overallAssessment && (
-                  <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
-                    <h3 className="text-lg font-bold text-gray-800 mb-4 pb-2 border-b border-gray-200">
-                      Overall Assessment
-                    </h3>
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium text-gray-700">Overall Rating</span>
-                        <div className="flex items-center gap-1">
-                          {[1, 2, 3, 4, 5].map((star) => (
-                            <Star
-                              key={star}
-                              size={20}
-                              className={`${
-                                star <= (selectedReview.overallAssessment.overallRating || 0)
-                                  ? 'fill-yellow-400 text-yellow-400'
-                                  : 'fill-gray-200 text-gray-300'
-                              }`}
-                            />
-                          ))}
-                          <span className="text-lg font-bold text-gray-800 ml-2">
-                            {selectedReview.overallAssessment.overallRating}/5
-                          </span>
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Strengths</label>
-                        <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                          <p className="text-gray-700">{selectedReview.overallAssessment.strengths || 'N/A'}</p>
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Areas for Improvement</label>
-                        <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                          <p className="text-gray-700">{selectedReview.overallAssessment.areasForImprovement || 'N/A'}</p>
-                        </div>
-                      </div>
-
-                      {selectedReview.overallAssessment.overallComments && (
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Overall Comments</label>
-                          <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                            <p className="text-gray-700">{selectedReview.overallAssessment.overallComments}</p>
-                          </div>
-                        </div>
-                      )}
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Manager Recommendation</label>
-                        <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold ${
-                            selectedReview.overallAssessment.managerRecommendation === 'continue'
-                              ? 'bg-green-100 text-green-800'
-                              : selectedReview.overallAssessment.managerRecommendation === 'terminate'
-                              ? 'bg-red-100 text-red-800'
-                              : 'bg-yellow-100 text-yellow-800'
-                          }`}>
-                            {selectedReview.overallAssessment.managerRecommendation === 'continue'
-                              ? 'Continue Employment'
-                              : selectedReview.overallAssessment.managerRecommendation === 'terminate'
-                              ? 'Terminate'
-                              : 'Extend Probation'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Attachment Section */}
-                <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
-                  <h3 className="text-lg font-bold text-gray-800 mb-4 pb-2 border-b border-gray-200">
-                    Attachment
-                  </h3>
-                  <div>
-                    {selectedReview.attachment ? (() => {
-                      // Handle different attachment formats (string, object, etc.)
-                      let attachmentPath = '';
-                      if (typeof selectedReview.attachment === 'string') {
-                        attachmentPath = selectedReview.attachment;
-                      } else if (selectedReview.attachment && typeof selectedReview.attachment === 'object') {
-                        attachmentPath = selectedReview.attachment.path || 
-                                        selectedReview.attachment.url || 
-                                        selectedReview.attachment.fileUrl || 
-                                        selectedReview.attachment.file || 
-                                        '';
-                      }
-                      
-                      if (!attachmentPath) {
-                        return <p className="text-gray-500 text-sm">No attachment provided</p>;
-                      }
-                      
-                      const attachmentUrl = typeof attachmentPath === 'string' && attachmentPath.startsWith('http')
-                        ? attachmentPath
-                        : `${API_CONFIG.BASE_URL}/${String(attachmentPath).replace(/^\//, '')}`;
-                      const fileName = String(attachmentPath).split('/').pop() || 'Attachment';
-                      return (
-                        <a
-                          href={attachmentUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors"
-                        >
-                          <FileText size={18} />
-                          <span className="font-medium">View Attachment</span>
-                          <span className="text-xs text-gray-600">({fileName})</span>
-                        </a>
-                      );
-                    })() : (
-                      <p className="text-gray-500 text-sm">No attachment provided</p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Director Decision (if available) */}
-                {selectedReview.directorDecision?.decision && (
-                  <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
-                    <h3 className="text-lg font-bold text-gray-800 mb-4 pb-2 border-b border-gray-200">
-                      Director Decision
-                    </h3>
-                    <div className="space-y-3">
-                      <div>
-                        <span className="text-sm font-medium text-gray-600">Decision: </span>
-                        <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold ${
-                          selectedReview.directorDecision.decision === 'continue'
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-red-100 text-red-800'
-                        }`}>
-                          {selectedReview.directorDecision.decision === 'continue' ? (
-                            <>
-                              <CheckCircle size={16} />
-                              Continue Employment
-                            </>
-                          ) : (
-                            <>
-                              <XCircle size={16} />
-                              Terminated
-                            </>
-                          )}
-                        </span>
-                      </div>
-                      {selectedReview.directorDecision.decisionComments && (
-                        <div>
-                          <span className="text-sm font-medium text-gray-600">Comments: </span>
-                          <p className="text-gray-700 mt-1">{selectedReview.directorDecision.decisionComments}</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
 
                 {/* Modal Footer */}
                 <div className="flex justify-end pt-4 border-t border-gray-200">
@@ -2132,6 +1734,7 @@ export default function EmployeeReviewDashboard() {
                     onClick={() => {
                       setShowReviewModal(false);
                       setSelectedReview(null);
+                      setReviewDetails(null);
                       setModalType('view');
                     }}
                     className="px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
@@ -2140,67 +1743,16 @@ export default function EmployeeReviewDashboard() {
                   </button>
                 </div>
               </div>
-            )}
+              ) : (
+                <div className="p-12 text-center">
+                  <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                  <p className="mt-4 text-gray-600">Loading review details...</p>
+                </div>
+              )
+            ) : null}
           </div>
         </div>
       )}
-
-      {/* Director Decision Confirmation Modal */}
-      {showConfirmModal && selectedReview && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-[10001] flex justify-center items-center p-3 sm:p-4">
-          <div className="bg-white rounded-2xl sm:rounded-3xl w-full max-w-md shadow-2xl mx-2 sm:mx-4">
-            <div className="p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                  directorDecision === 'continue' ? 'bg-green-100' : 'bg-red-100'
-                }`}>
-                  {directorDecision === 'continue' ? (
-                    <CheckCircle size={24} className="text-green-600" />
-                  ) : (
-                    <XCircle size={24} className="text-red-600" />
-                  )}
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-gray-800">Confirm Decision</h3>
-                  <p className="text-sm text-gray-600">
-                    Are you sure you want to {directorDecision === 'continue' ? 'approve' : 'terminate'} this employee?
-                  </p>
-                </div>
-              </div>
-              <div className="bg-gray-50 rounded-lg p-4 mb-4">
-                <p className="text-sm text-gray-700">
-                  <strong>Employee:</strong> {reviewDetails?.employee?.employeeName || reviewDetails?.employeeName || selectedReview?.employeeName || 'N/A'}
-                </p>
-                <p className="text-sm text-gray-700 mt-1">
-                  <strong>Decision:</strong> {directorDecision === 'continue' ? 'Continue Employment' : 'Terminate'}
-                </p>
-              </div>
-              <div className="flex flex-col sm:flex-row justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmModal(false)}
-                  className="w-full sm:w-auto px-4 sm:px-6 py-2 sm:py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors text-sm sm:text-base"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDirectorDecisionSubmit}
-                  disabled={submittingDecision}
-                  className={`w-full sm:w-auto px-4 sm:px-6 py-2 sm:py-3 rounded-lg font-semibold transition-colors text-sm sm:text-base ${
-                    directorDecision === 'continue'
-                      ? 'bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700'
-                      : 'bg-gradient-to-r from-red-500 to-red-600 text-white hover:from-red-600 hover:to-red-700'
-                  } ${submittingDecision ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  {submittingDecision ? 'Submitting...' : 'Confirm'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
     </>
   );
 }

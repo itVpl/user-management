@@ -1,10 +1,71 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import { AdminIcon } from '../../assets/image';
 import { ArrowDown } from '../../assets/image';
 import AddUserModal from './AddUser';
 import API_CONFIG from '../../config/api.js';
+
+// Searchable dropdown (select2-style) for filters
+const SearchableSelect = ({ value, onChange, options, placeholder = 'Select...', className = '' }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const dropdownRef = React.useRef(null);
+
+  const filteredOptions = searchTerm.trim()
+    ? options.filter(o => o.label.toLowerCase().includes(searchTerm.toLowerCase()))
+    : options;
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) setIsOpen(false);
+    };
+    if (isOpen) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
+
+  const selected = options.find(o => o.value === value);
+  return (
+    <div className={`relative ${className}`} ref={dropdownRef}>
+      <div
+        className="w-full min-w-[180px] px-4 py-2.5 border border-gray-300 rounded-xl bg-white cursor-pointer hover:border-gray-400 focus-within:ring-2 focus-within:ring-blue-300 flex items-center justify-between"
+        onClick={() => { setIsOpen(!isOpen); setSearchTerm(''); }}
+      >
+        <span className={selected ? 'text-gray-900' : 'text-gray-500'}>{selected ? selected.label : placeholder}</span>
+        <svg className={`w-4 h-4 text-gray-400 ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+      </div>
+      {isOpen && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-xl shadow-lg max-h-56 overflow-hidden">
+          <div className="p-2 border-b border-gray-200">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <input
+                type="text"
+                placeholder="Search..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+          <div className="max-h-40 overflow-y-auto">
+            {filteredOptions.length ? filteredOptions.map((opt) => (
+              <div
+                key={opt.value}
+                className="px-4 py-2 hover:bg-blue-50 cursor-pointer text-sm"
+                onClick={() => { onChange(opt.value); setIsOpen(false); }}
+              >
+                {opt.label}
+              </div>
+            )) : (
+              <div className="px-4 py-2 text-gray-500 text-sm text-center">No options</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 // ---- helpers: date & sort ---------
 const parseDateFlexible = (val) => {
@@ -52,7 +113,6 @@ const getCreatedAt = (u) => {
 const ManageUser = () => {
   const [downloading, setDownloading] = useState(false);
   const [users, setUsers] = useState([]);
-  const [expandedIndex, setExpandedIndex] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [showModal, setShowModal] = useState(false);
@@ -64,6 +124,13 @@ const ManageUser = () => {
   const [confirmAction, setConfirmAction] = useState('');
   const [showViewModal, setShowViewModal] = useState(false);
   const [viewingUser, setViewingUser] = useState(null);
+  const [bgVerificationEmail, setBgVerificationEmail] = useState('');
+  const [bgVerificationLoading, setBgVerificationLoading] = useState(false);
+  const [bgVerificationError, setBgVerificationError] = useState('');
+  const [departmentFilter, setDepartmentFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'active' | 'inactive'
+  const [assignManagerLoading, setAssignManagerLoading] = useState(false);
+  const [roleUpdateLoading, setRoleUpdateLoading] = useState(false);
   const usersPerPage = 10;
 
 
@@ -96,21 +163,14 @@ const ManageUser = () => {
     fetchUsers();
   }, []);
 
-  const toggleExpand = (idx) => {
-    const user = users[idx];
+  const openViewModal = (user) => {
     setViewingUser(user);
     setShowViewModal(true);
   };
 
-  const toggleStatus = async (idx) => {
-    const updatedUsers = [...users];
-    const user = updatedUsers[idx];
-    const newStatus = user.isActive ? 'inactive' : 'active';
-    const actionText = user.isActive ? 'deactivate' : 'activate';
-
-    // Show confirmation modal first
+  const openConfirmStatus = (user) => {
     setSelectedUser(user);
-    setConfirmAction(actionText);
+    setConfirmAction(user.isActive ? 'deactivate' : 'activate');
     setShowConfirmModal(true);
   };
 
@@ -133,6 +193,9 @@ const ManageUser = () => {
       if (userToUpdate) {
         userToUpdate.isActive = !userToUpdate.isActive;
         setUsers([...updatedUsers]);
+        if (viewingUser?.empId === user.empId) {
+          setViewingUser((u) => (u ? { ...u, isActive: userToUpdate.isActive } : u));
+        }
       }
 
       // Show success popup
@@ -149,10 +212,24 @@ const ManageUser = () => {
     }
   };
 
-  const filteredUsers = users.filter((user) =>
-    user.employeeName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredUsers = users.filter((user) => {
+    const matchesSearch =
+      user.employeeName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.email.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesDept = !departmentFilter || (user.department || '') === departmentFilter;
+    const matchesStatus =
+      statusFilter === 'all' ||
+      (statusFilter === 'active' && user.isActive) ||
+      (statusFilter === 'inactive' && !user.isActive);
+    return matchesSearch && matchesDept && matchesStatus;
+  });
+
+  const departmentOptions = [
+    { value: '', label: 'All Departments' },
+    ...Array.from(new Set(users.map((u) => u.department).filter(Boolean)))
+      .sort()
+      .map((d) => ({ value: d, label: d })),
+  ];
 
   const indexOfLastUser = currentPage * usersPerPage;
   const indexOfFirstUser = indexOfLastUser - usersPerPage;
@@ -364,18 +441,41 @@ const ManageUser = () => {
 
 
   const handleRoleChange = async (empId, newRole) => {
-
+    setRoleUpdateLoading(true);
     try {
       await axios.patch(
         `${API_CONFIG.BASE_URL}/api/v1/inhouseUser/assign-role/${empId}`,
         { role: newRole },
         { withCredentials: true }
       );
-      fetchUsers(); // Refresh list
-      alert(`Role updated to ${newRole}`);
+      fetchUsers();
+      if (viewingUser?.empId === empId) setViewingUser((u) => (u ? { ...u, role: newRole } : u));
+      alert(`Role updated successfully`);
     } catch (error) {
       console.error('Failed to update role:', error);
       alert(error?.response?.data?.message || 'Failed to update role. Please try again.');
+    } finally {
+      setRoleUpdateLoading(false);
+    }
+  };
+
+  const handleAssignManager = async (empId, managerEmpId) => {
+    if (!managerEmpId) return;
+    setAssignManagerLoading(true);
+    try {
+      await axios.put(
+        `${API_CONFIG.BASE_URL}/api/v1/inhouseUser/${empId}/assign-manager`,
+        { managerEmpId },
+        { withCredentials: true }
+      );
+      fetchUsers();
+      if (viewingUser?.empId === empId) setViewingUser((u) => (u ? { ...u, managerEmpId } : u));
+      alert('Manager assigned successfully');
+    } catch (error) {
+      console.error('Failed to assign manager:', error);
+      alert(error?.response?.data?.message || 'Failed to assign manager. Please try again.');
+    } finally {
+      setAssignManagerLoading(false);
     }
   };
 
@@ -407,6 +507,47 @@ const ManageUser = () => {
     }
   };
 
+  // Background Verification API call
+  const handleBackgroundVerification = async () => {
+    if (!bgVerificationEmail.trim()) {
+      setBgVerificationError('Please enter previous company email');
+      return;
+    }
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(bgVerificationEmail)) {
+      setBgVerificationError('Please enter a valid email address');
+      return;
+    }
+
+    try {
+      setBgVerificationLoading(true);
+      setBgVerificationError('');
+
+      const response = await axios.post(
+        `${API_CONFIG.BASE_URL}/api/v1/inhouseUser/background-verification/send`,
+        {
+          empId: viewingUser.empId,
+          previousCompanyEmail: bgVerificationEmail.trim()
+        },
+        { withCredentials: true }
+      );
+
+      if (response.data.success) {
+        alert(`✅ Background verification email sent to ${bgVerificationEmail}`);
+        setBgVerificationEmail('');
+      } else {
+        setBgVerificationError(response.data.message || 'Failed to send verification email');
+      }
+    } catch (error) {
+      console.error('Background verification error:', error);
+      setBgVerificationError(error?.response?.data?.message || 'Failed to send verification email. Please try again.');
+    } finally {
+      setBgVerificationLoading(false);
+    }
+  };
+
   return (
     <div className="p-6">
 
@@ -426,18 +567,38 @@ const ManageUser = () => {
       )}
       <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
         <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-            <div className="relative flex-1 w-full">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-                </svg>
+            <div className="flex flex-1 w-full flex-wrap items-center gap-3">
+              <div className="relative flex-1 min-w-[200px]">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                  </svg>
+                </div>
+                <input
+                  type="text"
+                  placeholder="Search Employees..."
+                  className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-xl leading-5 bg-gray-50 placeholder-gray-500 focus:outline-none focus:bg-white focus:ring-2 focus:ring-blue-300 focus:border-blue-300 transition-all duration-200 sm:text-base"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
               </div>
-              <input
-                type="text"
-                placeholder="Search Employees..."
-                className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-xl leading-5 bg-gray-50 placeholder-gray-500 focus:outline-none focus:bg-white focus:ring-2 focus:ring-blue-300 focus:border-blue-300 transition-all duration-200 sm:text-base"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+              <SearchableSelect
+                value={departmentFilter}
+                onChange={setDepartmentFilter}
+                options={departmentOptions}
+                placeholder="All Departments"
+                className="flex-shrink-0"
+              />
+              <SearchableSelect
+                value={statusFilter}
+                onChange={setStatusFilter}
+                options={[
+                  { value: 'all', label: 'All Status' },
+                  { value: 'active', label: 'Active' },
+                  { value: 'inactive', label: 'Inactive' },
+                ]}
+                placeholder="All Status"
+                className="flex-shrink-0"
               />
             </div>
             <button
@@ -473,7 +634,6 @@ const ManageUser = () => {
                     <th className="font-semibold text-base px-4 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">Name</th>
                     <th className="font-semibold text-base px-15 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">Email</th>
                     <th className="font-semibold text-base px-1 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">Department</th>
-                    <th className="font-semibold text-base px-10 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">Role</th>
                     <th className="font-semibold text-base px-4 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">Status</th>
                     <th className="font-semibold text-base px-15 py-3 text-left border-y first:border-l last:border-r border-gray-200 bg-gray-50 first:rounded-l-lg last:rounded-r-lg">Actions</th>
                   </tr>
@@ -481,7 +641,7 @@ const ManageUser = () => {
                 <tbody>
                   {currentUsers.length === 0 ? (
                     <tr>
-                      <td colSpan="7" className="py-12 text-center">
+                      <td colSpan="6" className="py-12 text-center">
                         <div className="flex flex-col items-center gap-4">
                           <svg className="w-16 h-16 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
@@ -498,10 +658,7 @@ const ManageUser = () => {
                       </td>
                     </tr>
                   ) : (
-                    currentUsers.map((user, idx) => {
-                      const globalIndex = indexOfFirstUser + idx;
-                      const isExpanded = expandedIndex === globalIndex;
-                      return (
+                    currentUsers.map((user) => (
                         <React.Fragment key={user._id}>
                           <tr className="bg-white hover:bg-gray-50 transition-colors group">
                             <td className="px-4 py-4 border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg">
@@ -517,19 +674,6 @@ const ManageUser = () => {
                               <span className="font-medium text-gray-700">{user.department}</span>
                             </td>
                             <td className="px-4 py-4 border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg">
-                              <select
-                                value={user.role}
-                                onChange={(e) => handleRoleChange(user.empId, e.target.value)}
-                                className="px-3 py-1 border border-gray-300 rounded-lg text-gray-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent hover:border-gray-400 transition-colors"
-                              >
-                                <option value="superadmin">Superadmin</option>
-                                <option value="admin">Admin</option>
-                                <option value="employee">Employee</option>
-                                <option value="hr">HR</option>
-                                <option value="teamlead">Team Lead</option>
-                              </select>
-                            </td>
-                            <td className="px-4 py-4 border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg">
                               <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-gray-700 font-medium ${
                                 user.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
                               }`}>
@@ -539,7 +683,7 @@ const ManageUser = () => {
                             <td className="px-4 py-4 border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg">
                               <div className="flex gap-2">
                                 <button
-                                  onClick={() => toggleExpand(globalIndex)}
+                                  onClick={() => openViewModal(user)}
                                   className="border border-blue-500 text-blue-500 bg-white hover:bg-blue-500 hover:text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
                                 >
                                   View
@@ -550,22 +694,11 @@ const ManageUser = () => {
                                 >
                                   Edit
                                 </button>
-                                <button
-                                  onClick={() => toggleStatus(globalIndex)}
-                                  className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors border ${
-                                    user.isActive 
-                                      ? 'border-red-500 text-red-500 bg-white hover:bg-red-500 hover:text-white' 
-                                      : 'border-blue-500 text-blue-500 bg-white hover:bg-blue-500 hover:text-white'
-                                  }`}
-                                >
-                                  {user.isActive ? 'Deactivate' : 'Activate'}
-                                </button>
                               </div>
                             </td>
                           </tr>
                         </React.Fragment>
-                      );
-                    })
+                    ))
                   )}
                 </tbody>
               </table>
@@ -619,7 +752,7 @@ const ManageUser = () => {
       {/* Confirmation Modal */}
       {showConfirmModal && (
         <div 
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 backdrop-blur-sm"
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4 backdrop-blur-sm bg-black/40"
           onClick={() => setShowConfirmModal(false)}
         >
           <div 
@@ -668,23 +801,27 @@ const ManageUser = () => {
         </div>
       )}
 
-      {/* View Employee Modal */}
+      {/* View Employee Modal - same style as DeliveryOrder view popup */}
       {showViewModal && viewingUser && (
-        <div 
-          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 backdrop-blur-md"
-          onClick={() => setShowViewModal(false)}
+        <div
+          className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
+          onClick={() => {
+            setShowViewModal(false);
+            setBgVerificationEmail('');
+            setBgVerificationError('');
+          }}
         >
           <style>{`
             .hide-scrollbar::-webkit-scrollbar { display: none; }
             .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
           `}</style>
-          <div 
-            className="bg-white rounded-3xl border border-gray-200 max-w-5xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar mx-4"
-            onClick={(e) => e.stopPropagation()}
+          <div
+            className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto hide-scrollbar"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            onClick={(e) => e.stopPropagation()}
           >
-            {/* Header */}
-            <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl sticky top-0 z-10">
+            {/* Header - DeliveryOrder style */}
+            <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-6 rounded-t-3xl">
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
@@ -698,7 +835,11 @@ const ManageUser = () => {
                   </div>
                 </div>
                 <button
-                  onClick={() => setShowViewModal(false)}
+                  onClick={() => {
+                    setShowViewModal(false);
+                    setBgVerificationEmail('');
+                    setBgVerificationError('');
+                  }}
                   className="text-white hover:text-gray-200 text-2xl font-bold"
                 >
                   ×
@@ -708,9 +849,68 @@ const ManageUser = () => {
 
             {/* Content */}
             <div className="p-6 space-y-6">
+              {/* Role & Assign Manager & Status Actions - in one section */}
+              <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl p-6 border border-indigo-100">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center">
+                    <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-800">Role & Manager</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <p className="text-sm text-gray-600 mb-2">Role</p>
+                    <select
+                      value={viewingUser.role === 'admin' ? 'admin' : 'employee'}
+                      onChange={(e) => handleRoleChange(viewingUser.empId, e.target.value)}
+                      disabled={roleUpdateLoading}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    >
+                      <option value="admin">Manager</option>
+                      <option value="employee">Employee</option>
+                    </select>
+                    {roleUpdateLoading && <p className="text-xs text-gray-500 mt-1">Updating...</p>}
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600 mb-2">Assign Manager</p>
+                    <SearchableSelect
+                      value={viewingUser.managerEmpId || ''}
+                      onChange={(val) => val && handleAssignManager(viewingUser.empId, val)}
+                      options={[
+                        { value: '', label: 'Select Manager' },
+                        ...users
+                          .filter((u) => (u.role === 'admin' || u.role === 'manager') && u.empId !== viewingUser.empId)
+                          .map((u) => ({ value: u.empId, label: `${u.empId} - ${u.employeeName}` })),
+                      ]}
+                      placeholder="Select Manager"
+                    />
+                    {assignManagerLoading && <p className="text-xs text-gray-500 mt-1">Assigning...</p>}
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-3 pt-2 border-t border-indigo-200">
+                  <span className="text-sm text-gray-600 self-center">Status:</span>
+                  <button
+                    onClick={() => {
+                      setSelectedUser(viewingUser);
+                      setConfirmAction(viewingUser.isActive ? 'deactivate' : 'activate');
+                      setShowConfirmModal(true);
+                    }}
+                    className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors border ${
+                      viewingUser.isActive
+                        ? 'border-red-500 text-red-600 bg-white hover:bg-red-500 hover:text-white'
+                        : 'border-green-500 text-green-600 bg-white hover:bg-green-500 hover:text-white'
+                    }`}
+                  >
+                    {viewingUser.isActive ? 'Deactivate' : 'Activate'}
+                  </button>
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-6">
                 {/* Personal Details */}
-                <div className="bg-white rounded-xl p-5 border border-gray-100">
+                <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-5 border border-green-200">
                   <div className="flex items-center gap-2 mb-4">
                     <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
                       <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -782,7 +982,7 @@ const ManageUser = () => {
                 </div>
 
                 {/* Documents */}
-                <div className="bg-white rounded-xl p-5 border border-gray-100">
+                <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-5 border border-green-200">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
@@ -844,11 +1044,70 @@ const ManageUser = () => {
                 </div>
               </div>
 
+              {/* Background Verification Section */}
+              <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-5 border border-purple-200">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                    <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-800">Background Verification</h3>
+                </div>
+                <p className="text-sm text-gray-600 mb-4">
+                  Send a background verification request to the employee's previous company HR.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <div className="flex-1">
+                    <input
+                      type="email"
+                      placeholder="Enter previous company HR email"
+                      value={bgVerificationEmail}
+                      onChange={(e) => {
+                        setBgVerificationEmail(e.target.value);
+                        setBgVerificationError('');
+                      }}
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-purple-200 focus:border-purple-500 transition-all duration-300"
+                    />
+                    {bgVerificationError && (
+                      <p className="text-red-600 text-xs mt-2">{bgVerificationError}</p>
+                    )}
+                  </div>
+                  <button
+                    onClick={handleBackgroundVerification}
+                    disabled={bgVerificationLoading}
+                    className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 flex items-center justify-center gap-2 whitespace-nowrap ${
+                      bgVerificationLoading
+                        ? 'bg-purple-400 cursor-not-allowed text-white'
+                        : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white'
+                    }`}
+                  >
+                    {bgVerificationLoading ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        <span>Sending...</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                        </svg>
+                        <span>Send Verification</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
               {/* Close Button */}
-              <div className="flex justify-end pt-4 border-t">
+              <div className="flex justify-end pt-4 border-t border-gray-200">
                 <button
-                  onClick={() => setShowViewModal(false)}
-                  className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-semibold hover:from-blue-600 hover:to-blue-700 transition"
+                  onClick={() => {
+                    setShowViewModal(false);
+                    setBgVerificationEmail('');
+                    setBgVerificationError('');
+                  }}
+                  className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl font-semibold hover:from-blue-600 hover:to-purple-700 transition"
                 >
                   Close
                 </button>
@@ -1238,24 +1497,36 @@ const EditUserModal = ({ user, onClose, onUpdate }) => {
   };
 
   return (
-    <div 
-      className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 backdrop-blur-sm overflow-hidden scrollbar-hide"
+    <div
+      className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
       onClick={onClose}
     >
-      <div 
-        className="bg-white rounded-3xl shadow-2xl w-[98%] max-w-4xl h-[90vh] flex flex-col overflow-hidden"
+      <style>{`
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+      `}</style>
+      <div
+        className="bg-white rounded-3xl max-w-6xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="bg-gradient-to-r from-green-600 via-blue-600 to-green-800 text-white p-8 rounded-t-3xl flex-shrink-0">
+        {/* Header - same as DeliveryOrder Add form */}
+        <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl">
           <div className="flex justify-between items-center">
-            <div>
-              <h2 className="text-3xl font-bold mb-2">Edit User</h2>
-              <p className="text-green-100 text-lg">Update user information for {user.employeeName}</p>
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-xl font-bold">Edit User</h2>
+                <p className="text-blue-100">Update user information for {user.employeeName}</p>
+              </div>
             </div>
             <button
               onClick={onClose}
-              className="text-white hover:text-red-200 text-4xl font-bold transition-all duration-300 hover:scale-110"
+              className="text-white hover:text-gray-200 text-2xl font-bold"
             >
               ×
             </button>
@@ -1263,21 +1534,12 @@ const EditUserModal = ({ user, onClose, onUpdate }) => {
         </div>
 
         {/* Body */}
-        <div ref={scrollAreaRef} className="flex-1 overflow-y-auto scrollbar-hide">
-          <form onSubmit={handleSubmit} noValidate  className="p-8 space-y-8">
+        <div ref={scrollAreaRef}>
+          <form onSubmit={handleSubmit} noValidate className="p-6 space-y-6">
 
             {/* Employee Details */}
-            <div className="bg-gradient-to-br from-green-50 via-blue-50 to-green-100 rounded-2xl p-8 shadow-xl border border-green-200">
-              <div className="flex items-center mb-8">
-                <div className="w-12 h-12 bg-gradient-to-r from-green-600 to-blue-600 rounded-full flex items-center justify-center mr-4 shadow-lg">
-                  <span className="text-white font-bold text-lg">👤</span>
-                </div>
-                <div>
-                  <h3 className="text-2xl font-bold text-gray-800">Employee Details</h3>
-                  <p className="text-gray-600">Update basic information</p>
-                </div>
-              </div>
-
+            <div className="bg-white p-4 rounded-lg border border-gray-200">
+              <h3 className="text-lg font-semibold text-blue-800 mb-4">Employee Details</h3>
               <div className="grid grid-cols-2 gap-6">
                 {/* Name */}
                 <div className="space-y-3">
@@ -1497,17 +1759,8 @@ const EditUserModal = ({ user, onClose, onUpdate }) => {
             </div>
 
             {/* Identity Documents */}
-            <div className="bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 rounded-2xl p-8 shadow-xl border border-green-200">
-              <div className="flex items-center mb-8">
-                <div className="w-12 h-12 bg-gradient-to-r from-green-600 to-emerald-600 rounded-full flex items-center justify-center mr-4 shadow-lg">
-                  <span className="text-white font-bold text-lg">🆔</span>
-                </div>
-                <div>
-                  <h3 className="text-2xl font-bold text-gray-800">Identity Documents</h3>
-                  <p className="text-gray-600">Update identity verification documents</p>
-                </div>
-              </div>
-
+            <div className="bg-white p-4 rounded-lg border border-gray-200">
+              <h3 className="text-lg font-semibold text-blue-800 mb-4">Identity Documents</h3>
               {/* Current Docs */}
               <div className="mb-6">
                 <h4 className="text-lg font-semibold text-gray-700 mb-4">Current Documents:</h4>
@@ -1631,17 +1884,8 @@ const EditUserModal = ({ user, onClose, onUpdate }) => {
             </div>
 
             {/* Previous Company Documents */}
-            <div className="bg-gradient-to-br from-purple-50 via-pink-50 to-rose-50 rounded-2xl p-8 shadow-xl border border-purple-200">
-              <div className="flex items-center mb-8">
-                <div className="w-12 h-12 bg-gradient-to-r from-purple-600 to-pink-600 rounded-full flex items-center justify-center mr-4 shadow-lg">
-                  <span className="text-white font-bold text-lg">🏢</span>
-                </div>
-                <div>
-                  <h3 className="text-2xl font-bold text-gray-800">Previous Company Documents</h3>
-                  <p className="text-gray-600">Update documents from previous employment</p>
-                </div>
-              </div>
-
+            <div className="bg-white p-4 rounded-lg border border-gray-200">
+              <h3 className="text-lg font-semibold text-blue-800 mb-4">Previous Company Documents</h3>
               {/* Current Docs */}
               <div className="mb-6">
                 <h4 className="text-lg font-semibold text-gray-700 mb-4">Current Documents:</h4>
@@ -1702,19 +1946,19 @@ const EditUserModal = ({ user, onClose, onUpdate }) => {
               </div>
             </div>
 
-            {/* Footer */}
-            <div className="flex justify-end space-x-6 pt-8 border-t-2 border-gray-200">
+            {/* Footer - same as DeliveryOrder form */}
+            <div className="flex justify-end space-x-6 pt-6 border-t border-gray-200">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-10 py-4 border-2 border-gray-300 text-gray-700 rounded-xl font-bold hover:bg-gray-50 hover:border-gray-400 transition-all duration-300 shadow-lg hover:shadow-xl"
+                className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 hover:border-gray-400 transition-all duration-300"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className={`px-10 py-4 bg-gradient-to-r from-green-600 via-blue-600 to-green-700 text-white rounded-xl font-bold transition-all duration-300 shadow-xl hover:shadow-2xl ${isSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:from-green-700 hover:via-blue-700 hover:to-green-800 transform hover:scale-105'}`}
+                className={`px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl font-semibold transition-all duration-300 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:from-blue-600 hover:to-blue-700'}`}
               >
                 {isSubmitting ? (
                   <div className="flex items-center space-x-2">
