@@ -85,6 +85,8 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Task",
       "Task Schedule",
       "Daily Task",
+      "Weekly Target Setup",
+      "My Target",
       "TO-DO List"
     ],
     "Team Management": [
@@ -123,7 +125,9 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Revenue & Satatistics"
     ],
     "Tasks": [
-      "Daily Task"
+      "Daily Task",
+      "Weekly Target Setup",
+      "My Target"
     ],
     "Team Management": [
       "Team",
@@ -227,7 +231,9 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Trucker Empty Location"
     ],
     "Tasks": [
-      "Daily Task"
+      "Daily Task",
+      "Weekly Target Setup",
+      "My Target"
     ],
     "Team Management": [
       "Team",
@@ -431,6 +437,8 @@ const menuItems = [
   { name: "Sub Company", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/SubCompanies" },
   { name: "Manage Module", icon: ManageModule, whiteIcon: WhiteManageModule, path: "/modules" },
   { name: "Daily Task", icon: DailyTarget, whiteIcon: DailyTargetWhite, path: "/DailyTask" },
+  { name: "Weekly Target Setup", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/weekly-target" },
+  { name: "My Target", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/my-target" },
   { name: "Call Data", icon: BlueCall, whiteIcon: WhiteCall, path: "/call-dashboard" },
   { name: "Chat", icon: ChatBlue, whiteIcon: ChatWhite, path: "/Chat" },
   { name: "Email", icon: BlueInbox, whiteIcon: WhiteInbox, path: "/Inbox" },
