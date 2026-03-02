@@ -1428,7 +1428,7 @@ const Email = () => {
           flexWrap: 'wrap'
         }}>
           <IconButton size="small" onClick={loadEmails}>
-            <RefreshIcon />
+            <RefreshIcon /> 
           </IconButton>
           <IconButton size="small">
             <FilterListIcon />

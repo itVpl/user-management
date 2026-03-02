@@ -76,6 +76,10 @@ const API_CONFIG = {
     EMPLOYEE_DOCUMENTS_LOI: '/api/v1/employee-documents/letter-of-intent/create',
     EMPLOYEE_DOCUMENTS_SALARY_SLIP: '/api/v1/employee-documents/salary-slip/create',
     EMPLOYEE_DOCUMENTS_FNF: '/api/v1/employee-documents/fnf/create',
+
+    // Weekly Target endpoints
+    WEEKLY_TARGET_BASE: '/api/v1/weekly-target',
+    WEEKLY_TARGET_MY: '/api/v1/weekly-target/my',
   },
   
   // Helper function to get full URL

@@ -64,6 +64,8 @@ const CarrierDocs = lazy(() => import("./Components/CMT/CarrierDocs.jsx"));
 const DoDetails = lazy(() => import("./Components/CMT/DODetails.jsx"));
 const CandidateShortlist = lazy(() => import("./Components/HRDashboard/CandidateShortlist.jsx"));
 const TargetReports = lazy(() => import("./Components/HRDashboard/TargetReports.jsx"));
+const WeeklyTargetSetup = lazy(() => import("./Components/WeeklyTarget/WeeklyTargetSetup.jsx"));
+const MyTarget = lazy(() => import("./Components/WeeklyTarget/MyTarget.jsx"));
 const Consignment = lazy(() => import("./Pages/Consignment.jsx"));
 const CustomerLoads = lazy(() => import("./Pages/CustomerLoads.jsx"));
 const DailyRateRequest = lazy(() => import("./Components/CMT-Manager/DailyRateRequest.jsx"));
@@ -672,6 +674,12 @@ function App() {
           <Route path="DODetails" element={<DoDetails />} />
           <Route path="candidate-shortlist" element={<CandidateShortlist />} />
           <Route path="target-reports" element={<TargetReports />} />
+          <Route path="weekly-target" element={<WeeklyTargetSetup />} />
+          <Route path="weekly-target/create" element={<WeeklyTargetSetup />} />
+          <Route path="weekly-target/edit/:targetId" element={<WeeklyTargetSetup />} />
+          <Route path="weekly-target/:targetId" element={<WeeklyTargetSetup />} />
+          <Route path="my-target" element={<MyTarget />} />
+          <Route path="my-target/:targetId" element={<MyTarget />} />
           <Route path="Consignment" element={<Consignment />} />
           <Route path="CustomerLoads" element={<CustomerLoads />} />
           <Route path="DailyRateRequest" element={<DailyRateRequest />} />
