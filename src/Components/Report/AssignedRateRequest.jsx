@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import axios from 'axios';
-import { FaArrowLeft } from 'react-icons/fa';
-import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, MapPin, Truck, Calendar, DollarSign, Search, Package, TrendingUp, Eye, X, ChevronDown } from 'lucide-react';
+import { FaArrowLeft, FaDownload } from 'react-icons/fa';
+import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, MapPin, Truck, Calendar, DollarSign, Search, Package, TrendingUp, Eye, X, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import API_CONFIG from '../../config/api.js';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
@@ -32,6 +32,10 @@ export default function AssignedRateRequest() {
   const [isCmtDropdownOpen, setIsCmtDropdownOpen] = useState(false);
   const [selectedLoad, setSelectedLoad] = useState(null);
   const [showLoadModal, setShowLoadModal] = useState(false);
+  const [showESignModal, setShowESignModal] = useState(false);
+  const [eSignName, setESignName] = useState('');
+  const [exportLoading, setExportLoading] = useState(false);
+  const dateRangeDropdownRef = useRef(null);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -208,6 +212,131 @@ export default function AssignedRateRequest() {
     setCurrentPage(1);
   }, [dateFilterApplied, selectedEmpId]);
 
+  // Close date range preset menu on outside click
+  useEffect(() => {
+    if (!showPresetMenu) return;
+    const handleClickOutside = (e) => {
+      if (dateRangeDropdownRef.current && !dateRangeDropdownRef.current.contains(e.target)) {
+        setShowPresetMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showPresetMenu]);
+
+  const hasAnyFilter = dateFilterApplied || !!selectedEmpId;
+
+  // Export to Excel (CSV) with E-Sign
+  const getOriginText = (load) => {
+    const origin = load.loadDetails?.origin;
+    if (!origin) return 'N/A';
+    const parts = [origin.city, origin.state, origin.zip].filter(Boolean);
+    return parts.length ? parts.join(', ') : (origin.addressLine1 || 'N/A');
+  };
+  const getDestinationText = (load) => {
+    const dest = load.loadDetails?.destination;
+    if (!dest) return 'N/A';
+    const parts = [dest.city, dest.state, dest.zip].filter(Boolean);
+    return parts.length ? parts.join(', ') : (dest.addressLine1 || 'N/A');
+  };
+
+  const handleExportCSV = (dataToExport, signedByName = '') => {
+    if (!dataToExport || dataToExport.length === 0) {
+      alertify.error('No data to export');
+      return;
+    }
+    const headers = ['Load ID', 'Assigned CMT', 'CMT Emp ID', 'Origin', 'Destination', 'Load Type', 'Agent Name', 'Bid Count', 'Has Bid'];
+    const rows = dataToExport.map((load) => {
+      const cmtName = load.cmtUser?.empName || load.assignedCMTUser?.empName || 'N/A';
+      const cmtId = load.cmtUser?.empId || load.assignedCMTUser?.empId || 'N/A';
+      const agentName = load.createdBy?.createdBySalesUser?.empName || 'N/A';
+      const bidCount = load.bidStatus?.bidCount ?? 0;
+      const hasBid = load.bidStatus?.hasBid ? 'Yes' : 'No';
+      return [
+        `"${load.loadId || 'N/A'}"`,
+        `"${cmtName}"`,
+        `"${cmtId}"`,
+        `"${getOriginText(load)}"`,
+        `"${getDestinationText(load)}"`,
+        `"${load.loadDetails?.loadType || 'N/A'}"`,
+        `"${agentName}"`,
+        `"${bidCount}"`,
+        `"${hasBid}"`
+      ];
+    });
+    let csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    if (signedByName && signedByName.trim()) {
+      const signDate = new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+      csvContent += '\n\n"E-Sign","Signed By","Date"\n';
+      csvContent += `"","${String(signedByName).replace(/"/g, '""')}","${signDate}"`;
+    }
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'Assigned_Rate_Request_Report.csv');
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportCSVClick = () => {
+    if (hasAnyFilter && allLoads.length === 0) {
+      alertify.error('No data to export');
+      return;
+    }
+    setESignName('');
+    setShowESignModal(true);
+  };
+
+  const fetchAllAndExport = async (signedByName) => {
+    setExportLoading(true);
+    setShowESignModal(false);
+    try {
+      const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+      const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/cmt-assignments/loads-with-bid-status`, {
+        params: { limit: 10000 },
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = res.data?.data;
+      let list = [];
+      if (data?.loads && Array.isArray(data.loads)) {
+        list = data.loads.map((l) => ({ ...l, cmtUser: data.cmtUser }));
+      } else if (data?.assignments && Array.isArray(data.assignments)) {
+        data.assignments.forEach((a) => {
+          if (a.loads) a.loads.forEach((l) => list.push({ ...l, cmtUser: a.cmtUser }));
+        });
+      }
+      if (list.length === 0) {
+        alertify.error('No data to export');
+        return;
+      }
+      handleExportCSV(list, signedByName);
+      alertify.success(`Exported ${list.length} loads`);
+    } catch (err) {
+      alertify.error(err.response?.data?.message || err.message || 'Export failed');
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  const handleESignConfirm = () => {
+    const name = (eSignName || '').trim();
+    if (!name) {
+      alertify.error('Please enter your name for E-Sign');
+      return;
+    }
+    setShowESignModal(false);
+    setESignName('');
+    if (!hasAnyFilter) {
+      fetchAllAndExport(name);
+    } else {
+      handleExportCSV(allLoads, name);
+    }
+  };
+
   // Handle page change
   const handlePageChange = (page) => {
     if (page < 1 || page > totalPages) return;
@@ -215,54 +344,29 @@ export default function AssignedRateRequest() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Generate smart pagination page numbers
+  // Pagination page numbers (TruckerReport style)
   const getPaginationPages = () => {
+    const total = totalPages;
+    const current = currentPage;
+    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
     const pages = [];
-    const maxVisible = 7; // Maximum visible page numbers
-    
-    if (totalPages <= maxVisible) {
-      // If total pages are less than maxVisible, show all
-      for (let i = 1; i <= totalPages; i++) {
-        pages.push(i);
-      }
-    } else {
-      // Always show first page
-      pages.push(1);
-      
-      if (currentPage <= 4) {
-        // Near the beginning
-        for (let i = 2; i <= 5; i++) {
-          pages.push(i);
-        }
-        pages.push('ellipsis');
-        pages.push(totalPages);
-      } else if (currentPage >= totalPages - 3) {
-        // Near the end
-        pages.push('ellipsis');
-        for (let i = totalPages - 4; i <= totalPages; i++) {
-          pages.push(i);
-        }
-      } else {
-        // In the middle
-        pages.push('ellipsis');
-        for (let i = currentPage - 1; i <= currentPage + 1; i++) {
-          pages.push(i);
-        }
-        pages.push('ellipsis');
-        pages.push(totalPages);
-      }
-    }
-    
+    if (current > 3) pages.push(1, 'ellipsis');
+    const start = Math.max(1, current - 2);
+    const end = Math.min(total, current + 2);
+    for (let i = start; i <= end; i++) pages.push(i);
+    if (current < total - 2) pages.push('ellipsis', total);
     return pages;
   };
 
-  // Loading state
+  const totalItems = allLoads.length;
+  const showLoadingOverlay = loading && assignments.length > 0;
+
   if (loading && assignments.length === 0) {
     return (
-      <div className="p-6">
+      <div className="p-6 bg-white min-h-screen">
         <div className="flex justify-center items-center h-64">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
             <p className="text-gray-600">Loading assigned rate requests...</p>
           </div>
         </div>
@@ -271,390 +375,237 @@ export default function AssignedRateRequest() {
   }
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center gap-6">
-          {/* Total Loads Card */}
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center">
-                <Package className="text-indigo-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Total Loads</p>
-                <p className="text-xl font-bold text-gray-800">{overallStatistics?.totalLoads || 0}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Loads with Bid Card */}
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-                <CheckCircle className="text-green-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Loads with Bid</p>
-                <p className="text-xl font-bold text-green-600">{overallStatistics?.loadsWithBid || overallStatistics?.totalLoadsWithBid || 0}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Loads without Bid Card */}
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
-                <XCircle className="text-orange-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Loads without Bid</p>
-                <p className="text-xl font-bold text-orange-600">{overallStatistics?.loadsWithoutBid || overallStatistics?.totalLoadsWithoutBid || 0}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Total CMT Users Card */}
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-                <User className="text-purple-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Total CMT Users</p>
-                <p className="text-xl font-bold text-purple-600">{totalCMTUsers}</p>
-              </div>
+    <div className="p-6 bg-white min-h-screen">
+      {showLoadingOverlay && (
+        <div className="fixed inset-0 bg-black/20 z-40 flex items-center justify-center">
+          <div className="bg-white rounded-2xl shadow-2xl p-8">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-gray-700 font-semibold">Loading...</p>
             </div>
           </div>
         </div>
+      )}
 
-        {/* Filters */}
-        <div className="flex items-center gap-4">
-          {/* CMT User Filter */}
-          <div className="relative cmt-dropdown-container">
-            <button
-              onClick={() => setIsCmtDropdownOpen(!isCmtDropdownOpen)}
-              className="flex items-center justify-between px-4 py-2 border border-gray-200 rounded-lg bg-white w-64 text-left focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200"
-            >
-              <span className="truncate text-md text-gray-700">
-                {selectedEmpId 
-                  ? cmtUsers.find(u => u.empId === selectedEmpId)?.employeeName || selectedEmpId
-                  : 'All CMT Users'}
-              </span>
-              <ChevronDown 
-                size={16} 
-                className={`text-gray-500 transition-transform duration-200 ${isCmtDropdownOpen ? 'transform rotate-180' : ''}`} 
-              />
-            </button>
-
-            {isCmtDropdownOpen && (
-              <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-                <style>
-                  {`
-                    .cmt-dropdown-container div::-webkit-scrollbar {
-                      display: none;
-                    }
-                  `}
-                </style>
-                
-                {/* Search Input */}
-                <div className="sticky top-0 bg-white p-2 border-b border-gray-100 z-10">
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={cmtUserSearch}
-                      onChange={(e) => setCmtUserSearch(e.target.value)}
-                      placeholder="Search CMT user..."
-                      className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                    <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 text-gray-400" size={14} />
-                  </div>
-                </div>
-
-                <div
-                  onClick={() => {
-                    setSelectedEmpId('');
-                    setCmtUserSearch('');
-                    setIsCmtDropdownOpen(false);
-                  }}
-                  className={`px-4 py-2 text-sm cursor-pointer hover:bg-indigo-50 transition-colors ${!selectedEmpId ? 'bg-indigo-50 text-indigo-600 font-medium' : 'text-gray-700'}`}
-                >
-                  All CMT Users
-                </div>
-                {filteredCmtUsers.map((user) => (
-                  <div
-                    key={user._id || user.empId}
-                    onClick={() => {
-                      setSelectedEmpId(user.empId);
-                      setCmtUserSearch('');
-                      setIsCmtDropdownOpen(false);
-                    }}
-                    className={`px-4 py-2 text-md cursor-pointer hover:bg-indigo-50 transition-colors ${selectedEmpId === user.empId ? 'bg-indigo-50 text-indigo-600 font-medium' : 'text-gray-700'}`}
-                  >
-                    {user.employeeName} ({user.empId})
-                  </div>
-                ))}
-                {filteredCmtUsers.length === 0 && (
-                  <div className="px-4 py-3 text-gray-500 text-center text-xs">
-                    No users found
-                  </div>
-                )}
+      {/* Top Section - same as TruckerReport */}
+      <div className="flex flex-col gap-6 mb-6 border border-gray-200 rounded-xl p-6 bg-white">
+        <div className="flex flex-col xl:flex-row gap-6">
+          <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-white rounded-xl border border-gray-200 p-6 h-[90px] flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-gray-700 font-bold text-2xl shrink-0">
+                {overallStatistics?.totalLoads ?? 0}
               </div>
-            )}
+              <span className="text-gray-700 font-semibold">Total Loads</span>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 p-6 h-[90px] flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-gray-700 font-bold text-2xl shrink-0">
+                {currentLoads.length}
+              </div>
+              <span className="text-gray-700 font-semibold">This Page</span>
+            </div>
           </div>
+          <div className="flex flex-col gap-2 w-full xl:w-auto xl:min-w-[280px]">
+            <div className="relative cmt-dropdown-container">
+              <button
+                onClick={() => setIsCmtDropdownOpen(!isCmtDropdownOpen)}
+                className="w-full px-4 h-[45px] border border-gray-200 rounded-lg bg-white text-left flex items-center justify-between text-gray-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
+              >
+                <span className="truncate">
+                  {selectedEmpId ? cmtUsers.find(u => u.empId === selectedEmpId)?.employeeName || selectedEmpId : 'All CMT Users'}
+                </span>
+                <ChevronDown size={16} className={`text-gray-500 shrink-0 ${isCmtDropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {isCmtDropdownOpen && (
+                <div className="absolute z-20 mt-2 w-full bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                  <div className="p-2 border-b border-gray-100 sticky top-0 bg-white">
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={cmtUserSearch}
+                        onChange={(e) => setCmtUserSearch(e.target.value)}
+                        placeholder="Search CMT user..."
+                        className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-100"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+                    </div>
+                  </div>
+                  <div
+                    onClick={() => { setSelectedEmpId(''); setCmtUserSearch(''); setIsCmtDropdownOpen(false); }}
+                    className={`px-4 py-2.5 text-sm cursor-pointer hover:bg-gray-50 ${!selectedEmpId ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'}`}
+                  >
+                    All CMT Users
+                  </div>
+                  {filteredCmtUsers.map((user) => (
+                    <div
+                      key={user._id || user.empId}
+                      onClick={() => { setSelectedEmpId(user.empId); setCmtUserSearch(''); setIsCmtDropdownOpen(false); }}
+                      className={`px-4 py-2.5 text-sm cursor-pointer hover:bg-gray-50 ${selectedEmpId === user.empId ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'}`}
+                    >
+                      {user.employeeName} ({user.empId})
+                    </div>
+                  ))}
+                  {filteredCmtUsers.length === 0 && <div className="px-4 py-3 text-gray-500 text-center text-sm">No users found</div>}
+                </div>
+              )}
+            </div>
+            <button
+              onClick={handleExportCSVClick}
+              disabled={(hasAnyFilter && allLoads.length === 0) || exportLoading}
+              className="flex items-center justify-center gap-2 px-4 h-[45px] bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed w-full"
+              title={hasAnyFilter ? 'Export filtered data' : 'Export all (E-Sign required)'}
+            >
+              {exportLoading ? 'Exporting...' : <><FaDownload size={18} /> Export to Excel</>}
+            </button>
+          </div>
+        </div>
 
-          {/* Date Range dropdown */}
-          <div className="relative">
+        <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center w-full">
+          <div className="relative w-full sm:w-[300px] shrink-0" ref={dateRangeDropdownRef}>
             <button
               type="button"
-              onClick={() => setShowPresetMenu(v => !v)}
-              className="w-[300px] text-left px-3 py-2 border border-gray-300 rounded-lg bg-white flex items-center justify-between"
+              onClick={() => setShowPresetMenu((v) => !v)}
+              className="w-full text-left px-4 h-[52px] border border-gray-200 rounded-xl bg-white flex items-center justify-between text-gray-700 font-medium hover:border-gray-300 transition-colors text-base"
             >
               <span>
                 {dateFilterApplied && range.startDate && range.endDate
                   ? `${format(range.startDate, 'MMM dd, yyyy')} - ${format(range.endDate, 'MMM dd, yyyy')}`
                   : 'Select Date Range'}
               </span>
-              <span className="ml-3">▼</span>
+              <span className="ml-3 text-gray-400 text-lg">▼</span>
             </button>
-
             {showPresetMenu && (
-              <div className="absolute z-50 mt-2 w-56 rounded-md border bg-white shadow-lg">
-                {dateFilterApplied && (
-                  <>
-                    <button
-                      onClick={() => {
-                        setDateFilterApplied(false);
-                        setRange({ startDate: null, endDate: null, key: 'selection' });
-                        setShowPresetMenu(false);
-                      }}
-                      className="block w-full text-left px-3 py-2 hover:bg-gray-50 text-red-600"
-                    >
-                      Clear Date Filter
-                    </button>
-                    <div className="my-1 border-t" />
-                  </>
-                )}
-                {Object.keys(presets).map((lbl) => (
-                  <button
-                    key={lbl}
-                    onClick={() => applyPreset(lbl)}
-                    className="block w-full text-left px-3 py-2 hover:bg-gray-50"
-                  >
-                    {lbl}
-                  </button>
-                ))}
-                <div className="my-1 border-t" />
+              <div className="absolute z-[100] mt-2 w-full min-w-[260px] rounded-xl border border-gray-100 bg-white shadow-lg py-2 right-0 text-base">
                 <button
-                  onClick={() => { setShowPresetMenu(false); setShowCustomRange(true); }}
-                  className="block w-full text-left px-3 py-2 hover:bg-gray-50"
+                  type="button"
+                  onClick={() => { setDateFilterApplied(false); setRange({ startDate: null, endDate: null, key: 'selection' }); setShowPresetMenu(false); }}
+                  className="block w-full text-left px-4 py-3 hover:bg-gray-50 text-gray-600"
                 >
-                  Custom Range
+                  Clear Filter
                 </button>
+                <div className="my-1 border-t border-gray-100" />
+                {Object.keys(presets).map((lbl) => (
+                  <button type="button" key={lbl} onClick={() => applyPreset(lbl)} className="block w-full text-left px-4 py-3 hover:bg-gray-50 text-gray-700">{lbl}</button>
+                ))}
+                <div className="my-1 border-t border-gray-100" />
+                <button type="button" onClick={() => { setShowPresetMenu(false); setShowCustomRange(true); }} className="block w-full text-left px-4 py-3 hover:bg-gray-50 text-gray-700">Custom Range</button>
               </div>
             )}
           </div>
+        </div>
+      </div>
 
-          {/* Custom Range calendars */}
-          {showCustomRange && (
-            <div className="fixed inset-0 z-[60] bg-black/30 flex items-center justify-center p-4" onClick={() => setShowCustomRange(false)}>
-              <div className="bg-white rounded-xl shadow-2xl p-4" onClick={(e) => e.stopPropagation()}>
-                <DateRange
-                  ranges={[range]}
-                  onChange={(item) => setRange(item.selection)}
-                  moveRangeOnFirstSelection={false}
-                  months={2}
-                  direction="horizontal"
-                />
-                <div className="flex justify-end gap-2 mt-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowCustomRange(false);
-                      if (!dateFilterApplied) {
-                        setRange({ startDate: null, endDate: null, key: 'selection' });
-                      }
-                    }}
-                    className="px-4 py-2 border rounded-lg hover:bg-gray-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDateFilterApplied(true);
-                      setShowCustomRange(false);
-                    }}
-                    className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
-                  >
-                    OK
-                  </button>
-                </div>
-              </div>
+      {showCustomRange && (
+        <div className="fixed inset-0 z-[60] bg-black/30 flex items-center justify-center p-4" onClick={() => setShowCustomRange(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-[90vw]" onClick={(e) => e.stopPropagation()}>
+            <div className="scale-110 origin-top" style={{ minWidth: 520 }}>
+              <DateRange
+                ranges={[range.startDate && range.endDate ? range : { startDate: new Date(), endDate: new Date(), key: 'selection' }]}
+                onChange={(item) => { if (item.selection?.startDate && item.selection?.endDate) setRange(item.selection); }}
+                moveRangeOnFirstSelection={false}
+                months={2}
+                direction="horizontal"
+              />
             </div>
+            <div className="flex justify-end gap-3 mt-4">
+              <button type="button" onClick={() => { setRange({ startDate: null, endDate: null, key: 'selection' }); setShowCustomRange(false); }} className="px-5 py-2.5 border rounded-xl hover:bg-gray-50 text-base font-medium">Clear</button>
+              <button type="button" onClick={() => setShowCustomRange(false)} className="px-5 py-2.5 border rounded-xl hover:bg-gray-50 text-base font-medium">Cancel</button>
+              <button type="button" onClick={() => { setDateFilterApplied(true); setShowCustomRange(false); }} className="px-5 py-2.5 rounded-xl text-base font-medium bg-blue-600 text-white hover:bg-blue-700">OK</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+        <div className="overflow-x-auto">
+          {allLoads.length === 0 ? (
+            <div className="text-center py-12">
+              <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500 text-lg">{dateFilterApplied || selectedEmpId ? 'No loads found matching your filters' : 'No assigned loads found'}</p>
+              <p className="text-gray-400 text-sm">{dateFilterApplied || selectedEmpId ? 'Try adjusting your filters' : 'Loads assigned to CMT users will appear here'}</p>
+            </div>
+          ) : (
+            <table className="w-full">
+              <thead className="bg-white border-b border-gray-200">
+                <tr>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Load ID</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Assigned CMT</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Origin</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Destination</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Load Type</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Agent Name</th>
+                  <th className="text-center py-4 px-4 text-gray-800 font-medium text-base">Bid Count</th>
+                  <th className="text-center py-4 px-4 text-gray-800 font-medium text-base">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {currentLoads.map((load) => {
+                  const origin = load.loadDetails?.origin;
+                  const destination = load.loadDetails?.destination;
+                  const originText = origin ? `${origin.city || ''}${origin.state ? `, ${origin.state}` : ''}${origin.zip ? ` ${origin.zip}` : ''}`.trim() || origin.addressLine1 || 'N/A' : 'N/A';
+                  const destinationText = destination ? `${destination.city || ''}${destination.state ? `, ${destination.state}` : ''}${destination.zip ? ` ${destination.zip}` : ''}`.trim() || destination.addressLine1 || 'N/A' : 'N/A';
+                  const agentName = load.createdBy?.createdBySalesUser?.empName || 'N/A';
+                  const bidCount = load.bidStatus?.bidCount || 0;
+                  const hasBid = load.bidStatus?.hasBid || false;
+                  return (
+                    <tr key={load.loadId} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                      <td className="py-4 px-4"><span className="text-sm text-gray-600 font-medium">{load.loadId?.slice(-8) || 'N/A'}</span></td>
+                      <td className="py-4 px-4">
+                        <span className="text-sm font-medium text-gray-800">{load.cmtUser?.empName || load.assignedCMTUser?.empName || 'N/A'}</span>
+                        {(load.cmtUser?.empId || load.assignedCMTUser?.empId) && <p className="text-xs text-gray-500">{load.cmtUser?.empId || load.assignedCMTUser?.empId}</p>}
+                      </td>
+                      <td className="py-4 px-4"><span className="text-sm text-gray-700">{originText}</span></td>
+                      <td className="py-4 px-4"><span className="text-sm text-gray-700">{destinationText}</span></td>
+                      <td className="py-4 px-4"><span className="text-sm text-gray-700">{load.loadDetails?.loadType || 'N/A'}</span></td>
+                      <td className="py-4 px-4"><span className="text-sm text-gray-700">{agentName}</span></td>
+                      <td className="py-4 px-4 text-center"><span className={`text-sm font-semibold ${hasBid ? 'text-green-600' : 'text-orange-600'}`}>{bidCount}</span></td>
+                      <td className="py-4 px-4">
+                        <button onClick={() => { setSelectedLoad(load); setShowLoadModal(true); }} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1 mx-auto">
+                          <Eye size={14} /> View
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           )}
         </div>
       </div>
 
-      {/* Loads Table */}
-      <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
-              <tr>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load ID</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Assigned CMT</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Origin</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Destination</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load Type</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Agent Name</th>
-                <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bid Count</th>
-                <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {currentLoads.map((load, index) => {
-                const origin = load.loadDetails?.origin;
-                const destination = load.loadDetails?.destination;
-                const originText = origin 
-                  ? `${origin.city || ''}${origin.state ? `, ${origin.state}` : ''}${origin.zip ? ` ${origin.zip}` : ''}`.trim() || origin.addressLine1 || 'N/A'
-                  : 'N/A';
-                const destinationText = destination
-                  ? `${destination.city || ''}${destination.state ? `, ${destination.state}` : ''}${destination.zip ? ` ${destination.zip}` : ''}`.trim() || destination.addressLine1 || 'N/A'
-                  : 'N/A';
-                const agentName = load.createdBy?.createdBySalesUser?.empName || 'N/A';
-                const bidCount = load.bidStatus?.bidCount || 0;
-                const hasBid = load.bidStatus?.hasBid || false;
-                
-                return (
-                  <tr key={load.loadId} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                    <td className="py-2 px-3">
-                      <span className="font-mono text-sm text-gray-700">{load.loadId?.slice(-8) || 'N/A'}</span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <div>
-                        <span className="font-medium text-indigo-600">{load.cmtUser?.empName || load.assignedCMTUser?.empName || 'N/A'}</span>
-                        {(load.cmtUser?.empId || load.assignedCMTUser?.empId) && (
-                          <p className="text-xs text-gray-500 mt-1">{load.cmtUser?.empId || load.assignedCMTUser?.empId}</p>
-                        )}
-                      </div>
-                    </td>
-                    <td className="py-2 px-3">
-                      <div>
-                        <span className="font-medium text-gray-700">{originText}</span>
-                        {origin?.addressLine1 && originText !== origin.addressLine1 && (
-                          <p className="text-xs text-gray-500 mt-1">{origin.addressLine1}</p>
-                        )}
-                      </div>
-                    </td>
-                    <td className="py-2 px-3">
-                      <div>
-                        <span className="font-medium text-gray-700">{destinationText}</span>
-                        {destination?.addressLine1 && destinationText !== destination.addressLine1 && (
-                          <p className="text-xs text-gray-500 mt-1">{destination.addressLine1}</p>
-                        )}
-                      </div>
-                    </td>
-                    <td className="py-2 px-3">
-                      <span className="font-medium text-gray-700">{load.loadDetails?.loadType || 'N/A'}</span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <div>
-                        <span className="font-medium text-gray-700">{agentName}</span>
-                        {load.createdBy?.createdBySalesUser?.empId && (
-                          <p className="text-xs text-gray-500 mt-1">{load.createdBy.createdBySalesUser.empId}</p>
-                        )}
-                      </div>
-                    </td>
-                    <td className="py-2 px-3 text-center">
-                      <span className={`font-semibold ${hasBid ? 'text-green-600' : 'text-orange-600'}`}>
-                        {bidCount}
-                      </span>
-                    </td>
-                    <td className="py-2 px-3">
-                      <button
-                        onClick={() => {
-                          setSelectedLoad(load);
-                          setShowLoadModal(true);
-                        }}
-                        className="bg-indigo-500 hover:bg-indigo-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors flex items-center gap-1 mx-auto"
-                      >
-                        <Eye className="w-4 h-4" />
-                        View
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-        {allLoads.length === 0 && (
-          <div className="text-center py-12">
-            <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500 text-lg">
-              {dateFilterApplied || selectedEmpId ? 'No loads found matching your filters' : 'No assigned loads found'}
-            </p>
-            <p className="text-gray-400 text-sm">
-              {dateFilterApplied || selectedEmpId ? 'Try adjusting your filters' : 'Loads assigned to CMT users will appear here'}
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* Pagination */}
-      {allLoads.length > 0 && totalPages > 1 && (
-        <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+      {totalPages > 1 && (
+        <div className="flex justify-between items-center mt-6 bg-white rounded-2xl border border-gray-200 p-4">
           <div className="text-sm text-gray-600">
-            Showing {startIndex + 1} to {Math.min(endIndex, allLoads.length)} of {allLoads.length} loads
+            Showing {totalItems === 0 ? 0 : startIndex + 1} to {Math.min(endIndex, totalItems)} of {totalItems} loads
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => handlePageChange(currentPage - 1)}
-              disabled={currentPage === 1}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                currentPage === 1
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                  : 'bg-indigo-100 text-indigo-600 hover:bg-indigo-200'
-              }`}
-            >
-              Previous
+          <div className="flex gap-1 items-center">
+            <button onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage === 1} className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium">
+              <ChevronLeft size={18} /><span>Previous</span>
             </button>
-            
-            {getPaginationPages().map((page, index) => {
-              if (page === 'ellipsis') {
-                return (
-                  <span key={`ellipsis-${index}`} className="px-2 text-gray-400">
-                    ...
-                  </span>
-                );
-              }
-              return (
-                <button
-                  key={page}
-                  onClick={() => handlePageChange(page)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    currentPage === page
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  {page}
-                </button>
-              );
-            })}
-            
-            <button
-              onClick={() => handlePageChange(currentPage + 1)}
-              disabled={currentPage === totalPages}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                currentPage === totalPages
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                  : 'bg-indigo-100 text-indigo-600 hover:bg-indigo-200'
-              }`}
-            >
-              Next
+            <div className="flex items-center gap-1 mx-4">
+              {getPaginationPages().map((page, index) => (
+                page === 'ellipsis' ? <span key={`ellipsis-${index}`} className="px-2 text-gray-400">...</span> : (
+                  <button key={page} onClick={() => handlePageChange(page)} className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-all ${currentPage === page ? 'bg-white border border-black shadow-sm text-black' : 'text-gray-600 hover:bg-gray-50'}`}>{page}</button>
+                )
+              ))}
+            </div>
+            <button onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage === totalPages} className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium">
+              <span>Next</span><ChevronRight size={18} />
             </button>
+          </div>
+        </div>
+      )}
+
+      {showESignModal && (
+        <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-4">
+          <div className="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-md">
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">E-Sign for Export</h3>
+            <p className="text-sm text-gray-600 mb-4">Enter your name to sign the report. It will be included in the exported file.</p>
+            <input type="text" value={eSignName} onChange={(e) => setESignName(e.target.value)} placeholder="Your full name" className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 text-gray-800 placeholder-gray-400 mb-4" onKeyDown={(e) => e.key === 'Enter' && handleESignConfirm()} />
+            <div className="flex gap-3 justify-end">
+              <button type="button" onClick={() => { setShowESignModal(false); setESignName(''); }} className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium">Cancel</button>
+              <button type="button" onClick={handleESignConfirm} className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium">Sign & Export</button>
+            </div>
           </div>
         </div>
       )}

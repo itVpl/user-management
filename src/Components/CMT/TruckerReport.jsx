@@ -1,7 +1,11 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import axios from 'axios';
 import { FaArrowLeft, FaDownload, FaEye, FaFileAlt } from 'react-icons/fa';
-import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Eye, Search, BarChart3, ChevronLeft, ChevronRight } from 'lucide-react';
+import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Eye, Search, BarChart3, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
+import 'react-date-range/dist/styles.css';
+import 'react-date-range/dist/theme/default.css';
+import { DateRange } from 'react-date-range';
+import { addDays, format } from 'date-fns';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
 import API_CONFIG from '../../config/api.js';
@@ -34,15 +38,39 @@ export default function TruckerReport() {
   const [activeSearchTerm, setActiveSearchTerm] = useState(''); // Active search term (what's actually being searched)
   const [searchFilter, setSearchFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [range, setRange] = useState({ startDate: null, endDate: null, key: 'selection' });
+  const [showPresetMenu, setShowPresetMenu] = useState(false);
+  const [showCustomRange, setShowCustomRange] = useState(false);
+  const [showESignModal, setShowESignModal] = useState(false);
+  const [eSignName, setESignName] = useState('');
+  const [exportLoading, setExportLoading] = useState(false);
+  const dateRangeDropdownRef = React.useRef(null);
+
+  const presets = {
+    'Today': [new Date(), new Date()],
+    'Yesterday': [addDays(new Date(), -1), addDays(new Date(), -1)],
+    'Last 7 Days': [addDays(new Date(), -6), new Date()],
+    'Last 30 Days': [addDays(new Date(), -29), new Date()],
+    'This Month': [new Date(new Date().getFullYear(), new Date().getMonth(), 1), new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0)],
+    'Last Month': [new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1), new Date(new Date().getFullYear(), new Date().getMonth(), 0)],
+  };
+  const applyPreset = (label) => {
+    const [s, e] = presets[label];
+    setRange({ startDate: s, endDate: e, key: 'selection' });
+    setShowPresetMenu(false);
+  };
 
   const currentPage = pagination.currentPage;
-  const itemsPerPage = pagination.itemsPerPage || 15;
+  const itemsPerPage = 10; // 10 rows per page
+
+  // When date range is active, fetch more records and filter client-side (same as DeliveryOrder)
+  const isDateFilterActive = !!(range.startDate && range.endDate);
 
   // Build search parameters for API
   const buildSearchParams = useCallback(() => {
     const params = {
-      page: currentPage,
-      limit: itemsPerPage,
+      page: isDateFilterActive ? 1 : currentPage,
+      limit: isDateFilterActive ? 1000 : itemsPerPage,
       forceRefresh: false
     };
 
@@ -69,8 +97,16 @@ export default function TruckerReport() {
       params.status = statusFilter;
     }
 
+    // Date range filter (sent to API if it supports it; we also filter client-side so it always works)
+    if (range.startDate) {
+      params.createdFrom = format(range.startDate, 'yyyy-MM-dd');
+    }
+    if (range.endDate) {
+      params.createdTo = format(range.endDate, 'yyyy-MM-dd');
+    }
+
     return params;
-  }, [currentPage, itemsPerPage, activeSearchTerm, searchFilter, statusFilter]);
+  }, [currentPage, itemsPerPage, isDateFilterActive, activeSearchTerm, searchFilter, statusFilter, range.startDate, range.endDate]);
 
   // Handle search button click
   const handleSearch = () => {
@@ -101,10 +137,22 @@ export default function TruckerReport() {
 
   // Reset to first page when filters change (but not when searchTerm changes - only when activeSearchTerm changes)
   useEffect(() => {
-    if (activeSearchTerm || searchFilter !== 'all' || statusFilter !== 'all') {
+    if (activeSearchTerm || searchFilter !== 'all' || statusFilter !== 'all' || range.startDate || range.endDate) {
       dispatch(setCurrentPage(1));
     }
-  }, [activeSearchTerm, searchFilter, statusFilter, dispatch]);
+  }, [activeSearchTerm, searchFilter, statusFilter, range.startDate, range.endDate, dispatch]);
+
+  // Close date range preset menu on outside click (same as DeliveryOrder behavior)
+  useEffect(() => {
+    if (!showPresetMenu) return;
+    const handleClickOutside = (e) => {
+      if (dateRangeDropdownRef.current && !dateRangeDropdownRef.current.contains(e.target)) {
+        setShowPresetMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showPresetMenu]);
 
   const handleStatusUpdate = async (status) => {
     try {
@@ -164,16 +212,19 @@ export default function TruckerReport() {
     return ['PNG', 'JPG', 'JPEG', 'GIF', 'WEBP'].includes(fileType?.toUpperCase());
   };
 
-  const handleExportCSV = () => {
-    if (filteredTruckers.length === 0) {
+  // dataToExport: when no filter = full list from API; when date/filter = filtered list
+  const handleExportCSV = (dataToExport, signedByName = '') => {
+    if (!dataToExport || dataToExport.length === 0) {
       alertify.error('No data to export');
       return;
     }
 
     const headers = ["Company Name", "MC/DOT No", "Email", "Phone", "City", "State", "Status", "Created Date", "Added By"];
-    
-    // Map data to rows, ensuring each value is wrapped in double quotes
-    const rows = filteredTruckers.map(trucker => [
+    const createdStr = (t) => {
+      const d = t?.createdAt ?? t?.created_at;
+      return d ? new Date(d).toLocaleDateString() : 'N/A';
+    };
+    const rows = dataToExport.map(trucker => [
       `"${trucker.compName || 'N/A'}"`,
       `"${trucker.mc_dot_no || 'N/A'}"`,
       `"${trucker.email || 'N/A'}"`,
@@ -181,15 +232,21 @@ export default function TruckerReport() {
       `"${trucker.city || 'N/A'}"`,
       `"${trucker.state || 'N/A'}"`,
       `"${trucker.status || 'N/A'}"`,
-      `"${new Date(trucker.createdAt).toLocaleDateString()}"`,
+      `"${createdStr(trucker)}"`,
       `"${trucker.addedBy?.employeeName || 'System'}"`
     ]);
 
-    // Join headers and rows
-    const csvContent = [
-        headers.join(','),
-        ...rows.map(row => row.join(','))
+    let csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.join(','))
     ].join('\n');
+
+    // Append E-Sign line when signed
+    if (signedByName && signedByName.trim()) {
+      const signDate = new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+      csvContent += '\n\n"E-Sign","Signed By","Date"\n';
+      csvContent += `"","${String(signedByName).replace(/"/g, '""')}","${signDate}"`;
+    }
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -200,11 +257,70 @@ export default function TruckerReport() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
+  const hasAnyFilter = isDateFilterActive || activeSearchTerm.trim() || statusFilter !== 'all';
+
+  const handleExportCSVClick = () => {
+    if (hasAnyFilter && filteredTruckers.length === 0) {
+      alertify.error('No data to export');
+      return;
+    }
+    setESignName('');
+    setShowESignModal(true);
+  };
+
+  const fetchAllTruckersAndExport = async (signedByName) => {
+    setExportLoading(true);
+    setShowESignModal(false);
+    try {
+      const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+      const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/shipper_driver/truckers`, {
+        params: { page: 1, limit: 10000 },
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+      });
+      const list = res.data?.data || [];
+      if (list.length === 0) {
+        alertify.error('No data to export');
+        return;
+      }
+      handleExportCSV(list, signedByName);
+      alertify.success(`Exported ${list.length} truckers`);
+    } catch (err) {
+      alertify.error(err.response?.data?.message || err.message || 'Export failed');
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  const handleESignConfirm = () => {
+    const name = (eSignName || '').trim();
+    if (!name) {
+      alertify.error('Please enter your name for E-Sign');
+      return;
+    }
+    setShowESignModal(false);
+    setESignName('');
+    if (!hasAnyFilter) {
+      fetchAllTruckersAndExport(name);
+    } else {
+      handleExportCSV(filteredTruckers, name);
+    }
+  };
+
+  // Helper: date to YYYY-MM-DD for comparison (handles createdAt string or Date)
+  const toYmd = (d) => {
+    if (d == null || d === '') return '';
+    const date = d instanceof Date ? d : new Date(d);
+    return isNaN(date.getTime()) ? '' : format(date, 'yyyy-MM-dd');
+  };
+  // Get trucker created date (API may send createdAt or created_at)
+  const getTruckerCreatedYmd = (trucker) =>
+    toYmd(trucker?.createdAt ?? trucker?.created_at);
+
   // -------- CLIENT-SIDE FILTERING (only for fields not supported by API) --------
-  // Note: Most filtering is done server-side. This only handles:
-  // State/City search when searchFilter is 'state' or 'city' (API search doesn't include these fields)
+  // Handles: State/City search; Date range (so filter works even if API ignores date params)
   const filteredTruckers = useMemo(() => {
     let result = [...(truckers || [])];
     const term = activeSearchTerm.trim().toLowerCase();
@@ -224,12 +340,29 @@ export default function TruckerReport() {
       });
     }
 
-    return result;
-  }, [truckers, activeSearchTerm, searchFilter]);
+    // Date range filter (client-side so it always works)
+    if (range.startDate && range.endDate) {
+      const fromYmd = toYmd(range.startDate);
+      const endYmd = toYmd(range.endDate);
+      if (fromYmd && endYmd) {
+        result = result.filter(trucker => {
+          const createdYmd = getTruckerCreatedYmd(trucker);
+          return createdYmd && createdYmd >= fromYmd && createdYmd <= endYmd;
+        });
+      }
+    }
 
-  // -------- PAGINATION (server-side pagination with server-side filtering) --------
-  const totalPages = pagination.totalPages || 1;
-  const currentTruckers = filteredTruckers; // Server-side filtered, with optional client-side filters applied
+    return result;
+  }, [truckers, activeSearchTerm, searchFilter, range.startDate, range.endDate]);
+
+  // -------- PAGINATION --------
+  // When date range is active: client-side pagination on filteredTruckers (same as DeliveryOrder)
+  const totalPages = isDateFilterActive
+    ? Math.max(1, Math.ceil(filteredTruckers.length / itemsPerPage))
+    : (pagination.totalPages || 1);
+  const currentTruckers = isDateFilterActive
+    ? filteredTruckers.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+    : filteredTruckers;
 
   const handlePageChange = (page) => {
     if (page < 1 || page > totalPages) return;
@@ -311,7 +444,7 @@ export default function TruckerReport() {
     return pages;
   };
 
-  const totalItems = pagination.totalItems || 0;
+  const totalItems = isDateFilterActive ? filteredTruckers.length : (pagination.totalItems || 0);
 
   return (
     <div className="p-6 bg-white min-h-screen">
@@ -341,7 +474,7 @@ export default function TruckerReport() {
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-6 h-[90px] flex items-center gap-4">
               <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-gray-700 font-bold text-2xl shrink-0">
-                {filteredTruckers.length}
+                {currentTruckers.length}
               </div>
               <span className="text-gray-700 font-semibold">This Page</span>
             </div>
@@ -360,18 +493,18 @@ export default function TruckerReport() {
               <option value="city">City</option>
             </select>
             <button
-              onClick={handleExportCSV}
-              disabled={filteredTruckers.length === 0}
+              onClick={handleExportCSVClick}
+              disabled={(hasAnyFilter && filteredTruckers.length === 0) || exportLoading}
               className="flex items-center justify-center gap-2 px-4 h-[45px] bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed w-full"
-              title="Export to CSV"
+              title={hasAnyFilter ? 'Export filtered data' : 'Export all truckers (E-Sign required)'}
             >
-              <FaDownload size={18} /> Export CSV
+              {exportLoading ? 'Exporting...' : <><FaDownload size={18} /> Export CSV</>}
             </button>
           </div>
         </div>
 
-        {/* Row 2: Search Bar - same as DeliveryOrder */}
-        <div className="flex flex-nowrap gap-2 items-center w-full min-w-0 overflow-x-auto">
+        {/* Row 2: Search Bar + Date Range (same structure as DeliveryOrder - no overflow so dropdown opens) */}
+        <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center w-full">
           <div className="relative flex-1 min-w-0">
             <input
               type="text"
@@ -385,14 +518,118 @@ export default function TruckerReport() {
           </div>
           <button
             onClick={handleSearch}
-            className="shrink-0 flex items-center gap-2 px-5 h-[45px] bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
+            className="shrink-0 flex items-center justify-center gap-2 px-5 h-[45px] bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
             title="Search"
           >
             <Search size={18} />
             Search
           </button>
+          {/* Date Range Dropdown - larger button + dropdown */}
+          <div className="relative w-full sm:w-[300px] shrink-0" ref={dateRangeDropdownRef}>
+            <button
+              type="button"
+              onClick={() => setShowPresetMenu((v) => !v)}
+              className="w-full text-left px-4 h-[52px] border border-gray-200 rounded-xl bg-white flex items-center justify-between text-gray-700 font-medium hover:border-gray-300 transition-colors text-base"
+            >
+              <span className={!range.startDate || !range.endDate ? 'text-gray-800' : 'text-gray-800'}>
+                {range.startDate && range.endDate
+                  ? `${format(range.startDate, 'MMM dd, yyyy')} - ${format(range.endDate, 'MMM dd, yyyy')}`
+                  : 'Select Date Range'}
+              </span>
+              <span className="ml-3 text-gray-400 text-lg">▼</span>
+            </button>
+            {showPresetMenu && (
+              <div className="absolute z-[100] mt-2 w-full min-w-[260px] rounded-xl border border-gray-100 bg-white shadow-lg py-2 right-0 text-base">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRange({ startDate: null, endDate: null, key: 'selection' });
+                    setShowPresetMenu(false);
+                  }}
+                  className="block w-full text-left px-4 py-3 hover:bg-gray-50 text-gray-600"
+                >
+                  Clear Filter
+                </button>
+                <div className="my-1 border-t border-gray-100" />
+                {Object.keys(presets).map((lbl) => (
+                  <button
+                    type="button"
+                    key={lbl}
+                    onClick={() => applyPreset(lbl)}
+                    className="block w-full text-left px-4 py-3 hover:bg-gray-50 text-gray-700"
+                  >
+                    {lbl}
+                  </button>
+                ))}
+                <div className="my-1 border-t border-gray-100" />
+                <button
+                  type="button"
+                  onClick={() => { setShowPresetMenu(false); setShowCustomRange(true); }}
+                  className="block w-full text-left px-4 py-3 hover:bg-gray-50 text-gray-700"
+                >
+                  Custom Range
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* Custom Range Modal - larger calendar */}
+      {showCustomRange && (
+        <div className="fixed inset-0 z-[60] bg-black/30 flex items-center justify-center p-4" onClick={() => setShowCustomRange(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-[90vw]" onClick={(e) => e.stopPropagation()}>
+            <div className="scale-110 origin-top" style={{ minWidth: 520 }}>
+              <DateRange
+                ranges={[range.startDate && range.endDate ? range : { startDate: new Date(), endDate: new Date(), key: 'selection' }]}
+                onChange={(item) => {
+                  if (item.selection.startDate && item.selection.endDate) {
+                    setRange(item.selection);
+                  }
+                }}
+                moveRangeOnFirstSelection={false}
+                months={2}
+                direction="horizontal"
+              />
+            </div>
+            <div className="flex justify-end gap-3 mt-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setRange({ startDate: null, endDate: null, key: 'selection' });
+                  setShowCustomRange(false);
+                }}
+                className="px-5 py-2.5 border rounded-xl hover:bg-gray-50 text-base font-medium"
+              >
+                Clear
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowCustomRange(false)}
+                className="px-5 py-2.5 border rounded-xl hover:bg-gray-50 text-base font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (range.startDate && range.endDate) {
+                    setShowCustomRange(false);
+                  }
+                }}
+                className={`px-5 py-2.5 rounded-xl text-base font-medium ${
+                  range.startDate && range.endDate
+                    ? 'bg-blue-600 text-white hover:bg-blue-700'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
+                disabled={!range.startDate || !range.endDate}
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Table - same as DeliveryOrder */}
       <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
@@ -467,11 +704,11 @@ export default function TruckerReport() {
         </div>
       </div>
 
-      {/* Pagination - same as DeliveryOrder */}
-      {totalPages > 1 && currentTruckers.length > 0 && (
+      {/* Pagination - 10 per page; when date filter on = client-side pages */}
+      {totalPages > 1 && (
         <div className="flex justify-between items-center mt-6 bg-white rounded-2xl border border-gray-200 p-4">
           <div className="text-sm text-gray-600">
-            Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems} truckers
+            Showing {totalItems === 0 ? 0 : ((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems} truckers
             {activeSearchTerm && ` (searching: "${activeSearchTerm}")`}
           </div>
           <div className="flex gap-1 items-center">
@@ -513,6 +750,40 @@ export default function TruckerReport() {
               <span>Next</span>
               <ChevronRight size={18} />
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* E-Sign modal for CSV export */}
+      {showESignModal && (
+        <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-4">
+          <div className="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-md">
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">E-Sign for Export</h3>
+            <p className="text-sm text-gray-600 mb-4">Enter your name to sign the report. It will be included in the exported CSV.</p>
+            <input
+              type="text"
+              value={eSignName}
+              onChange={(e) => setESignName(e.target.value)}
+              placeholder="Your full name"
+              className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 text-gray-800 placeholder-gray-400 mb-4"
+              onKeyDown={(e) => e.key === 'Enter' && handleESignConfirm()}
+            />
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => { setShowESignModal(false); setESignName(''); }}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleESignConfirm}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium"
+              >
+                Sign & Export CSV
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -106,7 +106,7 @@ function ImageStrip({ title, urls = [] }) {
 
 
 /* ====================== Details Modal ====================== */
-function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
+function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, reportView = false }) {
   if (!open || !order) return null;
 
   const raw = order.raw || {};
@@ -131,8 +131,9 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
       // Console logs for debugging
       console.log('Fetching assigned driver...', { cmtEmpId, loadId, loadNo });
       
-      if (!open || !cmtEmpId) {
-        console.log('Skipping fetch: open or cmtEmpId missing');
+      if (!open || !cmtEmpId || reportView) {
+        if (reportView) console.log('Skipping fetch: report view mode - use report API data only');
+        else console.log('Skipping fetch: open or cmtEmpId missing');
         return;
       }
       
@@ -182,7 +183,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
       }
     };
     fetchAssignedDriver();
-  }, [open, cmtEmpId, loadId, loadNo]);
+  }, [open, cmtEmpId, loadId, loadNo, reportView]);
 
   // Driver images
   const [imgLoading, setImgLoading] = useState(false);
@@ -1453,8 +1454,8 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
   };
 
   useEffect(() => {
-    if (open) fetchAdditionalDocs();
-  }, [open, doMongoId]); // eslint-disable-line
+    if (open && !reportView) fetchAdditionalDocs();
+  }, [open, doMongoId, reportView]); // eslint-disable-line
 
   // Fetch drivers for the CMT user by truckerId
   const fetchDriversForCarrier = async () => {
@@ -2131,7 +2132,8 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                 </div>
               )}
 
-              {/* Assign Driver UI */}
+              {/* Assign Driver UI - hidden in report view */}
+              {!reportView && (
               <div className="mt-4 pt-4">
                 <h4 className="font-semibold text-black mb-3">Assign Driver</h4>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3 items-end">
@@ -2194,6 +2196,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                   </div>
                 </div>
               </div>
+              )}
             </div>
           )}
 
@@ -2424,7 +2427,8 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
             )}
           </section>
 
-          {/* Created By */}
+          {/* Created By - hidden in report view */}
+          {!reportView && (
           <section className={SOFT.cardBlue}>
             <h3 className="text-sm font-semibold text-gray-800 mb-3">Created By</h3>
             <div className="grid grid-cols-1 gap-2 text-sm">
@@ -2433,8 +2437,10 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
               <div className="text-gray-600">{createdBy.department || '—'}</div>
             </div>
           </section>
+          )}
 
-          {/* Load Reference */}
+          {/* Load Reference - hidden in report view */}
+          {!reportView && (
           <section className={`${SOFT.cardBlue} md:col-span-2`}>
             <h3 className="text-sm font-semibold text-gray-800 mb-3">Load Reference</h3>
             {Object.keys(loadRef).length ? (
@@ -2452,6 +2458,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
               <div className="text-sm text-gray-500">No load reference</div>
             )}
           </section>
+          )}
 
 
           {/* Document Display */}
@@ -2545,7 +2552,8 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
 
 
 
-          {/* ========== Invoice (VIEW) ========== */}
+          {/* ========== Invoice (VIEW) - hidden in report view ========== */}
+          {!reportView && (
           <section className={`${SOFT.cardBlue} md:col-span-2`}>
             <h3 className="text-sm font-semibold text-gray-800 mb-3">Invoice</h3>
 
@@ -2605,8 +2613,10 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
               <div className="text-sm text-gray-500 p-4 bg-white border rounded-xl">No invoice uploaded yet.</div>
             )}
           </section>
+          )}
 
-          {/* ========== Additional Documents (VIEW) ========== */}
+          {/* ========== Additional Documents (VIEW) - hidden in report view ========== */}
+          {!reportView && (
           <section className={`${SOFT.cardBlue} md:col-span-2`}>
             <h3 className="text-sm font-semibold text-gray-800 mb-3">Additional Documents</h3>
 
@@ -2660,7 +2670,9 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
 
             )}
           </section>
-          {/* ========== Additional Documents (UPLOAD) ========== */}
+          )}
+          {/* ========== Additional Documents (UPLOAD) - hidden in report view ========== */}
+          {!reportView && (
           <section className={`${SOFT.cardBlue} md:col-span-2`}>
             <h3 className="text-sm font-semibold text-gray-800 mb-3">Additional Documents (CMT Upload)</h3>
             <div className="p-4 bg-white border rounded-xl">
@@ -2761,8 +2773,9 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
               </div>
             </div>
           </section>
+          )}
 
-          {/* Important Dates */}
+          {/* Important Dates - disabled in report view */}
           <section className="p-4 rounded-2xl border bg-[#F8FAFF] border-[#E0E7FF] md:col-span-2">
             <h3 className="text-sm font-semibold text-gray-800 mb-3">Important Dates</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2772,6 +2785,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                   <label className="block text-xs text-gray-500 mb-1">Vessel ETA</label>
                   <input
                     type="datetime-local"
+                    disabled={reportView}
                     value={formatDateForInput(importantDates.vesselETA)}
                     onChange={(e) => {
                       const value = e.target.value;
@@ -2786,13 +2800,14 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                         setImportantDates(prev => ({ ...prev, vesselETA: '' }));
                       }
                     }}
-                    className="w-full text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    className={`w-full text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${reportView ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}`}
                   />
                 </div>
                 <div className="flex-1">
                   <label className="block text-xs text-gray-500 mb-1">Lastfree Date</label>
                   <input
                     type="datetime-local"
+                    disabled={reportView}
                     value={formatDateForInput(importantDates.latfreeDate)}
                     onChange={(e) => {
                       const value = e.target.value;
@@ -2807,7 +2822,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                         setImportantDates(prev => ({ ...prev, latfreeDate: '' }));
                       }
                     }}
-                    className="w-full text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    className={`w-full text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${reportView ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}`}
                   />
                 </div>
               </div>
@@ -2818,6 +2833,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                   <label className="block text-xs text-gray-500 mb-1">Discharge Date</label>
                   <input
                     type="datetime-local"
+                    disabled={reportView}
                     value={formatDateForInput(importantDates.dischargeDate)}
                     onChange={(e) => {
                       const value = e.target.value;
@@ -2832,13 +2848,14 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                         setImportantDates(prev => ({ ...prev, dischargeDate: '' }));
                       }
                     }}
-                    className="w-full text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    className={`w-full text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${reportView ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}`}
                   />
                 </div>
                 <div className="flex-1">
                   <label className="block text-xs text-gray-500 mb-1">Outgate Date</label>
                   <input
                     type="datetime-local"
+                    disabled={reportView}
                     value={formatDateForInput(importantDates.outgateDate)}
                     onChange={(e) => {
                       const value = e.target.value;
@@ -2853,7 +2870,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                         setImportantDates(prev => ({ ...prev, outgateDate: '' }));
                       }
                     }}
-                    className="w-full text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    className={`w-full text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${reportView ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}`}
                   />
                 </div>
               </div>
@@ -2864,6 +2881,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                   <label className="block text-xs text-gray-500 mb-1">Empty Date</label>
                   <input
                     type="datetime-local"
+                    disabled={reportView}
                     value={formatDateForInput(importantDates.emptyDate)}
                     onChange={(e) => {
                       const value = e.target.value;
@@ -2878,13 +2896,14 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                         setImportantDates(prev => ({ ...prev, emptyDate: '' }));
                       }
                     }}
-                    className="w-full text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    className={`w-full text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${reportView ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}`}
                   />
                 </div>
                 <div className="flex-1">
                   <label className="block text-xs text-gray-500 mb-1">Per Diem Free Day</label>
                   <input
                     type="datetime-local"
+                    disabled={reportView}
                     value={formatDateForInput(importantDates.perDiemFreeDay)}
                     onChange={(e) => {
                       const value = e.target.value;
@@ -2899,7 +2918,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                         setImportantDates(prev => ({ ...prev, perDiemFreeDay: '' }));
                       }
                     }}
-                    className="w-full text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    className={`w-full text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${reportView ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}`}
                   />
                 </div>
               </div>
@@ -2910,6 +2929,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                   <label className="block text-xs text-gray-500 mb-1">Ingate Date</label>
                   <input
                     type="datetime-local"
+                    disabled={reportView}
                     value={formatDateForInput(importantDates.ingateDate)}
                     onChange={(e) => {
                       const value = e.target.value;
@@ -2924,13 +2944,14 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                         setImportantDates(prev => ({ ...prev, ingateDate: '' }));
                       }
                     }}
-                    className="w-full text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    className={`w-full text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${reportView ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}`}
                   />
                 </div>
                 <div className="flex-1">
                   <label className="block text-xs text-gray-500 mb-1">Ready To Return Date</label>
                   <input
                     type="datetime-local"
+                    disabled={reportView}
                     value={formatDateForInput(importantDates.readyToReturnDate)}
                     onChange={(e) => {
                       const value = e.target.value;
@@ -2945,7 +2966,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                         setImportantDates(prev => ({ ...prev, readyToReturnDate: '' }));
                       }
                     }}
-                    className="w-full text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    className={`w-full text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${reportView ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}`}
                   />
                 </div>
               </div>
@@ -2956,6 +2977,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                   <label className="block text-xs text-gray-500 mb-1">Delivery Date</label>
                   <input
                     type="datetime-local"
+                    disabled={reportView}
                     value={formatDateForInput(importantDates.deliveryDate)}
                     onChange={(e) => {
                       const value = e.target.value;
@@ -2970,7 +2992,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
                         setImportantDates(prev => ({ ...prev, deliveryDate: '' }));
                       }
                     }}
-                    className="w-full text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    className={`w-full text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${reportView ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}`}
                   />
                 </div>
                 <div className="flex-1">
@@ -2981,7 +3003,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
             <div className="mt-4 flex justify-end">
               {(() => {
                 const isDelivered = loadRef.status && loadRef.status.toLowerCase() === 'delivered';
-                const isDisabled = updatingDates || isDelivered;
+                const isDisabled = updatingDates || isDelivered || reportView;
                 return (
                   <button
                     onClick={updateImportantDates}
@@ -3002,6 +3024,35 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
               })()}
             </div>
           </section>
+
+          {/* Important Date Update History */}
+          {Array.isArray(loadRef.importantDateUpdateHistory) && loadRef.importantDateUpdateHistory.length > 0 && (
+            <section className="p-4 rounded-2xl border bg-[#F0FDF4] border-[#BBF7D0] md:col-span-2">
+              <h3 className="text-sm font-semibold text-gray-800 mb-3">Important Date Update History</h3>
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {loadRef.importantDateUpdateHistory.map((entry, idx) => (
+                  <div
+                    key={idx}
+                    className="flex flex-wrap items-center gap-x-4 gap-y-1 py-2 px-3 bg-white rounded-lg border border-gray-100 text-sm"
+                  >
+                    <span className="font-medium text-gray-800">{entry.employeeName || entry.empId || '—'}</span>
+                    {entry.empId && (
+                      <span className="text-gray-500 text-xs">({entry.empId})</span>
+                    )}
+                    <span className="text-gray-600 ml-auto">
+                      {entry.updatedAt ? (() => {
+                        try {
+                          return new Date(entry.updatedAt).toLocaleString();
+                        } catch {
+                          return '—';
+                        }
+                      })() : '—'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
           {/* Rejected by Accountant */}
           {order?.raw?.accountantApproval?.status === 'rejected' && (
@@ -3047,7 +3098,8 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
             </div>
           )}
 
-          {/* Remarks & Forward */}
+          {/* Remarks & Forward - hidden in report view */}
+          {!reportView && (
           <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6">
             <h3 className="text-lg font-bold text-gray-800 mb-4">Forward to Accountant</h3>
             <div className="bg-white rounded-lg p-4 border border-blue-200">
@@ -3098,8 +3150,10 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess }) {
               </div>
             </div>
           </div>
+          )}
 
-          {/* Send Email to Shipper */}
+          {/* Send Email to Shipper - hidden in report view */}
+          {!reportView && (
           <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6">
             <div className="flex items-center gap-2 mb-4">
               <Mail className="text-green-600" size={20} />
@@ -3234,8 +3288,10 @@ The email will be formatted with professional styling and company branding on th
               </div>
             </div>
           </div>
+          )}
 
-          {/* Generate Documents */}
+          {/* Generate Documents - hidden in report view */}
+          {!reportView && (
           <div className="bg-gradient-to-br from-purple-50 to-rose-50 rounded-2xl p-6">
             <div className="flex items-center gap-2 mb-4">
               <FaDownload className="text-purple-500" size={20} />
@@ -3289,6 +3345,7 @@ The email will be formatted with professional styling and company branding on th
               </button>
             </div>
           </div>
+          )}
         </div>
       </div>
     </div>
@@ -4111,5 +4168,7 @@ export default function DODetails({ overrideEmpId }) {
     </div>
   );
 }
+
+export { DetailsModal };
 
 
