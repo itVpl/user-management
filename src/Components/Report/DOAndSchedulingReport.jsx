@@ -1,24 +1,636 @@
-import React from 'react';
-import { FileText, Calendar } from 'lucide-react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
+import axios from 'axios';
+import { Search, Truck, ChevronLeft, ChevronRight, Eye, Download, ChevronDown, User } from 'lucide-react';
+import API_CONFIG from '../../config/api.js';
+import { DetailsModal } from '../CMT/DODetails.jsx';
+import alertify from 'alertifyjs';
+import 'alertifyjs/build/css/alertify.css';
+import 'react-date-range/dist/styles.css';
+import 'react-date-range/dist/theme/default.css';
+import { DateRange } from 'react-date-range';
+import { addDays, format } from 'date-fns';
 
 export default function DOAndSchedulingReport() {
-  return (
-    <div className="p-6 bg-gray-50 min-h-screen">
-      <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-8">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
-            <FileText className="text-indigo-600" size={20} />
+  const [assignedDOs, setAssignedDOs] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [range, setRange] = useState({
+    startDate: addDays(new Date(), -29),
+    endDate: new Date(),
+    key: 'selection'
+  });
+  const [showPresetMenu, setShowPresetMenu] = useState(false);
+  const [showCustomRange, setShowCustomRange] = useState(false);
+  const [viewingOrder, setViewingOrder] = useState(null);
+  const dateRangeDropdownRef = useRef(null);
+  const [showESignModal, setShowESignModal] = useState(false);
+  const [eSignName, setESignName] = useState('');
+  const [exportLoading, setExportLoading] = useState(false);
+  const [cmtUsers, setCmtUsers] = useState([]);
+  const [cmtUsersLoading, setCmtUsersLoading] = useState(false);
+  const [selectedCmtEmpId, setSelectedCmtEmpId] = useState('');
+  const [showCmtFilter, setShowCmtFilter] = useState(false);
+  const [cmtFilterSearch, setCmtFilterSearch] = useState('');
+  const cmtFilterRef = useRef(null);
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  const presets = {
+    'Today': [new Date(), new Date()],
+    'Yesterday': [addDays(new Date(), -1), addDays(new Date(), -1)],
+    'Last 7 Days': [addDays(new Date(), -6), new Date()],
+    'Last 30 Days': [addDays(new Date(), -29), new Date()],
+    'This Month': [new Date(new Date().getFullYear(), new Date().getMonth(), 1), new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0)],
+    'Last Month': [new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1), new Date(new Date().getFullYear(), new Date().getMonth(), 0)],
+  };
+
+  const applyPreset = (label) => {
+    const [s, e] = presets[label];
+    setRange({ startDate: s, endDate: e, key: 'selection' });
+    setShowPresetMenu(false);
+  };
+
+  const ymd = (d) => (d ? format(d, 'yyyy-MM-dd') : null);
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+      if (!token) {
+        alertify.error('Please login again.');
+        return;
+      }
+      const startDate = ymd(range.startDate);
+      const endDate = ymd(range.endDate);
+      if (!startDate || !endDate) {
+        setAssignedDOs([]);
+        setLoading(false);
+        return;
+      }
+      const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/do/do/all-cmt-assignments`, {
+        params: { startDate, endDate },
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.data?.success && Array.isArray(res.data?.data?.assignedDOs)) {
+        setAssignedDOs(res.data.data.assignedDOs);
+      } else {
+        setAssignedDOs([]);
+      }
+    } catch (err) {
+      console.error(err);
+      alertify.error(err.response?.data?.message || 'Failed to load DO and Scheduling report');
+      setAssignedDOs([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, [range.startDate, range.endDate]);
+
+  const fetchCmtUsers = async () => {
+    setCmtUsersLoading(true);
+    try {
+      const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+      if (!token) return;
+      const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/inhouseUser/department/CMT`, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+      });
+      const list = res.data?.employees || [];
+      setCmtUsers(Array.isArray(list) ? list : []);
+    } catch (err) {
+      console.error(err);
+      setCmtUsers([]);
+    } finally {
+      setCmtUsersLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCmtUsers();
+  }, []);
+
+  useEffect(() => {
+    if (!showCmtFilter) return;
+    const handleClickOutside = (e) => {
+      if (cmtFilterRef.current && !cmtFilterRef.current.contains(e.target)) {
+        setShowCmtFilter(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showCmtFilter]);
+
+  useEffect(() => {
+    if (!showPresetMenu) return;
+    const handleClickOutside = (e) => {
+      if (dateRangeDropdownRef.current && !dateRangeDropdownRef.current.contains(e.target)) {
+        setShowPresetMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showPresetMenu]);
+
+  const filteredOrders = useMemo(() => {
+    let list = [...assignedDOs];
+    const term = (searchTerm || '').trim().toLowerCase();
+    if (selectedCmtEmpId) {
+      list = list.filter((row) => (row.assignedToCMT?.empId || row.assignedToCMT?._id) === selectedCmtEmpId);
+    }
+    if (!term) return list;
+    return list.filter((row) => {
+      const createdBy = row.createdBySalesUser?.employeeName || '';
+      const assignedTo = row.assignedToCMT?.employeeName || '';
+      const customer = row.customerName || '';
+      const cust0 = row.customers?.[0] || {};
+      const loadNo = cust0.loadNo || '';
+      const dispatcherName = cust0.dispatcherName || '';
+      const carrier = row.carrier?.carrierName || '';
+      const loadType = row.loadType || '';
+      return [createdBy, assignedTo, customer, loadNo, dispatcherName, carrier, loadType].some((s) =>
+        String(s).toLowerCase().includes(term)
+      );
+    });
+  }, [assignedDOs, searchTerm, selectedCmtEmpId]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredOrders.length / itemsPerPage));
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const currentOrders = filteredOrders.slice(startIndex, startIndex + itemsPerPage);
+  const totalItems = filteredOrders.length;
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const todayCount = useMemo(
+    () => assignedDOs.filter((o) => o.createdAt && o.createdAt.startsWith(todayStr)).length,
+    [assignedDOs, todayStr]
+  );
+
+  const filteredCmtUsers = useMemo(() => {
+    const q = (cmtFilterSearch || '').trim().toLowerCase();
+    if (!q) return cmtUsers;
+    return cmtUsers.filter((u) => {
+      const name = (u.employeeName || u.empName || u.aliasName || '').toLowerCase();
+      const empIdStr = String(u.empId || u._id || '').toLowerCase();
+      return name.includes(q) || empIdStr.includes(q);
+    });
+  }, [cmtUsers, cmtFilterSearch]);
+
+  const selectedCmtUser = useMemo(
+    () => (selectedCmtEmpId ? cmtUsers.find((u) => (u.empId || u._id) === selectedCmtEmpId) : null),
+    [cmtUsers, selectedCmtEmpId]
+  );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, range.startDate, range.endDate, selectedCmtEmpId]);
+
+  const handlePageChange = (page) => {
+    if (page < 1 || page > totalPages) return;
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const getPaginationPages = () => {
+    const total = totalPages;
+    const current = currentPage;
+    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+    const pages = [];
+    if (current > 3) pages.push(1, 'ellipsis');
+    const start = Math.max(1, current - 2);
+    const end = Math.min(total, current + 2);
+    for (let i = start; i <= end; i++) pages.push(i);
+    if (current < total - 2) pages.push('ellipsis', total);
+    return pages;
+  };
+
+  const handleExportCSV = (dataToExport, signedByName = '') => {
+    if (!dataToExport || dataToExport.length === 0) {
+      alertify.error('No data to export');
+      return;
+    }
+    const headers = ['Load No', 'Dispatcher Name', 'Carrier Name', 'Load Type', 'Created By (Sales)', 'Assigned To (CMT)', 'Assigned At'];
+    const rows = dataToExport.map((order) => {
+      const cust0 = order.customers?.[0] || {};
+      const loadNo = cust0.loadNo || 'N/A';
+      const dispatcherName = cust0.dispatcherName || 'N/A';
+      const carrierName = order.carrier?.carrierName || 'N/A';
+      const loadType = order.loadType || 'N/A';
+      const createdBy = order.createdBySalesUser?.employeeName || 'N/A';
+      const assignedTo = order.assignedToCMT?.employeeName || 'N/A';
+      const assignedAt = order.assignedToCMT?.assignedAt
+        ? format(new Date(order.assignedToCMT.assignedAt), 'MMM dd, yyyy HH:mm')
+        : 'N/A';
+      return [
+        `"${String(loadNo).replace(/"/g, '""')}"`,
+        `"${String(dispatcherName).replace(/"/g, '""')}"`,
+        `"${String(carrierName).replace(/"/g, '""')}"`,
+        `"${String(loadType).replace(/"/g, '""')}"`,
+        `"${String(createdBy).replace(/"/g, '""')}"`,
+        `"${String(assignedTo).replace(/"/g, '""')}"`,
+        `"${String(assignedAt).replace(/"/g, '""')}"`
+      ];
+    });
+    let csvContent = [headers.join(','), ...rows.map((row) => row.join(','))].join('\n');
+    if (signedByName && signedByName.trim()) {
+      const signDate = new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+      csvContent += '\n\n"E-Sign","Signed By","Date"\n';
+      csvContent += `"","${String(signedByName).replace(/"/g, '""')}","${signDate}"`;
+    }
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'DO_and_Scheduling_Report.csv');
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportCSVClick = () => {
+    if (filteredOrders.length === 0) {
+      alertify.error('No data to export');
+      return;
+    }
+    setESignName('');
+    setShowESignModal(true);
+  };
+
+  const handleESignConfirm = () => {
+    const name = (eSignName || '').trim();
+    if (!name) {
+      alertify.error('Please enter your name for E-Sign');
+      return;
+    }
+    setExportLoading(true);
+    setShowESignModal(false);
+    setESignName('');
+    handleExportCSV(filteredOrders, name);
+    alertify.success(`Exported ${filteredOrders.length} orders`);
+    setExportLoading(false);
+  };
+
+  const showLoadingOverlay = loading && assignedDOs.length > 0;
+
+  if (loading && assignedDOs.length === 0) {
+    return (
+      <div className="p-6 bg-white min-h-screen">
+        <div className="flex justify-center items-center h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4" />
+            <p className="text-gray-600">Loading DO and Scheduling report...</p>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-800">DO & Scheduling Report</h1>
-            <p className="text-sm text-gray-500">Delivery order and scheduling report</p>
-          </div>
-        </div>
-        <div className="border border-gray-200 rounded-xl p-8 text-center">
-          <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <p className="text-gray-600">Report content can be added here.</p>
         </div>
       </div>
+    );
+  }
+
+  return (
+    <div className="p-6 bg-white min-h-screen">
+      {showLoadingOverlay && (
+        <div className="fixed inset-0 bg-black/20 z-40 flex items-center justify-center">
+          <div className="bg-white rounded-2xl shadow-2xl p-8">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4" />
+              <p className="text-gray-700 font-semibold">Loading...</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Top Section - same as DeliveryOrder */}
+      <div className="flex flex-col gap-6 mb-6 border border-gray-200 rounded-xl p-6 bg-white">
+        <div className="flex flex-col xl:flex-row gap-6">
+          <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-white rounded-xl border border-gray-200 p-6 h-[90px] flex items-center relative">
+              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-gray-700 font-bold text-2xl">
+                {filteredOrders.length}
+              </div>
+              <div className="absolute inset-0 flex items-center justify-center text-gray-700 font-semibold">
+                Total Orders
+              </div>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 p-6 h-[90px] flex items-center relative">
+              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-gray-700 font-bold text-2xl">
+                {todayCount}
+              </div>
+              <div className="absolute inset-0 flex items-center justify-center text-gray-700 font-semibold">
+                Today
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1 w-full xl:w-[350px]">
+            <div className="relative w-full" ref={dateRangeDropdownRef}>
+              <button
+                type="button"
+                onClick={() => setShowPresetMenu((v) => !v)}
+                className="w-full text-left px-4 h-[45px] border border-gray-200 rounded-lg bg-white flex items-center justify-between text-gray-700 font-medium hover:border-gray-300 transition-colors"
+              >
+                <span>
+                  {range.startDate && range.endDate
+                    ? `${format(range.startDate, 'MMM dd, yyyy')} - ${format(range.endDate, 'MMM dd, yyyy')}`
+                    : 'Select Date Range'}
+                </span>
+                <span className="ml-3 text-gray-400">▼</span>
+              </button>
+              {showPresetMenu && (
+                <div className="absolute z-50 mt-2 w-full rounded-lg border border-gray-100 bg-white shadow-lg py-1 right-0">
+                  <button
+                    onClick={() => {
+                      setRange({ startDate: null, endDate: null, key: 'selection' });
+                      setShowPresetMenu(false);
+                    }}
+                    className="block w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-600"
+                  >
+                    Clear Filter
+                  </button>
+                  <div className="my-1 border-t border-gray-100" />
+                  {Object.keys(presets).map((lbl) => (
+                    <button
+                      key={lbl}
+                      onClick={() => applyPreset(lbl)}
+                      className="block w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-700"
+                    >
+                      {lbl}
+                    </button>
+                  ))}
+                  <div className="my-1 border-t border-gray-100" />
+                  <button
+                    onClick={() => { setShowPresetMenu(false); setShowCustomRange(true); }}
+                    className="block w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-700"
+                  >
+                    Custom Range
+                  </button>
+                </div>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={handleExportCSVClick}
+              disabled={filteredOrders.length === 0 || exportLoading}
+              className="mt-2 w-full flex items-center justify-center gap-2 px-4 h-[45px] bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Export report to CSV (E-Sign required)"
+            >
+              {exportLoading ? 'Exporting...' : <><Download size={18} /> Export to CSV</>}
+            </button>
+          </div>
+        </div>
+
+        <div className="flex gap-2 w-full items-stretch">
+          <div className="relative flex-1">
+            <input
+              type="text"
+              placeholder="Search Orders"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-6 pr-12 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-colors text-gray-600 placeholder-gray-400"
+            />
+            <Search className="absolute right-6 top-1/2 transform -translate-y-1/2 text-gray-400" size={24} />
+          </div>
+          <div className="relative shrink-0 min-w-[320px]" ref={cmtFilterRef}>
+            <button
+              type="button"
+              onClick={() => setShowCmtFilter((v) => !v)}
+              className="h-full min-h-[48px] w-full px-4 py-3 border border-gray-200 rounded-xl bg-white hover:border-gray-300 flex items-center gap-2 text-gray-700 font-medium whitespace-nowrap"
+            >
+              <User size={18} className="text-gray-500 shrink-0" />
+              <span className="min-w-0 flex-1 text-left truncate max-w-[280px]">
+                {selectedCmtUser ? (selectedCmtUser.employeeName || selectedCmtUser.empName || selectedCmtUser.empId || 'CMT User') : 'CMT User (All)'}
+              </span>
+              <ChevronDown size={16} className="text-gray-400" />
+            </button>
+            {showCmtFilter && (
+              <div className="absolute z-50 right-0 mt-2 w-80 min-w-[280px] rounded-xl border border-gray-200 bg-white shadow-lg overflow-hidden">
+                <div className="p-2 border-b border-gray-100">
+                  <input
+                    type="text"
+                    placeholder="Search CMT user..."
+                    value={cmtFilterSearch}
+                    onChange={(e) => setCmtFilterSearch(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 placeholder-gray-400"
+                  />
+                </div>
+                <div className="max-h-60 overflow-y-auto py-1">
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedCmtEmpId(''); setShowCmtFilter(false); setCmtFilterSearch(''); }}
+                    className={`w-full text-left px-4 py-2.5 text-sm font-medium ${!selectedCmtEmpId ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`}
+                  >
+                    All CMT Users
+                  </button>
+                  {cmtUsersLoading ? (
+                    <div className="px-4 py-4 text-sm text-gray-500 text-center">Loading...</div>
+                  ) : filteredCmtUsers.length === 0 ? (
+                    <div className="px-4 py-4 text-sm text-gray-500 text-center">No CMT user found</div>
+                  ) : (
+                    filteredCmtUsers.map((u) => {
+                      const id = u.empId || u._id;
+                      const name = u.employeeName || u.empName || u.aliasName || id || '—';
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => { setSelectedCmtEmpId(id); setShowCmtFilter(false); setCmtFilterSearch(''); }}
+                          className={`w-full text-left px-4 py-2.5 text-sm ${selectedCmtEmpId === id ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700 hover:bg-gray-50'}`}
+                        >
+                          <span className="block truncate">{name}</span>
+                          {id && <span className="block text-xs text-gray-500 mt-0.5">ID: {id}</span>}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {showCustomRange && (
+        <div className="fixed inset-0 z-[60] bg-black/30 flex items-center justify-center p-4" onClick={() => setShowCustomRange(false)}>
+          <div className="bg-white rounded-xl shadow-2xl p-4" onClick={(e) => e.stopPropagation()}>
+            <DateRange
+              ranges={[range.startDate && range.endDate ? range : { startDate: new Date(), endDate: new Date(), key: 'selection' }]}
+              onChange={(item) => {
+                if (item.selection?.startDate && item.selection?.endDate) setRange(item.selection);
+              }}
+              moveRangeOnFirstSelection={false}
+              months={2}
+              direction="horizontal"
+            />
+            <div className="flex justify-end gap-2 mt-3">
+              <button type="button" onClick={() => { setRange({ startDate: null, endDate: null, key: 'selection' }); setShowCustomRange(false); }} className="px-4 py-2 border rounded-lg hover:bg-gray-50">Clear</button>
+              <button type="button" onClick={() => setShowCustomRange(false)} className="px-4 py-2 border rounded-lg hover:bg-gray-50">Cancel</button>
+              <button
+                type="button"
+                onClick={() => range.startDate && range.endDate && setShowCustomRange(false)}
+                className={`px-4 py-2 rounded-lg ${range.startDate && range.endDate ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
+                disabled={!range.startDate || !range.endDate}
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+        <div className="overflow-x-auto">
+          {filteredOrders.length === 0 ? (
+            <div className="text-center py-12">
+              <Truck className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500 text-lg">
+                {searchTerm ? 'No orders found matching your search' : !ymd(range.startDate) || !ymd(range.endDate) ? 'Select a date range' : 'No DO assignments in this period'}
+              </p>
+              <p className="text-gray-400 text-sm">
+                {searchTerm ? 'Try adjusting your search' : 'Change date range or check back later'}
+              </p>
+            </div>
+          ) : (
+            <table className="w-full">
+              <thead className="bg-white border-b border-gray-200">
+                <tr>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Load No</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Dispatcher Name</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Carrier Name</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Load Type</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Created By (Sales)</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Assigned To (CMT)</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Assigned At</th>
+                  <th className="text-center py-4 px-4 text-gray-800 font-medium text-base">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {currentOrders.map((order) => {
+                  const createdBy = order.createdBySalesUser?.employeeName || 'N/A';
+                  const assignedTo = order.assignedToCMT?.employeeName || 'N/A';
+                  const assignedAt = order.assignedToCMT?.assignedAt
+                    ? format(new Date(order.assignedToCMT.assignedAt), 'MMM dd, yyyy HH:mm')
+                    : 'N/A';
+                  const carrierName = order.carrier?.carrierName || 'N/A';
+                  const cust0 = order.customers?.[0] || {};
+                  const loadNo = cust0.loadNo || 'N/A';
+                  const dispatcherName = cust0.dispatcherName || 'N/A';
+                  const orderForModal = {
+                    id: order._id,
+                    doId: `DO-${String(order._id || '').slice(-6) || '—'}`,
+                    loadNo,
+                    billTo: cust0.billTo || order.customerName || 'N/A',
+                    raw: order
+                  };
+                  return (
+                    <tr key={order._id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                      <td className="py-4 px-4"><span className="text-sm text-gray-600 font-medium">{loadNo}</span></td>
+                      <td className="py-4 px-4"><span className="text-sm font-medium text-gray-800">{dispatcherName}</span></td>
+                      <td className="py-4 px-4"><span className="text-sm font-medium text-gray-800">{carrierName}</span></td>
+                      <td className="py-4 px-4"><span className="text-sm font-medium text-gray-800">{order.loadType || 'N/A'}</span></td>
+                      <td className="py-4 px-4"><span className="text-sm font-medium text-gray-800">{createdBy}</span></td>
+                      <td className="py-4 px-4"><span className="text-sm font-medium text-gray-800">{assignedTo}</span></td>
+                      <td className="py-4 px-4"><span className="text-sm text-gray-700">{assignedAt}</span></td>
+                      <td className="py-4 px-4">
+                        <button
+                          onClick={() => setViewingOrder(orderForModal)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                        >
+                          <Eye size={14} /> View
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+
+      {totalPages > 1 && (
+        <div className="flex justify-between items-center mt-6 bg-white rounded-2xl border border-gray-200 p-4">
+          <div className="text-sm text-gray-600">
+            Showing {totalItems === 0 ? 0 : startIndex + 1} to {Math.min(startIndex + itemsPerPage, totalItems)} of {totalItems} orders
+            {searchTerm && ` (searching: "${searchTerm}")`}
+          </div>
+          <div className="flex gap-1 items-center">
+            <button
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+            >
+              <ChevronLeft size={18} /><span>Previous</span>
+            </button>
+            <div className="flex items-center gap-1 mx-4">
+              {getPaginationPages().map((page, index) =>
+                page === 'ellipsis' ? (
+                  <span key={`ellipsis-${index}`} className="px-2 text-gray-400">...</span>
+                ) : (
+                  <button
+                    key={page}
+                    onClick={() => handlePageChange(page)}
+                    className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-all ${
+                      currentPage === page ? 'bg-white border border-black shadow-sm text-black' : 'text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    {page}
+                  </button>
+                )
+              )}
+            </div>
+            <button
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+            >
+              <span>Next</span><ChevronRight size={18} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* E-Sign modal for CSV export */}
+      {showESignModal && (
+        <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-4">
+          <div className="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-md">
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">E-Sign for Export</h3>
+            <p className="text-sm text-gray-600 mb-4">Enter your name to sign the report. It will be included in the exported CSV.</p>
+            <input
+              type="text"
+              value={eSignName}
+              onChange={(e) => setESignName(e.target.value)}
+              placeholder="Your full name"
+              className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 text-gray-800 placeholder-gray-400 mb-4"
+              onKeyDown={(e) => e.key === 'Enter' && handleESignConfirm()}
+            />
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => { setShowESignModal(false); setESignName(''); }}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleESignConfirm}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium"
+              >
+                Sign & Export CSV
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <DetailsModal
+        open={!!viewingOrder}
+        onClose={() => setViewingOrder(null)}
+        order={viewingOrder}
+        cmtEmpId={viewingOrder?.raw?.assignedToCMT?.empId || ''}
+        onForwardSuccess={() => fetchData()}
+        reportView={true}
+      />
     </div>
   );
 }
