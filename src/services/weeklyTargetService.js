@@ -94,8 +94,8 @@ export const listWeeklyTargets = async (params = {}) => {
 
 /** GET /api/v1/weekly-target/my - My weekly targets */
 export const getMyWeeklyTargets = async (params = {}) => {
-  const { page = 1, limit = 20, weekStartDate, weekEndDate } = params;
-  const query = buildQuery({ page, limit, weekStartDate, weekEndDate });
+  const { page = 1, limit = 20, weekStartDate, weekEndDate, status } = params;
+  const query = buildQuery({ page, limit, weekStartDate, weekEndDate, status });
   return apiFetch(`${BASE}/my${query}`);
 };
 

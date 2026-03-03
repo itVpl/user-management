@@ -294,6 +294,14 @@ export default function WeeklyTargetSetup() {
                 assignedDoImportantDateUpdates: d.cmtTargets.assignedDoImportantDateUpdates ?? 0,
               }
             : undefined,
+          hrTargets: d?.hrTargets
+            ? {
+                calls: d.hrTargets.calls ?? 0,
+                interviews: d.hrTargets.interviews ?? 0,
+                candidateJoin: d.hrTargets.candidateJoin ?? 0,
+                internalReviewFeedback: d.hrTargets.internalReviewFeedback ?? 0,
+              }
+            : undefined,
           status: d?.status ?? 'active',
           notes: d?.notes ?? '',
         });
@@ -606,6 +614,60 @@ export default function WeeklyTargetSetup() {
                 OK
               </button>
             </div>
+            <select
+              value={filters.empId}
+              onChange={(e) => handleFilterChange('empId', e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
+            >
+              <option value="">All employees</option>
+              {employees.map((emp) => (
+                <option key={emp._id || emp.empId} value={emp.empId}>
+                  {emp.empId} – {emp.employeeName || emp.name || 'N/A'}
+                </option>
+              ))}
+            </select>
+            <select
+              value={filters.department}
+              onChange={(e) => handleFilterChange('department', e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
+            >
+              <option value="">All departments</option>
+              <option value="Sales">Sales</option>
+              <option value="CMT">CMT</option>
+              <option value="HR">HR</option>
+            </select>
+            <input
+              type="date"
+              value={filters.weekStartDate}
+              onChange={(e) => handleFilterChange('weekStartDate', e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
+              placeholder="Week start"
+            />
+            <input
+              type="date"
+              value={filters.weekEndDate}
+              onChange={(e) => handleFilterChange('weekEndDate', e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
+              placeholder="Week end"
+            />
+            <select
+              value={filters.status}
+              onChange={(e) => handleFilterChange('status', e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
+            >
+              <option value="">All statuses</option>
+              <option value="draft">Draft</option>
+              <option value="active">Active</option>
+              <option value="completed">Completed</option>
+            </select>
+            <button
+              type="button"
+              onClick={() => fetchList()}
+              className="p-1.5 rounded-lg border border-gray-300 hover:bg-gray-100"
+              title="Refresh"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
           </div>
         </div>
       )}
@@ -1028,6 +1090,12 @@ function WeeklyTargetForm({ employees, onSuccess, onCancel, fetchEmployees, inMo
     carriersAdded: 0,
     assignedDoImportantDateUpdates: 0,
   });
+  const [hrTargets, setHrTargets] = useState({
+    calls: 0,
+    interviews: 0,
+    candidateJoin: 0,
+    internalReviewFeedback: 0,
+  });
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -1039,6 +1107,9 @@ function WeeklyTargetForm({ employees, onSuccess, onCancel, fetchEmployees, inMo
   };
   const setCmt = (key, value) => {
     setCmtTargets((c) => ({ ...c, [key]: Number(value) || 0 }));
+  };
+  const setHr = (key, value) => {
+    setHrTargets((h) => ({ ...h, [key]: Number(value) || 0 }));
   };
 
   const handleSubmit = async (e) => {
@@ -1056,7 +1127,8 @@ function WeeklyTargetForm({ employees, onSuccess, onCancel, fetchEmployees, inMo
         department,
       };
       if (department === 'Sales') payload.salesTargets = salesTargets;
-      else payload.cmtTargets = cmtTargets;
+      else if (department === 'CMT') payload.cmtTargets = cmtTargets;
+      else if (department === 'HR') payload.hrTargets = hrTargets;
       await createWeeklyTarget(payload);
       onSuccess();
     } catch (err) {
@@ -1072,10 +1144,13 @@ function WeeklyTargetForm({ employees, onSuccess, onCancel, fetchEmployees, inMo
   const cmtDept = employees.filter(
     (e) => (e.department || '').toLowerCase().includes('cmt')
   );
-  const options = department === 'Sales' ? salesDept : cmtDept;
+  const hrDept = employees.filter(
+    (e) => (e.department || '').toLowerCase().includes('hr')
+  );
+  const options =
+    department === 'Sales' ? salesDept : department === 'CMT' ? cmtDept : hrDept;
   if (options.length === 0 && employees.length) {
-    const fallback = department === 'Sales' ? employees : employees;
-    options.push(...fallback);
+    options.push(...employees);
   }
   const allOptions = employees.length ? employees : options;
 
@@ -1110,6 +1185,7 @@ function WeeklyTargetForm({ employees, onSuccess, onCancel, fetchEmployees, inMo
               >
                 <option value="Sales">Sales</option>
                 <option value="CMT">CMT</option>
+                <option value="HR">HR</option>
               </select>
             </div>
             <div>
@@ -1247,6 +1323,53 @@ function WeeklyTargetForm({ employees, onSuccess, onCancel, fetchEmployees, inMo
             </div>
           </div>
         )}
+        {department === 'HR' && (
+          <div className="border-t pt-4 space-y-3">
+            <h3 className="font-medium text-gray-800">HR targets</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm text-gray-600">Calls</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={hrTargets.calls}
+                  onChange={(e) => setHr('calls', e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600">Interviews</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={hrTargets.interviews}
+                  onChange={(e) => setHr('interviews', e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600">Candidate join</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={hrTargets.candidateJoin}
+                  onChange={(e) => setHr('candidateJoin', e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600">Internal review feedback</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={hrTargets.internalReviewFeedback}
+                  onChange={(e) => setHr('internalReviewFeedback', e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                />
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="flex justify-end gap-3 pt-2">
           <button
@@ -1273,6 +1396,7 @@ function WeeklyTargetEditForm({ target, formData, setFormData, onSuccess, onCanc
       const payload = {};
       if (formData.salesTargets) payload.salesTargets = formData.salesTargets;
       if (formData.cmtTargets) payload.cmtTargets = formData.cmtTargets;
+      if (formData.hrTargets) payload.hrTargets = formData.hrTargets;
       if (formData.status != null) payload.status = formData.status;
       if (formData.notes != null) payload.notes = formData.notes;
       await updateWeeklyTarget(target._id, payload);
@@ -1358,6 +1482,30 @@ function WeeklyTargetEditForm({ target, formData, setFormData, onSuccess, onCanc
             </div>
           </div>
         )}
+        {formData.hrTargets && (
+          <div className="space-y-3">
+            <h3 className="font-medium text-gray-800">HR targets</h3>
+            <div className="grid grid-cols-2 gap-3">
+              {['calls', 'interviews', 'candidateJoin', 'internalReviewFeedback'].map((key) => (
+                <div key={key}>
+                  <label className="block text-sm text-gray-600">{key.replace(/([A-Z])/g, ' $1').trim()}</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={formData.hrTargets[key] ?? 0}
+                    onChange={(e) =>
+                      setFormData((f) => ({
+                        ...f,
+                        hrTargets: { ...f.hrTargets, [key]: Number(e.target.value) || 0 },
+                      }))
+                    }
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="rounded-lg border border-gray-200 overflow-hidden shadow-sm">
           <div className="bg-orange-100 px-4 py-3">
             <h3 className="text-lg font-semibold text-orange-800">Status & Notes</h3>
@@ -1422,6 +1570,52 @@ export function WeeklyTargetDetail({
   const progressData = progress || {};
   const sales = progressData.salesTargets || {};
   const cmt = progressData.cmtTargets || {};
+  const hr = progressData.hrTargets || {};
+
+  const computeOverallPercent = (items) => {
+    let totalTarget = 0;
+    let totalCompleted = 0;
+    items.forEach((m) => {
+      totalTarget += Number(m?.target ?? 0) || 0;
+      totalCompleted += Number(m?.completed ?? 0) || 0;
+    });
+    if (totalTarget <= 0) return 0;
+    return Math.round((totalCompleted / totalTarget) * 100);
+  };
+
+  /** Compute overall progress % from metrics so HR (and others) show correct percentage */
+  const getComputedProgressPercentage = () => {
+    const dept = (target?.department || progressData.department || '').toLowerCase();
+    if (dept === 'sales') {
+      const items = [
+        sales.deliveryOrders,
+        sales.customerFollowUps,
+        sales.newCustomersAdded,
+        sales.marginAmount,
+      ].filter(Boolean);
+      return computeOverallPercent(items);
+    }
+    if (dept === 'cmt') {
+      const items = [
+        cmt.bidsSubmitted,
+        cmt.carriersAdded,
+        cmt.assignedDoImportantDateUpdates,
+      ].filter(Boolean);
+      return computeOverallPercent(items);
+    }
+    if (dept === 'hr') {
+      const items = [
+        hr.calls,
+        hr.interviews,
+        hr.candidateJoin,
+        hr.internalReviewFeedback,
+      ].filter(Boolean);
+      return computeOverallPercent(items);
+    }
+    return progressData.progressPercentage ?? null;
+  };
+
+  const computedProgressPct = getComputedProgressPercentage();
 
   const handleSaveProgress = () => {
     const payload = {};
@@ -1546,11 +1740,15 @@ export function WeeklyTargetDetail({
         <div className="px-4 py-3 flex items-center gap-2 bg-blue-100">
           <BarChart3 className="w-5 h-5 text-blue-700" />
           <span className="font-semibold text-blue-800 text-base">
-            {(target?.department || progressData.department || '').toLowerCase() === 'cmt' ? 'CMT Progress' : 'Sales Progress'}
+            {(target?.department || progressData.department || '').toLowerCase() === 'cmt'
+              ? 'CMT Progress'
+              : (target?.department || progressData.department || '').toLowerCase() === 'hr'
+              ? 'HR Progress'
+              : 'Sales Progress'}
           </span>
-          {progressData.progressPercentage != null && (
+          {(computedProgressPct != null || progressData.progressPercentage != null) && (
             <span className="ml-auto text-lg font-semibold text-blue-700">
-              {progressData.progressPercentage}%
+              {(computedProgressPct != null ? computedProgressPct : progressData.progressPercentage)}%
             </span>
           )}
         </div>
@@ -1576,8 +1774,15 @@ export function WeeklyTargetDetail({
               [
                 ['Bids submitted', cmt.bidsSubmitted?.target, cmt.bidsSubmitted?.completed],
                 ['Carriers added', cmt.carriersAdded?.target, cmt.carriersAdded?.completed],
-                ['Update Scheduling', cmt.assignedDoImportantDateUpdates?.target, cmt.assignedDoImportantDateUpdates?.completed], // manualKey removed – read-only
+                ['Update Scheduling', cmt.assignedDoImportantDateUpdates?.target, cmt.assignedDoImportantDateUpdates?.completed],
               ].map(([label, t, c, manualKey]) => renderRow(label, t, c, manualKey))}
+            {progressData.department === 'HR' &&
+              [
+                ['Calls', hr.calls?.target, hr.calls?.completed],
+                ['Interviews', hr.interviews?.target, hr.interviews?.completed],
+                ['Candidate join', hr.candidateJoin?.target, hr.candidateJoin?.completed],
+                ['Internal review feedback', hr.internalReviewFeedback?.target, hr.internalReviewFeedback?.completed],
+              ].map(([label, t, c]) => renderRow(label, t, c))}
           </tbody>
         </table>
         </div>

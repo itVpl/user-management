@@ -310,7 +310,7 @@ export default function CandidateShortlist() {
       ));
       alertify.success('Candidate updated successfully!');
     } else {
-      // Add new candidate via API
+      // Add new candidate to shortlist — POST /api/v1/candidate/create-simple
       try {
         setLoading(true);
 
@@ -372,9 +372,7 @@ export default function CandidateShortlist() {
           return;
         }
 
-         // Debug log
-
-        // Make API call
+        // API: Add Candidate to Shortlist — POST /api/v1/candidate/create-simple (Bearer token)
         const response = await fetch(`${API_BASE_URL}/api/v1/candidate/create-simple`, {
           method: 'POST',
           headers: {
