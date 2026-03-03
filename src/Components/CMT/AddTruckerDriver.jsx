@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import API_CONFIG from '../../config/api';
+import { Search, PlusCircle, ChevronLeft, ChevronRight, User } from 'lucide-react';
 
 // Base URL for API
 const BASE_URL = API_CONFIG.BASE_URL;
@@ -27,137 +28,117 @@ const useDebounce = (value, delay) => {
 const ViewDriverDetailsModal = ({ isOpen, onClose, driverData }) => {
   if (!isOpen || !driverData) return null;
 
-  // Tailwind classes
   const inputClass = "mt-1 block w-full bg-gray-50 border border-gray-200 rounded-lg shadow-sm p-3 text-gray-700 cursor-not-allowed";
   const labelClass = "block text-sm font-medium text-gray-700 mb-1";
-  const sectionHeaderClass = "text-lg font-bold text-white border-b border-white pb-2 mb-4 -mt-4";
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-md transition-opacity" />
-      <div 
-        className="relative w-full max-w-6xl max-h-[95vh] bg-white rounded-3xl shadow-2xl border border-gray-200/50 overflow-hidden flex flex-col transform transition-all duration-300 scale-100"
+    <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-2" onClick={onClose}>
+      <div
+        className="bg-white rounded-3xl max-w-4xl w-full max-h-[95vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Modal Header */}
-        <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 p-6 flex justify-between items-center text-white shadow-lg">
-          <div className="flex items-center space-x-3">
-            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-              </svg>
+        {/* Modal Header - same as DeliveryOrder */}
+        <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-4 rounded-t-3xl">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                <User className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold">Driver Details</h2>
+                <p className="text-blue-100">{driverData.fullName}</p>
+              </div>
             </div>
-            <div>
-              <h3 className="text-2xl font-bold">Driver Details</h3>
-              <p className="text-sm text-blue-100 mt-1">Complete information about {driverData.fullName}</p>
-            </div>
+            <button type="button" onClick={onClose} className="text-white hover:text-gray-200 text-2xl font-bold leading-none">
+              ×
+            </button>
           </div>
-          <button onClick={onClose} className="text-white/80 hover:text-white hover:bg-white/20 p-2 rounded-xl transition-all duration-200">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
-            </svg>
-          </button>
         </div>
-        
+
         {/* Form Body with Scroll - Hide Scrollbar */}
-        <div className="p-6 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [-webkit-overflow-scrolling:touch]">
+        <div className="p-4 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [-webkit-overflow-scrolling:touch]">
           <style jsx>{`
             .hide-scrollbar::-webkit-scrollbar {
               display: none;
             }
           `}</style>
           <div className="hide-scrollbar space-y-6">
-            {/* SECTION 1: Personal & Contact Information - Blue Background */}
-            <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-              <h4 className={sectionHeaderClass + " bg-blue-600 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4"}>Personal & Contact Information</h4>
-              <div className="grid grid-cols-2 md:grid-cols-2 gap-6">
-                
-                {/* Trucker Information */}
-                <div>
-                  <label className={labelClass}>Trucker/Carrier</label>
-                  <div className={inputClass}>
-                    {driverData.truckerInfo?.truckerName || 'N/A'}
+            {/* SECTION 1: Personal & Contact - same as DeliveryOrder popup */}
+            <div className="rounded-lg border border-gray-200 overflow-hidden shadow-sm">
+              <div className="bg-blue-100 px-4 py-3">
+                <h3 className="text-lg font-semibold text-blue-800">Personal & Contact Information</h3>
+              </div>
+              <div className="bg-white p-4 border-t border-gray-200">
+                <div className="grid grid-cols-2 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className={labelClass}>Trucker/Carrier</label>
+                    <div className={inputClass}>{driverData.truckerInfo?.truckerName || 'N/A'}</div>
                   </div>
-               
-                </div>
-
-                {/* Full Name */}
-                <div>
-                  <label className={labelClass}>Full Name</label>
-                  <div className={inputClass}>{driverData.fullName}</div>
-                </div>
-
-                {/* Phone */}
-                <div>
-                  <label className={labelClass}>Phone Number</label>
-                  <div className={inputClass}>{driverData.phone}</div>
-                </div>
-
-                {/* Email */}
-                <div>
-                  <label className={labelClass}>Email</label>
-                  <div className={inputClass}>{driverData.email}</div>
-                </div>
-
-                {/* Driver License */}
-                <div>
-                  <label className={labelClass}>Driver License</label>
-                  <div className={inputClass}>{driverData.driverLicense}</div>
-                </div>
-
-                {/* Gender */}
-                <div>
-                  <label className={labelClass}>Gender</label>
-                  <div className={inputClass}>{driverData.gender}</div>
-                </div>
-
-                {/* Driver ID */}
-                <div>
-                  <label className={labelClass}>Driver ID</label>
-                  <div className={inputClass}>{driverData.driverId}</div>
+                  <div>
+                    <label className={labelClass}>Full Name</label>
+                    <div className={inputClass}>{driverData.fullName}</div>
+                  </div>
+                  <div>
+                    <label className={labelClass}>Phone Number</label>
+                    <div className={inputClass}>{driverData.phone}</div>
+                  </div>
+                  <div>
+                    <label className={labelClass}>Email</label>
+                    <div className={inputClass}>{driverData.email}</div>
+                  </div>
+                  <div>
+                    <label className={labelClass}>Driver License</label>
+                    <div className={inputClass}>{driverData.driverLicense}</div>
+                  </div>
+                  <div>
+                    <label className={labelClass}>Gender</label>
+                    <div className={inputClass}>{driverData.gender}</div>
+                  </div>
+                  <div>
+                    <label className={labelClass}>Driver ID</label>
+                    <div className={inputClass}>{driverData.driverId}</div>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* SECTION 2: Address Details - Green Background */}
-            <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-              <h4 className={sectionHeaderClass + " bg-green-600 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4"}>Address Details</h4>
-              <div className="grid grid-cols-3 md:grid-cols-4 gap-6">
-                {/* Country */}
-                <div>
-                  <label className={labelClass}>Country</label>
-                  <div className={inputClass}>{driverData.country}</div>
-                </div>
-
-                {/* State */}
-                <div>
-                  <label className={labelClass}>State</label>
-                  <div className={inputClass}>{driverData.state}</div>
-                </div>
-
-                {/* City */}
-                <div>
-                  <label className={labelClass}>City</label>
-                  <div className={inputClass}>{driverData.city}</div>
-                </div>
-
-                {/* Zip Code */}
-                <div>
-                  <label className={labelClass}>Zip Code</label>
-                  <div className={inputClass}>{driverData.zipCode}</div>
-                </div>
+            {/* SECTION 2: Address Details - same as DeliveryOrder popup */}
+            <div className="rounded-lg border border-gray-200 overflow-hidden shadow-sm">
+              <div className="bg-green-100 px-4 py-3">
+                <h3 className="text-lg font-semibold text-green-800">Address Details</h3>
               </div>
-              
-              {/* Full Address (Full Width) */}
-              <div className="mt-4">
-                <label className={labelClass}>Full Address</label>
-                <div className={inputClass}>{driverData.fullAddress}</div>
+              <div className="bg-white p-4 border-t border-gray-200">
+                <div className="grid grid-cols-3 md:grid-cols-4 gap-6">
+                  <div>
+                    <label className={labelClass}>Country</label>
+                    <div className={inputClass}>{driverData.country}</div>
+                  </div>
+                  <div>
+                    <label className={labelClass}>State</label>
+                    <div className={inputClass}>{driverData.state}</div>
+                  </div>
+                  <div>
+                    <label className={labelClass}>City</label>
+                    <div className={inputClass}>{driverData.city}</div>
+                  </div>
+                  <div>
+                    <label className={labelClass}>Zip Code</label>
+                    <div className={inputClass}>{driverData.zipCode}</div>
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <label className={labelClass}>Full Address</label>
+                  <div className={inputClass}>{driverData.fullAddress}</div>
+                </div>
               </div>
             </div>
 
-            {/* SECTION 3: Compliance & Documents - Purple Background */}
-            <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
-              <h4 className={sectionHeaderClass + " bg-purple-600 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4"}>Compliance & Documents</h4>
+            {/* SECTION 3: Compliance & Documents - same as DeliveryOrder popup */}
+            <div className="rounded-lg border border-gray-200 overflow-hidden shadow-sm">
+              <div className="bg-purple-100 px-4 py-3">
+                <h3 className="text-lg font-semibold text-purple-800">Compliance & Documents</h3>
+              </div>
+              <div className="bg-white p-4 border-t border-gray-200">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {/* MC/DOT Number */}
                 <div>
@@ -242,41 +223,39 @@ const ViewDriverDetailsModal = ({ isOpen, onClose, driverData }) => {
                   )}
                 </div>
               </div>
+              </div>
             </div>
 
-            {/* SECTION 4: Added By Information - Orange Background */}
-            <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
-              <h4 className={sectionHeaderClass + " bg-orange-600 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4"}>Added By Information</h4>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                {/* Added By Employee */}
-                <div>
-                  <label className={labelClass}>Added By</label>
-                  <div className={inputClass}>{driverData.addedByInfo?.employeeName || 'N/A'}</div>
-                </div>
-
-                {/* Employee ID */}
-                <div>
-                  <label className={labelClass}>Employee ID</label>
-                  <div className={inputClass}>{driverData.addedByInfo?.empId || 'N/A'}</div>
-                </div>
-
-                {/* Department */}
-                <div>
-                  <label className={labelClass}>Department</label>
-                  <div className={inputClass}>{driverData.addedByInfo?.department || 'N/A'}</div>
-                </div>
-
-                {/* Added Date */}
-                <div>
-                  <label className={labelClass}>Added Date</label>
-                  <div className={inputClass}>
-                    {new Date(driverData.createdAt).toLocaleDateString('en-US', {
-                      year: 'numeric',
-                      month: 'short',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
+            {/* SECTION 4: Added By Information - same as DeliveryOrder popup */}
+            <div className="rounded-lg border border-gray-200 overflow-hidden shadow-sm">
+              <div className="bg-orange-100 px-4 py-3">
+                <h3 className="text-lg font-semibold text-orange-800">Added By Information</h3>
+              </div>
+              <div className="bg-white p-4 border-t border-gray-200">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                  <div>
+                    <label className={labelClass}>Added By</label>
+                    <div className={inputClass}>{driverData.addedByInfo?.employeeName || 'N/A'}</div>
+                  </div>
+                  <div>
+                    <label className={labelClass}>Employee ID</label>
+                    <div className={inputClass}>{driverData.addedByInfo?.empId || 'N/A'}</div>
+                  </div>
+                  <div>
+                    <label className={labelClass}>Department</label>
+                    <div className={inputClass}>{driverData.addedByInfo?.department || 'N/A'}</div>
+                  </div>
+                  <div>
+                    <label className={labelClass}>Added Date</label>
+                    <div className={inputClass}>
+                      {new Date(driverData.createdAt).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -499,39 +478,35 @@ const TruckerDriverModal = ({ isOpen, onClose, onDriverAdded }) => {
   // Tailwind classes
   const inputClass = "mt-1 block w-full bg-white border border-gray-200 rounded-lg shadow-sm p-3 focus:ring-blue-500 focus:border-blue-500 placeholder:text-gray-400";
   const labelClass = "block text-sm font-medium text-gray-700 mb-1";
-  const sectionHeaderClass = "text-lg font-bold text-white border-b border-white pb-2 mb-4 -mt-4";
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-md transition-opacity" />
-      <div 
-        className="relative w-full max-w-6xl max-h-[95vh] bg-white rounded-3xl shadow-2xl border border-gray-200/50 overflow-hidden flex flex-col transform transition-all duration-300 scale-100"
+    <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-2">
+      <div
+        className="bg-white rounded-3xl max-w-6xl w-full max-h-[95vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Modal Header */}
-        <div className="bg-gradient-to-r from-green-600 via-emerald-600 to-teal-600 p-6 flex justify-between items-center text-white shadow-lg">
-          <div className="flex items-center space-x-3">
-            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-              </svg>
+        {/* Modal Header - same as DeliveryOrder */}
+        <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-4 rounded-t-3xl">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                <PlusCircle className="text-white" size={24} />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold">Add New Trucker Driver</h2>
+                <p className="text-blue-100">Register a new driver and complete their compliance profile</p>
+              </div>
             </div>
-            <div>
-              <h3 className="text-2xl font-bold">Add New Trucker Driver</h3>
-              <p className="text-sm text-green-100 mt-1">Register a new driver and complete their compliance profile</p>
-            </div>
+            <button type="button" onClick={resetFormAndClose} className="text-white hover:text-gray-200 text-2xl font-bold leading-none" disabled={loading}>
+              ×
+            </button>
           </div>
-          <button onClick={resetFormAndClose} className="text-white/80 hover:text-white hover:bg-white/20 p-2 rounded-xl transition-all duration-200" disabled={loading}>
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
-            </svg>
-          </button>
         </div>
-        
+
         {/* Form Body with Scroll - Hide Scrollbar */}
-        <div className="p-6 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [-webkit-overflow-scrolling:touch]">
+        <div className="p-4 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [-webkit-overflow-scrolling:touch]">
           <style jsx>{`
             .hide-scrollbar::-webkit-scrollbar {
               display: none;
@@ -546,9 +521,12 @@ const TruckerDriverModal = ({ isOpen, onClose, onDriverAdded }) => {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-6">
-              {/* SECTION 1: Personal & Contact Information - Blue Background */}
-              <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                <h4 className={sectionHeaderClass + " bg-blue-600 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4"}>Personal & Contact Information</h4>
+              {/* SECTION 1: Personal & Contact - same as DeliveryOrder popup */}
+              <div className="rounded-lg border border-gray-200 overflow-hidden shadow-sm">
+                <div className="bg-blue-100 px-4 py-3">
+                  <h3 className="text-lg font-semibold text-blue-800">Personal & Contact Information</h3>
+                </div>
+                <div className="bg-white p-4 border-t border-gray-200">
                 <div className="grid grid-cols-2 md:grid-cols-2 gap-6">
                   
                   {/* Trucker ID/Name Dropdown (NEW) */}
@@ -705,11 +683,15 @@ const TruckerDriverModal = ({ isOpen, onClose, onDriverAdded }) => {
                     </select>
                   </div>
                 </div>
+                </div>
               </div>
 
-              {/* SECTION 2: Address Details - Green Background */}
-              <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-                <h4 className={sectionHeaderClass + " bg-green-600 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4"}>Address Details</h4>
+              {/* SECTION 2: Address Details - same as DeliveryOrder popup */}
+              <div className="rounded-lg border border-gray-200 overflow-hidden shadow-sm">
+                <div className="bg-green-100 px-4 py-3">
+                  <h3 className="text-lg font-semibold text-green-800">Address Details</h3>
+                </div>
+                <div className="bg-white p-4 border-t border-gray-200">
                 <div className="grid grid-cols-3 md:grid-cols-4 gap-6">
                   {/* Country */}
                   <div>
@@ -791,11 +773,15 @@ const TruckerDriverModal = ({ isOpen, onClose, onDriverAdded }) => {
                     disabled={loading}
                   />
                 </div>
+                </div>
               </div>
 
-              {/* SECTION 3: Compliance & Documents - Purple Background */}
-              <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
-                <h4 className={sectionHeaderClass + " bg-purple-600 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4"}>Compliance & Documents</h4>
+              {/* SECTION 3: Compliance & Documents - same as DeliveryOrder popup */}
+              <div className="rounded-lg border border-gray-200 overflow-hidden shadow-sm">
+                <div className="bg-purple-100 px-4 py-3">
+                  <h3 className="text-lg font-semibold text-purple-800">Compliance & Documents</h3>
+                </div>
+                <div className="bg-white p-4 border-t border-gray-200">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   {/* MC/DOT Number (Now optional/moved) */}
                   <div>
@@ -843,6 +829,7 @@ const TruckerDriverModal = ({ isOpen, onClose, onDriverAdded }) => {
                     />
                                 </div>
                                 </div>
+                </div>
               </div>
               
               {/* Submit/Cancel Buttons */}
@@ -990,7 +977,7 @@ const AddTruckerDriver = () => {
 
   if (loading) {
     return (
-      <div className="p-6 bg-gray-50 min-h-screen font-sans flex items-center justify-center">
+      <div className="p-6 bg-white min-h-screen font-sans flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
           <p className="mt-4 text-gray-600">Loading drivers data...</p>
@@ -1001,12 +988,12 @@ const AddTruckerDriver = () => {
 
   if (error) {
     return (
-      <div className="p-6 bg-gray-50 min-h-screen font-sans flex items-center justify-center">
-        <div className="text-center bg-white p-8 rounded-xl shadow-lg max-w-md">
+      <div className="p-6 bg-white min-h-screen font-sans flex items-center justify-center">
+        <div className="text-center bg-white p-8 rounded-xl shadow-lg max-w-md border border-gray-200">
           <div className="text-red-500 text-6xl mb-4">⚠️</div>
           <h3 className="text-xl font-bold text-gray-800 mb-2">Error Loading Data</h3>
           <p className="text-gray-600 mb-4">{error}</p>
-          <button 
+          <button
             onClick={fetchDrivers}
             className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg transition duration-150"
           >
@@ -1017,75 +1004,55 @@ const AddTruckerDriver = () => {
     );
   }
 
+  const getPaginationPages = () => {
+    const total = totalPages;
+    const current = currentPage;
+    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+    const pages = [];
+    if (current > 3) pages.push(1, 'ellipsis');
+    const start = Math.max(1, current - 2);
+    const end = Math.min(total, current + 2);
+    for (let i = start; i <= end; i++) pages.push(i);
+    if (current < total - 2) pages.push('ellipsis', total);
+    return pages;
+  };
+
   return (
-    <div className="p-6 bg-gray-50 min-h-screen font-sans">
-      {/* Stats Cards */}
-      <div className="flex items-center gap-6 mb-6">
-        {/* Total Drivers Card */}
-        <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-              <svg className="w-6 h-6 text-blue-600" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"></path>
-              </svg>
+    <div className="p-6 bg-white min-h-screen font-sans">
+      {/* Top Section - same as DeliveryOrder */}
+      <div className="flex flex-col gap-6 mb-6 border border-gray-200 rounded-xl p-6 bg-white">
+        <div className="flex flex-col xl:flex-row gap-6">
+          {/* Left: Stats Cards - same as DeliveryOrder */}
+          <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-white rounded-xl border border-gray-200 p-6 h-[90px] flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-gray-700 font-bold text-2xl shrink-0">
+                {driversData.length}
+              </div>
+              <span className="text-gray-700 font-semibold">Total Drivers</span>
             </div>
-            <div>
-              <p className="text-xs text-gray-500 font-medium">Total Drivers</p>
-              <p className="text-xl font-bold text-gray-900">{driversData.length}</p>
+            <div className="bg-white rounded-xl border border-gray-200 p-6 h-[90px] flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center text-gray-700 font-bold text-2xl shrink-0">
+                {driversData.filter(d => d.isLoggedIn).length}
+              </div>
+              <span className="text-gray-700 font-semibold">Active Drivers</span>
             </div>
+          </div>
+
+          {/* Right: Add Driver Button - same as DeliveryOrder */}
+          <div className="flex flex-col gap-1 w-full xl:w-[350px]">
+            <button
+              type="button"
+              onClick={() => setIsModalOpen(true)}
+              className="flex items-center justify-between gap-4 px-6 h-[45px] bg-blue-600 rounded-lg text-white font-semibold hover:bg-blue-700 transition w-full"
+            >
+              <span>Add Driver</span>
+              <PlusCircle size={20} />
+            </button>
           </div>
         </div>
 
-        {/* Active Drivers Card */}
-        <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-              <svg className="w-6 h-6 text-green-600" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path>
-              </svg>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 font-medium">Active Drivers</p>
-              <p className="text-xl font-bold text-green-600">
-                {driversData.filter(driver => driver.isLoggedIn).length}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Unique Truckers Card */}
-        <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-              <svg className="w-6 h-6 text-purple-600" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                <path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"></path>
-                <path d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H10a1 1 0 001-1v-1a1 1 0 011-1h2a1 1 0 011 1v1a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H19a1 1 0 001-1V5a1 1 0 00-1-1H3z"></path>
-              </svg>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 font-medium">Unique Truckers</p>
-              <p className="text-xl font-bold text-purple-600">
-                {new Set(driversData.map(driver => driver.truckerInfo?.truckerId)).size}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Add Driver Button */}
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="ml-auto flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all duration-200 shadow-lg hover:shadow-xl font-semibold"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path>
-          </svg>
-          <span>Add Driver</span>
-        </button>
-      </div>
-
-      {/* Search Bar */}
-      <div className="mb-6">
-        <div className="relative max-w-md">
+        {/* Row 2: Search Bar - same as DeliveryOrder */}
+        <div className="relative w-full">
           <input
             type="text"
             placeholder="Search by Driver ID, Name, Trucker, or Email"
@@ -1094,149 +1061,124 @@ const AddTruckerDriver = () => {
               setSearchTerm(e.target.value);
               setCurrentPage(1);
             }}
-            className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-150"
+            className="w-full pl-6 pr-12 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-colors text-gray-600 placeholder-gray-400"
           />
-          <svg className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-          </svg>
+          <Search className="absolute right-6 top-1/2 transform -translate-y-1/2 text-gray-400" size={24} />
         </div>
       </div>
 
-      {/* Data Table Section */}
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead className="bg-gray-200 to-gray-200">
-            <tr>
-              <th className="text-left py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">S.NO</th>
-              <th className="text-left py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">FULL NAME</th>
-              <th className="text-left py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">EMAIL</th>
-              <th className="text-left py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">PHONE</th>
-              <th className="text-left py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">TRUCKER</th>
-              <th className="text-left py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">LICENSE</th>
-              <th className="text-left py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">STATUS</th>
-              <th className="text-left py-3 px-6 text-gray-800 font-bold text-sm uppercase tracking-wide">ACTION</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-100">
-            {currentDrivers.length === 0 ? (
-              <tr>
-                <td colSpan="9" className="px-6 py-8 text-center text-gray-500">
-                  <div className="flex flex-col items-center justify-center">
-                    <svg className="w-12 h-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
-                    </svg>
-                    <p className="text-lg font-medium text-gray-600">No drivers found</p>
-                    <p className="text-sm text-gray-500 mt-1">
-                      {searchTerm ? 'Try adjusting your search terms' : 'Get started by adding your first driver'}
-                    </p>
-                  </div>
-                </td>
-              </tr>
-            ) : (
-              currentDrivers.map((driver, index) => (
-                <tr key={driver.driverId} className=" transition duration-100 border-b border-gray-200">
-                  <td className="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    {(currentPage - 1) * itemsPerPage + index + 1}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-700">
-                    <div className="flex items-center">
-                      {driver.fullName}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-700">{driver.email}</td>
-                  <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-700">{driver.phone}</td>
-                  <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-700">
-                    <div>
-                      <p className="font-medium">{driver.truckerInfo?.truckerName || 'N/A'}</p>
-                      <p className="text-xs text-gray-500">MC: {driver.truckerInfo?.mcDot || 'N/A'}</p>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-700">{driver.driverLicense}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-center">
-                    <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                      driver.isLoggedIn 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-gray-100 text-gray-800'
-                    }`}>
-                      {driver.isLoggedIn ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
-                    <button 
-                      onClick={() => handleViewDetails(driver)}
-                      className="flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg hover:from-blue-600 hover:to-indigo-700 hover:shadow-xl mx-auto"
-                    >
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-                      </svg>
-                      View
-                    </button>
-                  </td>
+      {/* Table - same as DeliveryOrder */}
+      <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+        <div className="overflow-x-auto">
+          {currentDrivers.length === 0 ? (
+            <div className="text-center py-12">
+              <User className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500 text-lg">
+                {searchTerm ? 'No drivers found matching your search' : 'No drivers found'}
+              </p>
+              <p className="text-gray-400 text-sm">
+                {searchTerm ? 'Try adjusting your search terms' : 'Add your first driver to get started'}
+              </p>
+            </div>
+          ) : (
+            <table className="w-full">
+              <thead className="bg-white border-b border-gray-200">
+                <tr>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">S.No</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Full Name</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Email</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Phone</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Trucker</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">License</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Status</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Action</th>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-
-        {/* Pagination Section */}
-        {filteredDrivers.length > 0 && totalPages > 1 && (
-          <div className="flex justify-between items-center p-4 border-t border-gray-200 bg-gray-50">
-            <div className="text-sm text-gray-600">
-              Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, filteredDrivers.length)} of {filteredDrivers.length} drivers
-            </div>
-
-            <div className="flex items-center gap-2 bg-white rounded-xl shadow-lg border border-gray-200 p-2">
-              {/* Previous Button */}
-              <button
-                onClick={() => handlePageChange(currentPage - 1)}
-                disabled={currentPage === 1}
-                className={`p-2 rounded-lg transition-all duration-200 ${
-                  currentPage === 1
-                    ? 'text-gray-300 cursor-not-allowed'
-                    : 'text-gray-600 hover:bg-gray-100 hover:text-blue-600'
-                }`}
-                title="Previous page"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path>
-                </svg>
-              </button>
-
-              {/* Page Numbers */}
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                <button
-                  key={page}
-                  onClick={() => handlePageChange(page)}
-                  className={`min-w-[2.5rem] h-10 rounded-lg font-medium text-sm transition-all duration-200 ${
-                    currentPage === page
-                      ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-md'
-                      : 'text-gray-600 hover:bg-gray-100'
-                  }`}
-                >
-                  {page}
-                </button>
-              ))}
-
-              {/* Next Button */}
-              <button
-                onClick={() => handlePageChange(currentPage + 1)}
-                disabled={currentPage === totalPages}
-                className={`p-2 rounded-lg transition-all duration-200 ${
-                  currentPage === totalPages
-                    ? 'text-gray-300 cursor-not-allowed'
-                    : 'text-gray-600 hover:bg-gray-100 hover:text-blue-600'
-                }`}
-                title="Next page"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path>
-                </svg>
-              </button>
-            </div>
-          </div>
-        )}
+              </thead>
+              <tbody>
+                {currentDrivers.map((driver, index) => (
+                  <tr key={driver.driverId} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                    <td className="py-4 px-4 text-sm text-gray-600 font-medium">
+                      {(currentPage - 1) * itemsPerPage + index + 1}
+                    </td>
+                    <td className="py-4 px-4">
+                      <span className="text-sm font-medium text-gray-800">{driver.fullName}</span>
+                    </td>
+                    <td className="py-4 px-4 text-sm text-gray-700">{driver.email}</td>
+                    <td className="py-4 px-4 text-sm text-gray-700">{driver.phone}</td>
+                    <td className="py-4 px-4">
+                      <div>
+                        <p className="text-sm font-medium text-gray-800">{driver.truckerInfo?.truckerName || 'N/A'}</p>
+                        <p className="text-xs text-gray-500">MC: {driver.truckerInfo?.mcDot || 'N/A'}</p>
+                      </div>
+                    </td>
+                    <td className="py-4 px-4 text-sm text-gray-700">{driver.driverLicense}</td>
+                    <td className="py-4 px-4">
+                      <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${driver.isLoggedIn ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                        {driver.isLoggedIn ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                    <td className="py-4 px-4">
+                      <button
+                        type="button"
+                        onClick={() => handleViewDetails(driver)}
+                        className="px-4 py-1 rounded border border-green-500 text-green-500 text-sm font-medium hover:bg-green-50 transition-colors min-w-[70px]"
+                      >
+                        View
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
       </div>
+
+      {/* Pagination - same as DeliveryOrder */}
+      {totalPages > 1 && currentDrivers.length > 0 && (
+        <div className="flex justify-between items-center mt-6 bg-white rounded-2xl border border-gray-200 p-4">
+          <div className="text-sm text-gray-600">
+            Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, filteredDrivers.length)} of {filteredDrivers.length} drivers
+          </div>
+          <div className="flex gap-1 items-center">
+            <button
+              type="button"
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+            >
+              <ChevronLeft size={18} />
+              <span>Previous</span>
+            </button>
+            <div className="flex items-center gap-1 mx-4">
+              {getPaginationPages().map((page, index) => {
+                if (page === 'ellipsis') {
+                  return <span key={`ellipsis-${index}`} className="px-2 text-gray-400">...</span>;
+                }
+                return (
+                  <button
+                    key={page}
+                    type="button"
+                    onClick={() => handlePageChange(page)}
+                    className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-all ${currentPage === page ? 'bg-white border border-black shadow-sm text-black' : 'text-gray-600 hover:bg-gray-50'}`}
+                  >
+                    {page}
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              type="button"
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+            >
+              <span>Next</span>
+              <ChevronRight size={18} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* The Add Driver Modal */}
       <TruckerDriverModal 

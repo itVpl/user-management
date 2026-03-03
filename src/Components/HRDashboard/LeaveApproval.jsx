@@ -117,6 +117,19 @@ const pickCreatedAny = (l) => getFirstNonEmpty(
 );
 const pickReason = (l) => getFirstNonEmpty(l.reason, l.notes, l.note, l.description, l.message, l.remark, l.remarks);
 
+/** Reason for display: hide "Automatic half-day" and show — instead */
+const reasonForDisplay = (raw) => {
+  const r = raw != null ? String(raw).trim() : '';
+  if (r.toLowerCase() === 'automatic half-day') return '—';
+  return r || '—';
+};
+
+/** True if leave reason is "Automatic half-day" (or contains it) — such rows are hidden from the list */
+const isAutomaticHalfDay = (l) => {
+  const r = (pickReason(l) || (l._norm?.reason ?? l.reason) || '').toString().trim().toLowerCase();
+  return r.includes('automatic half-day');
+};
+
 
 const getStatus = (l) => {
   const s = (getFirstNonEmpty(l.status) ?? 'pending').toString().trim().toLowerCase();
@@ -552,8 +565,11 @@ const LeaveApproval = () => {
   };
 
 
-  // Search + status filter
-  const filteredLeaves = leaveRequests.filter(l => {
+  // Base list excluding "Automatic half-day" — used for stats and for table filter
+  const leavesExcludingAutomaticHalfDay = leaveRequests.filter(l => !isAutomaticHalfDay(l));
+
+  // Search + status filter; exclude "Automatic half-day" leave rows
+  const filteredLeaves = leavesExcludingAutomaticHalfDay.filter(l => {
     const nm = (l._norm?.employeeName || '').toLowerCase();
     const matchesSearch = nm.includes(searchTerm.toLowerCase());
     const st = (l._norm?.status || 'pending').toLowerCase();
@@ -703,7 +719,7 @@ const LeaveApproval = () => {
               </div>
               <div>
                 <p className="text-sm text-gray-600">Total Requests</p>
-                <p className="text-xl font-bold text-gray-800">{leaveRequests.length}</p>
+                <p className="text-xl font-bold text-gray-800">{leavesExcludingAutomaticHalfDay.length}</p>
               </div>
             </div>
           </div>
@@ -717,7 +733,7 @@ const LeaveApproval = () => {
               <div>
                 <p className="text-sm text-gray-600">Pending</p>
                 <p className="text-xl font-bold text-yellow-600">
-                  {leaveRequests.filter(l => (l._norm?.status || 'pending') === 'pending').length}
+                  {leavesExcludingAutomaticHalfDay.filter(l => (l._norm?.status || 'pending').toLowerCase() === 'pending').length}
                 </p>
               </div>
             </div>
@@ -732,7 +748,7 @@ const LeaveApproval = () => {
               <div>
                 <p className="text-sm text-gray-600">Approved</p>
                 <p className="text-xl font-bold text-green-600">
-                  {leaveRequests.filter(l => (l._norm?.status || 'pending') === 'approved').length}
+                  {leavesExcludingAutomaticHalfDay.filter(l => (l._norm?.status || 'pending').toLowerCase() === 'approved').length}
                 </p>
               </div>
             </div>
@@ -747,7 +763,7 @@ const LeaveApproval = () => {
               <div>
                 <p className="text-sm text-gray-600">Rejected</p>
                 <p className="text-xl font-bold text-red-600">
-                  {leaveRequests.filter(l => (l._norm?.status || 'pending') === 'rejected').length}
+                  {leavesExcludingAutomaticHalfDay.filter(l => (l._norm?.status || 'pending').toLowerCase() === 'rejected').length}
                 </p>
               </div>
             </div>
@@ -815,6 +831,7 @@ const LeaveApproval = () => {
                 const createdFinal = leave._norm?.createdFinal;
                 const status = leave._norm?.status || 'pending';
                 const reason = leave._norm?.reason || leave.reason || 'N/A';
+                const reasonDisplay = reasonForDisplay(reason);
                 const remarks = leave.managerRemarks || '';
 
 
@@ -853,7 +870,7 @@ const LeaveApproval = () => {
 
 
                     <td className="py-4 px-6">
-                      <p className="text-gray-700 max-w-xs truncate" title={reason}>{reason}</p>
+                      <p className="text-gray-700 max-w-xs truncate" title={reasonDisplay}>{reasonDisplay}</p>
                     </td>
 
 
@@ -1064,7 +1081,7 @@ const LeaveApproval = () => {
                             </div>
                           </td>
                           <td className="py-4 px-6 max-w-xs">
-                            <p className="text-gray-700 truncate" title={req.reason}>{req.reason || '—'}</p>
+                            <p className="text-gray-700 truncate" title={reasonForDisplay(req.reason)}>{reasonForDisplay(req.reason)}</p>
                           </td>
                           <td className="py-4 px-6">
                             {status === 'pending' && <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700"><Clock size={12} /> Pending</span>}
@@ -1296,7 +1313,7 @@ const LeaveApproval = () => {
                   </div>
                   <div className="col-span-2">
                     <p className="text-sm font-medium text-gray-600">Reason</p>
-                    <p className="text-gray-800">{pickReason(selectedLeave) || 'N/A'}</p>
+                    <p className="text-gray-800">{reasonForDisplay(pickReason(selectedLeave))}</p>
                   </div>
                 </div>
               </div>

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { FaArrowLeft, FaDownload, FaEye, FaFileAlt, FaEdit } from 'react-icons/fa';
-import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, Eye, Edit, Upload } from 'lucide-react';
+import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, Eye, Edit, Upload, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import AddTruckerForm from './AddTruckerform';
 import axios from 'axios';
 import API_CONFIG from '../../config/api.js';
@@ -1199,6 +1199,20 @@ const handleWorkingAddressFileChange = (idx, file) => {
     setCurrentPage(page);
   };
 
+  // Pagination page numbers (DeliveryOrder style)
+  const getPaginationPages = () => {
+    const total = totalPages;
+    const current = currentPage;
+    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+    const pages = [];
+    if (current > 3) pages.push(1, 'ellipsis');
+    const start = Math.max(1, current - 2);
+    const end = Math.min(total, current + 2);
+    for (let i = start; i <= end; i++) pages.push(i);
+    if (current < total - 2) pages.push('ellipsis', total);
+    return pages;
+  };
+
   // Handle view trucker details
   const handleViewTrucker = (trucker) => {
     setSelectedTrucker(trucker);
@@ -1881,25 +1895,24 @@ const handleWorkingAddressFileChange = (idx, file) => {
                               {docFileName || 'Document uploaded'}
                             </div>
 
-                            <div className="flex gap-2">
-                              {/* // Current Documents card (inside map) */}
+                            <div className="flex gap-2 items-center">
                               <button
+                                type="button"
                                 onClick={() => handleDocumentPreview(absUrl(docUrl), doc.label)}
-                                className="flex items-center gap-1 bg-blue-500 text-white px-3 py-1 rounded-lg text-xs hover:bg-blue-600 transition"
+                                title="Preview"
+                                className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 transition"
                               >
-                                <Eye size={12} />
-                                Preview
+                                <Eye size={18} />
                               </button>
                               <a
                                 href={absUrl(docUrl)}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="flex items-center gap-1 bg-green-500 text-white px-3 py-1 rounded-lg text-xs hover:bg-green-600 transition"
+                                title="Download"
+                                className="p-2 rounded-lg text-green-600 hover:bg-green-50 transition"
                               >
-                                <FaDownload size={10} />
-                                Download
+                                <FaDownload size={18} />
                               </a>
-
                             </div>
                           </div>
                         </div>
@@ -2057,42 +2070,50 @@ const handleWorkingAddressFileChange = (idx, file) => {
   }
 
   return (
-    <div className="p-6">
-      {/* Search and Add Trucker Section */}
-      <div className="flex justify-between items-center gap-4 mb-6">
-        {/* Search Bar */}
-        <div className="relative flex-1 max-w-md">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
+    <div className="p-6 bg-white min-h-screen">
+      {/* Top Section - same as DeliveryOrder */}
+      <div className="flex flex-col gap-6 mb-6 border border-gray-200 rounded-xl p-6 bg-white">
+        {/* Row 1: Stats & Actions */}
+        <div className="flex flex-col xl:flex-row gap-6">
+          {/* Left: Stats Cards - same as DeliveryOrder */}
+          <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-white rounded-xl border border-gray-200 p-6 h-[90px] flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-gray-700 font-bold text-2xl shrink-0">
+                {truckers.length}
+              </div>
+              <span className="text-gray-700 font-semibold">Total Truckers</span>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 p-6 h-[90px] flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-gray-700 font-bold text-2xl shrink-0">
+                {currentTruckers.length}
+              </div>
+              <span className="text-gray-700 font-semibold">This Page</span>
+            </div>
           </div>
+
+          {/* Right: Add Trucker Button - same as DeliveryOrder */}
+          <div className="flex flex-col gap-1 w-full xl:w-[350px]">
+            <button
+              onClick={() => setShowAddTruckerForm(true)}
+              className="flex items-center justify-between gap-4 px-6 h-[45px] bg-blue-600 rounded-lg text-white font-semibold hover:bg-blue-700 transition w-full"
+            >
+              <span>Add Trucker</span>
+              <PlusCircle size={20} />
+            </button>
+          </div>
+        </div>
+
+        {/* Row 2: Search Bar - same as DeliveryOrder */}
+        <div className="relative w-full">
           <input
             type="text"
             placeholder="Search truckers by name, email, MC/DOT number..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="block w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 placeholder-gray-500 transition-all duration-200 hover:border-gray-400"
+            className="w-full pl-6 pr-12 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-colors text-gray-600 placeholder-gray-400"
           />
-          {searchTerm && (
-            <button
-              onClick={() => setSearchTerm('')}
-              className="absolute inset-y-0 right-0 pr-3 flex items-center"
-            >
-              <svg className="h-5 w-5 text-gray-400 hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          )}
+          <Search className="absolute right-6 top-1/2 transform -translate-y-1/2 text-gray-400" size={24} />
         </div>
-
-        {/* Add Trucker Button */}
-        <button
-          onClick={() => setShowAddTruckerForm(true)}
-          className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl font-semibold shadow-lg hover:from-blue-600 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 whitespace-nowrap"
-        >
-          <PlusCircle size={20} /> Add Trucker
-        </button>
       </div>
 
       {/* Error Display */}
@@ -2197,99 +2218,70 @@ const handleWorkingAddressFileChange = (idx, file) => {
         </div>
       ) : (
         <>
-          <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
-            <table className="w-full table-auto">
-              <thead className="bg-gradient-to-r from-blue-50 to-purple-100">
-                <tr>
-                  <th className="p-4 text-left font-semibold text-blue-700">Date</th>
-                  <th className="p-4 text-left font-semibold text-blue-700">Trucker Name</th>
-                  <th className="p-4 text-left font-semibold text-blue-700">MC/DOT No</th>
-                  <th className="p-4 text-left font-semibold text-blue-700">Email</th>
-                  <th className="p-4 text-left font-semibold text-blue-700">Status</th>
-                  <th className="p-4 text-left font-semibold text-blue-700">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Loading ? (
-                  <tr>
-                    <td colSpan="6" className="py-12">
-                      <div className="flex flex-col justify-center items-center bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl shadow-lg py-16 mx-4">
-                        <div className="relative">
-                          <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
-                          <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-b-purple-600 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1s' }}></div>
-                        </div>
-                        <div className="mt-6 text-center">
-                          <p className="text-xl font-semibold text-gray-800 mb-2">Loading Truckers...</p>
-                          <p className="text-sm text-gray-600">Please wait while we fetch trucker documents</p>
-                        </div>
-                      </div>
-                    </td>
-                  </tr>
-                ) : currentTruckers.length === 0 ? (
-                  <tr>
-                    <td colSpan="6" className="text-center py-12">
-                      <div className="flex flex-col items-center gap-4">
-                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
-                          <Truck className="text-gray-400" size={24} />
-                        </div>
-                        <div className="text-center">
-                          <h3 className="text-lg font-semibold text-gray-600 mb-2">No Truckers Found</h3>
-                          <p className="text-gray-500 text-sm">
-                            {searchTerm ? 'No truckers match your search criteria.' : 'No truckers have been added yet.'}
-                          </p>
-                          {searchTerm && (
-                            <button
-                              onClick={() => setSearchTerm('')}
-                              className="mt-3 text-blue-600 hover:text-blue-700 text-sm font-medium"
-                            >
-                              Clear search
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  <>
+          {/* Table - same as DeliveryOrder */}
+          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+            <div className="overflow-x-auto">
+              {Loading ? (
+                <div className="p-12 text-center text-gray-500">Loading...</div>
+              ) : currentTruckers.length === 0 ? (
+                <div className="text-center py-12">
+                  <Truck className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500 text-lg">
+                    {searchTerm ? 'No truckers found matching your search' : 'No truckers found'}
+                  </p>
+                  <p className="text-gray-400 text-sm">
+                    {searchTerm ? 'Try adjusting your search terms' : 'Add your first trucker to get started'}
+                  </p>
+                </div>
+              ) : (
+                <table className="w-full">
+                  <thead className="bg-white border-b border-gray-200">
+                    <tr>
+                      <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Date</th>
+                      <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Trucker Name</th>
+                      <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">MC/DOT No</th>
+                      <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Email</th>
+                      <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Status</th>
+                      <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
                     {currentTruckers.map((t, idx) => {
                       const truckerId = t.userId || t._id;
-                      const currentCompany = onboardCompanies[truckerId] || t.assignedCompany || t.onboardCompany || t.companyName || '';
-                      
                       return (
-                        <tr key={truckerId || idx} className="border-t text-sm hover:bg-blue-50 transition">
-                          <td className="p-4">{formatDDMMYYYY(t.addedAt)}</td>
-                          <td className="p-4">{t.compName}</td>
-                          <td className="p-4">
-                            <div className="flex items-center gap-2">
-                              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                              <span className="text-sm font-medium text-gray-700">
-                                {t.mc_dot_no || 'N/A'}
-                              </span>
-                            </div>
+                        <tr key={truckerId || idx} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                          <td className="py-4 px-4">
+                            <span className="text-sm text-gray-600">{formatDDMMYYYY(t.addedAt)}</span>
                           </td>
-                          <td className="p-4">{t.email}</td>
-                          <td className="p-4">
-                            <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${statusColor(t.status)}`}>
+                          <td className="py-4 px-4">
+                            <span className="text-sm font-medium text-gray-800">{t.compName}</span>
+                          </td>
+                          <td className="py-4 px-4">
+                            <span className="text-sm font-medium text-gray-800">{t.mc_dot_no || 'N/A'}</span>
+                          </td>
+                          <td className="py-4 px-4">
+                            <span className="text-sm text-gray-700">{t.email}</span>
+                          </td>
+                          <td className="py-4 px-4">
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${statusColor(t.status)}`}>
                               {t.status === 'approved' && <CheckCircle size={14} />}
                               {t.status === 'rejected' && <XCircle size={14} />}
                               {t.status === 'pending' && <Clock size={14} />}
                               {t.status || 'Pending'}
                             </span>
                           </td>
-                          <td className="p-4">
-                            <div className="flex gap-2">
+                          <td className="py-4 px-4">
+                            <div className="flex gap-3">
                               <button
                                 onClick={() => handleViewTrucker(t)}
-                                className="flex items-center gap-1 bg-transparent text-blue-600 px-3 py-1 rounded text-sm hover:bg-blue-500/30 transition border border-blue-200"
+                                className="px-4 py-1 rounded border border-green-500 text-green-500 text-sm font-medium hover:bg-green-50 transition-colors min-w-[70px]"
                               >
-                                <Eye size={14} />
                                 View
                               </button>
                               <button
                                 onClick={() => handleEditTrucker(t)}
-                                className="flex items-center gap-1 bg-transparent text-green-600 px-3 py-1 rounded text-sm hover:bg-green-500/30 transition border border-green-200"
+                                className="px-4 py-1 rounded border border-orange-500 text-orange-500 text-sm font-medium hover:bg-orange-50 transition-colors min-w-[70px]"
                               >
-                                <Edit size={14} />
                                 Edit
                               </button>
                             </div>
@@ -2297,100 +2289,58 @@ const handleWorkingAddressFileChange = (idx, file) => {
                         </tr>
                       );
                     })}
-                  </>
-                )}
-              </tbody>
-            </table>
+                  </tbody>
+                </table>
+              )}
+            </div>
           </div>
 
-          {/* Enhanced Pagination */}
-          {!Loading && filteredTruckers.length > 0 && (
-            <div className="mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-              <div className="flex justify-between items-center">
-                <div className="text-sm text-gray-600">
-                  Showing {startIndex + 1}-{Math.min(endIndex, filteredTruckers.length)} of {filteredTruckers.length} results
-                  {searchTerm && ` (filtered from ${truckers.length} total)`}
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {/* Previous Button */}
-                  <button
-                    onClick={() => handlePageChange(currentPage - 1)}
-                    disabled={currentPage === 1}
-                    className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors flex items-center gap-1"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                    Previous
-                  </button>
-
-                  {/* Page Numbers */}
-                  <div className="flex gap-1">
-                    {/* First Page */}
-                    {currentPage > 3 && (
+          {/* Pagination - same as DeliveryOrder */}
+          {totalPages > 1 && currentTruckers.length > 0 && (
+            <div className="flex justify-between items-center mt-6 bg-white rounded-2xl border border-gray-200 p-4">
+              <div className="text-sm text-gray-600">
+                Showing {startIndex + 1} to {Math.min(endIndex, filteredTruckers.length)} of {filteredTruckers.length} truckers
+                {searchTerm && ` (searching)`}
+              </div>
+              <div className="flex gap-1 items-center">
+                <button
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+                >
+                  <ChevronLeft size={18} />
+                  <span>Previous</span>
+                </button>
+                <div className="flex items-center gap-1 mx-4">
+                  {getPaginationPages().map((page, index) => {
+                    if (page === 'ellipsis') {
+                      return (
+                        <span key={`ellipsis-${index}`} className="px-2 text-gray-400">...</span>
+                      );
+                    }
+                    return (
                       <button
-                        onClick={() => handlePageChange(1)}
-                        className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                        key={page}
+                        onClick={() => handlePageChange(page)}
+                        className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-all ${
+                          currentPage === page
+                            ? 'bg-white border border-black shadow-sm text-black'
+                            : 'text-gray-600 hover:bg-gray-50'
+                        }`}
                       >
-                        1
+                        {page}
                       </button>
-                    )}
-
-                    {/* Ellipsis after first page */}
-                    {currentPage > 4 && (
-                      <span className="px-2 py-2 text-gray-500">...</span>
-                    )}
-
-                    {/* Pages around current page */}
-                    {Array.from({ length: totalPages }, (_, i) => i + 1)
-                      .filter(page => {
-                        if (totalPages <= 7) return true;
-                        return page === 1 ||
-                          page === totalPages ||
-                          (page >= currentPage - 1 && page <= currentPage + 1);
-                      })
-                      .map((page) => (
-                        <button
-                          key={page}
-                          onClick={() => handlePageChange(page)}
-                          className={`px-3 py-2 border rounded-lg transition-colors ${currentPage === page
-                            ? 'bg-blue-500 text-white border-blue-500'
-                            : 'border-gray-300 hover:bg-gray-50'
-                            }`}
-                        >
-                          {page}
-                        </button>
-                      ))}
-
-                    {/* Ellipsis before last page */}
-                    {currentPage < totalPages - 3 && (
-                      <span className="px-2 py-2 text-gray-500">...</span>
-                    )}
-
-                    {/* Last Page */}
-                    {currentPage < totalPages - 2 && totalPages > 1 && (
-                      <button
-                        onClick={() => handlePageChange(totalPages)}
-                        className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                      >
-                        {totalPages}
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Next Button */}
-                  <button
-                    onClick={() => handlePageChange(currentPage + 1)}
-                    disabled={currentPage === totalPages}
-                    className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors flex items-center gap-1"
-                  >
-                    Next
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
+                    );
+                  })}
                 </div>
+                <button
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+                >
+                  <span>Next</span>
+                  <ChevronRight size={18} />
+                </button>
               </div>
             </div>
           )}
