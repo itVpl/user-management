@@ -118,3 +118,14 @@ export const deleteWeeklyTarget = async (targetId) => {
     method: 'DELETE',
   });
 };
+
+/**
+ * GET /api/v1/weekly-target/salary-by-month
+ * Monthly salary based on weekly target completion (4 weeks, 25% per week).
+ * @param {Object} params - { month: 'YYYY-MM', empId?: string }. Without empId = current user.
+ */
+export const getSalaryByMonth = async (params = {}) => {
+  const { month, empId } = params;
+  const query = buildQuery({ month, empId });
+  return apiFetch(`${BASE}/salary-by-month${query}`);
+};

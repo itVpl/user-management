@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import {
   Users,
@@ -13,6 +13,10 @@ import {
   Send,
   Paperclip,
   Search,
+  Target,
+  CheckCircle,
+  XCircle,
+  Filter,
 } from 'lucide-react';
 import API_CONFIG from '../../config/api';
 import {
@@ -23,6 +27,7 @@ import {
   getMySalary,
   submitSandwichLeaveRemovalRequest,
 } from '../../services/salaryModificationService';
+import { getSalaryByMonth } from '../../services/weeklyTargetService';
 
 const formatDateWithDay = (dateStr) => {
   if (!dateStr) return '-';
@@ -109,6 +114,15 @@ const SalaryModification = () => {
   const [removalFiles, setRemovalFiles] = useState([]);
   const [removalSubmitting, setRemovalSubmitting] = useState(false);
   const [leaveSummarySearch, setLeaveSummarySearch] = useState('');
+  // Target-based salary (weekly target completion)
+  const [targetSalaryData, setTargetSalaryData] = useState(null);
+  const [targetSalaryLoading, setTargetSalaryLoading] = useState(false);
+  const [selectedEmpForTargetSalary, setSelectedEmpForTargetSalary] = useState('');
+  const [myTargetSalary, setMyTargetSalary] = useState(null);
+  const [myTargetSalaryLoading, setMyTargetSalaryLoading] = useState(false);
+  const [targetSalarySelectOpen, setTargetSalarySelectOpen] = useState(false);
+  const [targetSalarySearch, setTargetSalarySearch] = useState('');
+  const targetSalarySelectRef = useRef(null);
 
   const leaveSummaryPages =
     leaveSummary.pagination && leaveSummary.pagination.totalPages > 0
@@ -203,6 +217,43 @@ const SalaryModification = () => {
     fetchLeaveSummary(page);
   }, [fetchLeaveSummary]);
 
+  const fetchTargetSalary = useCallback(
+    async (empIdOrNull) => {
+      if (!monthYear.month) return;
+      setTargetSalaryLoading(true);
+      setTargetSalaryData(null);
+      try {
+        const res = await getSalaryByMonth({
+          month: monthYear.month,
+          empId: empIdOrNull || undefined,
+        });
+        if (res.success && res.data) setTargetSalaryData(res.data);
+        else setTargetSalaryData(null);
+      } catch (err) {
+        setTargetSalaryData(null);
+        setError(err?.message || 'Failed to load target-based salary');
+      } finally {
+        setTargetSalaryLoading(false);
+      }
+    },
+    [monthYear.month]
+  );
+
+  const fetchMyTargetSalary = useCallback(async () => {
+    if (!monthYear.month) return;
+    setMyTargetSalaryLoading(true);
+    setMyTargetSalary(null);
+    try {
+      const res = await getSalaryByMonth({ month: monthYear.month });
+      if (res.success && res.data) setMyTargetSalary(res.data);
+      else setMyTargetSalary(null);
+    } catch {
+      setMyTargetSalary(null);
+    } finally {
+      setMyTargetSalaryLoading(false);
+    }
+  }, [monthYear.month]);
+
   const fetchSandwichDays = useCallback(
     async (empId) => {
       if (!empId) return;
@@ -231,12 +282,33 @@ const SalaryModification = () => {
       fetchEmployees();
     } else {
       fetchMySalary();
+      fetchMyTargetSalary();
     }
   }, [isHR, monthYear.month, monthYear.year]);
 
   useEffect(() => {
     if (isHR && activeTab === 'leaveSummary') fetchLeaveSummary(leaveSummaryPage);
   }, [isHR, activeTab]);
+
+  useEffect(() => {
+    if (isHR && activeTab === 'targetSalary' && selectedEmpForTargetSalary) {
+      fetchTargetSalary(selectedEmpForTargetSalary);
+    } else if (isHR && activeTab === 'targetSalary' && !selectedEmpForTargetSalary) {
+      setTargetSalaryData(null);
+    }
+  }, [isHR, activeTab, selectedEmpForTargetSalary, monthYear.month, fetchTargetSalary]);
+
+  // Close target salary dropdown when clicking outside
+  useEffect(() => {
+    if (!targetSalarySelectOpen) return;
+    const handleClickOutside = (e) => {
+      if (targetSalarySelectRef.current && !targetSalarySelectRef.current.contains(e.target)) {
+        setTargetSalarySelectOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [targetSalarySelectOpen]);
 
   const handleAddSandwichLeave = async (e) => {
     e.preventDefault();
@@ -419,6 +491,92 @@ const SalaryModification = () => {
         ) : !mySalaryLoading && !error ? (
           <div className="text-center py-12 text-gray-500">No salary data available for this month.</div>
         ) : null}
+
+        {/* Target-based salary (weekly target completion) – same month */}
+        <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <div className="p-4 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-indigo-50">
+            <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+              <Target className="w-5 h-5 text-blue-600" />
+              Salary by weekly targets
+            </h2>
+            <p className="text-sm text-gray-600 mt-1">
+              4 weeks in month, 25% of base salary per completed week (100% progress).
+            </p>
+          </div>
+          <div className="p-6">
+            {myTargetSalaryLoading ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+              </div>
+            ) : myTargetSalary ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Base salary</p>
+                    <p className="text-lg font-bold text-gray-800">
+                      ₹{(myTargetSalary.baseSalary ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                    </p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Weeks completed</p>
+                    <p className="text-lg font-bold text-gray-800">
+                      {myTargetSalary.completedWeeks ?? 0} / {myTargetSalary.weeksInMonth ?? 4}
+                    </p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">% earned</p>
+                    <p className="text-lg font-bold text-blue-600">{myTargetSalary.percentageEarned ?? 0}%</p>
+                  </div>
+                  <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+                    <p className="text-xs font-medium text-green-700 uppercase tracking-wide">Calculated salary</p>
+                    <p className="text-xl font-bold text-green-700">
+                      ₹{(myTargetSalary.calculatedSalary ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                    </p>
+                  </div>
+                </div>
+                {myTargetSalary.weekBreakdown && myTargetSalary.weekBreakdown.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-700 mb-2">Week breakdown</h4>
+                    <div className="border border-gray-200 rounded-lg overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="text-left px-4 py-2 font-semibold text-gray-700">Week</th>
+                            <th className="text-left px-4 py-2 font-semibold text-gray-700">Period</th>
+                            <th className="text-center px-4 py-2 font-semibold text-gray-700">Progress</th>
+                            <th className="text-center px-4 py-2 font-semibold text-gray-700">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {myTargetSalary.weekBreakdown.map((w) => (
+                            <tr key={w.weekIndex} className="border-t border-gray-100">
+                              <td className="px-4 py-2">{w.weekIndex}</td>
+                              <td className="px-4 py-2 text-gray-600">{w.slotStart} – {w.slotEnd}</td>
+                              <td className="px-4 py-2 text-center">{w.progress ?? 0}%</td>
+                              <td className="px-4 py-2 text-center">
+                                {w.completed ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                    <CheckCircle className="w-3.5 h-3.5" /> Completed
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                                    <XCircle className="w-3.5 h-3.5" /> Not completed
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : !myTargetSalaryLoading ? (
+              <p className="text-gray-500 text-sm">No target-based salary data for this month.</p>
+            ) : null}
+          </div>
+        </div>
       </div>
     );
   }
@@ -427,6 +585,7 @@ const SalaryModification = () => {
   const tabs = [
     { id: 'leaveSummary', label: 'Leave Summary', icon: Users },
     { id: 'sandwichLeave', label: 'Sandwich Leave', icon: Plus },
+    { id: 'targetSalary', label: 'Target-based Salary', icon: Target },
   ];
 
   return (
@@ -508,12 +667,6 @@ const SalaryModification = () => {
           </button>
         </div>
       )}
-
-      {/* Info badge: 1 sandwich leave = 3 days */}
-      <div className="mb-4 flex items-center gap-2 text-red-700 bg-red-50 border border-red-200 rounded-lg px-4 py-2 text-lg">
-        <AlertCircle className="w-4 h-4 flex-shrink-0" />
-        <span>1 sandwich leave = 3 days for salary deduction</span>
-      </div>
 
       {/* Leave Summary Tab */}
       {activeTab === 'leaveSummary' && (
@@ -1048,6 +1201,169 @@ const SalaryModification = () => {
                 <div className="text-center py-8 text-gray-500">No sandwich leaves for this month.</div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Target-based Salary Tab (weekly target completion: 4 weeks, 25% per week) */}
+      {activeTab === 'targetSalary' && (
+        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+          <div className="p-6 border-b border-gray-200 overflow-visible relative">
+            <p className="text-sm text-gray-600 mb-4">
+              Salary is calculated from weekly target completion: 4 weeks in the month, 25% of base salary per completed week (100% progress).
+            </p>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Select employee</label>
+            <div className="relative w-full max-w-md" ref={targetSalarySelectRef}>
+              <button
+                type="button"
+                onClick={() => setTargetSalarySelectOpen((o) => !o)}
+                className="w-full flex items-center justify-between gap-2 border border-gray-300 rounded-lg px-3 py-2.5 text-sm text-left bg-white hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <span className={selectedEmpForTargetSalary ? 'text-gray-900' : 'text-gray-500'}>
+                  {selectedEmpForTargetSalary
+                    ? (() => {
+                        const emp = employees.find((e) => e.empId === selectedEmpForTargetSalary);
+                        return emp ? `${emp.employeeName} (${emp.empId})` : selectedEmpForTargetSalary;
+                      })()
+                    : '— Select employee —'}
+                </span>
+                <ChevronDown className={`w-4 h-4 text-gray-500 flex-shrink-0 transition-transform ${targetSalarySelectOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {targetSalarySelectOpen && (
+                <div className="absolute z-50 mt-1 w-full rounded-lg border border-gray-200 bg-white shadow-xl">
+                  <div className="p-2 border-b border-gray-100">
+                    <input
+                      type="text"
+                      placeholder="Search by name or Emp ID..."
+                      value={targetSalarySearch}
+                      onChange={(e) => setTargetSalarySearch(e.target.value)}
+                      onKeyDown={(e) => e.stopPropagation()}
+                      className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="max-h-60 overflow-y-auto py-1">
+                    {(() => {
+                      const q = targetSalarySearch.trim().toLowerCase();
+                      const filtered = q
+                        ? employees.filter(
+                            (e) =>
+                              (e.employeeName || '').toLowerCase().includes(q) ||
+                              (e.empId || '').toLowerCase().includes(q)
+                          )
+                        : employees;
+                      return filtered.length === 0 ? (
+                        <p className="px-3 py-4 text-sm text-gray-500 text-center">No employee found</p>
+                      ) : (
+                        filtered.map((e) => (
+                          <button
+                            key={e.empId}
+                            type="button"
+                            onMouseDown={(ev) => ev.preventDefault()}
+                            onClick={() => {
+                              setSelectedEmpForTargetSalary(e.empId);
+                              setTargetSalarySearch('');
+                              setTargetSalarySelectOpen(false);
+                            }}
+                            className={`w-full text-left px-3 py-2.5 text-sm hover:bg-blue-50 focus:bg-blue-50 focus:outline-none ${
+                              selectedEmpForTargetSalary === e.empId ? 'bg-blue-50 text-blue-800 font-medium' : 'text-gray-800'
+                            }`}
+                          >
+                            {e.employeeName} ({e.empId})
+                          </button>
+                        ))
+                      );
+                    })()}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="p-6">
+            {targetSalaryLoading ? (
+              <div className="flex justify-center items-center py-12">
+                <Loader2 className="w-10 h-10 animate-spin text-blue-600" />
+              </div>
+            ) : !selectedEmpForTargetSalary ? (
+              <p className="text-gray-500">Select an employee and month to view target-based salary.</p>
+            ) : targetSalaryData ? (
+              <div className="space-y-6">
+                <div className="flex flex-wrap items-center gap-3 mb-4">
+                  <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
+                    <Target className="w-6 h-6 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-800">{targetSalaryData.employeeName}</h3>
+                    <p className="text-sm text-gray-600">{targetSalaryData.empId} · {targetSalaryData.month}</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Base salary</p>
+                    <p className="text-xl font-bold text-gray-800">
+                      ₹{(targetSalaryData.baseSalary ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                    </p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Weeks completed</p>
+                    <p className="text-xl font-bold text-gray-800">
+                      {targetSalaryData.completedWeeks ?? 0} / {targetSalaryData.weeksInMonth ?? 4}
+                    </p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">% earned</p>
+                    <p className="text-xl font-bold text-blue-600">{targetSalaryData.percentageEarned ?? 0}%</p>
+                  </div>
+                  <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+                    <p className="text-xs font-medium text-green-700 uppercase tracking-wide">Calculated salary</p>
+                    <p className="text-2xl font-bold text-green-700">
+                      ₹{(targetSalaryData.calculatedSalary ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                    </p>
+                  </div>
+                </div>
+                {targetSalaryData.weekBreakdown && targetSalaryData.weekBreakdown.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-700 mb-2">Week breakdown</h4>
+                    <div className="border border-gray-200 rounded-lg overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="text-left px-4 py-3 font-semibold text-gray-700">Week</th>
+                            <th className="text-left px-4 py-3 font-semibold text-gray-700">Period</th>
+                            <th className="text-center px-4 py-3 font-semibold text-gray-700">Progress</th>
+                            <th className="text-center px-4 py-3 font-semibold text-gray-700">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {targetSalaryData.weekBreakdown.map((w) => (
+                            <tr key={w.weekIndex} className="border-t border-gray-100 hover:bg-gray-50">
+                              <td className="px-4 py-3 font-medium text-gray-800">{w.weekIndex}</td>
+                              <td className="px-4 py-3 text-gray-600">
+                                {w.slotStart} – {w.slotEnd}
+                              </td>
+                              <td className="px-4 py-3 text-center">{w.progress ?? 0}%</td>
+                              <td className="px-4 py-3 text-center">
+                                {w.completed ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                    <CheckCircle className="w-3.5 h-3.5" /> Completed
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                                    <XCircle className="w-3.5 h-3.5" /> Not completed
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-gray-500">No target-based salary data for this employee and month.</p>
+            )}
           </div>
         </div>
       )}
