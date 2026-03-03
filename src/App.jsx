@@ -110,6 +110,7 @@ const EmployeeDocuments = lazy(() => import("./Components/HRDashboard/EmployeeDo
 const SalaryModification = lazy(() => import("./Components/HRDashboard/SalaryModification.jsx"));
 const EmployeeFeedback = lazy(() => import("./Components/HRDashboard/EmployeeFeedback.jsx"));
 const EmployeeFeedbackReport = lazy(() => import("./Components/HRDashboard/EmployeeFeedbackReport.jsx"));
+const EmployeeTargetReport = lazy(() => import("./Components/HRDashboard/EmployeeTargetReport.jsx"));
 const TodoList = lazy(() => import("./Components/TodoList/TodoList.jsx"));
 const EmployeeReviewDashboard = lazy(() => import("./Components/EmployeeReview/EmployeeReviewDashboard.jsx"));
 const ReviewSubmissionForm = lazy(() => import("./Components/EmployeeReview/ReviewSubmissionForm.jsx"));
@@ -680,6 +681,7 @@ function App() {
           <Route path="weekly-target/:targetId" element={<WeeklyTargetSetup />} />
           <Route path="my-target" element={<MyTarget />} />
           <Route path="my-target/:targetId" element={<MyTarget />} />
+          <Route path="employee-target-report" element={<EmployeeTargetReport />} />
           <Route path="Consignment" element={<Consignment />} />
           <Route path="CustomerLoads" element={<CustomerLoads />} />
           <Route path="DailyRateRequest" element={<DailyRateRequest />} />

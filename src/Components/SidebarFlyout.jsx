@@ -38,6 +38,7 @@ const getMenuIcon = (itemName) => {
     'Rate Request Report': BarChart3,
     'Break Report': Clock,
     'Target Reports': Target,
+    'Employee Target Report': Target,
     'Attendance Leave': Calendar,
     'Leave Approval': Award,
     'Report Analysis': TrendingUp,

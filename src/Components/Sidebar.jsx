@@ -468,6 +468,7 @@ const menuItems = [
   { name: "Employee Review", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/reviews/dashboard" },
   { name: "Monthly Performance Reviews", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/monthly-performance-reviews" },
   { name: "Target Reports", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/target-reports" },
+  { name: "Employee Target Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/employee-target-report" },
   { name: "Rate Request", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/RateRequest" },
   { name: "Rate Approved", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/RateApproved" },
   { name: "Manager Rate Approval", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/ManagerRateApproval" },
@@ -541,6 +542,7 @@ const REPORT_NAMES = [
   "CMT Dept Report",
   "Trucker Report",
   "Target Reports",
+  "Employee Target Report",
   "QA Call Report",
   "Employee Feedback Report",
   "Attendance Leave",
@@ -572,6 +574,7 @@ const DEPARTMENT_REPORTS = {
     "Leave Approval",
     "Break Report",
     "Target Reports",
+    "Employee Target Report",
     "Emp Login Report",
     "Employee Feedback Report"
   ],
