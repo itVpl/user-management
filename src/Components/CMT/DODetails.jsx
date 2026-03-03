@@ -62,7 +62,7 @@ const MS = {
 
 /* ====================== Soft Theme (colors only) ====================== */
 const SOFT = {
-  header: 'rounded-2xl bg-gradient-to-r from-[#6D5DF6] via-[#7A5AF8] to-[#19C3FB] text-white px-5 py-4 shadow',
+  header: 'rounded-2xl bg-gradient-to-r from-[#6D5DF6] via-[#7A5AF8] to-[#19C3FB] text-white px-5 py-4',
   cardMint: 'p-4 rounded-2xl border bg-[#F3FBF6] border-[#B9E6C9]',   // Customer
   cardPink: 'p-4 rounded-2xl border bg-[#FFF3F7] border-[#F7CADA]',   // Carrier
   cardBlue: 'p-4 rounded-2xl border bg-[#EEF4FF] border-[#C9D5FF]',   // BOL / Files / Assignment / CreatedBy / LoadRef / Additional Docs
@@ -3660,226 +3660,168 @@ export default function DODetails({ overrideEmpId }) {
 
   return (
     <div className="p-6">
-      {/* Tabs */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
+        {/* 1. Statistics Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+          <div className="bg-white rounded-2xl border border-gray-200 p-6">
+            <p className="text-xl font-medium mb-3">Total Assigned DOs</p>
+            <div className="flex items-center justify-between">
+              <span className="text-2xl font-bold text-gray-900">{orders.length}</span>
+              <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-600">
+                <Package size={25} />
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-2xl border border-gray-200 p-6">
+            <p className="text-xl font-medium mb-3">Verified</p>
+            <div className="flex items-center justify-between">
+              <span className="text-2xl font-bold text-gray-900">
+                {orders.filter(o => o.assignmentStatus === 'cmt_verified').length}
+              </span>
+              <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center text-green-600">
+                <CheckCircle size={25} />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-gray-200 p-6">
+            <p className="text-xl font-medium mb-3">Today</p>
+            <div className="flex items-center justify-between">
+              <span className="text-2xl font-bold text-gray-900">
+                {orders.filter(o => o.createdAt?.split('T')[0] === new Date().toISOString().split('T')[0]).length}
+              </span>
+              <div className="w-10 h-10 rounded-full bg-purple-50 flex items-center justify-center text-purple-600">
+                <Calendar size={25} />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 2. Search Input */}
+        <div className="flex gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+            <input
+              type="text"
+              placeholder={activeTab === 'assign-do' ? "Search DO / Load / Carrier / Shipper..." : "Search rejected DOs..."}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-12 pr-4 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-700 placeholder-gray-400"
+            />
+          </div>
+          {activeTab === 'rejected' && (
+             <button
+               onClick={fetchRejectedDOs}
+               disabled={rejectedLoading}
+               className="cursor-pointer flex items-center gap-2 px-4 py-3 bg-white border border-blue-600 rounded-xl text-blue-600 hover:bg-blue-50 font-medium transition-colors"
+               title="Refresh"
+             >
+               <RefreshCw size={18} className={rejectedLoading ? "animate-spin" : ""} />
+               <span>Refresh</span>
+             </button>
+          )}
+        </div>
+      </div>
+
+      {/* 3. Tabs */}
       <div className="flex items-center gap-4 mb-6">
         <button
           onClick={() => handleTabChange('assign-do')}
-          className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${activeTab === 'assign-do'
-              ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg'
-              : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
-            }`}
+          className={`cursor-pointer px-4 py-3 text-lg font-semibold border-b-2 transition-colors duration-200 flex items-center gap-2 ${
+            activeTab === 'assign-do'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+          }`}
         >
-          <div className="flex items-center gap-2">
-            <Package size={18} />
-            <span>Assign DO ({filteredOrders.length})</span>
-          </div>
+          <Package size={22} />
+          Assign DO ({filteredOrders.length})
         </button>
         <button
           onClick={() => handleTabChange('rejected')}
-          className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${activeTab === 'rejected'
-              ? 'bg-gradient-to-r from-red-500 to-rose-600 text-white shadow-lg'
-              : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
-            }`}
+          className={`cursor-pointer px-4 py-3 text-LG font-semibold border-b-2 transition-colors duration-200 flex items-center gap-2 ${
+            activeTab === 'rejected'
+              ? 'border-red-600 text-red-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+          }`}
         >
-          <div className="flex items-center gap-2">
-            <XCircle size={18} />
-            <span>Rejected by Accountant ({filteredRejectedDOs.length})</span>
-          </div>
+          <XCircle size={22} />
+          Rejected by Accountant ({filteredRejectedDOs.length})
         </button>
       </div>
 
-      {/* Tab Content */}
-      {activeTab === 'assign-do' && (
-        <div>
-          {/* Statistics Cards */}
-          <div className="flex items-center gap-6 mb-6">
-            <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                  <Package className="text-blue-600" size={20} />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">Total Assigned DOs</p>
-                  <p className="text-xl font-bold text-gray-800">{filteredOrders.length}</p>
-                </div>
-              </div>
-            </div>
-            <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-                  <CheckCircle className="text-green-600" size={20} />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">Verified</p>
-                  <p className="text-xl font-bold text-green-600">{filteredOrders.filter(o => o.assignmentStatus === 'cmt_verified').length}</p>
-                </div>
-              </div>
-            </div>
-            <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-                  <Calendar className="text-purple-600" size={20} />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">Today</p>
-                  <p className="text-xl font-bold text-purple-600">{filteredOrders.filter(o => o.createdAt?.split('T')[0] === new Date().toISOString().split('T')[0]).length}</p>
-                </div>
-              </div>
-            </div>
-            <div className="flex-1"></div>
-            <div className="flex items-center gap-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                <input
-                  type="text"
-                  placeholder="Search DO / Load / Carrier / Shipper..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'rejected' && (
-        <div>
-          {/* Statistics Cards */}
-          <div className="flex items-center gap-6 mb-6">
-            <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
-                  <XCircle className="text-red-600" size={20} />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">Total Rejected</p>
-                  <p className="text-xl font-bold text-gray-800">{filteredRejectedDOs.length}</p>
-                </div>
-              </div>
-            </div>
-            <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
-                  <Calendar className="text-orange-600" size={20} />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">Today</p>
-                  <p className="text-xl font-bold text-orange-600">{filteredRejectedDOs.filter(o => o.createdAt?.split('T')[0] === new Date().toISOString().split('T')[0]).length}</p>
-                </div>
-              </div>
-            </div>
-            <div className="flex-1"></div>
-            <div className="flex items-center gap-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                <input
-                  type="text"
-                  placeholder="Search rejected DOs..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                />
-              </div>
-              <button
-                onClick={fetchRejectedDOs}
-                disabled={rejectedLoading}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Refresh rejected DOs"
-              >
-                {rejectedLoading ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    <span>Loading...</span>
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw size={16} />
-                    <span>Refresh</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-
-
-      {/* Table */}
-      <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+      {/* 4. Table */}
+      <div className="bg-white rounded-2xl border border-gray-200 mb-6 p-4">
         {(loading || (activeTab === 'rejected' && rejectedLoading)) ? (
-          <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-500 text-lg">
-              {activeTab === 'assign-do' ? 'Loading Assigned DOs...' : 'Loading Rejected DOs...'}
-            </p>
-            <p className="text-gray-400 text-sm">Please wait while we fetch the data</p>
-          </div>
+           <div className="text-center py-12">
+             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-4"></div>
+             <p className="text-gray-500 font-medium">
+               {activeTab === 'assign-do' ? 'Loading Assigned DOs...' : 'Loading Rejected DOs...'}
+             </p>
+           </div>
         ) : (
-          <>
+           <>
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
+              <table className="w-full border-separate border-spacing-y-4">
+                <thead className="bg-gray-100">
                   <tr>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">S.No</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">DO ID</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load No</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Dispatcher</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Total Amount</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier Fees</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Action</th>
+                    {['S.No', 'DO ID', 'Load No', 'Dispatcher', 'Carrier', 'Total Amount', 'Carrier Fees', 'Status', 'Action'].map((h, i, arr) => (
+                      <th 
+                        key={h} 
+                        className={`text-left py-4 px-4 text-sm font-semibold text-gray-600 uppercase tracking-wider border-y border-gray-300 ${
+                          i === 0 ? 'rounded-l-2xl pl-6 border-l' : ''
+                        } ${i === arr.length - 1 ? 'rounded-r-2xl pr-6 border-r' : ''}`}
+                      >
+                        {h}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y-0">
                   {currentOrders.map((order, index) => (
-                    <tr key={order.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                      <td className="py-2 px-3"><span className="font-medium text-gray-700">{order.sNo}</span></td>
-                      <td className="py-2 px-3"><span className="font-medium text-gray-700">{order.doId}</span></td>
-                      <td className="py-2 px-3"><span className="font-medium text-gray-700">{order.loadNo}</span></td>
-                      <td className="py-2 px-3"><span className="font-medium text-gray-700">{order.dispatcherName}</span></td>
-                      <td className="py-2 px-3"><span className="font-medium text-gray-700">{order.carrierName}</span></td>
-                      <td className="py-2 px-3"><span className="font-medium text-gray-700">{fmtCurrency(order.totalAmount)}</span></td>
-                      <td className="py-2 px-3"><span className="font-medium text-gray-700">{fmtCurrency(order.carrierFees)}</span></td>
-                      <td className="py-2 px-3">
+                    <tr key={order.id} className="transition-all group">
+                      <td className="py-4 px-4 font-medium text-gray-900 border-y border-l border-gray-200 rounded-l-2xl pl-6 bg-white group-hover:bg-gray-50">{startIndex + index + 1}</td>
+                      <td className="py-4 px-4 font-medium text-gray-900 font-medium border-y border-gray-200 bg-white group-hover:bg-gray-50">{order.doId}</td>
+                      <td className="py-4 px-4 font-medium text-gray-900 border-y border-gray-200 bg-white group-hover:bg-gray-50">{order.loadNo}</td>
+                      <td className="py-4 px-4 font-medium text-gray-900 border-y border-gray-200 bg-white group-hover:bg-gray-50">
                         <div className="flex items-center gap-2">
-                          <span
-                            className={`text-xs font-semibold px-2 py-1 rounded-full ${order.status === 'open' ? MS.successPill : MS.neutralPill
-                              }`}
-                          >
-                            {order.loadReferenceStatus || order.doStatus || order.status}
-                          </span>
-                          {order.assignmentStatus === 'cmt_verified' && (
-                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                           {/* <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold">
+                             {order.dispatcherName?.charAt(0) || 'U'}
+                           </div> */}
+                           {order.dispatcherName}
+                        </div>
+                      </td>
+                      <td className="py-4 px-4 font-medium text-gray-900 border-y border-gray-200 bg-white group-hover:bg-gray-50">{order.carrierName}</td>
+                      <td className="py-4 px-4 font-medium text-gray-900 font-medium border-y border-gray-200 bg-white group-hover:bg-gray-50">{fmtCurrency(order.totalAmount)}</td>
+                      <td className="py-4 px-4 font-medium text-gray-900 border-y border-gray-200 bg-white group-hover:bg-gray-50">{fmtCurrency(order.carrierFees)}</td>
+                      <td className="py-4 px-4 border-y border-gray-200 bg-white group-hover:bg-gray-50">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full font-medium ${
+                          order.status === 'open' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          {order.loadReferenceStatus || order.doStatus || order.status}
+                        </span>
+                         {order.assignmentStatus === 'cmt_verified' && (
+                            <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-[12px] font-medium bg-blue-50 text-blue-700 border border-blue-100">
                               CMT Verified
                             </span>
                           )}
-                        </div>
                       </td>
-                      <td className="py-2 px-3">
+                      <td className="py-4 px-4 border-y border-r border-gray-200 rounded-r-2xl pr-6 bg-white group-hover:bg-gray-50">
                         <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => {
-                              console.log('Opening modal for order:', order.doId, 'Active Tab:', activeTab, 'Assignment Status:', order.assignmentStatus, 'Raw Assignment Status:', order.raw?.assignmentStatus, 'Forwarded:', !!order.raw?.forwardedToAccountant);
-                              setViewingOrder(order);
-                            }}
-                            className="flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg hover:from-blue-600 hover:to-indigo-700 hover:shadow-xl"
-                          >
-                            <FaEye size={12} />
-                            <span>View</span>
-                          </button>
-
-                          {/* Resubmit button for rejected DOs */}
-                          {activeTab === 'rejected' && (
+                         <button
+  onClick={() => setViewingOrder(order)}
+  className="cursor-pointer px-4 py-1.5 text-base font-semibold text-[#3b82f6] border-1 border-[#3b82f6] rounded-lg bg-transparent hover:bg-[#3b82f6] hover:text-white transition-all duration-200"
+  title="View Details"
+>
+  View
+</button>
+                           {activeTab === 'rejected' && (
                             <button
                               onClick={() => openResubmitModal(order)}
-                              className="flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-orange-500 to-amber-600 text-white shadow-lg hover:from-orange-600 hover:to-amber-700 hover:shadow-xl"
-                              title="Resubmit this DO with corrections"
+                              className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                              title="Resubmit"
                             >
-                              <RefreshCw size={12} />
-                              <span>Resubmit</span>
+                              <RefreshCw size={16} />
                             </button>
                           )}
                         </div>
@@ -3889,71 +3831,40 @@ export default function DODetails({ overrideEmpId }) {
                 </tbody>
               </table>
             </div>
-
             {currentData.length === 0 && (
-              <div className="text-center py-12">
-                <Truck className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                <p className="text-gray-500 text-lg">
-                  {searchTerm
-                    ? 'No DOs found matching your search'
-                    : activeTab === 'assign-do'
-                      ? 'No DOs assigned'
-                      : 'No rejected DOs'
-                  }
-                </p>
-                <p className="text-gray-400 text-sm">
-                  {searchTerm
-                    ? 'Try adjusting your search terms'
-                    : activeTab === 'assign-do'
-                      ? 'Currently no data for this CMT user'
-                      : 'No DOs have been rejected by accountant yet'
-                  }
-                </p>
-              </div>
+               <div className="text-center py-12">
+                 <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                   <Package className="text-gray-300" size={32} />
+                 </div>
+                 <h3 className="text-lg font-medium text-gray-900">
+                    {searchTerm ? 'No DOs found' : (activeTab === 'assign-do' ? 'No Assigned DOs' : 'No Rejected DOs')}
+                 </h3>
+                 <p className="text-gray-500 mt-1">
+                    {searchTerm ? 'Try adjusting your search terms' : 'There are no records to display'}
+                 </p>
+               </div>
             )}
-          </>
+           </>
         )}
       </div>
 
-      {/* Enhanced Pagination */}
+      {/* 5. Pagination */}
       {totalPages > 1 && currentData.length > 0 && (
-        <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+        <div className="flex justify-between items-center bg-white rounded-2xl border border-gray-200 p-4">
           <div className="text-sm text-gray-600">
             Showing {startIndex + 1} to {Math.min(endIndex, currentData.length)} of {currentData.length} DOs
-            {searchTerm && ` (filtered from ${activeTab === 'assign-do' ? orders.length : rejectedDOs.length} total)`}
           </div>
 
-          <div className="flex items-center gap-2 bg-white rounded-xl shadow-lg border border-gray-200 p-2">
-            {/* Previous Button */}
+          <div className="flex items-center gap-2">
             <button
               onClick={() => handlePageChange(currentPage - 1)}
               disabled={currentPage === 1}
-              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+              className="cursor-pointer flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
               Previous
             </button>
 
-            {/* Page Numbers */}
             <div className="flex items-center gap-1">
-              {/* First Page */}
-              {currentPage > 3 && (
-                <>
-                  <button
-                    onClick={() => handlePageChange(1)}
-                    className="px-3 py-2 text-sm font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-all duration-200"
-                  >
-                    1
-                  </button>
-                  {currentPage > 4 && (
-                    <span className="px-2 text-gray-400">...</span>
-                  )}
-                </>
-              )}
-
-              {/* Current Page Range */}
               {Array.from({ length: totalPages }, (_, i) => i + 1)
                 .filter(page => {
                   if (totalPages <= 7) return true;
@@ -3965,41 +3876,22 @@ export default function DODetails({ overrideEmpId }) {
                   <button
                     key={page}
                     onClick={() => handlePageChange(page)}
-                    className={`px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${currentPage === page
-                        ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg'
-                        : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'
+                    className={`cursor-pointer px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${currentPage === page
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'text-gray-700 hover:bg-gray-50'
                       }`}
                   >
                     {page}
                   </button>
                 ))}
-
-              {/* Last Page */}
-              {currentPage < totalPages - 2 && totalPages > 7 && (
-                <>
-                  {currentPage < totalPages - 3 && (
-                    <span className="px-2 text-gray-400">...</span>
-                  )}
-                  <button
-                    onClick={() => handlePageChange(totalPages)}
-                    className="px-3 py-2 text-sm font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-all duration-200"
-                  >
-                    {totalPages}
-                  </button>
-                </>
-              )}
             </div>
 
-            {/* Next Button */}
             <button
               onClick={() => handlePageChange(currentPage + 1)}
               disabled={currentPage === totalPages}
-              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+              className="cursor-pointer flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
             >
               Next
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
             </button>
           </div>
         </div>
