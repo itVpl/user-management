@@ -231,51 +231,41 @@ export default function DailyRateRequest() {
   }
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center gap-6">
-          {/* Total Loads Card */}
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center">
-                <Package className="text-indigo-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Total Loads</p>
-                <p className="text-xl font-bold text-gray-800">{overallStatistics?.totalLoads || 0}</p>
-              </div>
+    <div className="p-6 bg-gray-50 min-h-screen">
+      {/* Top section - Consignment style: single white card, no shadow */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+          <div className="p-4 border border-gray-200 rounded-xl flex items-center justify-between">
+            <div>
+              <p className="text-xl font-medium mb-3">Total Loads</p>
+              <p className="text-2xl font-bold text-gray-800">{overallStatistics?.totalLoads || 0}</p>
+            </div>
+            <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
+              <Package className="text-indigo-600" size={18} />
             </div>
           </div>
-
-          {/* Loads with Bid Card */}
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-                <CheckCircle className="text-green-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Loads with Bid</p>
-                <p className="text-xl font-bold text-green-600">{overallStatistics?.loadsWithBid || overallStatistics?.totalLoadsWithBid || 0}</p>
-              </div>
+          <div className="p-4 border border-gray-200 rounded-xl flex items-center justify-between">
+            <div>
+              <p className="text-xl font-medium mb-3">Loads with Bid</p>
+              <p className="text-2xl font-bold text-green-600">{overallStatistics?.loadsWithBid || overallStatistics?.totalLoadsWithBid || 0}</p>
+            </div>
+            <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+              <CheckCircle className="text-green-600" size={18} />
             </div>
           </div>
-
-          {/* Loads without Bid Card */}
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center"> 
-                <XCircle className="text-orange-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Loads without Bid</p>
-                <p className="text-xl font-bold text-orange-600">{overallStatistics?.loadsWithoutBid || overallStatistics?.totalLoadsWithoutBid || 0}</p>
-              </div>
+          <div className="p-4 border border-gray-200 rounded-xl flex items-center justify-between">
+            <div>
+              <p className="text-xl font-medium mb-3">Loads without Bid</p>
+              <p className="text-2xl font-bold text-orange-600">{overallStatistics?.loadsWithoutBid || overallStatistics?.totalLoadsWithoutBid || 0}</p>
+            </div>
+            <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
+              <XCircle className="text-orange-600" size={18} />
             </div>
           </div>
         </div>
 
         {/* Filters */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 flex-wrap">
           {/* Date Range dropdown */}
           <div className="relative">
             <button
@@ -292,7 +282,7 @@ export default function DailyRateRequest() {
             </button>
 
             {showPresetMenu && (
-              <div className="absolute z-50 mt-2 w-56 rounded-md border bg-white shadow-lg">
+              <div className="absolute z-50 mt-2 w-56 rounded-md border border-gray-200 bg-white">
                 {dateFilterApplied && (
                   <>
                     <button
@@ -331,7 +321,7 @@ export default function DailyRateRequest() {
           {/* Custom Range calendars */}
           {showCustomRange && (
             <div className="fixed inset-0 z-[60] bg-black/30 flex items-center justify-center p-4" onClick={() => setShowCustomRange(false)}>
-              <div className="bg-white rounded-xl shadow-2xl p-4" onClick={(e) => e.stopPropagation()}>
+              <div className="bg-white rounded-xl border border-gray-200 p-4" onClick={(e) => e.stopPropagation()}>
                 <DateRange
                   ranges={[range]}
                   onChange={(item) => setRange(item.selection)}
@@ -369,20 +359,20 @@ export default function DailyRateRequest() {
         </div>
       </div>
 
-      {/* Loads Table */}
-      <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
-              <tr>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load ID</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Assigned CMT</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Origin</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Destination</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load Type</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Agent Name</th>
-                <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bid Count</th>
-                <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Actions</th>
+      {/* Loads Table - Consignment style */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="overflow-x-auto p-4">
+          <table className="min-w-full text-left border-separate border-spacing-y-4">
+            <thead>
+              <tr className="bg-gray-100">
+                <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y first:border-l border-gray-200 rounded-l-lg whitespace-nowrap">Load ID</th>
+                <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">Assigned CMT</th>
+                <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">Origin</th>
+                <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">Destination</th>
+                <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">Load Type</th>
+                <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">Agent Name</th>
+                <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200 text-center">Bid Count</th>
+                <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y last:border-r border-gray-200 rounded-r-lg text-center">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -400,11 +390,11 @@ export default function DailyRateRequest() {
                 const hasBid = load.bidStatus?.hasBid || false;
                 
                 return (
-                  <tr key={load.loadId} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                    <td className="py-2 px-3">
-                      <span className="font-mono text-sm text-gray-700">{load.loadId?.slice(-8) || 'N/A'}</span>
+                  <tr key={load.loadId} className="bg-white hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-4 border-y first:border-l border-gray-200 first:rounded-l-lg">
+                      <span className="font-mono text-sm font-medium text-gray-700">{load.loadId?.slice(-8) || 'N/A'}</span>
                     </td>
-                    <td className="py-2 px-3">
+                    <td className="px-4 py-4 border-y border-gray-200">
                       <div>
                         <span className="font-medium text-indigo-600">{load.cmtUser?.empName || load.assignedCMTUser?.empName || 'N/A'}</span>
                         {(load.cmtUser?.empId || load.assignedCMTUser?.empId) && (
@@ -412,7 +402,7 @@ export default function DailyRateRequest() {
                         )}
                       </div>
                     </td>
-                    <td className="py-2 px-3">
+                    <td className="px-4 py-4 border-y border-gray-200">
                       <div>
                         <span className="font-medium text-gray-700">{originText}</span>
                         {origin?.addressLine1 && originText !== origin.addressLine1 && (
@@ -420,7 +410,7 @@ export default function DailyRateRequest() {
                         )}
                       </div>
                     </td>
-                    <td className="py-2 px-3">
+                    <td className="px-4 py-4 border-y border-gray-200">
                       <div>
                         <span className="font-medium text-gray-700">{destinationText}</span>
                         {destination?.addressLine1 && destinationText !== destination.addressLine1 && (
@@ -428,10 +418,10 @@ export default function DailyRateRequest() {
                         )}
                       </div>
                     </td>
-                    <td className="py-2 px-3">
+                    <td className="px-4 py-4 border-y border-gray-200">
                       <span className="font-medium text-gray-700">{load.loadDetails?.loadType || 'N/A'}</span>
                     </td>
-                    <td className="py-2 px-3">
+                    <td className="px-4 py-4 border-y border-gray-200">
                       <div>
                         <span className="font-medium text-gray-700">{agentName}</span>
                         {load.createdBy?.createdBySalesUser?.empId && (
@@ -439,12 +429,12 @@ export default function DailyRateRequest() {
                         )}
                       </div>
                     </td>
-                    <td className="py-2 px-3 text-center">
+                    <td className="px-4 py-4 border-y border-gray-200 text-center">
                       <span className={`font-semibold ${hasBid ? 'text-green-600' : 'text-orange-600'}`}>
                         {bidCount}
                       </span>
                     </td>
-                    <td className="py-2 px-3">
+                    <td className="px-4 py-4 border-y last:border-r border-gray-200 last:rounded-r-lg">
                       <button
                         onClick={() => {
                           setSelectedLoad(load);
@@ -477,7 +467,7 @@ export default function DailyRateRequest() {
 
       {/* Pagination */}
       {allLoads.length > 0 && totalPages > 1 && (
-        <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+        <div className="flex justify-between items-center mt-6 bg-white rounded-2xl p-4 border border-gray-200">
           <div className="text-sm text-gray-600">
             Showing {startIndex + 1} to {Math.min(endIndex, allLoads.length)} of {allLoads.length} loads
           </div>
@@ -536,7 +526,7 @@ export default function DailyRateRequest() {
       {showLoadModal && selectedLoad && (
         <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4" onClick={() => setShowLoadModal(false)}>
           <div
-            className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+            className="bg-white rounded-3xl border border-gray-200 max-w-4xl w-full max-h-[90vh] overflow-y-auto"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             onClick={(e) => e.stopPropagation()}
           >

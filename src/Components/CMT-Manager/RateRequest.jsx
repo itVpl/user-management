@@ -1871,47 +1871,56 @@ useEffect(() => {
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
-      {/* Tabs */}
-      <div className="flex items-center gap-4 mb-6">
-        {/* <button
-          onClick={() => setActiveTab('pending')}
-          className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${
-            activeTab === 'pending'
-              ? 'bg-gradient-to-r from-yellow-500 to-orange-600 text-white shadow-lg'
-              : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            <Clock size={18} />
-            <span>Pending Request</span>
+      {/* Top section - same layout as Consignment: single white card, no shadow */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-8">
+        {/* Tabs */}
+        <div className="flex items-center gap-4 mb-6">
+          <button
+            onClick={() => setActiveTab('rate')}
+            className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${
+              activeTab === 'rate'
+                ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white border border-transparent'
+                : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <CheckCircle size={18} />
+              <span>Daily Rate Request</span>
+            </div>
+          </button>
+          <button
+            onClick={() => setActiveTab('rateDetails')}
+            className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${
+              activeTab === 'rateDetails'
+                ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white border border-transparent'
+                : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <BarChart3 size={18} />
+              <span>All Rate Request</span>
+            </div>
+          </button>
+        </div>
+
+        {/* Stats row - Consignment style: border only, no shadow */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+          <div className="p-4 border border-gray-200 rounded-xl flex items-center justify-between">
+            <div>
+              <p className="text-xl font-medium mb-3">
+                {activeTab === 'rate' ? 'Today Rate Request' : 'Total Assigned'}
+              </p>
+              <p className="text-2xl font-bold text-gray-800">
+                {rateRequestPagination?.totalItems ?? (activeTab === 'rate'
+                  ? (completedRequests.length > 0 ? completedRequests.length : rateRequests.length)
+                  : (completedRequests.length > 0 ? completedRequests.length : rateRequests.length))}
+              </p>
+            </div>
+            <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+              <CheckCircle className="text-green-600" size={18} />
+            </div>
           </div>
-        </button> */}
-        <button
-          onClick={() => setActiveTab('rate')}
-          className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${
-            activeTab === 'rate'
-              ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg'
-              : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            <CheckCircle size={18} />
-            <span>Daily Rate Request</span>
-          </div>
-        </button>
-        <button
-          onClick={() => setActiveTab('rateDetails')}
-          className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${
-            activeTab === 'rateDetails'
-              ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg'
-              : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            <BarChart3 size={18} />
-            <span>All Rate Request</span>
-          </div>
-        </button>
+        </div>
       </div>
 
       {/* Pending Tab */}
@@ -1919,7 +1928,7 @@ useEffect(() => {
         <div>
           <div className="flex justify-between items-center mb-6">
             <div className="flex items-center gap-6">
-              <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+              <div className="bg-white rounded-2xl p-4 border border-gray-200">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-yellow-100 rounded-xl flex items-center justify-center">
                     <Clock className="text-yellow-600" size={20} />
@@ -1930,7 +1939,7 @@ useEffect(() => {
                   </div>
                 </div>
               </div>
-              <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+              <div className="bg-white rounded-2xl p-4 border border-gray-200">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
                     <Truck className="text-blue-600" size={20} />
@@ -1943,7 +1952,7 @@ useEffect(() => {
                   </div>
                 </div>
               </div>
-              <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+              <div className="bg-white rounded-2xl p-4 border border-gray-200">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
                     <Calendar className="text-orange-600" size={20} />
@@ -1972,9 +1981,9 @@ useEffect(() => {
             </div>
           </div>
 
-          <div className="overflow-x-auto bg-white rounded-2xl shadow-xl border border-gray-100">
+          <div className="overflow-x-auto bg-white rounded-2xl border border-gray-200">
             {isFetching ? (
-              <div className="flex flex-col justify-center items-center h-96 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl shadow-lg">
+              <div className="flex flex-col justify-center items-center h-96 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl">
                 <div className="relative">
                   <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
                   <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-b-purple-600 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1s' }}></div>
@@ -1986,7 +1995,7 @@ useEffect(() => {
               </div>
             ) : (
               <table className="min-w-full table-auto text-sm text-left">
-                <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
+                <thead className="bg-gray-100">
                   <tr>
                     <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load ID</th>
                     <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Weight (lbs)</th>
@@ -2105,7 +2114,7 @@ useEffect(() => {
                                 receiverName: receiverName
                               });
                             }}
-                            className="flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg hover:from-blue-600 hover:to-blue-700 hover:shadow-xl"
+                            className="flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700"
                             title="Chat"
                           >
                             <MessageCircle size={14} />
@@ -2122,7 +2131,7 @@ useEffect(() => {
                                   </div>
                                   <button
                                     onClick={() => handleManualAcceptFromTable(item)}
-                                    className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-3 py-2 rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all duration-200 font-semibold shadow-lg hover:shadow-xl text-xs"
+                                    className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-3 py-2 rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all duration-200 font-semibold text-xs"
                                   >
                                     Accept Now
                                   </button>
@@ -2166,38 +2175,14 @@ useEffect(() => {
       {activeTab === 'rate' && (
         <div>
           <div className="flex justify-between items-center mb-6">
-            <div className="flex items-center gap-6">
-              <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-                    <CheckCircle className="text-green-600" size={20} />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">
-                      Today Rate Request
-                    </p>
-                    <p className="text-xl font-bold text-gray-800">
-                      {rateRequestPagination?.totalItems || (activeTab === 'rate'
-                        ? completedRequests.length > 0
-                          ? completedRequests.length
-                          : rateRequests.length
-                        : completedRequests.length)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
             <div className="flex items-center gap-4 flex-wrap">
-              {/* Daily Rate Request shows only today's data - no date filters needed */}
-              
               <button
                 onClick={exportToCSV}
                 disabled={filteredRequests.length === 0}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all duration-200 ${
                   filteredRequests.length === 0
                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-lg hover:shadow-xl'
+                    : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white border border-emerald-700'
                 }`}
                 title={filteredRequests.length === 0 ? 'No data to export' : `Export ${filteredRequests.length} records to CSV`}
               >
@@ -2214,9 +2199,9 @@ useEffect(() => {
             </div>
           </div>
 
-          <div className="overflow-x-auto bg-white rounded-2xl shadow-xl border border-gray-100">
+          <div className="overflow-x-auto bg-white rounded-xl border border-gray-200">
             {isFetching ? (
-              <div className="flex flex-col justify-center items-center h-96 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl shadow-lg">
+              <div className="flex flex-col justify-center items-center h-96 bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl">
                 <div className="relative">
                   <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
                   <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-b-purple-600 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1s' }}></div>
@@ -2227,97 +2212,82 @@ useEffect(() => {
                 </div>
               </div>
             ) : (
-              <table className="min-w-full table-auto text-sm text-left">
-                <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
-                  <tr>
-                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load ID</th>
-                    {/* <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Shipment No</th> */}
-                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Weight (lbs)</th>
-                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Pick-Up</th>
-                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Drop</th>
-                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Vehicle</th>
-                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Shipment Type</th>
-                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Date & Time</th>
-                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Rate</th>
-                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bid Count</th>
-                    {/* <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th> */}
-                    {/* <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Time</th> */}
-                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Details</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredRequests.map((item, index) => (
-                    <tr
-                      key={item._id}
-                      className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}
-                    >
-                      <td className="px-4 py-3">
-                        <span className="font-medium text-gray-700">{loadShort(item._id)}</span>
-                      </td>
-                      {/* <td className="px-4 py-3">
-                        <span className="font-medium text-gray-700">{item.shipmentNumber || 'N/A'}</span>
-                      </td> */}
-                      <td className="px-4 py-3">
-                        <span className="font-medium text-gray-700">{item.weight} lbs</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div>
-                          <span className="font-medium text-gray-700">{item.origin?.city || '—'}</span>
-                          <p className="text-xs text-gray-500">{item.origin?.state || ''}</p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div>
-                          <span className="font-medium text-gray-700">{item.destination?.city || '—'}</span>
-                          <p className="text-xs text-gray-500">{item.destination?.state || ''}</p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="font-medium text-gray-700">{item.vehicleType || '—'}</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        {item.loadType ? (
-                          <span className="font-medium text-gray-700">{item.loadType}</span>
-                        ) : null}
-                      </td>
-                      <td className="px-4 py-3">
-                        {item.createdAt ? (
+              <div className="overflow-x-auto p-4">
+                <table className="min-w-full text-left border-separate border-spacing-y-4">
+                  <thead>
+                    <tr className="bg-gray-100">
+                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y first:border-l border-gray-200 rounded-l-lg whitespace-nowrap">Load ID</th>
+                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">Weight (lbs)</th>
+                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">Pick-Up</th>
+                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">Drop</th>
+                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">Vehicle</th>
+                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">Shipment Type</th>
+                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">Date & Time</th>
+                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">Rate</th>
+                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">Bid Count</th>
+                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y last:border-r border-gray-200 rounded-r-lg">Details</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredRequests.map((item, index) => (
+                      <tr
+                        key={item._id}
+                        className="bg-white hover:bg-gray-50 transition-colors"
+                      >
+                        <td className="px-4 py-4 border-y first:border-l border-gray-200 first:rounded-l-lg">
+                          <span className="font-medium text-gray-700">{loadShort(item._id)}</span>
+                        </td>
+                        <td className="px-4 py-4 border-y border-gray-200">
+                          <span className="font-medium text-gray-700">{item.weight} lbs</span>
+                        </td>
+                        <td className="px-4 py-4 border-y border-gray-200">
                           <div>
-                            <div className="font-medium text-gray-700">
-                              {new Date(item.createdAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              {new Date(item.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
-                            </div>
+                            <span className="font-medium text-gray-700">{item.origin?.city || '—'}</span>
+                            <p className="text-xs text-gray-500">{item.origin?.state || ''}</p>
                           </div>
-                        ) : (
-                          <span className="font-medium text-gray-400">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="font-bold text-green-600">
-                          ${item.rate?.toLocaleString() || '0'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="font-medium text-gray-700">
-                          {item.bidCount || 0}
-                        </span>
-                      </td>
-                      {/* <td className="px-4 py-3">
-                        <span
-                          className={`text-white text-xs px-3 py-1 rounded-full font-bold ${
-                            statusColors[item.status] || 'bg-gray-500'
-                          }`}
-                        >
-                          {item.status || '—'}
-                        </span>
-                      </td> */}
-                      {/* <td className="px-4 py-3">{renderTimerChip(item.loadId)}</td> */}
-                      <td className="px-4 py-3">
-                        <div className="flex gap-2">
-                          {/* Chat Button */}
-                         <button
+                        </td>
+                        <td className="px-4 py-4 border-y border-gray-200">
+                          <div>
+                            <span className="font-medium text-gray-700">{item.destination?.city || '—'}</span>
+                            <p className="text-xs text-gray-500">{item.destination?.state || ''}</p>
+                          </div>
+                        </td>
+                        <td className="px-4 py-4 border-y border-gray-200">
+                          <span className="font-medium text-gray-700">{item.vehicleType || '—'}</span>
+                        </td>
+                        <td className="px-4 py-4 border-y border-gray-200">
+                          {item.loadType ? (
+                            <span className="font-medium text-gray-700">{item.loadType}</span>
+                          ) : null}
+                        </td>
+                        <td className="px-4 py-4 border-y border-gray-200">
+                          {item.createdAt ? (
+                            <div>
+                              <div className="font-medium text-gray-700">
+                                {new Date(item.createdAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {new Date(item.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="font-medium text-gray-400">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-4 border-y border-gray-200">
+                          <span className="font-bold text-green-600">
+                            ${item.rate?.toLocaleString() || '0'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 border-y border-gray-200">
+                          <span className="font-medium text-gray-700">
+                            {item.bidCount || 0}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 border-y last:border-r border-gray-200 last:rounded-r-lg">
+                          <div className="flex gap-2">
+                            {/* Chat Button */}
+                           <button
   onClick={async () => {
     console.log('🔍 RateRequest (Pending Tab): Chat button clicked - FULL ITEM OBJECT:', item);
     console.log('🔍 SalesUserInfo structure:', {
@@ -2412,7 +2382,7 @@ useEffect(() => {
       receiverName: receiverName
     });
   }}
-  className="flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg hover:from-blue-600 hover:to-blue-700 hover:shadow-xl"
+  className="flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700"
   title="Chat"
 >
   <MessageCircle size={14} />
@@ -2423,13 +2393,13 @@ useEffect(() => {
                             onClick={() => {
                               handleViewBids(item);
                             }}
-                            className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 py-2 rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 font-semibold shadow-lg hover:shadow-xl"
+                            className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 py-2 rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 font-semibold"
                           >
                             View
                           </button>
                           <button
                             onClick={() => openModal(item)}
-                            className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2 rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all duration-200 font-semibold shadow-lg hover:shadow-xl"
+                            className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2 rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all duration-200 font-semibold"
                           >
                             Submit Rate
                           </button>
@@ -2439,7 +2409,7 @@ useEffect(() => {
                   ))}
                   {filteredRequests.length === 0 && (
                     <tr>
-                      <td colSpan="9" className="text-center py-12">
+                      <td colSpan="10" className="text-center py-12">
                         <CheckCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                         <p className="text-gray-500 text-lg">
                           {search ? 'No requests found matching your search' : 'No requests found'}
@@ -2456,8 +2426,9 @@ useEffect(() => {
                       </td>
                     </tr>
                   )}
-                </tbody>
-              </table>
+                  </tbody>
+                </table>
+              </div>
             )}
             
             {/* Pagination Controls */}
@@ -2542,11 +2513,11 @@ useEffect(() => {
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md transition-opacity duration-300 p-4 overflow-hidden"
         >
           <div 
-            className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl h-[90vh] flex flex-col border border-gray-200 overflow-hidden"
+            className="bg-white rounded-3xl w-full max-w-4xl h-[90vh] flex flex-col border border-gray-200 overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             <form onSubmit={handleSubmit} className="flex flex-col h-full">
-              <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 text-white px-8 py-6 rounded-t-3xl shadow-lg flex justify-between items-center flex-shrink-0">
+              <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 text-white px-8 py-6 rounded-t-3xl flex justify-between items-center flex-shrink-0">
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
                     <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2572,7 +2543,7 @@ useEffect(() => {
 
               <div className="flex-1 overflow-y-auto p-8 bg-gray-50/30">
                 {/* Load Details Card */}
-                <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mb-8">
+                <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-8">
                   <div className="flex items-center gap-3 mb-4">
                     <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
                       <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2642,7 +2613,7 @@ useEffect(() => {
                 </div>
 
                 {/* Form Fields */}
-                <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
+                <div className="bg-white rounded-2xl border border-gray-100 p-6">
                   <div className="flex items-center gap-3 mb-6">
                     <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
                       <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2682,7 +2653,7 @@ useEffect(() => {
                       </div>
                       
                       {isTruckerDropdownOpen && (
-                        <div className="absolute z-50 w-full mt-2 bg-white border-2 border-gray-200 rounded-xl shadow-xl max-h-60 overflow-y-auto">
+                        <div className="absolute z-50 w-full mt-2 bg-white border-2 border-gray-200 rounded-xl max-h-60 overflow-y-auto">
                           {/* Clear/Unselect option */}
                           {selectedTrucker && (
                             <div
@@ -3128,7 +3099,7 @@ useEffect(() => {
                     className={`px-8 py-3 rounded-xl font-semibold text-white transition-all duration-200 flex items-center gap-2 ${
                       submitting 
                         ? 'bg-gray-400 cursor-not-allowed' 
-                        : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-lg hover:shadow-xl'
+                        : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700'
                     }`}
                   >
                     {submitting ? (
@@ -3160,10 +3131,10 @@ useEffect(() => {
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity duration-300"
         >
           <div 
-            className="bg-white/90 backdrop-blur-lg rounded-3xl shadow-2xl w-full max-w-2xl p-8 border border-blue-100"
+            className="bg-white/90 backdrop-blur-lg rounded-3xl w-full max-w-2xl p-8 border border-blue-100"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="bg-gradient-to-r from-indigo-600 to-blue-500 text-white px-6 py-4 rounded-xl shadow mb-6 flex justify-between items-center">
+            <div className="bg-gradient-to-r from-indigo-600 to-blue-500 text-white px-6 py-4 rounded-xl mb-6 flex justify-between items-center">
               <div>
                 <h2 className="text-2xl font-semibold flex items-center gap-2">
                   Accept Load
@@ -3273,10 +3244,10 @@ useEffect(() => {
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md transition-opacity duration-300 p-4 overflow-hidden"
         >
           <div 
-            className="bg-white rounded-3xl shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col border border-gray-200 overflow-hidden"
+            className="bg-white rounded-3xl w-full max-w-6xl h-[90vh] flex flex-col border border-gray-200 overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 text-white px-8 py-6 rounded-t-3xl shadow-lg flex justify-between items-center flex-shrink-0">
+            <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 text-white px-8 py-6 rounded-t-3xl flex justify-between items-center flex-shrink-0">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
                   <BarChart3 className="w-6 h-6 text-white" size={24} />
@@ -3301,7 +3272,7 @@ useEffect(() => {
             <div className="flex-1 overflow-y-auto p-8 bg-gray-50/30">
               {/* Load Information Section */}
               {bidDetailsModal.load && (
-                <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mb-8">
+                <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-8">
                   <div className="flex items-center gap-3 mb-4">
                     <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
                       <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3400,7 +3371,7 @@ useEffect(() => {
 
             {/* Rate Details Section */}
             {bidDetailsModal.load && (bidDetailsModal.load.rateDetails || bidDetailsData?.rateDetails) && (
-              <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mb-8">
+              <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-8">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
                     <DollarSign className="w-4 h-4 text-blue-600" />
@@ -3465,7 +3436,7 @@ useEffect(() => {
             )}
 
               {/* Bids Table */}
-              <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
+              <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
                 <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -3478,7 +3449,7 @@ useEffect(() => {
                 </div>
               
               {bidDetailsLoading ? (
-                <div className="flex flex-col justify-center items-center h-96 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl shadow-lg">
+                <div className="flex flex-col justify-center items-center h-96 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl">
                   <div className="relative">
                     <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
                     <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-b-purple-600 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1s' }}></div>
@@ -3491,7 +3462,7 @@ useEffect(() => {
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full">
-                    <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
+                    <thead className="bg-gray-100">
                       <tr>
                         <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">S.No</th>
                         <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier</th>
@@ -3570,28 +3541,6 @@ useEffect(() => {
       {activeTab === 'rateDetails' && (
         <div>
           <div className="flex justify-between items-center mb-6">
-            <div className="flex items-center gap-6">
-              <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-                    <CheckCircle className="text-green-600" size={20} />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">
-                      Total Assigned
-                    </p>
-                    <p className="text-xl font-bold text-gray-800">
-                      {rateRequestPagination?.totalItems || (activeTab === 'rateDetails'
-                        ? completedRequests.length > 0
-                          ? completedRequests.length
-                          : rateRequests.length
-                        : completedRequests.length)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
             <div className="flex items-center gap-4 flex-wrap">
               {/* Date Range Filter (like DeliveryOrder.jsx) for All Rate Request tab */}
               <div className="relative">
@@ -3609,7 +3558,7 @@ useEffect(() => {
                 </button>
 
                 {showPresetMenu && (
-                  <div className="absolute z-50 mt-2 w-56 rounded-md border bg-white shadow-lg">
+                  <div className="absolute z-50 mt-2 w-56 rounded-md border border-gray-200 bg-white">
                     <button
                       onClick={() => {
                         setDateRange({ startDate: null, endDate: null, key: 'selection' });
@@ -3646,7 +3595,7 @@ useEffect(() => {
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all duration-200 ${
                   filteredRequests.length === 0
                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-lg hover:shadow-xl'
+                    : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white border border-emerald-700'
                 }`}
                 title={filteredRequests.length === 0 ? 'No data to export' : `Export ${filteredRequests.length} records to CSV`}
               >
@@ -3666,7 +3615,7 @@ useEffect(() => {
           {/* Custom Range calendars (open ONLY when 'Custom Range' clicked) */}
           {showCustomRange && (
             <div className="fixed inset-0 z-[60] bg-black/30 flex items-center justify-center p-4" onClick={() => setShowCustomRange(false)}>
-              <div className="bg-white rounded-xl shadow-2xl p-4" onClick={(e) => e.stopPropagation()}>
+              <div className="bg-white rounded-xl border border-gray-200 p-4" onClick={(e) => e.stopPropagation()}>
                 <DateRange
                   ranges={[dateRange.startDate && dateRange.endDate ? dateRange : { startDate: new Date(), endDate: new Date(), key: 'selection' }]}
                   onChange={(item) => {
@@ -3717,9 +3666,9 @@ useEffect(() => {
             </div>
           )}
 
-          <div className="overflow-x-auto bg-white rounded-2xl shadow-xl border border-gray-100">
+          <div className="overflow-x-auto bg-white rounded-xl border border-gray-200">
             {isFetching ? (
-              <div className="flex flex-col justify-center items-center h-96 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl shadow-lg">
+              <div className="flex flex-col justify-center items-center h-96 bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl">
                 <div className="relative">
                   <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
                   <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-b-purple-600 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1s' }}></div>
@@ -3730,81 +3679,82 @@ useEffect(() => {
                 </div>
               </div>
             ) : (
-              <table className="min-w-full table-auto text-sm text-left">
-                <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
-                  <tr>
-                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load ID</th>
-                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Weight (lbs)</th>
-                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Pick-Up</th>
-                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Drop</th>
-                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Vehicle</th>
-                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Shipment Type</th>
-                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Date & Time</th>
-                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Rate</th>
-                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bid Count</th>
-                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Details</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredRequests.map((item, index) => (
-                    <tr
-                      key={item._id}
-                      className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}
-                    >
-                      <td className="px-4 py-3">
-                        <span className="font-medium text-gray-700">{loadShort(item._id)}</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="font-medium text-gray-700">{item.weight} lbs</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div>
-                          <span className="font-medium text-gray-700">{item.origin?.city || '—'}</span>
-                          <p className="text-xs text-gray-500">{item.origin?.state || ''}</p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div>
-                          <span className="font-medium text-gray-700">{item.destination?.city || '—'}</span>
-                          <p className="text-xs text-gray-500">{item.destination?.state || ''}</p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="font-medium text-gray-700">{item.vehicleType || '—'}</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        {item.loadType ? (
-                          <span className="font-medium text-gray-700">{item.loadType}</span>
-                        ) : null}
-                      </td>
-                      <td className="px-4 py-3">
-                        {item.createdAt ? (
+              <div className="overflow-x-auto p-4">
+                <table className="min-w-full text-left border-separate border-spacing-y-4">
+                  <thead>
+                    <tr className="bg-gray-100">
+                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y first:border-l border-gray-200 rounded-l-lg whitespace-nowrap">Load ID</th>
+                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">Weight (lbs)</th>
+                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">Pick-Up</th>
+                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">Drop</th>
+                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">Vehicle</th>
+                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">Shipment Type</th>
+                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">Date & Time</th>
+                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">Rate</th>
+                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">Bid Count</th>
+                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y last:border-r border-gray-200 rounded-r-lg">Details</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredRequests.map((item, index) => (
+                      <tr
+                        key={item._id}
+                        className="bg-white hover:bg-gray-50 transition-colors"
+                      >
+                        <td className="px-4 py-4 border-y first:border-l border-gray-200 first:rounded-l-lg">
+                          <span className="font-medium text-gray-700">{loadShort(item._id)}</span>
+                        </td>
+                        <td className="px-4 py-4 border-y border-gray-200">
+                          <span className="font-medium text-gray-700">{item.weight} lbs</span>
+                        </td>
+                        <td className="px-4 py-4 border-y border-gray-200">
                           <div>
-                            <div className="font-medium text-gray-700">
-                              {new Date(item.createdAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              {new Date(item.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
-                            </div>
+                            <span className="font-medium text-gray-700">{item.origin?.city || '—'}</span>
+                            <p className="text-xs text-gray-500">{item.origin?.state || ''}</p>
                           </div>
-                        ) : (
-                          <span className="font-medium text-gray-400">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="font-bold text-green-600">
-                          ${item.rate?.toLocaleString() || '0'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="font-medium text-gray-700">
-                          {item.bidCount || 0}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex gap-2">
-                          {/* Chat Button */}
-                         <button
+                        </td>
+                        <td className="px-4 py-4 border-y border-gray-200">
+                          <div>
+                            <span className="font-medium text-gray-700">{item.destination?.city || '—'}</span>
+                            <p className="text-xs text-gray-500">{item.destination?.state || ''}</p>
+                          </div>
+                        </td>
+                        <td className="px-4 py-4 border-y border-gray-200">
+                          <span className="font-medium text-gray-700">{item.vehicleType || '—'}</span>
+                        </td>
+                        <td className="px-4 py-4 border-y border-gray-200">
+                          {item.loadType ? (
+                            <span className="font-medium text-gray-700">{item.loadType}</span>
+                          ) : null}
+                        </td>
+                        <td className="px-4 py-4 border-y border-gray-200">
+                          {item.createdAt ? (
+                            <div>
+                              <div className="font-medium text-gray-700">
+                                {new Date(item.createdAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {new Date(item.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="font-medium text-gray-400">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-4 border-y border-gray-200">
+                          <span className="font-bold text-green-600">
+                            ${item.rate?.toLocaleString() || '0'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 border-y border-gray-200">
+                          <span className="font-medium text-gray-700">
+                            {item.bidCount || 0}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 border-y last:border-r border-gray-200 last:rounded-r-lg">
+                          <div className="flex gap-2">
+                            {/* Chat Button */}
+                           <button
   onClick={async () => {
     console.log('🔍 RateRequest (All Rate Request Tab): Chat button clicked - FULL ITEM OBJECT:', item);
     console.log('🔍 SalesUserInfo structure:', {
@@ -3899,7 +3849,7 @@ useEffect(() => {
       receiverName: receiverName
     });
   }}
-  className="flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg hover:from-blue-600 hover:to-blue-700 hover:shadow-xl"
+  className="flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700"
   title="Chat"
 >
   <MessageCircle size={14} />
@@ -3910,13 +3860,13 @@ useEffect(() => {
                             onClick={() => {
                               handleViewBids(item);
                             }}
-                            className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 py-2 rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 font-semibold shadow-lg hover:shadow-xl"
+                            className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 py-2 rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 font-semibold"
                           >
                             View
                           </button>
                           <button
                             onClick={() => openModal(item)}
-                            className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2 rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all duration-200 font-semibold shadow-lg hover:shadow-xl"
+                            className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2 rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all duration-200 font-semibold"
                           >
                             Submit Rate
                           </button>
@@ -3943,8 +3893,9 @@ useEffect(() => {
                       </td>
                     </tr>
                   )}
-                </tbody>
-              </table>
+                  </tbody>
+                </table>
+              </div>
             )}
             
             {/* Pagination Controls */}
@@ -4029,7 +3980,7 @@ useEffect(() => {
           className="fixed inset-0 flex items-center justify-center z-[60]"
         >
           <div 
-            className="bg-white rounded-xl shadow-2xl border border-gray-200 p-8 w-full max-w-5xl max-h-[85vh] overflow-y-auto"
+            className="bg-white rounded-xl border border-gray-200 p-8 w-full max-w-5xl max-h-[85vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
 
@@ -4077,7 +4028,7 @@ useEffect(() => {
 
               {/* Rows */}
               {charges.map((charge, index) => (
-                <div key={index} className="grid grid-cols-5 gap-4 items-start p-4 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                <div key={index} className="grid grid-cols-5 gap-4 items-start p-4 bg-white rounded-xl border border-gray-200 transition-colors hover:bg-gray-50">
                   {/* Name */}
                   <div>
                     <input
@@ -4213,7 +4164,7 @@ useEffect(() => {
                 <button
                   type="button"
                   onClick={addCharge}
-                  className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all duration-300 flex items-center gap-3 shadow-lg hover:shadow-xl transform hover:scale-105"
+                  className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all duration-300 flex items-center gap-3 transform hover:scale-105"
                 >
                   <PlusCircle className="w-5 h-5" />
                   <span className="font-semibold">Add New Charge</span>
@@ -4245,7 +4196,7 @@ useEffect(() => {
                     <button
                       type="button"
                       onClick={applyCharges}
-                      className="px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl hover:from-green-600 hover:to-green-700 transition-all duration-300 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105"
+                      className="px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl hover:from-green-600 hover:to-green-700 transition-all duration-300 font-semibold transform hover:scale-105"
                     >
                       Apply to Bid Rate
                     </button>
