@@ -1,46 +1,56 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
- import { useLocation } from 'react-router-dom';
-import axios from 'axios';
-import { toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
-import { Clock, CheckCircle, Search, Truck, Calendar, DollarSign, BarChart3, FileText, PlusCircle, MessageCircle } from 'lucide-react';
-import { DateRange } from 'react-date-range';
-import { format, addDays } from 'date-fns';
-import 'react-date-range/dist/styles.css';
-import 'react-date-range/dist/theme/default.css';
-import API_CONFIG from '../../config/api.js';
-import LoadChatModalCMT from '../CMT/LoadChatModalCMT.jsx';
- const getAuthToken = () =>
-   localStorage.getItem('authToken') ||
-   sessionStorage.getItem('authToken') ||
-   localStorage.getItem('token') ||
-   sessionStorage.getItem('token');
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
+import axios from "axios";
+import { toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+import {
+  Clock,
+  CheckCircle,
+  Search,
+  Truck,
+  Calendar,
+  DollarSign,
+  BarChart3,
+  FileText,
+  PlusCircle,
+  MessageCircle,
+} from "lucide-react";
+import { DateRange } from "react-date-range";
+import { format, addDays } from "date-fns";
+import "react-date-range/dist/styles.css";
+import "react-date-range/dist/theme/default.css";
+import API_CONFIG from "../../config/api.js";
+import LoadChatModalCMT from "../CMT/LoadChatModalCMT.jsx";
+const getAuthToken = () =>
+  localStorage.getItem("authToken") ||
+  sessionStorage.getItem("authToken") ||
+  localStorage.getItem("token") ||
+  sessionStorage.getItem("token");
 
 const statusColors = {
-  Assigned: 'bg-orange-500',
-  Posted: 'bg-blue-500',
-  'In Transit': 'bg-blue-700',
-  pending: 'bg-yellow-500',
-  approved: 'bg-green-500',
-  rejected: 'bg-red-500',
-  accepted: 'bg-green-600',
-  completed: 'bg-purple-500',
-  delivered: 'bg-indigo-500'
+  Assigned: "bg-orange-500",
+  Posted: "bg-blue-500",
+  "In Transit": "bg-blue-700",
+  pending: "bg-yellow-500",
+  approved: "bg-green-500",
+  rejected: "bg-red-500",
+  accepted: "bg-green-600",
+  completed: "bg-purple-500",
+  delivered: "bg-indigo-500",
 };
 
 const NINETY_MIN_MS = 90 * 60 * 1000;
-const LS_START_KEY = 'rr_timer_start';
-const LS_STOP_KEY = 'rr_timer_stop';
+const LS_START_KEY = "rr_timer_start";
+const LS_STOP_KEY = "rr_timer_stop";
 
 const loadShort = (id) => {
-  const s = (id ?? '').toString();
-  return s ? `L-${s.slice(-4)}` : 'L-0000';
+  const s = (id ?? "").toString();
+  return s ? `L-${s.slice(-4)}` : "L-0000";
 };
-
 
 function readLS(key) {
   try {
-    return JSON.parse(localStorage.getItem(key) || '{}');
+    return JSON.parse(localStorage.getItem(key) || "{}");
   } catch {
     return {};
   }
@@ -52,28 +62,28 @@ function writeLS(key, val) {
 }
 
 const RateRequest = () => {
- const location = useLocation();
+  const location = useLocation();
 
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [submitting, setSubmitting] = useState(false);
-  const [rate, setRate] = useState(''); // Line Haul amount
-  const [fscPercentage, setFscPercentage] = useState(''); // FSC percentage
-  const [message, setMessage] = useState('');
-  const [pickupDate, setPickupDate] = useState('');
-  const [deliveryDate, setDeliveryDate] = useState('');
+  const [rate, setRate] = useState(""); // Line Haul amount
+  const [fscPercentage, setFscPercentage] = useState(""); // FSC percentage
+  const [message, setMessage] = useState("");
+  const [pickupDate, setPickupDate] = useState("");
+  const [deliveryDate, setDeliveryDate] = useState("");
   const [rateRequests, setRateRequests] = useState([]);
   const [truckers, setTruckers] = useState([]);
-  const [selectedTrucker, setSelectedTrucker] = useState('');
-  const [driverName, setDriverName] = useState('');
-  const [vehicleNo, setVehicleNo] = useState('');
-  const [truckerSearch, setTruckerSearch] = useState('');
+  const [selectedTrucker, setSelectedTrucker] = useState("");
+  const [driverName, setDriverName] = useState("");
+  const [vehicleNo, setVehicleNo] = useState("");
+  const [truckerSearch, setTruckerSearch] = useState("");
   const [isTruckerDropdownOpen, setIsTruckerDropdownOpen] = useState(false);
   const [isFetching, setIsFetching] = useState(true);
   const [formErrors, setFormErrors] = useState({});
   const [touchedFields, setTouchedFields] = useState({});
-  const [activeTab, setActiveTab] = useState('rate'); // 'pending', 'rate', or 'rateDetails'
+  const [activeTab, setActiveTab] = useState("rate"); // 'pending', 'rate', or 'rateDetails'
   const [pendingRequests, setPendingRequests] = useState([]);
   const [completedRequests, setCompletedRequests] = useState([]);
   // Rate Request pagination
@@ -81,70 +91,85 @@ const RateRequest = () => {
   const [rateRequestLimit, setRateRequestLimit] = useState(10);
   const [rateRequestPagination, setRateRequestPagination] = useState(null);
   // Rate Request date filters
-  const [rateRequestFromDate, setRateRequestFromDate] = useState('');
-  const [rateRequestToDate, setRateRequestToDate] = useState('');
+  const [rateRequestFromDate, setRateRequestFromDate] = useState("");
+  const [rateRequestToDate, setRateRequestToDate] = useState("");
   // Date range state for All Rate Request tab (like DeliveryOrder.jsx)
   const [dateRange, setDateRange] = useState({
     startDate: null,
     endDate: null,
-    key: 'selection'
+    key: "selection",
   });
   const [showPresetMenu, setShowPresetMenu] = useState(false);
   const [showCustomRange, setShowCustomRange] = useState(false);
-  const [bidDetailsModal, setBidDetailsModal] = useState({ visible: false, load: null });
+  const [bidDetailsModal, setBidDetailsModal] = useState({
+    visible: false,
+    load: null,
+  });
   const [bidDetailsData, setBidDetailsData] = useState(null);
   const [bidDetailsLoading, setBidDetailsLoading] = useState(false);
-  const [approvalModal, setApprovalModal] = useState({ visible: false, type: null, approval: null });
-  const [approvalReason, setApprovalReason] = useState('');
+  const [approvalModal, setApprovalModal] = useState({
+    visible: false,
+    type: null,
+    approval: null,
+  });
+  const [approvalReason, setApprovalReason] = useState("");
   const [approvalSubmitting, setApprovalSubmitting] = useState(false);
   const [autoAcceptTimer, setAutoAcceptTimer] = useState(null);
   const [timeRemaining, setTimeRemaining] = useState(30);
   const [loadTimers, setLoadTimers] = useState({});
   const [uploadedFile, setUploadedFile] = useState(null);
   const [filePreview, setFilePreview] = useState(null);
-  
+
   // Chat Modal State
   const [chatModal, setChatModal] = useState({
     visible: false,
     loadId: null,
     receiverEmpId: null,
-    receiverName: null
+    receiverName: null,
   });
-  
+
   // Charges Calculator popup state
   const [showChargesPopup, setShowChargesPopup] = useState(false);
   const [charges, setCharges] = useState([
-    { name: '', quantity: '', amt: '', total: 0 }
+    { name: "", quantity: "", amt: "", total: 0 },
   ]);
-  const [chargeErrors, setChargeErrors] = useState([{ name: '', quantity: '', amt: '' }]);
-  const [chargesPopupError, setChargesPopupError] = useState('');
+  const [chargeErrors, setChargeErrors] = useState([
+    { name: "", quantity: "", amt: "" },
+  ]);
+  const [chargesPopupError, setChargesPopupError] = useState("");
   const [ratesArray, setRatesArray] = useState([]); // Store charges array for API
 
   // timers
-  const [timerStartMap, setTimerStartMap] = useState(() => readLS(LS_START_KEY));
+  const [timerStartMap, setTimerStartMap] = useState(() =>
+    readLS(LS_START_KEY),
+  );
   const [timerStopMap, setTimerStopMap] = useState(() => readLS(LS_STOP_KEY));
   const [tick, setTick] = useState(0); // 1s re-render
   const pollRef = useRef(null);
-// 💡 double-submit lock (same load pe multiple auto-accept calls na ho)
-const autoAcceptingRef = useRef(new Set());
+  // 💡 double-submit lock (same load pe multiple auto-accept calls na ho)
+  const autoAcceptingRef = useRef(new Set());
 
   // Date range presets (like DeliveryOrder.jsx)
   const presets = {
-    'Today': [new Date(), new Date()],
-    'Yesterday': [addDays(new Date(), -1), addDays(new Date(), -1)],
-    'Last 7 Days': [addDays(new Date(), -6), new Date()],
-    'Last 30 Days': [addDays(new Date(), -29), new Date()],
-    'This Month': [new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-    new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0)],
-    'Last Month': [new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1),
-    new Date(new Date().getFullYear(), new Date().getMonth(), 0)],
+    Today: [new Date(), new Date()],
+    Yesterday: [addDays(new Date(), -1), addDays(new Date(), -1)],
+    "Last 7 Days": [addDays(new Date(), -6), new Date()],
+    "Last 30 Days": [addDays(new Date(), -29), new Date()],
+    "This Month": [
+      new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+      new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0),
+    ],
+    "Last Month": [
+      new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1),
+      new Date(new Date().getFullYear(), new Date().getMonth(), 0),
+    ],
   };
   const applyPreset = (label) => {
     const [s, e] = presets[label];
-    setDateRange({ startDate: s, endDate: e, key: 'selection' });
+    setDateRange({ startDate: s, endDate: e, key: "selection" });
     setShowPresetMenu(false);
   };
-  const ymd = (d) => format(d, 'yyyy-MM-dd'); // "YYYY-MM-DD"
+  const ymd = (d) => format(d, "yyyy-MM-dd"); // "YYYY-MM-DD"
 
   const saveStart = (loadId, ts) => {
     if (!loadId) return;
@@ -173,7 +198,7 @@ const autoAcceptingRef = useRef(new Set());
   const formatMMSS = (ms) => {
     const m = Math.floor(ms / 60000);
     const s = Math.floor((ms % 60000) / 1000);
-    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   };
 
   const renderTimerChip = (loadId) => {
@@ -184,59 +209,70 @@ const autoAcceptingRef = useRef(new Set());
     const nowTs = stop || Date.now();
     const elapsed = Math.max(0, nowTs - start);
 
-    let text = '';
-    let cls = 'bg-yellow-100 text-yellow-700';
-    let icon = '⏳';
+    let text = "";
+    let cls = "bg-yellow-100 text-yellow-700";
+    let icon = "⏳";
 
     if (elapsed < NINETY_MIN_MS) {
       const remaining = NINETY_MIN_MS - elapsed;
       text = formatMMSS(remaining);
-      cls = 'bg-yellow-100 text-yellow-700';
-      icon = '⏳';
+      cls = "bg-yellow-100 text-yellow-700";
+      icon = "⏳";
     } else {
       const over = elapsed - NINETY_MIN_MS;
       text = `+${formatMMSS(over)}`;
-      cls = 'bg-red-100 text-red-700';
-      icon = stop ? '⏹️' : '⏰';
+      cls = "bg-red-100 text-red-700";
+      icon = stop ? "⏹️" : "⏰";
     }
 
     if (stop) {
-      cls = 'bg-gray-200 text-gray-700';
-      icon = '⏹️';
+      cls = "bg-gray-200 text-gray-700";
+      icon = "⏹️";
     }
 
     return (
-      <span className={`text-xs px-3 py-1 rounded-full font-bold inline-flex items-center gap-1 ${cls}`}>
+      <span
+        className={`text-xs px-3 py-1 rounded-full font-bold inline-flex items-center gap-1 ${cls}`}
+      >
         <span>{icon}</span> {text}
       </span>
     );
   };
 
-  const fetchRateRequests = async (page = rateRequestPage, limit = rateRequestLimit, fromDate = rateRequestFromDate, toDate = rateRequestToDate) => {
+  const fetchRateRequests = async (
+    page = rateRequestPage,
+    limit = rateRequestLimit,
+    fromDate = rateRequestFromDate,
+    toDate = rateRequestToDate,
+  ) => {
     try {
       setIsFetching(true);
       const token = getAuthToken();
       if (!token) {
-        toast.error('Please login to access this resource');
+        toast.error("Please login to access this resource");
         setIsFetching(false);
         return;
       }
-      const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+      const headers = {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      };
 
-      console.log('Fetching pending approvals...');
+      console.log("Fetching pending approvals...");
       // Pending approvals
       const pendingRes = await axios.get(
         `${API_CONFIG.BASE_URL}/api/v1/load-approval/pending?page=${page}&limit=${limit}`,
-        { headers }
+        { headers },
       );
-      console.log('Pending Response:', pendingRes.data);
+      console.log("Pending Response:", pendingRes.data);
       let pendingApprovals = [];
       if (Array.isArray(pendingRes.data)) {
         pendingApprovals = pendingRes.data;
       } else {
-        pendingApprovals = pendingRes.data?.approvals || pendingRes.data?.data?.approvals || [];
+        pendingApprovals =
+          pendingRes.data?.approvals || pendingRes.data?.data?.approvals || [];
       }
-      console.log('Pending Approvals Count:', pendingApprovals.length);
+      console.log("Pending Approvals Count:", pendingApprovals.length);
 
       const transformedPending = pendingApprovals.map((approval) => {
         const loadId = approval?.loadId?._id || null;
@@ -247,79 +283,104 @@ const autoAcceptingRef = useRef(new Set());
             loadId,
             shipmentNumber: null,
             weight: 0,
-            origin: { address: '', city: 'N/A', state: 'N/A', zipcode: 'N/A' },
-            destination: { address: '', city: 'N/A', state: 'N/A', zipcode: 'N/A' },
-            vehicleType: 'N/A',
+            origin: { address: "", city: "N/A", state: "N/A", zipcode: "N/A" },
+            destination: {
+              address: "",
+              city: "N/A",
+              state: "N/A",
+              zipcode: "N/A",
+            },
+            vehicleType: "N/A",
             rate: 0,
-            commodity: 'N/A',
+            commodity: "N/A",
             loadType: null,
             pickupDate: null,
             deliveryDate: null,
-            status: approval.overallStatus || 'pending',
-            shipper: approval.shipper || { compName: 'N/A', email: 'N/A' },
+            status: approval.overallStatus || "pending",
+            shipper: approval.shipper || { compName: "N/A", email: "N/A" },
             cmtApprovals: approval.cmtApprovals || [],
             createdAt: approval.createdAt,
             expiresAt: approval.expiresAt,
             userApprovalStatus: approval.userApprovalStatus,
             userAction: approval.userAction,
-            userActionAt: approval.userActionAt
+            userActionAt: approval.userActionAt,
           };
         }
 
         // Helper function to get origin data (check both single object and array)
         const getOriginData = () => {
           if (approval.loadId.origin && approval.loadId.origin.city) {
-            const address = approval.loadId.origin.addressLine1 || approval.loadId.origin.address || '';
-            const addressLine2 = approval.loadId.origin.addressLine2 || '';
-            const fullAddress = address + (addressLine2 ? `, ${addressLine2}` : '');
-            return { 
+            const address =
+              approval.loadId.origin.addressLine1 ||
+              approval.loadId.origin.address ||
+              "";
+            const addressLine2 = approval.loadId.origin.addressLine2 || "";
+            const fullAddress =
+              address + (addressLine2 ? `, ${addressLine2}` : "");
+            return {
               address: fullAddress,
-              city: approval.loadId.origin.city, 
+              city: approval.loadId.origin.city,
               state: approval.loadId.origin.state,
-              zipcode: approval.loadId.origin.zipcode || approval.loadId.origin.zip || 'N/A'
+              zipcode:
+                approval.loadId.origin.zipcode ||
+                approval.loadId.origin.zip ||
+                "N/A",
             };
           }
           if (approval.loadId.origins && approval.loadId.origins.length > 0) {
             const origin = approval.loadId.origins[0];
-            const address = origin.addressLine1 || origin.address || '';
-            const addressLine2 = origin.addressLine2 || '';
-            const fullAddress = address + (addressLine2 ? `, ${addressLine2}` : '');
-            return { 
+            const address = origin.addressLine1 || origin.address || "";
+            const addressLine2 = origin.addressLine2 || "";
+            const fullAddress =
+              address + (addressLine2 ? `, ${addressLine2}` : "");
+            return {
               address: fullAddress,
-              city: origin.city, 
+              city: origin.city,
               state: origin.state,
-              zipcode: origin.zipcode || origin.zip || 'N/A'
+              zipcode: origin.zipcode || origin.zip || "N/A",
             };
           }
-          return { address: '', city: 'N/A', state: 'N/A', zipcode: 'N/A' };
+          return { address: "", city: "N/A", state: "N/A", zipcode: "N/A" };
         };
 
         // Helper function to get destination data (check both single object and array)
         const getDestinationData = () => {
           if (approval.loadId.destination && approval.loadId.destination.city) {
-            const address = approval.loadId.destination.addressLine1 || approval.loadId.destination.address || '';
-            const addressLine2 = approval.loadId.destination.addressLine2 || '';
-            const fullAddress = address + (addressLine2 ? `, ${addressLine2}` : '');
-            return { 
+            const address =
+              approval.loadId.destination.addressLine1 ||
+              approval.loadId.destination.address ||
+              "";
+            const addressLine2 = approval.loadId.destination.addressLine2 || "";
+            const fullAddress =
+              address + (addressLine2 ? `, ${addressLine2}` : "");
+            return {
               address: fullAddress,
-              city: approval.loadId.destination.city, 
+              city: approval.loadId.destination.city,
               state: approval.loadId.destination.state,
-              zipcode: approval.loadId.destination.zipcode || approval.loadId.destination.zip || 'N/A'
+              zipcode:
+                approval.loadId.destination.zipcode ||
+                approval.loadId.destination.zip ||
+                "N/A",
             };
           }
-          if (approval.loadId.destinations && approval.loadId.destinations.length > 0) {
+          if (
+            approval.loadId.destinations &&
+            approval.loadId.destinations.length > 0
+          ) {
             const destination = approval.loadId.destinations[0];
-            const address = destination.addressLine1 || destination.address || '';
-            const addressLine2 = destination.addressLine2 || '';
-            const fullAddress = address + (addressLine2 ? `, ${addressLine2}` : '');
-            return { 
+            const address =
+              destination.addressLine1 || destination.address || "";
+            const addressLine2 = destination.addressLine2 || "";
+            const fullAddress =
+              address + (addressLine2 ? `, ${addressLine2}` : "");
+            return {
               address: fullAddress,
-              city: destination.city, 
+              city: destination.city,
               state: destination.state,
-              zipcode: destination.zipcode || destination.zip || 'N/A'
+              zipcode: destination.zipcode || destination.zip || "N/A",
             };
           }
-          return { address: '', city: 'N/A', state: 'N/A', zipcode: 'N/A' };
+          return { address: "", city: "N/A", state: "N/A", zipcode: "N/A" };
         };
 
         const originData = getOriginData();
@@ -333,14 +394,14 @@ const autoAcceptingRef = useRef(new Set());
           weight: approval.loadId.weight || 0,
           origin: originData,
           destination: destinationData,
-          vehicleType: approval.loadId.vehicleType || 'N/A',
+          vehicleType: approval.loadId.vehicleType || "N/A",
           rate: approval.loadId.rate || 0,
-          commodity: approval.loadId.commodity || 'N/A',
+          commodity: approval.loadId.commodity || "N/A",
           loadType: approval.loadId.loadType,
           pickupDate: approval.loadId.pickupDate,
           deliveryDate: approval.loadId.deliveryDate,
-          status: approval.overallStatus || 'pending',
-          shipper: approval.shipper || { compName: 'N/A', email: 'N/A' },
+          status: approval.overallStatus || "pending",
+          shipper: approval.shipper || { compName: "N/A", email: "N/A" },
           cmtApprovals: approval.cmtApprovals || [],
           createdAt: approval.createdAt,
           expiresAt: approval.expiresAt,
@@ -351,36 +412,40 @@ const autoAcceptingRef = useRef(new Set());
           returnAddress: approval.loadId?.returnAddress || null,
           returnCity: approval.loadId?.returnCity || null,
           returnState: approval.loadId?.returnState || null,
-          returnZip: approval.loadId?.returnZip || approval.loadId?.returnZipCode || null,
+          returnZip:
+            approval.loadId?.returnZip ||
+            approval.loadId?.returnZipCode ||
+            null,
           // Add sales user info for chat - try multiple possible paths
-          salesUserInfo: approval.loadId?.createdBySalesUser || 
-                        approval.loadId?.createdBy || 
-                        approval.createdBySalesUser || 
-                        approval.createdBy || 
-                        approval.salesUser ||
-                        null
+          salesUserInfo:
+            approval.loadId?.createdBySalesUser ||
+            approval.loadId?.createdBy ||
+            approval.createdBySalesUser ||
+            approval.createdBy ||
+            approval.salesUser ||
+            null,
         };
       });
 
       // Approved loads for Rate tab - using new API endpoint with pagination and date filters
-      console.log('Fetching approved requests...');
+      console.log("Fetching approved requests...");
       // Build query parameters for date filtering
       let queryParams = `status=approved&page=${page}&limit=${limit}`;
       let actualFromDate = fromDate;
       let actualToDate = toDate;
-      
+
       // If Daily Rate Request tab, filter by today's date only
-      if (activeTab === 'rate') {
+      if (activeTab === "rate") {
         const today = ymd(new Date());
         actualFromDate = today;
         actualToDate = today;
       }
       // If All Rate Request tab, don't apply date filters in API (fetch all data, filter client-side)
-      else if (activeTab === 'rateDetails') {
-        actualFromDate = '';
-        actualToDate = '';
+      else if (activeTab === "rateDetails") {
+        actualFromDate = "";
+        actualToDate = "";
       }
-      
+
       if (actualFromDate) {
         queryParams += `&fromDate=${actualFromDate}`;
       }
@@ -389,9 +454,9 @@ const autoAcceptingRef = useRef(new Set());
       }
       const approvedRes = await axios.get(
         `${API_CONFIG.BASE_URL}/api/v1/load-approval/pending?${queryParams}`,
-        { headers }
+        { headers },
       );
-      console.log('Approved Response:', approvedRes.data);
+      console.log("Approved Response:", approvedRes.data);
       let approvedApprovals = [];
       let approvedPagination = null;
       if (Array.isArray(approvedRes.data)) {
@@ -399,35 +464,43 @@ const autoAcceptingRef = useRef(new Set());
         // If response is array, no pagination available
         setRateRequestPagination(null);
       } else {
-        approvedApprovals = approvedRes.data?.approvals || approvedRes.data?.data?.approvals || [];
+        approvedApprovals =
+          approvedRes.data?.approvals ||
+          approvedRes.data?.data?.approvals ||
+          [];
         // Extract pagination info from response - check multiple possible locations
-        approvedPagination = approvedRes.data?.pagination || 
-                             approvedRes.data?.data?.pagination || 
-                             approvedRes.data?.meta?.pagination ||
-                             null;
+        approvedPagination =
+          approvedRes.data?.pagination ||
+          approvedRes.data?.data?.pagination ||
+          approvedRes.data?.meta?.pagination ||
+          null;
         if (approvedPagination) {
-          const totalItems = approvedPagination.totalItems || approvedPagination.total || approvedApprovals.length;
-          const itemsPerPage = approvedPagination.itemsPerPage || approvedPagination.limit || limit;
+          const totalItems =
+            approvedPagination.totalItems ||
+            approvedPagination.total ||
+            approvedApprovals.length;
+          const itemsPerPage =
+            approvedPagination.itemsPerPage ||
+            approvedPagination.limit ||
+            limit;
           setRateRequestPagination({
-            currentPage: approvedPagination.currentPage || approvedPagination.page || page,
+            currentPage:
+              approvedPagination.currentPage || approvedPagination.page || page,
             itemsPerPage: itemsPerPage,
             totalItems: totalItems,
-            totalPages: approvedPagination.totalPages || Math.ceil(totalItems / itemsPerPage)
+            totalPages:
+              approvedPagination.totalPages ||
+              Math.ceil(totalItems / itemsPerPage),
           });
         } else {
           // If no pagination object but we have data, assume single page
           setRateRequestPagination(null);
         }
       }
-      console.log('Approved Approvals Count:', approvedApprovals.length);
+      console.log("Approved Approvals Count:", approvedApprovals.length);
 
       const transformedApproved = approvedApprovals.map((approval) => {
         const loadId = approval?.loadId?._id || null;
-
-
-
-
-
 
         if (!approval.loadId) {
           return {
@@ -435,16 +508,21 @@ const autoAcceptingRef = useRef(new Set());
             loadId,
             shipmentNumber: null,
             weight: 0,
-            origin: { address: '', city: 'N/A', state: 'N/A', zipcode: 'N/A' },
-            destination: { address: '', city: 'N/A', state: 'N/A', zipcode: 'N/A' },
-            vehicleType: 'N/A',
+            origin: { address: "", city: "N/A", state: "N/A", zipcode: "N/A" },
+            destination: {
+              address: "",
+              city: "N/A",
+              state: "N/A",
+              zipcode: "N/A",
+            },
+            vehicleType: "N/A",
             rate: 0,
-            commodity: 'N/A',
+            commodity: "N/A",
             loadType: null,
             pickupDate: null,
             deliveryDate: null,
             //status: approval.overallStatus === 'approved' ? 'Assigned' : (approval.overallStatus || 'Assigned'),
-            shipper: approval.shipper || { compName: 'N/A', email: 'N/A' },
+            shipper: approval.shipper || { compName: "N/A", email: "N/A" },
             cmtApprovals: approval.cmtApprovals || [],
             createdAt: approval.createdAt,
             expiresAt: approval.expiresAt,
@@ -452,69 +530,90 @@ const autoAcceptingRef = useRef(new Set());
             userAction: approval.userAction,
             userActionAt: approval.userActionAt,
             // Add sales user info for chat - try multiple possible paths
-            salesUserInfo: approval.createdBySalesUser || 
-                          approval.createdBy || 
-                          approval.salesUser ||
-                          null,
+            salesUserInfo:
+              approval.createdBySalesUser ||
+              approval.createdBy ||
+              approval.salesUser ||
+              null,
             // Add bid count
-            bidCount: approval.loadId?.bidCount || 0
+            bidCount: approval.loadId?.bidCount || 0,
           };
         }
 
         // Helper function to get origin data (check both single object and array)
         const getOriginData = () => {
           if (approval.loadId.origin && approval.loadId.origin.city) {
-            const address = approval.loadId.origin.addressLine1 || approval.loadId.origin.address || '';
-            const addressLine2 = approval.loadId.origin.addressLine2 || '';
-            const fullAddress = address + (addressLine2 ? `, ${addressLine2}` : '');
-            return { 
+            const address =
+              approval.loadId.origin.addressLine1 ||
+              approval.loadId.origin.address ||
+              "";
+            const addressLine2 = approval.loadId.origin.addressLine2 || "";
+            const fullAddress =
+              address + (addressLine2 ? `, ${addressLine2}` : "");
+            return {
               address: fullAddress,
-              city: approval.loadId.origin.city, 
+              city: approval.loadId.origin.city,
               state: approval.loadId.origin.state,
-              zipcode: approval.loadId.origin.zipcode || approval.loadId.origin.zip || 'N/A'
+              zipcode:
+                approval.loadId.origin.zipcode ||
+                approval.loadId.origin.zip ||
+                "N/A",
             };
           }
           if (approval.loadId.origins && approval.loadId.origins.length > 0) {
             const origin = approval.loadId.origins[0];
-            const address = origin.addressLine1 || origin.address || '';
-            const addressLine2 = origin.addressLine2 || '';
-            const fullAddress = address + (addressLine2 ? `, ${addressLine2}` : '');
-            return { 
+            const address = origin.addressLine1 || origin.address || "";
+            const addressLine2 = origin.addressLine2 || "";
+            const fullAddress =
+              address + (addressLine2 ? `, ${addressLine2}` : "");
+            return {
               address: fullAddress,
-              city: origin.city, 
+              city: origin.city,
               state: origin.state,
-              zipcode: origin.zipcode || origin.zip || 'N/A'
+              zipcode: origin.zipcode || origin.zip || "N/A",
             };
           }
-          return { address: '', city: 'N/A', state: 'N/A', zipcode: 'N/A' };
+          return { address: "", city: "N/A", state: "N/A", zipcode: "N/A" };
         };
 
         // Helper function to get destination data (check both single object and array)
         const getDestinationData = () => {
           if (approval.loadId.destination && approval.loadId.destination.city) {
-            const address = approval.loadId.destination.addressLine1 || approval.loadId.destination.address || '';
-            const addressLine2 = approval.loadId.destination.addressLine2 || '';
-            const fullAddress = address + (addressLine2 ? `, ${addressLine2}` : '');
-            return { 
+            const address =
+              approval.loadId.destination.addressLine1 ||
+              approval.loadId.destination.address ||
+              "";
+            const addressLine2 = approval.loadId.destination.addressLine2 || "";
+            const fullAddress =
+              address + (addressLine2 ? `, ${addressLine2}` : "");
+            return {
               address: fullAddress,
-              city: approval.loadId.destination.city, 
+              city: approval.loadId.destination.city,
               state: approval.loadId.destination.state,
-              zipcode: approval.loadId.destination.zipcode || approval.loadId.destination.zip || 'N/A'
+              zipcode:
+                approval.loadId.destination.zipcode ||
+                approval.loadId.destination.zip ||
+                "N/A",
             };
           }
-          if (approval.loadId.destinations && approval.loadId.destinations.length > 0) {
+          if (
+            approval.loadId.destinations &&
+            approval.loadId.destinations.length > 0
+          ) {
             const destination = approval.loadId.destinations[0];
-            const address = destination.addressLine1 || destination.address || '';
-            const addressLine2 = destination.addressLine2 || '';
-            const fullAddress = address + (addressLine2 ? `, ${addressLine2}` : '');
-            return { 
+            const address =
+              destination.addressLine1 || destination.address || "";
+            const addressLine2 = destination.addressLine2 || "";
+            const fullAddress =
+              address + (addressLine2 ? `, ${addressLine2}` : "");
+            return {
               address: fullAddress,
-              city: destination.city, 
+              city: destination.city,
               state: destination.state,
-              zipcode: destination.zipcode || destination.zip || 'N/A'
+              zipcode: destination.zipcode || destination.zip || "N/A",
             };
           }
-          return { address: '', city: 'N/A', state: 'N/A', zipcode: 'N/A' };
+          return { address: "", city: "N/A", state: "N/A", zipcode: "N/A" };
         };
 
         const originData = getOriginData();
@@ -528,14 +627,17 @@ const autoAcceptingRef = useRef(new Set());
           weight: approval.loadId.weight || 0,
           origin: originData,
           destination: destinationData,
-          vehicleType: approval.loadId.vehicleType || 'N/A',
+          vehicleType: approval.loadId.vehicleType || "N/A",
           rate: approval.loadId.rate || 0,
-          commodity: approval.loadId.commodity || 'N/A',
+          commodity: approval.loadId.commodity || "N/A",
           loadType: approval.loadId.loadType,
           pickupDate: approval.loadId.pickupDate,
           deliveryDate: approval.loadId.deliveryDate,
-          status: approval.overallStatus === 'approved' ? 'Assigned' : (approval.overallStatus || 'Assigned'),
-          shipper: approval.shipper || { compName: 'N/A', email: 'N/A' },
+          status:
+            approval.overallStatus === "approved"
+              ? "Assigned"
+              : approval.overallStatus || "Assigned",
+          shipper: approval.shipper || { compName: "N/A", email: "N/A" },
           cmtApprovals: approval.cmtApprovals || [],
           createdAt: approval.createdAt,
           expiresAt: approval.expiresAt,
@@ -546,49 +648,62 @@ const autoAcceptingRef = useRef(new Set());
           returnAddress: approval.loadId?.returnAddress || null,
           returnCity: approval.loadId?.returnCity || null,
           returnState: approval.loadId?.returnState || null,
-          returnZip: approval.loadId?.returnZip || approval.loadId?.returnZipCode || null,
+          returnZip:
+            approval.loadId?.returnZip ||
+            approval.loadId?.returnZipCode ||
+            null,
           // Add sales user info for chat - try multiple possible paths
-          salesUserInfo: approval.loadId?.createdBySalesUser || 
-                        approval.loadId?.createdBy || 
-                        approval.createdBySalesUser || 
-                        approval.createdBy || 
-                        approval.salesUser ||
-                        null,
+          salesUserInfo:
+            approval.loadId?.createdBySalesUser ||
+            approval.loadId?.createdBy ||
+            approval.createdBySalesUser ||
+            approval.createdBy ||
+            approval.salesUser ||
+            null,
           // Add bid count
-          bidCount: approval.loadId?.bidCount || 0
+          bidCount: approval.loadId?.bidCount || 0,
         };
       });
-// ---- broadcast new pending approvals (cross-tab + same tab) ----
-try {
-  const prevIdsJson = localStorage.getItem('rr_prev_pending_ids') || '[]';
-  let prevIds;
-  try { prevIds = JSON.parse(prevIdsJson); } catch { prevIds = []; }
-  const prevSet = new Set(prevIds);
-
-  const onlyPending = transformedPending.filter(a => a.status === 'pending');
-  const newbies = onlyPending.filter(a => !prevSet.has(a._id));
-
-  if (newbies.length) {
-    newbies.forEach((approval) => {
-      // 1) BroadcastChannel
-      if ('BroadcastChannel' in window) {
-        try {
-          const bc = new BroadcastChannel('rr_events');
-          bc.postMessage({ type: 'RR_NEW_ASSIGNMENT', approval });
-          bc.close?.();
-        } catch {}
-      }
-      // 2) localStorage pulse (fallback)
+      // ---- broadcast new pending approvals (cross-tab + same tab) ----
       try {
-        localStorage.setItem('rr_new_assignment', JSON.stringify(approval));
-        setTimeout(() => localStorage.removeItem('rr_new_assignment'), 0);
-      } catch {}
-    });
-  }
+        const prevIdsJson = localStorage.getItem("rr_prev_pending_ids") || "[]";
+        let prevIds;
+        try {
+          prevIds = JSON.parse(prevIdsJson);
+        } catch {
+          prevIds = [];
+        }
+        const prevSet = new Set(prevIds);
 
-  const nextIds = onlyPending.map(a => a._id);
-  localStorage.setItem('rr_prev_pending_ids', JSON.stringify(nextIds));
-} catch {}
+        const onlyPending = transformedPending.filter(
+          (a) => a.status === "pending",
+        );
+        const newbies = onlyPending.filter((a) => !prevSet.has(a._id));
+
+        if (newbies.length) {
+          newbies.forEach((approval) => {
+            // 1) BroadcastChannel
+            if ("BroadcastChannel" in window) {
+              try {
+                const bc = new BroadcastChannel("rr_events");
+                bc.postMessage({ type: "RR_NEW_ASSIGNMENT", approval });
+                bc.close?.();
+              } catch {}
+            }
+            // 2) localStorage pulse (fallback)
+            try {
+              localStorage.setItem(
+                "rr_new_assignment",
+                JSON.stringify(approval),
+              );
+              setTimeout(() => localStorage.removeItem("rr_new_assignment"), 0);
+            } catch {}
+          });
+        }
+
+        const nextIds = onlyPending.map((a) => a._id);
+        localStorage.setItem("rr_prev_pending_ids", JSON.stringify(nextIds));
+      } catch {}
 
       setPendingRequests(transformedPending);
       setCompletedRequests(transformedApproved);
@@ -596,13 +711,15 @@ try {
 
       // check first-bid for running timers
       const activeLoadsToCheck = transformedApproved.filter(
-        (ld) => timerStartMap[ld.loadId] && !timerStopMap[ld.loadId]
+        (ld) => timerStartMap[ld.loadId] && !timerStopMap[ld.loadId],
       );
-      if (activeLoadsToCheck.length) await checkFirstBidsForLoads(activeLoadsToCheck);
+      if (activeLoadsToCheck.length)
+        await checkFirstBidsForLoads(activeLoadsToCheck);
     } catch (error) {
-      console.error('Error fetching data:', error);
-      if (error.response?.data?.message) toast.error(error.response.data.message);
-      else toast.error('Failed to fetch load data');
+      console.error("Error fetching data:", error);
+      if (error.response?.data?.message)
+        toast.error(error.response.data.message);
+      else toast.error("Failed to fetch load data");
     } finally {
       setIsFetching(false);
     }
@@ -612,31 +729,34 @@ try {
     try {
       const token = getAuthToken();
       if (!token) {
-        toast.error('Please login to access this resource');
+        toast.error("Please login to access this resource");
         return;
       }
-      const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+      const headers = {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      };
       const res = await axios.get(
         `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/truckers/all`,
-        { headers }
+        { headers },
       );
       // Map the response to match expected structure
       // New API returns: { totalCount, truckers: [{ carrierId, name, ... }] }
       const truckersData = res.data?.truckers || [];
       // Map carrierId to _id and name to compName for compatibility
-      const mappedTruckers = truckersData.map(trucker => ({
+      const mappedTruckers = truckersData.map((trucker) => ({
         ...trucker,
         _id: trucker.carrierId || trucker._id,
-        compName: trucker.name || trucker.compName
+        compName: trucker.name || trucker.compName,
       }));
       setTruckers(mappedTruckers);
     } catch (error) {
-      console.error('Error fetching truckers:', error);
-      if (error.response?.data?.message) toast.error(error.response.data.message);
-      else toast.error('Failed to fetch trucker data');
+      console.error("Error fetching truckers:", error);
+      if (error.response?.data?.message)
+        toast.error(error.response.data.message);
+      else toast.error("Failed to fetch trucker data");
     }
   };
-
 
   // Handle View Bids
   const handleViewBids = (load) => {
@@ -646,7 +766,7 @@ try {
     if (loadIdToFetch) {
       fetchBidDetails(loadIdToFetch);
     } else {
-      toast.error('Unable to determine load ID');
+      toast.error("Unable to determine load ID");
     }
   };
 
@@ -657,79 +777,81 @@ try {
   };
 
   // Fetch load details to get sales user info
- // Fetch load details to get sales user info - IMPROVED VERSION
-const fetchLoadDetailsForChat = async (loadId) => {
-  try {
-    const token = sessionStorage.getItem('authToken') || 
-                  localStorage.getItem('authToken') || 
-                  sessionStorage.getItem('token') || 
-                  localStorage.getItem('token');
-    
-    if (!token) {
-      console.error('No token for fetching load details');
-      return null;
-    }
+  // Fetch load details to get sales user info - IMPROVED VERSION
+  const fetchLoadDetailsForChat = async (loadId) => {
+    try {
+      const token =
+        sessionStorage.getItem("authToken") ||
+        localStorage.getItem("authToken") ||
+        sessionStorage.getItem("token") ||
+        localStorage.getItem("token");
 
-    const response = await axios.get(
-      `${API_CONFIG.BASE_URL}/api/v1/load/${loadId}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-
-    if (response.data && response.data.success) {
-      const load = response.data.data || response.data.load;
-      console.log('🔍 Load object structure:', {
-        load,
-        hasCreatedBySalesUser: !!load?.createdBySalesUser,
-        hasCreatedBy: !!load?.createdBy,
-        createdBySalesUser: load?.createdBySalesUser,
-        createdBy: load?.createdBy,
-        allKeys: load ? Object.keys(load) : 'no load'
-      });
-      
-      // Try multiple possible paths for sales user info
-      const salesUserInfo = load?.createdBySalesUser || 
-                           load?.createdBy || 
-                           load?.salesUser ||
-                           load?.assignedTo; // Sometimes assignedTo has the user info
-      
-      if (salesUserInfo) {
-
-        return salesUserInfo;
-      } else {
-        console.warn('⚠️ No sales user info found in load details');
+      if (!token) {
+        console.error("No token for fetching load details");
         return null;
       }
+
+      const response = await axios.get(
+        `${API_CONFIG.BASE_URL}/api/v1/load/${loadId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+
+      if (response.data && response.data.success) {
+        const load = response.data.data || response.data.load;
+        console.log("🔍 Load object structure:", {
+          load,
+          hasCreatedBySalesUser: !!load?.createdBySalesUser,
+          hasCreatedBy: !!load?.createdBy,
+          createdBySalesUser: load?.createdBySalesUser,
+          createdBy: load?.createdBy,
+          allKeys: load ? Object.keys(load) : "no load",
+        });
+
+        // Try multiple possible paths for sales user info
+        const salesUserInfo =
+          load?.createdBySalesUser ||
+          load?.createdBy ||
+          load?.salesUser ||
+          load?.assignedTo; // Sometimes assignedTo has the user info
+
+        if (salesUserInfo) {
+          return salesUserInfo;
+        } else {
+          console.warn("⚠️ No sales user info found in load details");
+          return null;
+        }
+      }
+
+      console.warn("⚠️ Load details API response not successful");
+      return null;
+    } catch (error) {
+      console.error("❌ Error fetching load details for chat:", error);
+      console.error("Error details:", {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+      });
+      return null;
     }
-    
-    console.warn('⚠️ Load details API response not successful');
-    return null;
-  } catch (error) {
-    console.error('❌ Error fetching load details for chat:', error);
-    console.error('Error details:', {
-      message: error.message,
-      response: error.response?.data,
-      status: error.response?.status
-    });
-    return null;
-  }
-};
+  };
 
   // Fetch bid details for a specific load
   const fetchBidDetails = async (loadId) => {
     try {
       setBidDetailsLoading(true);
-       const token = sessionStorage.getItem('authToken') || 
-                    localStorage.getItem('authToken') || 
-                    sessionStorage.getItem('token') || 
-                    localStorage.getItem('token');
-      
+      const token =
+        sessionStorage.getItem("authToken") ||
+        localStorage.getItem("authToken") ||
+        sessionStorage.getItem("token") ||
+        localStorage.getItem("token");
+
       if (!token) {
-        toast.error('Authentication required. Please login again.');
+        toast.error("Authentication required. Please login again.");
         return;
       }
 
@@ -737,24 +859,23 @@ const fetchLoadDetailsForChat = async (loadId) => {
         `${API_CONFIG.BASE_URL}/api/v1/load/cmt/load/${loadId}/bid-count`,
         {
           headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        }
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        },
       );
-
 
       if (response.data && response.data.success) {
         setBidDetailsData(response.data.data);
       } else {
-        toast.error(response.data?.message || 'Failed to fetch bid details');
+        toast.error(response.data?.message || "Failed to fetch bid details");
       }
     } catch (error) {
-      console.error('Error fetching bid details:', error);
+      console.error("Error fetching bid details:", error);
       if (error.response?.data?.message) {
         toast.error(error.response.data.message);
       } else {
-        toast.error('Failed to fetch bid details');
+        toast.error("Failed to fetch bid details");
       }
     } finally {
       setBidDetailsLoading(false);
@@ -764,18 +885,30 @@ const fetchLoadDetailsForChat = async (loadId) => {
   // Get status color
   const getStatusColor = (status) => {
     switch (status?.toLowerCase()) {
-      case 'pending': return 'bg-yellow-100 text-yellow-800 border border-yellow-200';
-      case 'bidding': return 'bg-blue-100 text-blue-800 border border-blue-200';
-      case 'assigned': return 'bg-green-100 text-green-800 border border-green-200';
-      case 'in_transit': return 'bg-purple-100 text-purple-800 border border-purple-200';
-      case 'delivered': return 'bg-green-100 text-green-800 border border-green-200';
-      case 'cancelled': return 'bg-red-100 text-red-800 border border-red-200';
-      case 'completed': return 'bg-green-100 text-green-800 border border-green-200';
-      case 'active': return 'bg-green-100 text-green-800 border border-green-200';
-      case 'inactive': return 'bg-gray-100 text-gray-800 border border-gray-200';
-      case 'rejected': return 'bg-red-100 text-red-800 border border-red-200';
-      case 'accepted': return 'bg-green-100 text-green-800 border border-green-200';
-      default: return 'bg-gray-100 text-gray-800 border border-gray-200';
+      case "pending":
+        return "bg-yellow-100 text-yellow-800 border border-yellow-200";
+      case "bidding":
+        return "bg-blue-100 text-blue-800 border border-blue-200";
+      case "assigned":
+        return "bg-green-100 text-green-800 border border-green-200";
+      case "in_transit":
+        return "bg-purple-100 text-purple-800 border border-purple-200";
+      case "delivered":
+        return "bg-green-100 text-green-800 border border-green-200";
+      case "cancelled":
+        return "bg-red-100 text-red-800 border border-red-200";
+      case "completed":
+        return "bg-green-100 text-green-800 border border-green-200";
+      case "active":
+        return "bg-green-100 text-green-800 border border-green-200";
+      case "inactive":
+        return "bg-gray-100 text-gray-800 border border-gray-200";
+      case "rejected":
+        return "bg-red-100 text-red-800 border border-red-200";
+      case "accepted":
+        return "bg-green-100 text-green-800 border border-green-200";
+      default:
+        return "bg-gray-100 text-gray-800 border border-gray-200";
     }
   };
 
@@ -784,7 +917,10 @@ const fetchLoadDetailsForChat = async (loadId) => {
     try {
       const token = getAuthToken();
       if (!token) return;
-      const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+      const headers = {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      };
 
       for (const ld of loads) {
         const loadId = ld.loadId || ld._id;
@@ -800,105 +936,139 @@ const fetchLoadDetailsForChat = async (loadId) => {
       }
     } catch {}
   };
- // navigate("/RateRequest", { state: { openApprovalFromBroadcast: approval } }) se aane par modal open
- useEffect(() => {
-   const approval = location?.state?.openApprovalFromBroadcast;
-   if (approval) {
-     setActiveTab('rate'); // Changed from 'pending' to 'rate' since pending tab is disabled
-     openApprovalModal(approval, 'approval');
-     // state clear so refresh pe dubara na khule
-     window.history.replaceState({}, document.title);
-   }
-   // eslint-disable-next-line react-hooks/exhaustive-deps
- }, []);
+  // navigate("/RateRequest", { state: { openApprovalFromBroadcast: approval } }) se aane par modal open
+  useEffect(() => {
+    const approval = location?.state?.openApprovalFromBroadcast;
+    if (approval) {
+      setActiveTab("rate"); // Changed from 'pending' to 'rate' since pending tab is disabled
+      openApprovalModal(approval, "approval");
+      // state clear so refresh pe dubara na khule
+      window.history.replaceState({}, document.title);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // init
   useEffect(() => {
-    fetchRateRequests(rateRequestPage, rateRequestLimit, rateRequestFromDate, rateRequestToDate);
+    fetchRateRequests(
+      rateRequestPage,
+      rateRequestLimit,
+      rateRequestFromDate,
+      rateRequestToDate,
+    );
     fetchTruckers();
   }, []);
 
   // Fetch data when tab changes
   useEffect(() => {
-    if (activeTab === 'pending' || activeTab === 'rate' || activeTab === 'rateDetails') {
+    if (
+      activeTab === "pending" ||
+      activeTab === "rate" ||
+      activeTab === "rateDetails"
+    ) {
       // Fetch rate requests data for all tabs
       setRateRequestPage(1); // Reset to first page when switching tabs
-      fetchRateRequests(1, rateRequestLimit, rateRequestFromDate, rateRequestToDate);
+      fetchRateRequests(
+        1,
+        rateRequestLimit,
+        rateRequestFromDate,
+        rateRequestToDate,
+      );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
   // Fetch data when pagination changes for Rate Request tab
   useEffect(() => {
-    if (activeTab === 'rate' || activeTab === 'pending' || activeTab === 'rateDetails') {
-      fetchRateRequests(rateRequestPage, rateRequestLimit, rateRequestFromDate, rateRequestToDate);
+    if (
+      activeTab === "rate" ||
+      activeTab === "pending" ||
+      activeTab === "rateDetails"
+    ) {
+      fetchRateRequests(
+        rateRequestPage,
+        rateRequestLimit,
+        rateRequestFromDate,
+        rateRequestToDate,
+      );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rateRequestPage, rateRequestLimit]);
 
   // Fetch data when date filters change for Rate Request tab
   useEffect(() => {
-    if (activeTab === 'rate' || activeTab === 'pending' || activeTab === 'rateDetails') {
+    if (
+      activeTab === "rate" ||
+      activeTab === "pending" ||
+      activeTab === "rateDetails"
+    ) {
       setRateRequestPage(1); // Reset to first page when date filters change
-      fetchRateRequests(1, rateRequestLimit, rateRequestFromDate, rateRequestToDate);
+      fetchRateRequests(
+        1,
+        rateRequestLimit,
+        rateRequestFromDate,
+        rateRequestToDate,
+      );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rateRequestFromDate, rateRequestToDate]);
 
   // Start auto-accept timer for new pending requests
   // ✅ Stable auto-accept countdown (interval clear + single fire)
-useEffect(() => {
-  const timers = {};
+  useEffect(() => {
+    const timers = {};
 
-  pendingRequests.forEach((request) => {
-    const id = request._id;
-    // sirf pending items pe timer chalao, aur agar timer init nahi hua to hi
-    if (request.status === "pending" && loadTimers[id] == null) {
-      // init at 30s
-      setLoadTimers((prev) => ({ ...prev, [id]: 30 }));
+    pendingRequests.forEach((request) => {
+      const id = request._id;
+      // sirf pending items pe timer chalao, aur agar timer init nahi hua to hi
+      if (request.status === "pending" && loadTimers[id] == null) {
+        // init at 30s
+        setLoadTimers((prev) => ({ ...prev, [id]: 30 }));
 
-      timers[id] = setInterval(() => {
-        setLoadTimers((prev) => {
-          const cur = prev[id] ?? 30;
-          const next = cur - 1;
+        timers[id] = setInterval(() => {
+          setLoadTimers((prev) => {
+            const cur = prev[id] ?? 30;
+            const next = cur - 1;
 
-          if (next <= 0) {
-            // interval turant clear, ek hi baar auto-accept fire
-            clearInterval(timers[id]);
-            delete timers[id];
+            if (next <= 0) {
+              // interval turant clear, ek hi baar auto-accept fire
+              clearInterval(timers[id]);
+              delete timers[id];
 
-            // sentinel -1 => finish ho gaya, dobara mat chalana
-            const after = { ...prev, [id]: -1 };
-            // allow state update flush, then call
-            setTimeout(() => handleAutoAcceptFromTable(request), 0);
+              // sentinel -1 => finish ho gaya, dobara mat chalana
+              const after = { ...prev, [id]: -1 };
+              // allow state update flush, then call
+              setTimeout(() => handleAutoAcceptFromTable(request), 0);
 
-            return after;
-          }
+              return after;
+            }
 
-          return { ...prev, [id]: next };
-        });
-      }, 1000);
-    }
-  });
+            return { ...prev, [id]: next };
+          });
+        }, 1000);
+      }
+    });
 
-  return () => {
-    Object.values(timers).forEach((t) => clearInterval(t));
-  };
-  // ⚠️ dependency me loadTimers bhi rakho, warna stale state rahegi
-}, [pendingRequests, loadTimers]);
+    return () => {
+      Object.values(timers).forEach((t) => clearInterval(t));
+    };
+    // ⚠️ dependency me loadTimers bhi rakho, warna stale state rahegi
+  }, [pendingRequests, loadTimers]);
 
-useEffect(() => {
-  const done = new Set(
-    pendingRequests.filter(r => r.status !== 'pending').map(r => r._id)
-  );
-  if (done.size === 0) return;
+  useEffect(() => {
+    const done = new Set(
+      pendingRequests.filter((r) => r.status !== "pending").map((r) => r._id),
+    );
+    if (done.size === 0) return;
 
-  setLoadTimers(prev => {
-    const copy = { ...prev };
-    done.forEach(id => { delete copy[id]; });
-    return copy;
-  });
-}, [pendingRequests]);
+    setLoadTimers((prev) => {
+      const copy = { ...prev };
+      done.forEach((id) => {
+        delete copy[id];
+      });
+      return copy;
+    });
+  }, [pendingRequests]);
 
   // 1s ticker
   useEffect(() => {
@@ -909,25 +1079,29 @@ useEffect(() => {
   // Close trucker dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (isTruckerDropdownOpen && !event.target.closest('.trucker-dropdown-container')) {
+      if (
+        isTruckerDropdownOpen &&
+        !event.target.closest(".trucker-dropdown-container")
+      ) {
         setIsTruckerDropdownOpen(false);
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [isTruckerDropdownOpen]);
-
 
   // 30s polling for running timers (Rate tab) - reduced frequency to prevent 429 errors
   useEffect(() => {
     if (pollRef.current) clearInterval(pollRef.current);
     pollRef.current = setInterval(() => {
-      if (activeTab !== 'rate') return;
+      if (activeTab !== "rate") return;
       const src = completedRequests.length ? completedRequests : rateRequests;
-      const running = src.filter((ld) => timerStartMap[ld.loadId] && !timerStopMap[ld.loadId]);
+      const running = src.filter(
+        (ld) => timerStartMap[ld.loadId] && !timerStopMap[ld.loadId],
+      );
       if (running.length) checkFirstBidsForLoads(running);
     }, 30000); // Increased from 15s to 30s
     return () => {
@@ -942,33 +1116,33 @@ useEffect(() => {
   const closeModal = () => {
     setIsModalOpen(false);
     setSelectedRequest(null);
-    setRate('');
-    setFscPercentage('');
-    setMessage('');
-    setPickupDate('');
-    setDeliveryDate('');
-    setSelectedTrucker('');
-    setDriverName('');
-    setVehicleNo('');
-    setTruckerSearch('');
+    setRate("");
+    setFscPercentage("");
+    setMessage("");
+    setPickupDate("");
+    setDeliveryDate("");
+    setSelectedTrucker("");
+    setDriverName("");
+    setVehicleNo("");
+    setTruckerSearch("");
     setIsTruckerDropdownOpen(false);
     setFormErrors({});
     setTouchedFields({});
     setUploadedFile(null);
     setFilePreview(null);
     setRatesArray([]); // Clear rates array
-    setCharges([{ name: '', quantity: '', amt: '', total: 0 }]); // Reset charges
+    setCharges([{ name: "", quantity: "", amt: "", total: 0 }]); // Reset charges
   };
 
   // approval modal
   const openApprovalModal = (approval, type) => {
     setApprovalModal({ visible: true, type, approval });
-    setApprovalReason('');
+    setApprovalReason("");
     setTimeRemaining(30);
-    
+
     // Start auto-accept timer
     const timer = setInterval(() => {
-      setTimeRemaining(prev => {
+      setTimeRemaining((prev) => {
         if (prev <= 1) {
           // Auto-accept after 30 seconds
           handleAutoAccept(approval);
@@ -977,156 +1151,187 @@ useEffect(() => {
         return prev - 1;
       });
     }, 1000);
-    
+
     setAutoAcceptTimer(timer);
   };
-  
+
   const closeApprovalModal = () => {
     setApprovalModal({ visible: false, type: null, approval: null });
-    setApprovalReason('');
+    setApprovalReason("");
     setTimeRemaining(30);
-    
+
     // Clear auto-accept timer
     if (autoAcceptTimer) {
       clearInterval(autoAcceptTimer);
       setAutoAcceptTimer(null);
     }
   };
-  
+
   const handleAutoAccept = async (approval) => {
-  const id = approval._id;
-  if (autoAcceptingRef.current.has(id)) return;   // ✅ lock
-  autoAcceptingRef.current.add(id);
+    const id = approval._id;
+    if (autoAcceptingRef.current.has(id)) return; // ✅ lock
+    autoAcceptingRef.current.add(id);
 
-  try {
-    const token = getAuthToken();
-    const empId = localStorage.getItem('empId') || sessionStorage.getItem('empId');
-    if (!token || !empId) {
-      toast.error('Missing token or empId. Please log in again.');
-      return;
-    }
-
-    const payload = {
-      approvalId: id,
-      action: 'accept',
-      reason: 'Auto-accepted after 30 seconds'
-    };
-
-    const response = await axios.post(
-      `${API_CONFIG.BASE_URL}/api/v1/load-approval/handle`,
-      payload,
-      { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
-    );
-
-    if (response.data.success) {
-      toast.success('Load auto-accepted successfully!');
-      const acceptedLoadId = approval?.loadId?._id || approval?.loadId;
-      if (acceptedLoadId) saveStart(acceptedLoadId, Date.now());
-
-      setPendingRequests(prev =>
-        prev.map(r => (r._id === id ? { ...r, status: 'approved' } : r))
-      );
-
-      closeApprovalModal();   // timer bhi clear ho jayega
-      setTimeout(() => { fetchRateRequests(rateRequestPage, rateRequestLimit, rateRequestFromDate, rateRequestToDate); }, 1000);
-    } else {
-      toast.error('Auto-accept failed. Please try again.');
-    }
-  } catch (error) {
-    console.error('Auto-accept failed:', error);
-    toast.error('Auto-accept failed. Please try again.');
-  } finally {
-    autoAcceptingRef.current.delete(id);  // ✅ unlock
-  }
-};
-
-
-  const handleAutoAcceptFromTable = async (request) => {
-  const id = request._id;
-
-  // ✅ already in-flight? to dobara mat bhejo
-  if (autoAcceptingRef.current.has(id)) return;
-  autoAcceptingRef.current.add(id);
-
-  try {
-    const token = getAuthToken();
-    const empId = localStorage.getItem('empId') || sessionStorage.getItem('empId');
-    if (!token || !empId) {
-      toast.error('Missing token or empId. Please log in again.');
-      return;
-    }
-
-    const payload = {
-      approvalId: id,
-      action: 'accept',
-      reason: 'Auto-accepted after 30 seconds',
-    };
-
-    const response = await axios.post(
-      `${API_CONFIG.BASE_URL}/api/v1/load-approval/handle`,
-      payload,
-      { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
-    );
-
-    if (response.data.success) {
-      toast.success('Load auto-accepted successfully!');
-
-      // 90-min timer start
-      const acceptedLoadId = request?.loadId?._id || request?.loadId;
-      if (acceptedLoadId) saveStart(acceptedLoadId, Date.now());
-
-      // optimistic UI
-      setPendingRequests((prev) =>
-        prev.map((r) => (r._id === id ? { ...r, status: 'approved' } : r))
-      );
-
-      // timer state cleanup
-      setLoadTimers((prev) => {
-        const copy = { ...prev };
-        delete copy[id];
-        return copy;
-      });
-
-      setTimeout(() => {
-        fetchRateRequests(rateRequestPage, rateRequestLimit, rateRequestFromDate, rateRequestToDate);
-      }, 1000);
-    } else {
-      toast.error('Auto-accept failed. Please try again.');
-    }
-  } catch (error) {
-    console.error('Auto-accept failed:', error?.response?.data || error.message);
-    toast.error(error?.response?.data?.message || 'Auto-accept failed.');
-  } finally {
-    autoAcceptingRef.current.delete(id);
-  }
-};
-
-
-  const handleManualAcceptFromTable = async (request) => {
     try {
       const token = getAuthToken();
-      const empId = localStorage.getItem('empId') || sessionStorage.getItem('empId');
-      
+      const empId =
+        localStorage.getItem("empId") || sessionStorage.getItem("empId");
       if (!token || !empId) {
-        toast.error('Missing token or empId. Please log in again.');
+        toast.error("Missing token or empId. Please log in again.");
         return;
       }
 
       const payload = {
-        approvalId: request._id,
-        action: 'accept',
-        reason: 'Manually accepted by user'
+        approvalId: id,
+        action: "accept",
+        reason: "Auto-accepted after 30 seconds",
       };
 
       const response = await axios.post(
         `${API_CONFIG.BASE_URL}/api/v1/load-approval/handle`,
         payload,
-        { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        },
       );
 
       if (response.data.success) {
-        toast.success('Load accepted successfully!');
-        
+        toast.success("Load auto-accepted successfully!");
+        const acceptedLoadId = approval?.loadId?._id || approval?.loadId;
+        if (acceptedLoadId) saveStart(acceptedLoadId, Date.now());
+
+        setPendingRequests((prev) =>
+          prev.map((r) => (r._id === id ? { ...r, status: "approved" } : r)),
+        );
+
+        closeApprovalModal(); // timer bhi clear ho jayega
+        setTimeout(() => {
+          fetchRateRequests(
+            rateRequestPage,
+            rateRequestLimit,
+            rateRequestFromDate,
+            rateRequestToDate,
+          );
+        }, 1000);
+      } else {
+        toast.error("Auto-accept failed. Please try again.");
+      }
+    } catch (error) {
+      console.error("Auto-accept failed:", error);
+      toast.error("Auto-accept failed. Please try again.");
+    } finally {
+      autoAcceptingRef.current.delete(id); // ✅ unlock
+    }
+  };
+
+  const handleAutoAcceptFromTable = async (request) => {
+    const id = request._id;
+
+    // ✅ already in-flight? to dobara mat bhejo
+    if (autoAcceptingRef.current.has(id)) return;
+    autoAcceptingRef.current.add(id);
+
+    try {
+      const token = getAuthToken();
+      const empId =
+        localStorage.getItem("empId") || sessionStorage.getItem("empId");
+      if (!token || !empId) {
+        toast.error("Missing token or empId. Please log in again.");
+        return;
+      }
+
+      const payload = {
+        approvalId: id,
+        action: "accept",
+        reason: "Auto-accepted after 30 seconds",
+      };
+
+      const response = await axios.post(
+        `${API_CONFIG.BASE_URL}/api/v1/load-approval/handle`,
+        payload,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+
+      if (response.data.success) {
+        toast.success("Load auto-accepted successfully!");
+
+        // 90-min timer start
+        const acceptedLoadId = request?.loadId?._id || request?.loadId;
+        if (acceptedLoadId) saveStart(acceptedLoadId, Date.now());
+
+        // optimistic UI
+        setPendingRequests((prev) =>
+          prev.map((r) => (r._id === id ? { ...r, status: "approved" } : r)),
+        );
+
+        // timer state cleanup
+        setLoadTimers((prev) => {
+          const copy = { ...prev };
+          delete copy[id];
+          return copy;
+        });
+
+        setTimeout(() => {
+          fetchRateRequests(
+            rateRequestPage,
+            rateRequestLimit,
+            rateRequestFromDate,
+            rateRequestToDate,
+          );
+        }, 1000);
+      } else {
+        toast.error("Auto-accept failed. Please try again.");
+      }
+    } catch (error) {
+      console.error(
+        "Auto-accept failed:",
+        error?.response?.data || error.message,
+      );
+      toast.error(error?.response?.data?.message || "Auto-accept failed.");
+    } finally {
+      autoAcceptingRef.current.delete(id);
+    }
+  };
+
+  const handleManualAcceptFromTable = async (request) => {
+    try {
+      const token = getAuthToken();
+      const empId =
+        localStorage.getItem("empId") || sessionStorage.getItem("empId");
+
+      if (!token || !empId) {
+        toast.error("Missing token or empId. Please log in again.");
+        return;
+      }
+
+      const payload = {
+        approvalId: request._id,
+        action: "accept",
+        reason: "Manually accepted by user",
+      };
+
+      const response = await axios.post(
+        `${API_CONFIG.BASE_URL}/api/v1/load-approval/handle`,
+        payload,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+
+      if (response.data.success) {
+        toast.success("Load accepted successfully!");
+
         // Start the 90-min timer on ACCEPT
         const acceptedLoadId = request?.loadId?._id || request?.loadId;
         if (acceptedLoadId) saveStart(acceptedLoadId, Date.now());
@@ -1134,14 +1339,12 @@ useEffect(() => {
         // optimistic UI
         setPendingRequests((prev) =>
           prev.map((r) =>
-            r._id === request._id
-              ? { ...r, status: 'approved' }
-              : r
-          )
+            r._id === request._id ? { ...r, status: "approved" } : r,
+          ),
         );
 
         // Remove timer
-        setLoadTimers(prev => {
+        setLoadTimers((prev) => {
           const newTimers = { ...prev };
           delete newTimers[request._id];
           return newTimers;
@@ -1151,19 +1354,20 @@ useEffect(() => {
           fetchRateRequests();
         }, 1000);
       } else {
-        toast.error('Failed to accept load. Please try again.');
+        toast.error("Failed to accept load. Please try again.");
       }
     } catch (error) {
-      console.error('Manual accept failed:', error);
-      toast.error('Failed to accept load. Please try again.');
+      console.error("Manual accept failed:", error);
+      toast.error("Failed to accept load. Please try again.");
     }
   };
 
   const handleApprovalSubmit = async () => {
     const token = getAuthToken();
-    const empId = localStorage.getItem('empId') || sessionStorage.getItem('empId');
+    const empId =
+      localStorage.getItem("empId") || sessionStorage.getItem("empId");
     if (!token || !empId) {
-      toast.error('Missing token or empId. Please log in again.');
+      toast.error("Missing token or empId. Please log in again.");
       return;
     }
 
@@ -1171,186 +1375,202 @@ useEffect(() => {
       setApprovalSubmitting(true);
       const payload = {
         approvalId: approvalModal.approval._id,
-        action: 'accept', // Only accept action now
-        ...(approvalReason.trim() ? { reason: approvalReason } : {})
+        action: "accept", // Only accept action now
+        ...(approvalReason.trim() ? { reason: approvalReason } : {}),
       };
 
       const response = await axios.post(
         `${API_CONFIG.BASE_URL}/api/v1/load-approval/handle`,
         payload,
-        { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        },
       );
 
       if (response.data.success) {
-        toast.success('Load accepted successfully!');
+        toast.success("Load accepted successfully!");
 
         // Start the 90-min timer on ACCEPT
-        const acceptedLoadId = approvalModal?.approval?.loadId?._id || approvalModal?.approval?.loadId;
+        const acceptedLoadId =
+          approvalModal?.approval?.loadId?._id ||
+          approvalModal?.approval?.loadId;
         if (acceptedLoadId) saveStart(acceptedLoadId, Date.now());
 
         // optimistic UI
         setPendingRequests((prev) =>
           prev.map((r) =>
             r._id === approvalModal.approval._id
-              ? { ...r, status: 'approved' }
-              : r
-          )
+              ? { ...r, status: "approved" }
+              : r,
+          ),
         );
 
         closeApprovalModal();
         setTimeout(() => {
-          fetchRateRequests(rateRequestPage, rateRequestLimit, rateRequestFromDate, rateRequestToDate);
+          fetchRateRequests(
+            rateRequestPage,
+            rateRequestLimit,
+            rateRequestFromDate,
+            rateRequestToDate,
+          );
         }, 600);
       } else {
-        toast.error(response.data.message || 'Action failed');
+        toast.error(response.data.message || "Action failed");
       }
     } catch (error) {
-      console.error('Approval submission error:', error);
-      toast.error(error.response?.data?.message || 'Failed to submit action');
+      console.error("Approval submission error:", error);
+      toast.error(error.response?.data?.message || "Failed to submit action");
     } finally {
       setApprovalSubmitting(false);
     }
   };
 
-
-
-
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     const token = getAuthToken();
-    const empId = localStorage.getItem('empId') || sessionStorage.getItem('empId');
+    const empId =
+      localStorage.getItem("empId") || sessionStorage.getItem("empId");
     if (!token || !empId) {
-      toast.error('Missing token or empId. Please log in again.');
+      toast.error("Missing token or empId. Please log in again.");
       return;
     }
 
     // Validate form before submission
     if (!validateForm()) {
-      toast.error('Please fix all validation errors before submitting');
+      toast.error("Please fix all validation errors before submitting");
       return;
     }
 
     // Use the actual loadId, not the approval _id
     const actualLoadId = selectedRequest?.loadId;
     if (!actualLoadId) {
-      toast.error('Load ID not found. Please try again.');
+      toast.error("Load ID not found. Please try again.");
       return;
     }
-    
+
     // Debug: Log the selectedRequest to see what we have
-
-
 
     // Calculate total bid rate
     const lineHaul = parseFloat(rate) || 0;
     const fscPct = parseFloat(fscPercentage) || 0;
     const fscValue = (lineHaul * fscPct) / 100;
-    const otherCharges = (ratesArray || []).reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+    const otherCharges = (ratesArray || []).reduce(
+      (sum, item) => sum + (Number(item.total) || 0),
+      0,
+    );
     const totalBidRate = lineHaul + fscValue + otherCharges;
 
     // Create FormData for file upload
     const formData = new FormData();
-    formData.append('loadId', actualLoadId);
-    formData.append('truckerId', selectedTrucker);
-    formData.append('empId', empId);
-    
+    formData.append("loadId", actualLoadId);
+    formData.append("truckerId", selectedTrucker);
+    formData.append("empId", empId);
+
     // Send ONLY the calculated total bid rate
-    formData.append('rate', totalBidRate.toFixed(2));
-    
+    formData.append("rate", totalBidRate.toFixed(2));
+
     // Send detailed breakdown in rates array for record keeping
     const detailedRates = [];
-    
+
     // Add Line Haul
     if (lineHaul > 0) {
       detailedRates.push({
-        name: 'Line Haul',
+        name: "Line Haul",
         quantity: 1,
         amount: lineHaul,
-        total: lineHaul
+        total: lineHaul,
       });
     }
-    
+
     // Add FSC
     if (fscValue > 0) {
       detailedRates.push({
         name: `FSC (${fscPct}%)`,
         quantity: 1,
         amount: fscValue,
-        total: fscValue
+        total: fscValue,
       });
     }
-    
+
     // Add other charges from calculator (modal se jo values aayi hain)
     if (ratesArray && ratesArray.length > 0) {
-      ratesArray.forEach(item => {
+      ratesArray.forEach((item) => {
         detailedRates.push({
           name: item.name,
           quantity: item.quantity,
           amount: item.amount,
-          total: item.total
+          total: item.total,
         });
       });
     }
-    
+
     // Append detailed rates array for breakdown
     detailedRates.forEach((rateItem, index) => {
       formData.append(`rates[${index}][name]`, rateItem.name);
-      formData.append(`rates[${index}][quantity]`, rateItem.quantity.toString());
+      formData.append(
+        `rates[${index}][quantity]`,
+        rateItem.quantity.toString(),
+      );
       formData.append(`rates[${index}][amount]`, rateItem.amount.toString());
       formData.append(`rates[${index}][total]`, rateItem.total.toString());
     });
-    
+
     // Also send totalrates field (same as rate)
-    formData.append('totalrates', totalBidRate.toFixed(2));
-    
-    formData.append('message', message);
-    formData.append('estimatedPickupDate', pickupDate);
-    formData.append('estimatedDeliveryDate', deliveryDate);
-    formData.append('driverName', driverName);
-    formData.append('vehicleNumber', vehicleNo);
-    formData.append('vehicleType', selectedRequest?.vehicleType || 'Truck');
-    
+    formData.append("totalrates", totalBidRate.toFixed(2));
+
+    formData.append("message", message);
+    formData.append("estimatedPickupDate", pickupDate);
+    formData.append("estimatedDeliveryDate", deliveryDate);
+    formData.append("driverName", driverName);
+    formData.append("vehicleNumber", vehicleNo);
+    formData.append("vehicleType", selectedRequest?.vehicleType || "Truck");
+
     // Append file if uploaded
     if (uploadedFile) {
-      formData.append('attachment', uploadedFile);
+      formData.append("attachment", uploadedFile);
     }
-    
+
     // Debug: Log all FormData entries
 
     for (let [key, value] of formData.entries()) {
-
     }
-
 
     try {
       setSubmitting(true);
-
 
       // Try with FormData first (for file upload)
       const response = await axios.post(
         `${API_CONFIG.BASE_URL}/api/v1/bid/place-by-inhouse/`,
         formData,
-        { 
-          headers: { 
-            Authorization: `Bearer ${token}`
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
             // Let axios set Content-Type automatically with boundary
-          } 
-        }
+          },
+        },
       );
 
-      toast.success('Bid submitted!');
+      toast.success("Bid submitted!");
       // stop timer on first bid (from this UI)
       const loadId = selectedRequest?.loadId || selectedRequest?._id;
       if (loadId && !timerStopMap[loadId]) {
         saveStop(loadId, Date.now());
       }
 
-      await fetchRateRequests(rateRequestPage, rateRequestLimit, rateRequestFromDate, rateRequestToDate);
+      await fetchRateRequests(
+        rateRequestPage,
+        rateRequestLimit,
+        rateRequestFromDate,
+        rateRequestToDate,
+      );
       closeModal();
     } catch (error) {
-      console.error('Submission Error:', error.response?.data || error.message);
-      toast.error(error.response?.data?.message || 'Submission failed');
+      console.error("Submission Error:", error.response?.data || error.message);
+      toast.error(error.response?.data?.message || "Submission failed");
     } finally {
       setSubmitting(false);
     }
@@ -1358,25 +1578,31 @@ useEffect(() => {
 
   const filteredRequests = useMemo(() => {
     let requests;
-    if (activeTab === 'pending') {
+    if (activeTab === "pending") {
       requests = pendingRequests;
-    } else if (activeTab === 'rate' || activeTab === 'rateDetails') {
-      requests = completedRequests.length > 0 ? completedRequests : rateRequests;
+    } else if (activeTab === "rate" || activeTab === "rateDetails") {
+      requests =
+        completedRequests.length > 0 ? completedRequests : rateRequests;
     } else {
-      requests = completedRequests.length > 0 ? completedRequests : rateRequests;
+      requests =
+        completedRequests.length > 0 ? completedRequests : rateRequests;
     }
-    
+
     // Filter by date range for All Rate Request tab (client-side filtering)
-    if (activeTab === 'rateDetails' && dateRange.startDate && dateRange.endDate) {
+    if (
+      activeTab === "rateDetails" &&
+      dateRange.startDate &&
+      dateRange.endDate
+    ) {
       requests = requests.filter((item) => {
-        const created = item.createdAt || '';
-        const createdDate = created ? created.split('T')[0] : ''; // Extract date part (YYYY-MM-DD)
+        const created = item.createdAt || "";
+        const createdDate = created ? created.split("T")[0] : ""; // Extract date part (YYYY-MM-DD)
         const startDateStr = ymd(dateRange.startDate);
         const endDateStr = ymd(dateRange.endDate);
         return createdDate >= startDateStr && createdDate <= endDateStr;
       });
     }
-    
+
     const q = search.trim().toLowerCase();
     if (!q) return requests;
     return requests.filter((item) => {
@@ -1390,30 +1616,45 @@ useEffect(() => {
         item.origin?.state,
         item.destination?.city,
         item.destination?.state,
-        item.vehicleType
-      ].map((x) => (x || '').toString().toLowerCase());
+        item.vehicleType,
+      ].map((x) => (x || "").toString().toLowerCase());
       return parts.some((p) => p.includes(q));
     });
-  }, [activeTab, search, pendingRequests, completedRequests, rateRequests, dateRange]);
+  }, [
+    activeTab,
+    search,
+    pendingRequests,
+    completedRequests,
+    rateRequests,
+    dateRange,
+  ]);
 
   const listForValue =
-    (activeTab === 'rate' || activeTab === 'rateDetails') ? (completedRequests.length > 0 ? completedRequests : rateRequests) : completedRequests;
-  const totalValue = listForValue.reduce((sum, r) => sum + (Number(r.rate) || 0), 0);
+    activeTab === "rate" || activeTab === "rateDetails"
+      ? completedRequests.length > 0
+        ? completedRequests
+        : rateRequests
+      : completedRequests;
+  const totalValue = listForValue.reduce(
+    (sum, r) => sum + (Number(r.rate) || 0),
+    0,
+  );
 
   // Filter truckers based on search
   const filteredTruckers = useMemo(() => {
     if (!truckerSearch.trim()) return truckers;
-    return truckers.filter(trucker => 
-      trucker.compName?.toLowerCase().includes(truckerSearch.toLowerCase()) ||
-      trucker.email?.toLowerCase().includes(truckerSearch.toLowerCase()) ||
-      trucker.phoneNo?.includes(truckerSearch)
+    return truckers.filter(
+      (trucker) =>
+        trucker.compName?.toLowerCase().includes(truckerSearch.toLowerCase()) ||
+        trucker.email?.toLowerCase().includes(truckerSearch.toLowerCase()) ||
+        trucker.phoneNo?.includes(truckerSearch),
     );
   }, [truckers, truckerSearch]);
 
   // Get selected trucker name for display
   const selectedTruckerName = useMemo(() => {
-    const trucker = truckers.find(t => t._id === selectedTrucker);
-    return trucker?.compName || '';
+    const trucker = truckers.find((t) => t._id === selectedTrucker);
+    return trucker?.compName || "";
   }, [truckers, selectedTrucker]);
 
   const handleTruckerSelect = (truckerId, truckerName) => {
@@ -1422,7 +1663,7 @@ useEffect(() => {
     setIsTruckerDropdownOpen(false);
     // Clear trucker error when selected
     if (formErrors.trucker) {
-      setFormErrors(prev => ({ ...prev, trucker: '' }));
+      setFormErrors((prev) => ({ ...prev, trucker: "" }));
     }
   };
 
@@ -1431,9 +1672,9 @@ useEffect(() => {
     const file = event.target.files[0];
     if (file) {
       setUploadedFile(file);
-      
+
       // Create preview for images
-      if (file.type.startsWith('image/')) {
+      if (file.type.startsWith("image/")) {
         const reader = new FileReader();
         reader.onload = (e) => {
           setFilePreview(e.target.result);
@@ -1442,10 +1683,10 @@ useEffect(() => {
       } else {
         setFilePreview(null);
       }
-      
+
       // Clear file error when file is selected
       if (formErrors.uploadedFile) {
-        setFormErrors(prev => ({ ...prev, uploadedFile: '' }));
+        setFormErrors((prev) => ({ ...prev, uploadedFile: "" }));
       }
     }
   };
@@ -1455,9 +1696,9 @@ useEffect(() => {
     setUploadedFile(null);
     setFilePreview(null);
     // Reset file input
-    const fileInput = document.getElementById('file-upload');
+    const fileInput = document.getElementById("file-upload");
     if (fileInput) {
-      fileInput.value = '';
+      fileInput.value = "";
     }
   };
 
@@ -1465,219 +1706,240 @@ useEffect(() => {
   const exportToCSV = () => {
     try {
       const dataToExport = filteredRequests.map((item, index) => ({
-        'S.No': index + 1,
-        'Load ID': loadShort(item._id),
-        'Shipment Number': item.shipmentNumber || 'N/A',
-        'Weight (lbs)': item.weight || 0,
-        'Pickup City': item.origin?.city || 'N/A',
-        'Pickup State': item.origin?.state || 'N/A',
-        'Delivery City': item.destination?.city || 'N/A',
-        'Delivery State': item.destination?.state || 'N/A',
-        'Vehicle Type': item.vehicleType || 'N/A',
-        'Rate ($)': item.rate || 0,
-        'Status': item.status || 'N/A',
-        'Commodity': item.commodity || 'N/A',
-        'Pickup Date': item.pickupDate ? new Date(item.pickupDate).toLocaleDateString() : 'N/A',
-        'Delivery Date': item.deliveryDate ? new Date(item.deliveryDate).toLocaleDateString() : 'N/A',
-        'Created At': item.createdAt ? new Date(item.createdAt).toLocaleDateString() : 'N/A'
+        "S.No": index + 1,
+        "Load ID": loadShort(item._id),
+        "Shipment Number": item.shipmentNumber || "N/A",
+        "Weight (lbs)": item.weight || 0,
+        "Pickup City": item.origin?.city || "N/A",
+        "Pickup State": item.origin?.state || "N/A",
+        "Delivery City": item.destination?.city || "N/A",
+        "Delivery State": item.destination?.state || "N/A",
+        "Vehicle Type": item.vehicleType || "N/A",
+        "Rate ($)": item.rate || 0,
+        Status: item.status || "N/A",
+        Commodity: item.commodity || "N/A",
+        "Pickup Date": item.pickupDate
+          ? new Date(item.pickupDate).toLocaleDateString()
+          : "N/A",
+        "Delivery Date": item.deliveryDate
+          ? new Date(item.deliveryDate).toLocaleDateString()
+          : "N/A",
+        "Created At": item.createdAt
+          ? new Date(item.createdAt).toLocaleDateString()
+          : "N/A",
       }));
 
       // Convert to CSV
       const headers = Object.keys(dataToExport[0] || {});
       const csvContent = [
-        headers.join(','),
-        ...dataToExport.map(row => 
-          headers.map(header => {
-            const value = row[header];
-            // Escape commas and quotes in CSV
-            if (typeof value === 'string' && (value.includes(',') || value.includes('"') || value.includes('\n'))) {
-              return `"${value.replace(/"/g, '""')}"`;
-            }
-            return value;
-          }).join(',')
-        )
-      ].join('\n');
+        headers.join(","),
+        ...dataToExport.map((row) =>
+          headers
+            .map((header) => {
+              const value = row[header];
+              // Escape commas and quotes in CSV
+              if (
+                typeof value === "string" &&
+                (value.includes(",") ||
+                  value.includes('"') ||
+                  value.includes("\n"))
+              ) {
+                return `"${value.replace(/"/g, '""')}"`;
+              }
+              return value;
+            })
+            .join(","),
+        ),
+      ].join("\n");
 
       // Create and download file
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
       const url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
-      
+      link.setAttribute("href", url);
+
       // Generate filename with current date
-      const currentDate = new Date().toISOString().split('T')[0];
+      const currentDate = new Date().toISOString().split("T")[0];
       const filename = `Rate_Request_Data_${currentDate}.csv`;
-      link.setAttribute('download', filename);
-      
-      link.style.visibility = 'hidden';
+      link.setAttribute("download", filename);
+
+      link.style.visibility = "hidden";
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
+
       toast.success(`Data exported successfully as ${filename}`);
     } catch (error) {
-      console.error('Export error:', error);
-      toast.error('Failed to export data. Please try again.');
+      console.error("Export error:", error);
+      toast.error("Failed to export data. Please try again.");
     }
   };
 
   // Validation functions
   const validateField = (name, value) => {
-    let error = '';
-    
+    let error = "";
+
     switch (name) {
-      case 'trucker':
-        if (!value || value.trim() === '') {
-          error = 'Please select a trucker';
+      case "trucker":
+        if (!value || value.trim() === "") {
+          error = "Please select a trucker";
         }
         break;
-      case 'driverName':
-        if (!value || value.trim() === '') {
-          error = 'Driver name is required';
+      case "driverName":
+        if (!value || value.trim() === "") {
+          error = "Driver name is required";
         } else if (value.trim().length < 2) {
-          error = 'Driver name must be at least 2 characters';
+          error = "Driver name must be at least 2 characters";
         } else if (!/^[a-zA-Z\s]+$/.test(value.trim())) {
-          error = 'Driver name can only contain letters and spaces';
+          error = "Driver name can only contain letters and spaces";
         }
         break;
-      case 'vehicleNo':
-        if (!value || value.trim() === '') {
-          error = 'Vehicle number is required';
+      case "vehicleNo":
+        if (!value || value.trim() === "") {
+          error = "Vehicle number is required";
         } else if (value.trim().length < 3) {
-          error = 'Vehicle number must be at least 3 characters';
+          error = "Vehicle number must be at least 3 characters";
         }
         break;
-      case 'pickupDate':
+      case "pickupDate":
         if (!value) {
-          error = 'Pickup date is required';
+          error = "Pickup date is required";
         } else {
           const pickupDateValue = new Date(value);
           const now = new Date();
           if (pickupDateValue < now) {
-            error = 'Pickup date cannot be in the past';
+            error = "Pickup date cannot be in the past";
           }
         }
         break;
-      case 'deliveryDate':
+      case "deliveryDate":
         if (!value) {
-          error = 'Delivery date is required';
+          error = "Delivery date is required";
         } else {
           const deliveryDateValue = new Date(value);
           const pickupDateValue = new Date(pickupDate);
           const now = new Date();
           if (deliveryDateValue < now) {
-            error = 'Delivery date cannot be in the past';
+            error = "Delivery date cannot be in the past";
           } else if (pickupDate && deliveryDateValue <= pickupDateValue) {
-            error = 'Delivery date must be after pickup date';
+            error = "Delivery date must be after pickup date";
           }
         }
         break;
-      case 'rate':
-        if (!value || value.trim() === '') {
-          error = 'Rate is required';
+      case "rate":
+        if (!value || value.trim() === "") {
+          error = "Rate is required";
         } else {
           const rateNum = parseFloat(value);
           if (isNaN(rateNum) || rateNum <= 0) {
-            error = 'Rate must be a positive number';
+            error = "Rate must be a positive number";
           } else if (rateNum < 1) {
-            error = 'Rate must be at least $1';
+            error = "Rate must be at least $1";
           } else if (rateNum > 1000000) {
-            error = 'Rate cannot exceed $1,000,000';
+            error = "Rate cannot exceed $1,000,000";
           }
         }
         break;
-      case 'message':
-        if (!value || value.trim() === '') {
-          error = 'Message is required';
+      case "message":
+        if (!value || value.trim() === "") {
+          error = "Message is required";
         } else if (value.trim().length < 10) {
-          error = 'Message must be at least 10 characters';
+          error = "Message must be at least 10 characters";
         } else if (value.trim().length > 500) {
-          error = 'Message cannot exceed 500 characters';
+          error = "Message cannot exceed 500 characters";
         }
         break;
-      case 'uploadedFile':
+      case "uploadedFile":
         if (!value) {
-          error = 'Please upload a file';
+          error = "Please upload a file";
         } else {
           // Check file size (max 10MB)
           if (value.size > 10 * 1024 * 1024) {
-            error = 'File size must be less than 10MB';
+            error = "File size must be less than 10MB";
           }
           // Check file type
-          const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+          const allowedTypes = [
+            "image/jpeg",
+            "image/png",
+            "image/gif",
+            "application/pdf",
+            "application/msword",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          ];
           if (!allowedTypes.includes(value.type)) {
-            error = 'File type not supported. Please upload JPG, PNG, GIF, PDF, or DOC files';
+            error =
+              "File type not supported. Please upload JPG, PNG, GIF, PDF, or DOC files";
           }
         }
         break;
       default:
         break;
     }
-    
+
     return error;
   };
 
   const handleFieldBlur = (fieldName) => {
-    setTouchedFields(prev => ({ ...prev, [fieldName]: true }));
-    
+    setTouchedFields((prev) => ({ ...prev, [fieldName]: true }));
+
     let value;
     switch (fieldName) {
-      case 'trucker':
+      case "trucker":
         value = selectedTrucker;
         break;
-      case 'driverName':
+      case "driverName":
         value = driverName;
         break;
-      case 'vehicleNo':
+      case "vehicleNo":
         value = vehicleNo;
         break;
-      case 'pickupDate':
+      case "pickupDate":
         value = pickupDate;
         break;
-      case 'deliveryDate':
+      case "deliveryDate":
         value = deliveryDate;
         break;
-      case 'rate':
+      case "rate":
         value = rate;
         break;
-      case 'message':
+      case "message":
         value = message;
         break;
-      case 'uploadedFile':
+      case "uploadedFile":
         value = uploadedFile;
         break;
       default:
-        value = '';
+        value = "";
     }
-    
+
     const error = validateField(fieldName, value);
-    setFormErrors(prev => ({ ...prev, [fieldName]: error }));
+    setFormErrors((prev) => ({ ...prev, [fieldName]: error }));
   };
 
   const handleFieldChange = (fieldName, value) => {
     // Clear error when user starts typing
     if (formErrors[fieldName]) {
-      setFormErrors(prev => ({ ...prev, [fieldName]: '' }));
+      setFormErrors((prev) => ({ ...prev, [fieldName]: "" }));
     }
-    
+
     // Update the respective state
     switch (fieldName) {
-      case 'driverName':
+      case "driverName":
         setDriverName(value);
         break;
-      case 'vehicleNo':
+      case "vehicleNo":
         setVehicleNo(value);
         break;
-      case 'pickupDate':
+      case "pickupDate":
         setPickupDate(value);
         break;
-      case 'deliveryDate':
+      case "deliveryDate":
         setDeliveryDate(value);
         break;
-      case 'rate':
+      case "rate":
         setRate(value);
         break;
-      case 'message':
+      case "message":
         setMessage(value);
         break;
       default:
@@ -1687,35 +1949,36 @@ useEffect(() => {
 
   // Charges Calculator functions
   useEffect(() => {
-    setChargeErrors(prev =>
-      (charges || []).map((_, i) => prev[i] || { name: '', quantity: '', amt: '' })
+    setChargeErrors((prev) =>
+      (charges || []).map(
+        (_, i) => prev[i] || { name: "", quantity: "", amt: "" },
+      ),
     );
   }, [charges]);
 
-  const onlyAlpha = (s = '') => s.replace(/[^A-Za-z ]/g, '');
-  const clampPosInt = (s = '') => s.replace(/[^\d]/g, '');
+  const onlyAlpha = (s = "") => s.replace(/[^A-Za-z ]/g, "");
+  const clampPosInt = (s = "") => s.replace(/[^\d]/g, "");
   const blockIntNoSign = (e) => {
-    if (['e', 'E', '+', '-', '.'].includes(e.key)) e.preventDefault();
+    if (["e", "E", "+", "-", "."].includes(e.key)) e.preventDefault();
   };
 
   const handleChargesClick = () => {
-
     setShowChargesPopup(true);
   };
 
   const handleChargeChange = (index, field, value) => {
     const updated = [...charges];
 
-    if (field === 'name') value = onlyAlpha(value);
-    if (field === 'quantity') value = clampPosInt(value);
-    if (field === 'amt') {
-      value = value.replace(/[^\d.]/g, '');
-      const parts = value.split('.');
+    if (field === "name") value = onlyAlpha(value);
+    if (field === "quantity") value = clampPosInt(value);
+    if (field === "amt") {
+      value = value.replace(/[^\d.]/g, "");
+      const parts = value.split(".");
       if (parts.length > 2) {
-        value = parts[0] + '.' + parts.slice(1).join('');
+        value = parts[0] + "." + parts.slice(1).join("");
       }
       if (parts[1] && parts[1].length > 2) {
-        value = parts[0] + '.' + parts[1].substring(0, 2);
+        value = parts[0] + "." + parts[1].substring(0, 2);
       }
     }
 
@@ -1727,93 +1990,102 @@ useEffect(() => {
 
     setCharges(updated);
 
-    setChargeErrors(prev => {
+    setChargeErrors((prev) => {
       const next = [...prev];
       next[index] = { ...next[index] };
-      if (field === 'name') next[index].name = '';
-      if (field === 'quantity') next[index].quantity = '';
-      if (field === 'amt') next[index].amt = '';
+      if (field === "name") next[index].name = "";
+      if (field === "quantity") next[index].quantity = "";
+      if (field === "amt") next[index].amt = "";
       return next;
     });
-    setChargesPopupError('');
+    setChargesPopupError("");
   };
 
   const addCharge = () => {
-    setCharges(prev => [...prev, { name: '', quantity: '', amt: '', total: 0 }]);
-    setChargeErrors(prev => [...prev, { name: '', quantity: '', amt: '' }]);
+    setCharges((prev) => [
+      ...prev,
+      { name: "", quantity: "", amt: "", total: 0 },
+    ]);
+    setChargeErrors((prev) => [...prev, { name: "", quantity: "", amt: "" }]);
   };
 
   const removeCharge = (index) => {
     if (charges.length > 1) {
-      setCharges(prev => prev.filter((_, i) => i !== index));
-      setChargeErrors(prev => prev.filter((_, i) => i !== index));
+      setCharges((prev) => prev.filter((_, i) => i !== index));
+      setChargeErrors((prev) => prev.filter((_, i) => i !== index));
     }
   };
 
   const applyCharges = async () => {
     const allEmpty = (charges || []).every(
-      ch => !(ch?.name?.trim()) &&
-        !(String(ch?.quantity ?? '') !== '') &&
-        !(String(ch?.amt ?? '') !== '')
+      (ch) =>
+        !ch?.name?.trim() &&
+        !(String(ch?.quantity ?? "") !== "") &&
+        !(String(ch?.amt ?? "") !== ""),
     );
 
     if (allEmpty) {
       const errs = (charges || []).map((_, i) =>
         i === 0
           ? {
-            name: 'Please enter the charge name',
-            quantity: 'Please enter the Quantity',
-            amt: 'Please enter the amount',
-          }
-          : { name: '', quantity: '', amt: '' }
+              name: "Please enter the charge name",
+              quantity: "Please enter the Quantity",
+              amt: "Please enter the amount",
+            }
+          : { name: "", quantity: "", amt: "" },
       );
       setChargeErrors(errs);
-      setChargesPopupError('Please add charges.');
+      setChargesPopupError("Please add charges.");
       return;
     }
 
     const nextErrs = (charges || []).map((ch) => {
-      const row = { name: '', quantity: '', amt: '' };
-      const hasAny = (ch?.name || ch?.quantity || ch?.amt);
+      const row = { name: "", quantity: "", amt: "" };
+      const hasAny = ch?.name || ch?.quantity || ch?.amt;
 
       if (hasAny) {
-        const nm = (ch?.name || '').trim();
-        if (!nm) row.name = 'Please enter the charge name';
-        else if (!/^[A-Za-z ]+$/.test(nm)) row.name = 'Name should contain only alphabets';
+        const nm = (ch?.name || "").trim();
+        if (!nm) row.name = "Please enter the charge name";
+        else if (!/^[A-Za-z ]+$/.test(nm))
+          row.name = "Name should contain only alphabets";
 
-        const qRaw = String(ch?.quantity ?? '');
-        if (qRaw === '') row.quantity = 'Please enter the Quantity';
-        else if (!/^[1-9]\d*$/.test(qRaw)) row.quantity = 'Quantity must be a positive integer';
+        const qRaw = String(ch?.quantity ?? "");
+        if (qRaw === "") row.quantity = "Please enter the Quantity";
+        else if (!/^[1-9]\d*$/.test(qRaw))
+          row.quantity = "Quantity must be a positive integer";
 
-        const aRaw = String(ch?.amt ?? '');
-        if (aRaw === '') row.amt = 'Please enter the amount';
-        else if (!/^\d+(\.\d{1,2})?$/.test(aRaw)) row.amt = 'Amount must be a positive number (max 2 decimal places)';
+        const aRaw = String(ch?.amt ?? "");
+        if (aRaw === "") row.amt = "Please enter the amount";
+        else if (!/^\d+(\.\d{1,2})?$/.test(aRaw))
+          row.amt = "Amount must be a positive number (max 2 decimal places)";
       }
       return row;
     });
 
-    const hasErrors = nextErrs.some(r => r.name || r.quantity || r.amt);
+    const hasErrors = nextErrs.some((r) => r.name || r.quantity || r.amt);
     setChargeErrors(nextErrs);
 
     if (hasErrors) {
-      setChargesPopupError('Please correct the charge rows (Name*, Quantity*, Amount*).');
+      setChargesPopupError(
+        "Please correct the charge rows (Name*, Quantity*, Amount*).",
+      );
       return;
     }
 
     // Format charges array for API (rates array) - for Other Charges only
     const formattedRates = (charges || [])
-      .filter(ch => ch?.name?.trim() && ch?.quantity && ch?.amt) // Only include valid charges
-      .map(ch => ({
-        name: (ch.name || '').trim(),
+      .filter((ch) => ch?.name?.trim() && ch?.quantity && ch?.amt) // Only include valid charges
+      .map((ch) => ({
+        name: (ch.name || "").trim(),
         quantity: parseInt(ch.quantity, 10) || 1,
         amount: parseFloat(ch.amt) || 0,
-        total: (parseInt(ch.quantity, 10) || 1) * (parseFloat(ch.amt) || 0)
+        total: (parseInt(ch.quantity, 10) || 1) * (parseFloat(ch.amt) || 0),
       }));
-    
+
     // Store in ratesArray - this will show in Other Charges field
     setRatesArray(formattedRates);
 
-    setChargesPopupError('');
+    setChargesPopupError("");
     setShowChargesPopup(false);
   };
 
@@ -1823,18 +2095,21 @@ useEffect(() => {
 
   const validateForm = () => {
     const errors = {};
-    
+
     // Calculate if we have any rate information
     const lineHaul = parseFloat(rate) || 0;
     const fscPct = parseFloat(fscPercentage) || 0;
-    const otherCharges = (ratesArray || []).reduce((sum, item) => sum + (Number(item.total) || 0), 0);
-    const totalBidRate = lineHaul + (lineHaul * fscPct / 100) + otherCharges;
-    
+    const otherCharges = (ratesArray || []).reduce(
+      (sum, item) => sum + (Number(item.total) || 0),
+      0,
+    );
+    const totalBidRate = lineHaul + (lineHaul * fscPct) / 100 + otherCharges;
+
     // Check if at least one rate component exists
     if (totalBidRate <= 0) {
-      errors.rate = 'Please enter Line Haul, FSC, or add Other Charges';
+      errors.rate = "Please enter Line Haul, FSC, or add Other Charges";
     }
-    
+
     // Validate required fields (excluding rate and fscPercentage as they're now optional)
     const fields = {
       trucker: selectedTrucker,
@@ -1843,10 +2118,10 @@ useEffect(() => {
       pickupDate: pickupDate,
       deliveryDate: deliveryDate,
       message: message,
-      uploadedFile: uploadedFile
+      uploadedFile: uploadedFile,
     };
 
-    Object.keys(fields).forEach(field => {
+    Object.keys(fields).forEach((field) => {
       const error = validateField(field, fields[field]);
       if (error) {
         errors[field] = error;
@@ -1863,7 +2138,7 @@ useEffect(() => {
       rate: true,
       fscPercentage: true,
       message: true,
-      uploadedFile: true
+      uploadedFile: true,
     });
 
     return Object.keys(errors).length === 0;
@@ -1876,11 +2151,11 @@ useEffect(() => {
         {/* Tabs */}
         <div className="flex items-center gap-4 mb-6">
           <button
-            onClick={() => setActiveTab('rate')}
+            onClick={() => setActiveTab("rate")}
             className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${
-              activeTab === 'rate'
-                ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white border border-transparent'
-                : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
+              activeTab === "rate"
+                ? "bg-gradient-to-r from-green-500 to-emerald-600 text-white border border-transparent"
+                : "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
             }`}
           >
             <div className="flex items-center gap-2">
@@ -1889,11 +2164,11 @@ useEffect(() => {
             </div>
           </button>
           <button
-            onClick={() => setActiveTab('rateDetails')}
+            onClick={() => setActiveTab("rateDetails")}
             className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${
-              activeTab === 'rateDetails'
-                ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white border border-transparent'
-                : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
+              activeTab === "rateDetails"
+                ? "bg-gradient-to-r from-purple-500 to-indigo-600 text-white border border-transparent"
+                : "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
             }`}
           >
             <div className="flex items-center gap-2">
@@ -1908,12 +2183,17 @@ useEffect(() => {
           <div className="p-4 border border-gray-200 rounded-xl flex items-center justify-between">
             <div>
               <p className="text-xl font-medium mb-3">
-                {activeTab === 'rate' ? 'Today Rate Request' : 'Total Assigned'}
+                {activeTab === "rate" ? "Today Rate Request" : "Total Assigned"}
               </p>
               <p className="text-2xl font-bold text-gray-800">
-                {rateRequestPagination?.totalItems ?? (activeTab === 'rate'
-                  ? (completedRequests.length > 0 ? completedRequests.length : rateRequests.length)
-                  : (completedRequests.length > 0 ? completedRequests.length : rateRequests.length))}
+                {rateRequestPagination?.totalItems ??
+                  (activeTab === "rate"
+                    ? completedRequests.length > 0
+                      ? completedRequests.length
+                      : rateRequests.length
+                    : completedRequests.length > 0
+                      ? completedRequests.length
+                      : rateRequests.length)}
               </p>
             </div>
             <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
@@ -1924,7 +2204,7 @@ useEffect(() => {
       </div>
 
       {/* Pending Tab */}
-      {false && activeTab === 'pending' && (
+      {false && activeTab === "pending" && (
         <div>
           <div className="flex justify-between items-center mb-6">
             <div className="flex items-center gap-6">
@@ -1935,7 +2215,9 @@ useEffect(() => {
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Total Pending</p>
-                    <p className="text-xl font-bold text-gray-800">{pendingRequests.length}</p>
+                    <p className="text-xl font-bold text-gray-800">
+                      {pendingRequests.length}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -1947,7 +2229,11 @@ useEffect(() => {
                   <div>
                     <p className="text-sm text-gray-600">Approved</p>
                     <p className="text-xl font-bold text-blue-600">
-                      {pendingRequests.filter((req) => req.status === 'approved').length}
+                      {
+                        pendingRequests.filter(
+                          (req) => req.status === "approved",
+                        ).length
+                      }
                     </p>
                   </div>
                 </div>
@@ -1960,7 +2246,11 @@ useEffect(() => {
                   <div>
                     <p className="text-sm text-gray-600">Pending Approval</p>
                     <p className="text-xl font-bold text-orange-600">
-                      {pendingRequests.filter((req) => req.status === 'pending').length}
+                      {
+                        pendingRequests.filter(
+                          (req) => req.status === "pending",
+                        ).length
+                      }
                     </p>
                   </div>
                 </div>
@@ -1969,7 +2259,10 @@ useEffect(() => {
 
             <div className="flex items-center gap-4">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                <Search
+                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                  size={18}
+                />
                 <input
                   type="text"
                   placeholder="Search pending requests..."
@@ -1986,68 +2279,126 @@ useEffect(() => {
               <div className="flex flex-col justify-center items-center h-96 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl">
                 <div className="relative">
                   <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
-                  <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-b-purple-600 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1s' }}></div>
+                  <div
+                    className="absolute inset-0 w-16 h-16 border-4 border-transparent border-b-purple-600 rounded-full animate-spin"
+                    style={{
+                      animationDirection: "reverse",
+                      animationDuration: "1s",
+                    }}
+                  ></div>
                 </div>
                 <div className="mt-6 text-center">
-                  <p className="text-xl font-semibold text-gray-800 mb-2">Loading Requests...</p>
-                  <p className="text-sm text-gray-600">Please wait while we fetch the information</p>
+                  <p className="text-xl font-semibold text-gray-800 mb-2">
+                    Loading Requests...
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    Please wait while we fetch the information
+                  </p>
                 </div>
               </div>
             ) : (
               <table className="min-w-full table-auto text-sm text-left">
                 <thead className="bg-gray-100">
                   <tr>
-                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load ID</th>
-                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Weight (lbs)</th>
-                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Pick-Up</th>
-                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Drop</th>
-                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Vehicle</th>
-                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Shipment Type</th>
-                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Date & Time</th>
-                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Rate</th>
-                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Details</th>
+                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">
+                      Load ID
+                    </th>
+                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">
+                      Weight (lbs)
+                    </th>
+                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">
+                      Pick-Up
+                    </th>
+                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">
+                      Drop
+                    </th>
+                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">
+                      Vehicle
+                    </th>
+                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">
+                      Shipment Type
+                    </th>
+                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">
+                      Date & Time
+                    </th>
+                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">
+                      Rate
+                    </th>
+                    <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">
+                      Details
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredRequests.map((item, index) => (
                     <tr
                       key={item._id}
-                      className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}
+                      className={`border-b border-gray-100 ${index % 2 === 0 ? "bg-white" : "bg-gray-50/30"}`}
                     >
                       <td className="px-4 py-3">
-                        <span className="font-medium text-gray-700">{loadShort(item.loadId || item._id)}</span>
+                        <span className="font-medium text-gray-700">
+                          {loadShort(item.loadId || item._id)}
+                        </span>
                       </td>
                       <td className="px-4 py-3">
-                        <span className="font-medium text-gray-700">{item.weight} lbs</span>
+                        <span className="font-medium text-gray-700">
+                          {item.weight} lbs
+                        </span>
                       </td>
                       <td className="px-4 py-3">
                         <div>
-                          <span className="font-medium text-gray-700">{item.origin?.city || '—'}</span>
-                          <p className="text-xs text-gray-500">{item.origin?.state || ''}</p>
+                          <span className="font-medium text-gray-700">
+                            {item.origin?.city || "—"}
+                          </span>
+                          <p className="text-xs text-gray-500">
+                            {item.origin?.state || ""}
+                          </p>
                         </div>
                       </td>
                       <td className="px-4 py-3">
                         <div>
-                          <span className="font-medium text-gray-700">{item.destination?.city || '—'}</span>
-                          <p className="text-xs text-gray-500">{item.destination?.state || ''}</p>
+                          <span className="font-medium text-gray-700">
+                            {item.destination?.city || "—"}
+                          </span>
+                          <p className="text-xs text-gray-500">
+                            {item.destination?.state || ""}
+                          </p>
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <span className="font-medium text-gray-700">{item.vehicleType || '—'}</span>
+                        <span className="font-medium text-gray-700">
+                          {item.vehicleType || "—"}
+                        </span>
                       </td>
                       <td className="px-4 py-3">
                         {item.loadType ? (
-                          <span className="font-medium text-gray-700">{item.loadType}</span>
+                          <span className="font-medium text-gray-700">
+                            {item.loadType}
+                          </span>
                         ) : null}
                       </td>
                       <td className="px-4 py-3">
                         {item.createdAt ? (
                           <div>
                             <div className="font-medium text-gray-700">
-                              {new Date(item.createdAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}
+                              {new Date(item.createdAt).toLocaleDateString(
+                                "en-US",
+                                {
+                                  month: "2-digit",
+                                  day: "2-digit",
+                                  year: "numeric",
+                                },
+                              )}
                             </div>
                             <div className="text-xs text-gray-500">
-                              {new Date(item.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                              {new Date(item.createdAt).toLocaleTimeString(
+                                "en-US",
+                                {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                  hour12: true,
+                                },
+                              )}
                             </div>
                           </div>
                         ) : (
@@ -2056,7 +2407,7 @@ useEffect(() => {
                       </td>
                       <td className="px-4 py-3">
                         <span className="font-bold text-green-600">
-                          ${item.rate?.toLocaleString() || '0'}
+                          ${item.rate?.toLocaleString() || "0"}
                         </span>
                       </td>
                       <td className="px-4 py-3">
@@ -2064,54 +2415,80 @@ useEffect(() => {
                           {/* Chat Button */}
                           <button
                             onClick={async () => {
-                              console.log('RateRequest (Pending Tab): Chat button clicked', {
-                                item,
-                                loadId: item.loadId,
-                                salesUserInfo: item.salesUserInfo
-                              });
-                              
+                              console.log(
+                                "RateRequest (Pending Tab): Chat button clicked",
+                                {
+                                  item,
+                                  loadId: item.loadId,
+                                  salesUserInfo: item.salesUserInfo,
+                                },
+                              );
+
                               // Use actualLoadId if available, otherwise use loadId (should be MongoDB ID)
                               const loadId = item.actualLoadId || item.loadId;
-                              
+
                               if (!loadId) {
-                                console.error('RateRequest (Pending Tab): Missing loadId', item);
-                                toast.error('Unable to determine load ID. Please check the request information.');
+                                console.error(
+                                  "RateRequest (Pending Tab): Missing loadId",
+                                  item,
+                                );
+                                toast.error(
+                                  "Unable to determine load ID. Please check the request information.",
+                                );
                                 return;
                               }
 
                               let receiverEmpId = item.salesUserInfo?.empId;
-                              let receiverName = item.salesUserInfo?.empName || item.salesUserInfo?.employeeName || 'Sales User';
+                              let receiverName =
+                                item.salesUserInfo?.empName ||
+                                item.salesUserInfo?.employeeName ||
+                                "Sales User";
 
                               // If salesUserInfo is missing, try to fetch it from load details
                               if (!receiverEmpId && loadId) {
-                                toast.info('Fetching load details...', { autoClose: 2000 });
-                                const salesUserInfo = await fetchLoadDetailsForChat(loadId);
-                                
-                                if (salesUserInfo) {
-                                  receiverEmpId = salesUserInfo.empId || salesUserInfo._id;
-                                  receiverName = salesUserInfo.empName || salesUserInfo.employeeName || salesUserInfo.name || 'Sales User';
+                                toast.info("Fetching load details...", {
+                                  autoClose: 2000,
+                                });
+                                const salesUserInfo =
+                                  await fetchLoadDetailsForChat(loadId);
 
+                                if (salesUserInfo) {
+                                  receiverEmpId =
+                                    salesUserInfo.empId || salesUserInfo._id;
+                                  receiverName =
+                                    salesUserInfo.empName ||
+                                    salesUserInfo.employeeName ||
+                                    salesUserInfo.name ||
+                                    "Sales User";
                                 }
                               }
 
                               if (!receiverEmpId) {
-                                console.error('RateRequest (Pending Tab): Missing receiverEmpId after fetch', item);
-                                toast.error('Unable to determine receiver. Sales user information not available for this load.');
+                                console.error(
+                                  "RateRequest (Pending Tab): Missing receiverEmpId after fetch",
+                                  item,
+                                );
+                                toast.error(
+                                  "Unable to determine receiver. Sales user information not available for this load.",
+                                );
                                 return;
                               }
 
-                              console.log('RateRequest (Pending Tab): Opening chat modal', {
-                                loadId,
-                                receiverEmpId,
-                                receiverName,
-                                actualLoadId: item.actualLoadId
-                              });
+                              console.log(
+                                "RateRequest (Pending Tab): Opening chat modal",
+                                {
+                                  loadId,
+                                  receiverEmpId,
+                                  receiverName,
+                                  actualLoadId: item.actualLoadId,
+                                },
+                              );
 
                               setChatModal({
                                 visible: true,
                                 loadId: loadId, // Use actual MongoDB loadId for API calls
                                 receiverEmpId: receiverEmpId,
-                                receiverName: receiverName
+                                receiverName: receiverName,
                               });
                             }}
                             className="flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700"
@@ -2120,17 +2497,23 @@ useEffect(() => {
                             <MessageCircle size={14} />
                             <span>Chat</span>
                           </button>
-                          
-                          {item.status !== 'approved' ? (
+
+                          {item.status !== "approved" ? (
                             <div className="flex items-center gap-2">
                               {(loadTimers[item._id] ?? 0) > 0 ? (
                                 <div className="flex items-center gap-2">
                                   <div className="text-center">
-                                    <div className="text-lg font-bold text-orange-600">{loadTimers[item._id]}s</div>
-                                    <div className="text-xs text-orange-500">Auto-accept</div>
+                                    <div className="text-lg font-bold text-orange-600">
+                                      {loadTimers[item._id]}s
+                                    </div>
+                                    <div className="text-xs text-orange-500">
+                                      Auto-accept
+                                    </div>
                                   </div>
                                   <button
-                                    onClick={() => handleManualAcceptFromTable(item)}
+                                    onClick={() =>
+                                      handleManualAcceptFromTable(item)
+                                    }
                                     className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-3 py-2 rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all duration-200 font-semibold text-xs"
                                   >
                                     Accept Now
@@ -2156,10 +2539,14 @@ useEffect(() => {
                       <td colSpan="9" className="text-center py-12">
                         <Clock className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                         <p className="text-gray-500 text-lg">
-                          {search ? 'No pending requests found matching your search' : 'No pending requests found'}
+                          {search
+                            ? "No pending requests found matching your search"
+                            : "No pending requests found"}
                         </p>
                         <p className="text-gray-400 text-sm">
-                          {search ? 'Try adjusting your search terms' : 'All requests have been processed'}
+                          {search
+                            ? "Try adjusting your search terms"
+                            : "All requests have been processed"}
                         </p>
                       </td>
                     </tr>
@@ -2172,7 +2559,7 @@ useEffect(() => {
       )}
 
       {/* Rate Request Tab */}
-      {activeTab === 'rate' && (
+      {activeTab === "rate" && (
         <div>
           <div className="flex justify-between items-center mb-6">
             <div className="flex items-center gap-4 flex-wrap">
@@ -2181,13 +2568,27 @@ useEffect(() => {
                 disabled={filteredRequests.length === 0}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all duration-200 ${
                   filteredRequests.length === 0
-                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white border border-emerald-700'
+                    ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                    : "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white border border-emerald-700"
                 }`}
-                title={filteredRequests.length === 0 ? 'No data to export' : `Export ${filteredRequests.length} records to CSV`}
+                title={
+                  filteredRequests.length === 0
+                    ? "No data to export"
+                    : `Export ${filteredRequests.length} records to CSV`
+                }
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                  />
                 </svg>
                 Export to CSV
                 {filteredRequests.length > 0 && (
@@ -2204,11 +2605,21 @@ useEffect(() => {
               <div className="flex flex-col justify-center items-center h-96 bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl">
                 <div className="relative">
                   <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
-                  <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-b-purple-600 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1s' }}></div>
+                  <div
+                    className="absolute inset-0 w-16 h-16 border-4 border-transparent border-b-purple-600 rounded-full animate-spin"
+                    style={{
+                      animationDirection: "reverse",
+                      animationDuration: "1s",
+                    }}
+                  ></div>
                 </div>
                 <div className="mt-6 text-center">
-                  <p className="text-xl font-semibold text-gray-800 mb-2">Loading Completed Requests...</p>
-                  <p className="text-sm text-gray-600">Please wait while we fetch the information</p>
+                  <p className="text-xl font-semibold text-gray-800 mb-2">
+                    Loading Completed Requests...
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    Please wait while we fetch the information
+                  </p>
                 </div>
               </div>
             ) : (
@@ -2216,16 +2627,36 @@ useEffect(() => {
                 <table className="min-w-full text-left border-separate border-spacing-y-4">
                   <thead>
                     <tr className="bg-gray-100">
-                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y first:border-l border-gray-200 rounded-l-lg whitespace-nowrap">Load ID</th>
-                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">Weight (lbs)</th>
-                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">Pick-Up</th>
-                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">Drop</th>
-                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">Vehicle</th>
-                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">Shipment Type</th>
-                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">Date & Time</th>
-                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">Rate</th>
-                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">Bid Count</th>
-                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y last:border-r border-gray-200 rounded-r-lg">Details</th>
+                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y first:border-l border-gray-200 rounded-l-lg whitespace-nowrap">
+                        Load ID
+                      </th>
+                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                        Weight (lbs)
+                      </th>
+                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                        Pick-Up
+                      </th>
+                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                        Drop
+                      </th>
+                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                        Vehicle
+                      </th>
+                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                        Shipment Type
+                      </th>
+                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                        Date & Time
+                      </th>
+                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                        Rate
+                      </th>
+                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                        Bid Count
+                      </th>
+                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y last:border-r border-gray-200 rounded-r-lg">
+                        Details
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2235,39 +2666,69 @@ useEffect(() => {
                         className="bg-white hover:bg-gray-50 transition-colors"
                       >
                         <td className="px-4 py-4 border-y first:border-l border-gray-200 first:rounded-l-lg">
-                          <span className="font-medium text-gray-700">{loadShort(item._id)}</span>
+                          <span className="font-medium text-gray-700">
+                            {loadShort(item._id)}
+                          </span>
                         </td>
                         <td className="px-4 py-4 border-y border-gray-200">
-                          <span className="font-medium text-gray-700">{item.weight} lbs</span>
+                          <span className="font-medium text-gray-700">
+                            {item.weight} lbs
+                          </span>
                         </td>
                         <td className="px-4 py-4 border-y border-gray-200">
                           <div>
-                            <span className="font-medium text-gray-700">{item.origin?.city || '—'}</span>
-                            <p className="text-xs text-gray-500">{item.origin?.state || ''}</p>
+                            <span className="font-medium text-gray-700">
+                              {item.origin?.city || "—"}
+                            </span>
+                            <p className="text-xs text-gray-500">
+                              {item.origin?.state || ""}
+                            </p>
                           </div>
                         </td>
                         <td className="px-4 py-4 border-y border-gray-200">
                           <div>
-                            <span className="font-medium text-gray-700">{item.destination?.city || '—'}</span>
-                            <p className="text-xs text-gray-500">{item.destination?.state || ''}</p>
+                            <span className="font-medium text-gray-700">
+                              {item.destination?.city || "—"}
+                            </span>
+                            <p className="text-xs text-gray-500">
+                              {item.destination?.state || ""}
+                            </p>
                           </div>
                         </td>
                         <td className="px-4 py-4 border-y border-gray-200">
-                          <span className="font-medium text-gray-700">{item.vehicleType || '—'}</span>
+                          <span className="font-medium text-gray-700">
+                            {item.vehicleType || "—"}
+                          </span>
                         </td>
                         <td className="px-4 py-4 border-y border-gray-200">
                           {item.loadType ? (
-                            <span className="font-medium text-gray-700">{item.loadType}</span>
+                            <span className="font-medium text-gray-700">
+                              {item.loadType}
+                            </span>
                           ) : null}
                         </td>
                         <td className="px-4 py-4 border-y border-gray-200">
                           {item.createdAt ? (
                             <div>
                               <div className="font-medium text-gray-700">
-                                {new Date(item.createdAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}
+                                {new Date(item.createdAt).toLocaleDateString(
+                                  "en-US",
+                                  {
+                                    month: "2-digit",
+                                    day: "2-digit",
+                                    year: "numeric",
+                                  },
+                                )}
                               </div>
                               <div className="text-xs text-gray-500">
-                                {new Date(item.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                                {new Date(item.createdAt).toLocaleTimeString(
+                                  "en-US",
+                                  {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                    hour12: true,
+                                  },
+                                )}
                               </div>
                             </div>
                           ) : (
@@ -2276,7 +2737,7 @@ useEffect(() => {
                         </td>
                         <td className="px-4 py-4 border-y border-gray-200">
                           <span className="font-bold text-green-600">
-                            ${item.rate?.toLocaleString() || '0'}
+                            ${item.rate?.toLocaleString() || "0"}
                           </span>
                         </td>
                         <td className="px-4 py-4 border-y border-gray-200">
@@ -2287,161 +2748,202 @@ useEffect(() => {
                         <td className="px-4 py-4 border-y last:border-r border-gray-200 last:rounded-r-lg">
                           <div className="flex gap-2">
                             {/* Chat Button */}
-                           <button
-  onClick={async () => {
-    console.log('🔍 RateRequest (Pending Tab): Chat button clicked - FULL ITEM OBJECT:', item);
-    console.log('🔍 SalesUserInfo structure:', {
-      salesUserInfo: item.salesUserInfo,
-      hasSalesUserInfo: !!item.salesUserInfo,
-      salesUserInfoType: typeof item.salesUserInfo,
-      salesUserInfoKeys: item.salesUserInfo ? Object.keys(item.salesUserInfo) : 'none'
-    });
-    
-    // Use actualLoadId if available, otherwise use loadId (should be MongoDB ID)
-    const loadId = item.actualLoadId || item.loadId;
-    
-    if (!loadId) {
-      console.error('❌ RateRequest (Pending Tab): Missing loadId', item);
-      toast.error('Unable to determine load ID. Please check the request information.');
-      return;
-    }
+                            <button
+                              onClick={async () => {
+                                console.log(
+                                  "🔍 RateRequest (Pending Tab): Chat button clicked - FULL ITEM OBJECT:",
+                                  item,
+                                );
+                                console.log("🔍 SalesUserInfo structure:", {
+                                  salesUserInfo: item.salesUserInfo,
+                                  hasSalesUserInfo: !!item.salesUserInfo,
+                                  salesUserInfoType: typeof item.salesUserInfo,
+                                  salesUserInfoKeys: item.salesUserInfo
+                                    ? Object.keys(item.salesUserInfo)
+                                    : "none",
+                                });
 
-    // Enhanced receiver extraction with multiple fallbacks
-    let receiverEmpId = null;
-    let receiverName = 'Sales User';
+                                // Use actualLoadId if available, otherwise use loadId (should be MongoDB ID)
+                                const loadId = item.actualLoadId || item.loadId;
 
-    // Try multiple possible paths for sales user info
-    if (item.salesUserInfo) {
-      receiverEmpId = item.salesUserInfo.empId || 
-                     item.salesUserInfo._id || 
-                     item.salesUserInfo.id;
-      receiverName = item.salesUserInfo.empName || 
-                    item.salesUserInfo.employeeName || 
-                    item.salesUserInfo.name || 
-                    item.salesUserInfo.username || 
-                    'Sales User';
+                                if (!loadId) {
+                                  console.error(
+                                    "❌ RateRequest (Pending Tab): Missing loadId",
+                                    item,
+                                  );
+                                  toast.error(
+                                    "Unable to determine load ID. Please check the request information.",
+                                  );
+                                  return;
+                                }
 
-    }
-    
-    // If still no receiverEmpId, try fetch from load details
-    if (!receiverEmpId && loadId) {
+                                // Enhanced receiver extraction with multiple fallbacks
+                                let receiverEmpId = null;
+                                let receiverName = "Sales User";
 
-      toast.info('Fetching load details...', { autoClose: 2000 });
-      const salesUserInfo = await fetchLoadDetailsForChat(loadId);
-      
-      if (salesUserInfo) {
-        receiverEmpId = salesUserInfo.empId || salesUserInfo._id || salesUserInfo.id;
-        receiverName = salesUserInfo.empName || salesUserInfo.employeeName || salesUserInfo.name || 'Sales User';
+                                // Try multiple possible paths for sales user info
+                                if (item.salesUserInfo) {
+                                  receiverEmpId =
+                                    item.salesUserInfo.empId ||
+                                    item.salesUserInfo._id ||
+                                    item.salesUserInfo.id;
+                                  receiverName =
+                                    item.salesUserInfo.empName ||
+                                    item.salesUserInfo.employeeName ||
+                                    item.salesUserInfo.name ||
+                                    item.salesUserInfo.username ||
+                                    "Sales User";
+                                }
 
-      }
-    }
+                                // If still no receiverEmpId, try fetch from load details
+                                if (!receiverEmpId && loadId) {
+                                  toast.info("Fetching load details...", {
+                                    autoClose: 2000,
+                                  });
+                                  const salesUserInfo =
+                                    await fetchLoadDetailsForChat(loadId);
 
-    // Final fallback - check if there's any user info in the item itself
-    if (!receiverEmpId) {
+                                  if (salesUserInfo) {
+                                    receiverEmpId =
+                                      salesUserInfo.empId ||
+                                      salesUserInfo._id ||
+                                      salesUserInfo.id;
+                                    receiverName =
+                                      salesUserInfo.empName ||
+                                      salesUserInfo.employeeName ||
+                                      salesUserInfo.name ||
+                                      "Sales User";
+                                  }
+                                }
 
-      // Check common alternative paths in your data structure
-      const alternativePaths = [
-        item.createdBySalesUser,
-        item.createdBy,
-        item.salesUser,
-        item.user,
-        item.shipper?.createdBy, // Sometimes shipper has creator info
-      ];
-      
-      for (const alt of alternativePaths) {
-        if (alt && (alt.empId || alt._id)) {
-          receiverEmpId = alt.empId || alt._id;
-          receiverName = alt.empName || alt.employeeName || alt.name || 'Sales User';
+                                // Final fallback - check if there's any user info in the item itself
+                                if (!receiverEmpId) {
+                                  // Check common alternative paths in your data structure
+                                  const alternativePaths = [
+                                    item.createdBySalesUser,
+                                    item.createdBy,
+                                    item.salesUser,
+                                    item.user,
+                                    item.shipper?.createdBy, // Sometimes shipper has creator info
+                                  ];
 
-          break;
-        }
-      }
-    }
+                                  for (const alt of alternativePaths) {
+                                    if (alt && (alt.empId || alt._id)) {
+                                      receiverEmpId = alt.empId || alt._id;
+                                      receiverName =
+                                        alt.empName ||
+                                        alt.employeeName ||
+                                        alt.name ||
+                                        "Sales User";
 
-    if (!receiverEmpId) {
-      console.error('❌ RateRequest (Pending Tab): Missing receiverEmpId after all attempts', {
-        item,
-        loadId,
-        availableKeys: Object.keys(item)
-      });
-      toast.error('Unable to determine receiver. Sales user information not available for this load.');
-      return;
-    }
+                                      break;
+                                    }
+                                  }
+                                }
 
-    console.log('🎯 RateRequest (Pending Tab): Opening chat modal with final data', {
-      loadId,
-      receiverEmpId,
-      receiverName,
-      actualLoadId: item.actualLoadId
-    });
+                                if (!receiverEmpId) {
+                                  console.error(
+                                    "❌ RateRequest (Pending Tab): Missing receiverEmpId after all attempts",
+                                    {
+                                      item,
+                                      loadId,
+                                      availableKeys: Object.keys(item),
+                                    },
+                                  );
+                                  toast.error(
+                                    "Unable to determine receiver. Sales user information not available for this load.",
+                                  );
+                                  return;
+                                }
 
-    setChatModal({
-      visible: true,
-      loadId: loadId,
-      receiverEmpId: receiverEmpId,
-      receiverName: receiverName
-    });
-  }}
-  className="flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700"
-  title="Chat"
->
-  <MessageCircle size={14} />
-  <span>Chat</span>
-</button>
-                          
-                          <button
-                            onClick={() => {
-                              handleViewBids(item);
-                            }}
-                            className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 py-2 rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 font-semibold"
-                          >
-                            View
-                          </button>
-                          <button
-                            onClick={() => openModal(item)}
-                            className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2 rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all duration-200 font-semibold"
-                          >
-                            Submit Rate
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {filteredRequests.length === 0 && (
-                    <tr>
-                      <td colSpan="10" className="text-center py-12">
-                        <CheckCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                        <p className="text-gray-500 text-lg">
-                          {search ? 'No requests found matching your search' : 'No requests found'}
-                        </p>
-                        <p className="text-gray-400 text-sm">
-                          {search
-                            ? 'Try adjusting your search terms'
-                            : activeTab === 'rate'
-                            ? completedRequests.length > 0
-                              ? 'No completed requests found'
-                              : 'No requests available'
-                            : 'No requests have been completed yet'}
-                        </p>
-                      </td>
-                    </tr>
-                  )}
+                                console.log(
+                                  "🎯 RateRequest (Pending Tab): Opening chat modal with final data",
+                                  {
+                                    loadId,
+                                    receiverEmpId,
+                                    receiverName,
+                                    actualLoadId: item.actualLoadId,
+                                  },
+                                );
+
+                                setChatModal({
+                                  visible: true,
+                                  loadId: loadId,
+                                  receiverEmpId: receiverEmpId,
+                                  receiverName: receiverName,
+                                });
+                              }}
+                              className="inline-flex items-center justify-center px-4 py-2 text-sm font-semibold rounded-lg border border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-colors cursor-pointer"
+                              title="Chat"
+                            >
+                              Chat
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                handleViewBids(item);
+                              }}
+                              className="inline-flex items-center justify-center px-4 py-2 rounded-lg text-sm font-semibold border border-green-300 text-green-700 bg-green-50 hover:bg-green-600 hover:text-white hover:border-green-600 transition-colors cursor-pointer"
+                            >
+                              View
+                            </button>
+                            <button
+                              onClick={() => openModal(item)}
+                              className="inline-flex items-center justify-center whitespace-nowrap px-4 py-2 rounded-lg text-sm font-semibold border border-indigo-300 text-indigo-700 bg-indigo-50 hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition-colors cursor-pointer"
+                            >
+                              Submit Rate
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {filteredRequests.length === 0 && (
+                      <tr>
+                        <td colSpan="10" className="text-center py-12">
+                          <CheckCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                          <p className="text-gray-500 text-lg">
+                            {search
+                              ? "No requests found matching your search"
+                              : "No requests found"}
+                          </p>
+                          <p className="text-gray-400 text-sm">
+                            {search
+                              ? "Try adjusting your search terms"
+                              : activeTab === "rate"
+                                ? completedRequests.length > 0
+                                  ? "No completed requests found"
+                                  : "No requests available"
+                                : "No requests have been completed yet"}
+                          </p>
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
             )}
-            
+
             {/* Pagination Controls */}
             {rateRequestPagination && rateRequestPagination.totalPages > 1 && (
               <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50">
                 <div className="flex items-center gap-4">
                   <div className="text-sm text-gray-600">
-                    Showing {((rateRequestPagination.currentPage - 1) * rateRequestPagination.itemsPerPage) + 1} to{' '}
-                    {Math.min(rateRequestPagination.currentPage * rateRequestPagination.itemsPerPage, rateRequestPagination.totalItems)} of{' '}
-                    {rateRequestPagination.totalItems} results
+                    Showing{" "}
+                    {(rateRequestPagination.currentPage - 1) *
+                      rateRequestPagination.itemsPerPage +
+                      1}{" "}
+                    to{" "}
+                    {Math.min(
+                      rateRequestPagination.currentPage *
+                        rateRequestPagination.itemsPerPage,
+                      rateRequestPagination.totalItems,
+                    )}{" "}
+                    of {rateRequestPagination.totalItems} results
                   </div>
                   <div className="flex items-center gap-2">
-                    <label className="text-sm text-gray-600">Items per page:</label>
+                    <label className="text-sm text-gray-600">
+                      Items per page:
+                    </label>
                     <select
                       value={rateRequestLimit}
                       onChange={(e) => {
@@ -2459,43 +2961,58 @@ useEffect(() => {
                 </div>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => setRateRequestPage(prev => Math.max(1, prev - 1))}
+                    onClick={() =>
+                      setRateRequestPage((prev) => Math.max(1, prev - 1))
+                    }
                     disabled={rateRequestPage === 1 || isFetching}
                     className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     Previous
                   </button>
                   <div className="flex items-center gap-1">
-                    {Array.from({ length: Math.min(5, rateRequestPagination.totalPages) }, (_, i) => {
-                      let pageNum;
-                      if (rateRequestPagination.totalPages <= 5) {
-                        pageNum = i + 1;
-                      } else if (rateRequestPagination.currentPage <= 3) {
-                        pageNum = i + 1;
-                      } else if (rateRequestPagination.currentPage >= rateRequestPagination.totalPages - 2) {
-                        pageNum = rateRequestPagination.totalPages - 4 + i;
-                      } else {
-                        pageNum = rateRequestPagination.currentPage - 2 + i;
-                      }
-                      return (
-                        <button
-                          key={pageNum}
-                          onClick={() => setRateRequestPage(pageNum)}
-                          disabled={isFetching}
-                          className={`px-3 py-2 text-sm border rounded-lg transition-colors ${
-                            rateRequestPage === pageNum
-                              ? 'bg-green-600 text-white border-green-600'
-                              : 'border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed'
-                          }`}
-                        >
-                          {pageNum}
-                        </button>
-                      );
-                    })}
+                    {Array.from(
+                      { length: Math.min(5, rateRequestPagination.totalPages) },
+                      (_, i) => {
+                        let pageNum;
+                        if (rateRequestPagination.totalPages <= 5) {
+                          pageNum = i + 1;
+                        } else if (rateRequestPagination.currentPage <= 3) {
+                          pageNum = i + 1;
+                        } else if (
+                          rateRequestPagination.currentPage >=
+                          rateRequestPagination.totalPages - 2
+                        ) {
+                          pageNum = rateRequestPagination.totalPages - 4 + i;
+                        } else {
+                          pageNum = rateRequestPagination.currentPage - 2 + i;
+                        }
+                        return (
+                          <button
+                            key={pageNum}
+                            onClick={() => setRateRequestPage(pageNum)}
+                            disabled={isFetching}
+                            className={`px-3 py-2 text-sm border rounded-lg transition-colors ${
+                              rateRequestPage === pageNum
+                                ? "bg-green-600 text-white border-green-600"
+                                : "border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                            }`}
+                          >
+                            {pageNum}
+                          </button>
+                        );
+                      },
+                    )}
                   </div>
                   <button
-                    onClick={() => setRateRequestPage(prev => Math.min(rateRequestPagination.totalPages, prev + 1))}
-                    disabled={rateRequestPage === rateRequestPagination.totalPages || isFetching}
+                    onClick={() =>
+                      setRateRequestPage((prev) =>
+                        Math.min(rateRequestPagination.totalPages, prev + 1),
+                      )
+                    }
+                    disabled={
+                      rateRequestPage === rateRequestPagination.totalPages ||
+                      isFetching
+                    }
                     className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     Next
@@ -2509,10 +3026,8 @@ useEffect(() => {
 
       {/* Bid Modal */}
       {isModalOpen && (
-        <div 
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md transition-opacity duration-300 p-4 overflow-hidden"
-        >
-          <div 
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md transition-opacity duration-300 p-4 overflow-hidden">
+          <div
             className="bg-white rounded-3xl w-full max-w-4xl h-[90vh] flex flex-col border border-gray-200 overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
@@ -2520,13 +3035,27 @@ useEffect(() => {
               <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 text-white px-8 py-6 rounded-t-3xl flex justify-between items-center flex-shrink-0">
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    <svg
+                      className="w-6 h-6 text-white"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                      />
                     </svg>
                   </div>
                   <div>
-                    <h2 className="text-2xl font-bold flex items-center gap-2">Rate Request Form</h2>
-                    <p className="text-sm text-emerald-100 mt-1">Submit your bid with trucker and delivery details</p>
+                    <h2 className="text-2xl font-bold flex items-center gap-2">
+                      Rate Request Form
+                    </h2>
+                    <p className="text-sm text-emerald-100 mt-1">
+                      Submit your bid with trucker and delivery details
+                    </p>
                   </div>
                 </div>
                 <button
@@ -2535,8 +3064,18 @@ useEffect(() => {
                   className="text-white hover:text-gray-200 hover:bg-white/10 p-2 rounded-xl transition-all duration-200"
                   aria-label="Close"
                 >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  <svg
+                    className="w-6 h-6"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
                   </svg>
                 </button>
               </div>
@@ -2546,68 +3085,133 @@ useEffect(() => {
                 <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-8">
                   <div className="flex items-center gap-3 mb-4">
                     <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
-                      <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      <svg
+                        className="w-4 h-4 text-emerald-600"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                        />
                       </svg>
                     </div>
-                    <h3 className="text-lg font-semibold text-gray-800">Load Information</h3>
+                    <h3 className="text-lg font-semibold text-gray-800">
+                      Load Information
+                    </h3>
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                     <div className="space-y-1">
-                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Pickup Location</div>
+                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                        Pickup Location
+                      </div>
                       {selectedRequest?.origin?.address && (
-                        <div className="text-sm font-semibold text-gray-800">{selectedRequest.origin.address}</div>
+                        <div className="text-sm font-semibold text-gray-800">
+                          {selectedRequest.origin.address}
+                        </div>
                       )}
-                      <div className="text-sm font-semibold text-gray-800">{selectedRequest?.origin?.city || '—'}</div>
-                      <div className="text-xs text-gray-500">{selectedRequest?.origin?.state || ''}</div>
-                      <div className="text-xs text-gray-400">ZIP: {selectedRequest?.origin?.zipcode || 'N/A'}</div>
+                      <div className="text-sm font-semibold text-gray-800">
+                        {selectedRequest?.origin?.city || "—"}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {selectedRequest?.origin?.state || ""}
+                      </div>
+                      <div className="text-xs text-gray-400">
+                        ZIP: {selectedRequest?.origin?.zipcode || "N/A"}
+                      </div>
                     </div>
                     <div className="space-y-1">
-                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Delivery Location</div>
+                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                        Delivery Location
+                      </div>
                       {selectedRequest?.destination?.address && (
-                        <div className="text-sm font-semibold text-gray-800">{selectedRequest.destination.address}</div>
+                        <div className="text-sm font-semibold text-gray-800">
+                          {selectedRequest.destination.address}
+                        </div>
                       )}
-                      <div className="text-sm font-semibold text-gray-800">{selectedRequest?.destination?.city || '—'}</div>
-                      <div className="text-xs text-gray-500">{selectedRequest?.destination?.state || ''}</div>
-                      <div className="text-xs text-gray-400">ZIP: {selectedRequest?.destination?.zipcode || 'N/A'}</div>
+                      <div className="text-sm font-semibold text-gray-800">
+                        {selectedRequest?.destination?.city || "—"}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {selectedRequest?.destination?.state || ""}
+                      </div>
+                      <div className="text-xs text-gray-400">
+                        ZIP: {selectedRequest?.destination?.zipcode || "N/A"}
+                      </div>
                     </div>
                     {/* Return Location - Show only if return data exists */}
-                    {(selectedRequest?.returnAddress || selectedRequest?.returnCity || selectedRequest?.returnState || selectedRequest?.returnZip) && (
+                    {(selectedRequest?.returnAddress ||
+                      selectedRequest?.returnCity ||
+                      selectedRequest?.returnState ||
+                      selectedRequest?.returnZip) && (
                       <div className="space-y-1">
-                        <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Return Location</div>
+                        <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                          Return Location
+                        </div>
                         {selectedRequest?.returnAddress && (
-                          <div className="text-sm font-semibold text-gray-800">{selectedRequest.returnAddress}</div>
+                          <div className="text-sm font-semibold text-gray-800">
+                            {selectedRequest.returnAddress}
+                          </div>
                         )}
                         {selectedRequest?.returnCity && (
-                          <div className="text-sm font-semibold text-gray-800">{selectedRequest.returnCity}</div>
+                          <div className="text-sm font-semibold text-gray-800">
+                            {selectedRequest.returnCity}
+                          </div>
                         )}
                         {selectedRequest?.returnState && (
-                          <div className="text-xs text-gray-500">{selectedRequest.returnState}</div>
+                          <div className="text-xs text-gray-500">
+                            {selectedRequest.returnState}
+                          </div>
                         )}
                         {selectedRequest?.returnZip && (
-                          <div className="text-xs text-gray-400">ZIP: {selectedRequest.returnZip}</div>
+                          <div className="text-xs text-gray-400">
+                            ZIP: {selectedRequest.returnZip}
+                          </div>
                         )}
                       </div>
                     )}
                     <div className="space-y-1">
-                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Weight</div>
-                      <div className="text-sm font-semibold text-gray-800">{selectedRequest?.weight} lbs</div>
+                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                        Weight
+                      </div>
+                      <div className="text-sm font-semibold text-gray-800">
+                        {selectedRequest?.weight} lbs
+                      </div>
                     </div>
                     <div className="space-y-1">
-                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Vehicle Type</div>
-                      <div className="text-sm font-semibold text-gray-800">{selectedRequest?.vehicleType || '—'}</div>
+                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                        Vehicle Type
+                      </div>
+                      <div className="text-sm font-semibold text-gray-800">
+                        {selectedRequest?.vehicleType || "—"}
+                      </div>
                     </div>
                     <div className="space-y-1">
-                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Commodity</div>
-                      <div className="text-sm font-semibold text-gray-800">{selectedRequest?.commodity || 'N/A'}</div>
+                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                        Commodity
+                      </div>
+                      <div className="text-sm font-semibold text-gray-800">
+                        {selectedRequest?.commodity || "N/A"}
+                      </div>
                     </div>
                     <div className="space-y-1">
-                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Rate</div>
-                      <div className="text-sm font-semibold text-emerald-600">${selectedRequest?.rate?.toLocaleString() || '0'}</div>
+                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                        Rate
+                      </div>
+                      <div className="text-sm font-semibold text-emerald-600">
+                        ${selectedRequest?.rate?.toLocaleString() || "0"}
+                      </div>
                     </div>
                     <div className="space-y-1">
-                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Status</div>
-                      <div className="text-sm font-semibold text-gray-800">{selectedRequest?.status || 'N/A'}</div>
+                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                        Status
+                      </div>
+                      <div className="text-sm font-semibold text-gray-800">
+                        {selectedRequest?.status || "N/A"}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -2616,124 +3220,190 @@ useEffect(() => {
                 <div className="bg-white rounded-2xl border border-gray-100 p-6">
                   <div className="flex items-center gap-3 mb-6">
                     <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                      <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      <svg
+                        className="w-4 h-4 text-blue-600"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                        />
                       </svg>
                     </div>
-                    <h3 className="text-lg font-semibold text-gray-800">Bid Details</h3>
+                    <h3 className="text-lg font-semibold text-gray-800">
+                      Bid Details
+                    </h3>
                   </div>
-                  
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="md:col-span-2">
                       <label className="block text-gray-700 text-sm font-semibold mb-2">
                         Select Trucker <span className="text-red-500">*</span>
                       </label>
                       <div className="relative trucker-dropdown-container">
-                      <input
-                        type="text"
-                        value={truckerSearch}
-                        onChange={(e) => {
-                          setTruckerSearch(e.target.value);
-                          setIsTruckerDropdownOpen(true);
-                        }}
-                        onFocus={() => setIsTruckerDropdownOpen(true)}
-                        onClick={() => setIsTruckerDropdownOpen(true)}
-                        onBlur={() => handleFieldBlur('trucker')}
-                        placeholder="Search trucker by name, email, or phone..."
-                        className={`w-full border-2 rounded-xl px-4 py-3 pr-10 focus:outline-none focus:ring-2 cursor-pointer transition-all duration-200 ${
-                          touchedFields.trucker && formErrors.trucker
-                            ? 'border-red-500 focus:ring-red-500 focus:border-red-500'
-                            : 'border-gray-200 focus:ring-emerald-500 focus:border-emerald-500 hover:border-gray-300'
-                        }`}
-                      />
-                      <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                        </svg>
-                      </div>
-                      
-                      {isTruckerDropdownOpen && (
-                        <div className="absolute z-50 w-full mt-2 bg-white border-2 border-gray-200 rounded-xl max-h-60 overflow-y-auto">
-                          {/* Clear/Unselect option */}
-                          {selectedTrucker && (
-                            <div
-                              onClick={() => {
-                                setSelectedTrucker('');
-                                setTruckerSearch('');
-                                setIsTruckerDropdownOpen(false);
-                              }}
-                              className="px-4 py-3 hover:bg-red-50 cursor-pointer border-b border-gray-100 transition-colors duration-150"
-                            >
-                              <div className="font-medium text-red-600 flex items-center gap-2">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                                Clear Selection
-                              </div>
-                            </div>
-                          )}
-                          
-                          {filteredTruckers.length > 0 ? (
-                            filteredTruckers.map((trucker) => (
+                        <input
+                          type="text"
+                          value={truckerSearch}
+                          onChange={(e) => {
+                            setTruckerSearch(e.target.value);
+                            setIsTruckerDropdownOpen(true);
+                          }}
+                          onFocus={() => setIsTruckerDropdownOpen(true)}
+                          onClick={() => setIsTruckerDropdownOpen(true)}
+                          onBlur={() => handleFieldBlur("trucker")}
+                          placeholder="Search trucker by name, email, or phone..."
+                          className={`w-full border-2 rounded-xl px-4 py-3 pr-10 focus:outline-none focus:ring-2 cursor-pointer transition-all duration-200 ${
+                            touchedFields.trucker && formErrors.trucker
+                              ? "border-red-500 focus:ring-red-500 focus:border-red-500"
+                              : "border-gray-200 focus:ring-emerald-500 focus:border-emerald-500 hover:border-gray-300"
+                          }`}
+                        />
+                        <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                          <svg
+                            className="w-4 h-4 text-gray-400"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                            />
+                          </svg>
+                        </div>
+
+                        {isTruckerDropdownOpen && (
+                          <div className="absolute z-50 w-full mt-2 bg-white border-2 border-gray-200 rounded-xl max-h-60 overflow-y-auto">
+                            {/* Clear/Unselect option */}
+                            {selectedTrucker && (
                               <div
-                                key={trucker._id}
-                                onClick={() => handleTruckerSelect(trucker._id, trucker.compName)}
-                                className={`px-4 py-3 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0 transition-colors duration-150 ${
-                                  selectedTrucker === trucker._id ? 'bg-blue-50' : ''
-                                }`}
+                                onClick={() => {
+                                  setSelectedTrucker("");
+                                  setTruckerSearch("");
+                                  setIsTruckerDropdownOpen(false);
+                                }}
+                                className="px-4 py-3 hover:bg-red-50 cursor-pointer border-b border-gray-100 transition-colors duration-150"
                               >
-                                <div className="font-medium text-gray-900">{trucker.compName}</div>
-                                <div className="text-sm text-gray-500">{trucker.email}</div>
-                                {trucker.phoneNo && (
-                                  <div className="text-sm text-gray-500">{trucker.phoneNo}</div>
-                                )}
+                                <div className="font-medium text-red-600 flex items-center gap-2">
+                                  <svg
+                                    className="w-4 h-4"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M6 18L18 6M6 6l12 12"
+                                    />
+                                  </svg>
+                                  Clear Selection
+                                </div>
                               </div>
-                            ))
-                          ) : (
-                            <div className="px-4 py-3 text-gray-500 text-center">
-                              No truckers found matching "{truckerSearch}"
+                            )}
+
+                            {filteredTruckers.length > 0 ? (
+                              filteredTruckers.map((trucker) => (
+                                <div
+                                  key={trucker._id}
+                                  onClick={() =>
+                                    handleTruckerSelect(
+                                      trucker._id,
+                                      trucker.compName,
+                                    )
+                                  }
+                                  className={`px-4 py-3 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0 transition-colors duration-150 ${
+                                    selectedTrucker === trucker._id
+                                      ? "bg-blue-50"
+                                      : ""
+                                  }`}
+                                >
+                                  <div className="font-medium text-gray-900">
+                                    {trucker.compName}
+                                  </div>
+                                  <div className="text-sm text-gray-500">
+                                    {trucker.email}
+                                  </div>
+                                  {trucker.phoneNo && (
+                                    <div className="text-sm text-gray-500">
+                                      {trucker.phoneNo}
+                                    </div>
+                                  )}
+                                </div>
+                              ))
+                            ) : (
+                              <div className="px-4 py-3 text-gray-500 text-center">
+                                No truckers found matching "{truckerSearch}"
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {touchedFields.trucker && formErrors.trucker && (
+                        <div className="mt-2 text-sm text-red-600 flex items-center gap-1">
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                            />
+                          </svg>
+                          {formErrors.trucker}
+                        </div>
+                      )}
+
+                      {selectedTrucker && (
+                        <div className="mt-3 p-3 bg-emerald-50 border-2 border-emerald-200 rounded-xl">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
+                              <div className="text-sm text-emerald-800">
+                                <span className="font-semibold">Selected:</span>{" "}
+                                {selectedTruckerName}
+                              </div>
                             </div>
-                          )}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedTrucker("");
+                                setTruckerSearch("");
+                                handleFieldBlur("trucker");
+                              }}
+                              className="text-red-600 hover:text-red-800 hover:bg-red-100 p-2 rounded-lg transition-all duration-150"
+                              title="Clear Selection"
+                            >
+                              <svg
+                                className="w-4 h-4"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M6 18L18 6M6 6l12 12"
+                                />
+                              </svg>
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
-                    
-                    {touchedFields.trucker && formErrors.trucker && (
-                      <div className="mt-2 text-sm text-red-600 flex items-center gap-1">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        {formErrors.trucker}
-                      </div>
-                    )}
-                    
-                    {selectedTrucker && (
-                      <div className="mt-3 p-3 bg-emerald-50 border-2 border-emerald-200 rounded-xl">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
-                            <div className="text-sm text-emerald-800">
-                              <span className="font-semibold">Selected:</span> {selectedTruckerName}
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedTrucker('');
-                              setTruckerSearch('');
-                              handleFieldBlur('trucker');
-                            }}
-                            className="text-red-600 hover:text-red-800 hover:bg-red-100 p-2 rounded-lg transition-all duration-150"
-                            title="Clear Selection"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
 
                     <div>
                       <label className="block text-gray-700 text-sm font-semibold mb-2">
@@ -2742,25 +3412,36 @@ useEffect(() => {
                       <input
                         type="text"
                         value={driverName}
-                        onChange={(e) => handleFieldChange('driverName', e.target.value)}
-                        onBlur={() => handleFieldBlur('driverName')}
+                        onChange={(e) =>
+                          handleFieldChange("driverName", e.target.value)
+                        }
+                        onBlur={() => handleFieldBlur("driverName")}
                         placeholder="Enter driver's full name"
                         className={`w-full border-2 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 transition-all duration-200 ${
                           touchedFields.driverName && formErrors.driverName
-                            ? 'border-red-500 focus:ring-red-500 focus:border-red-500'
-                            : 'border-gray-200 focus:ring-emerald-500 focus:border-emerald-500 hover:border-gray-300'
+                            ? "border-red-500 focus:ring-red-500 focus:border-red-500"
+                            : "border-gray-200 focus:ring-emerald-500 focus:border-emerald-500 hover:border-gray-300"
                         }`}
                       />
                       {touchedFields.driverName && formErrors.driverName && (
                         <div className="mt-1 text-sm text-red-600 flex items-center gap-1">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                            />
                           </svg>
                           {formErrors.driverName}
                         </div>
                       )}
                     </div>
-
 
                     <div>
                       <label className="block text-gray-700 text-sm font-semibold mb-2">
@@ -2769,19 +3450,31 @@ useEffect(() => {
                       <input
                         type="text"
                         value={vehicleNo}
-                        onChange={(e) => handleFieldChange('vehicleNo', e.target.value)}
-                        onBlur={() => handleFieldBlur('vehicleNo')}
+                        onChange={(e) =>
+                          handleFieldChange("vehicleNo", e.target.value)
+                        }
+                        onBlur={() => handleFieldBlur("vehicleNo")}
                         placeholder="Enter vehicle registration number"
                         className={`w-full border-2 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 transition-all duration-200 ${
                           touchedFields.vehicleNo && formErrors.vehicleNo
-                            ? 'border-red-500 focus:ring-red-500 focus:border-red-500'
-                            : 'border-gray-200 focus:ring-emerald-500 focus:border-emerald-500 hover:border-gray-300'
+                            ? "border-red-500 focus:ring-red-500 focus:border-red-500"
+                            : "border-gray-200 focus:ring-emerald-500 focus:border-emerald-500 hover:border-gray-300"
                         }`}
                       />
                       {touchedFields.vehicleNo && formErrors.vehicleNo && (
                         <div className="mt-1 text-sm text-red-600 flex items-center gap-1">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                            />
                           </svg>
                           {formErrors.vehicleNo}
                         </div>
@@ -2790,23 +3483,36 @@ useEffect(() => {
 
                     <div>
                       <label className="block text-gray-700 text-sm font-semibold mb-2">
-                        Pickup Date & Time <span className="text-red-500">*</span>
+                        Pickup Date & Time{" "}
+                        <span className="text-red-500">*</span>
                       </label>
                       <input
                         type="datetime-local"
                         value={pickupDate}
-                        onChange={(e) => handleFieldChange('pickupDate', e.target.value)}
-                        onBlur={() => handleFieldBlur('pickupDate')}
+                        onChange={(e) =>
+                          handleFieldChange("pickupDate", e.target.value)
+                        }
+                        onBlur={() => handleFieldBlur("pickupDate")}
                         className={`w-full border-2 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 transition-all duration-200 ${
                           touchedFields.pickupDate && formErrors.pickupDate
-                            ? 'border-red-500 focus:ring-red-500 focus:border-red-500'
-                            : 'border-gray-200 focus:ring-emerald-500 focus:border-emerald-500 hover:border-gray-300'
+                            ? "border-red-500 focus:ring-red-500 focus:border-red-500"
+                            : "border-gray-200 focus:ring-emerald-500 focus:border-emerald-500 hover:border-gray-300"
                         }`}
                       />
                       {touchedFields.pickupDate && formErrors.pickupDate && (
                         <div className="mt-1 text-sm text-red-600 flex items-center gap-1">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                            />
                           </svg>
                           {formErrors.pickupDate}
                         </div>
@@ -2815,27 +3521,41 @@ useEffect(() => {
 
                     <div>
                       <label className="block text-gray-700 text-sm font-semibold mb-2">
-                        Delivery Date & Time <span className="text-red-500">*</span>
+                        Delivery Date & Time{" "}
+                        <span className="text-red-500">*</span>
                       </label>
                       <input
                         type="datetime-local"
                         value={deliveryDate}
-                        onChange={(e) => handleFieldChange('deliveryDate', e.target.value)}
-                        onBlur={() => handleFieldBlur('deliveryDate')}
+                        onChange={(e) =>
+                          handleFieldChange("deliveryDate", e.target.value)
+                        }
+                        onBlur={() => handleFieldBlur("deliveryDate")}
                         className={`w-full border-2 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 transition-all duration-200 ${
                           touchedFields.deliveryDate && formErrors.deliveryDate
-                            ? 'border-red-500 focus:ring-red-500 focus:border-red-500'
-                            : 'border-gray-200 focus:ring-emerald-500 focus:border-emerald-500 hover:border-gray-300'
+                            ? "border-red-500 focus:ring-red-500 focus:border-red-500"
+                            : "border-gray-200 focus:ring-emerald-500 focus:border-emerald-500 hover:border-gray-300"
                         }`}
                       />
-                      {touchedFields.deliveryDate && formErrors.deliveryDate && (
-                        <div className="mt-1 text-sm text-red-600 flex items-center gap-1">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          {formErrors.deliveryDate}
-                        </div>
-                      )}
+                      {touchedFields.deliveryDate &&
+                        formErrors.deliveryDate && (
+                          <div className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                            <svg
+                              className="w-4 h-4"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                              />
+                            </svg>
+                            {formErrors.deliveryDate}
+                          </div>
+                        )}
                     </div>
 
                     {/* Line Haul (Rate) */}
@@ -2847,24 +3567,34 @@ useEffect(() => {
                         type="number"
                         value={rate}
                         onChange={(e) => {
-                          const val = e.target.value.replace(/[^\d.]/g, '');
+                          const val = e.target.value.replace(/[^\d.]/g, "");
                           setRate(val);
-                          handleFieldChange('rate', val);
+                          handleFieldChange("rate", val);
                         }}
-                        onBlur={() => handleFieldBlur('rate')}
+                        onBlur={() => handleFieldBlur("rate")}
                         min="0"
                         step="0.01"
                         placeholder="Enter Line Haul amount"
                         className={`w-full border-2 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 transition-all duration-200 ${
                           touchedFields.rate && formErrors.rate
-                            ? 'border-red-500 focus:ring-red-500 focus:border-red-500'
-                            : 'border-gray-200 focus:ring-emerald-500 focus:border-emerald-500 hover:border-gray-300'
+                            ? "border-red-500 focus:ring-red-500 focus:border-red-500"
+                            : "border-gray-200 focus:ring-emerald-500 focus:border-emerald-500 hover:border-gray-300"
                         }`}
                       />
                       {touchedFields.rate && formErrors.rate && (
                         <div className="mt-1 text-sm text-red-600 flex items-center gap-1">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                            />
                           </svg>
                           {formErrors.rate}
                         </div>
@@ -2880,28 +3610,40 @@ useEffect(() => {
                         type="number"
                         value={fscPercentage}
                         onChange={(e) => {
-                          const val = e.target.value.replace(/[^\d.]/g, '');
+                          const val = e.target.value.replace(/[^\d.]/g, "");
                           setFscPercentage(val);
-                          handleFieldChange('fscPercentage', val);
+                          handleFieldChange("fscPercentage", val);
                         }}
-                        onBlur={() => handleFieldBlur('fscPercentage')}
+                        onBlur={() => handleFieldBlur("fscPercentage")}
                         min="0"
                         step="0.01"
                         placeholder="Enter FSC percentage"
                         className={`w-full border-2 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 transition-all duration-200 ${
-                          touchedFields.fscPercentage && formErrors.fscPercentage
-                            ? 'border-red-500 focus:ring-red-500 focus:border-red-500'
-                            : 'border-gray-200 focus:ring-emerald-500 focus:border-emerald-500 hover:border-gray-300'
+                          touchedFields.fscPercentage &&
+                          formErrors.fscPercentage
+                            ? "border-red-500 focus:ring-red-500 focus:border-red-500"
+                            : "border-gray-200 focus:ring-emerald-500 focus:border-emerald-500 hover:border-gray-300"
                         }`}
                       />
-                      {touchedFields.fscPercentage && formErrors.fscPercentage && (
-                        <div className="mt-1 text-sm text-red-600 flex items-center gap-1">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          {formErrors.fscPercentage}
-                        </div>
-                      )}
+                      {touchedFields.fscPercentage &&
+                        formErrors.fscPercentage && (
+                          <div className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                            <svg
+                              className="w-4 h-4"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                              />
+                            </svg>
+                            {formErrors.fscPercentage}
+                          </div>
+                        )}
                     </div>
 
                     {/* FSC Value (Calculated - Read Only) */}
@@ -2911,11 +3653,15 @@ useEffect(() => {
                       </label>
                       <div className="w-full border-2 border-blue-200 bg-blue-50 px-4 py-3 rounded-xl">
                         <span className="text-blue-700 font-semibold">
-                          ${(() => {
+                          $
+                          {(() => {
                             const lh = parseFloat(rate) || 0;
                             const fscPct = parseFloat(fscPercentage) || 0;
                             const fscVal = (lh * fscPct) / 100;
-                            return fscVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                            return fscVal.toLocaleString(undefined, {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            });
                           })()}
                         </span>
                       </div>
@@ -2929,8 +3675,11 @@ useEffect(() => {
                       <input
                         type="text"
                         value={(() => {
-                          const total = (ratesArray || []).reduce((sum, item) => sum + (Number(item.total) || 0), 0);
-                          return total > 0 ? total.toFixed(2) : '';
+                          const total = (ratesArray || []).reduce(
+                            (sum, item) => sum + (Number(item.total) || 0),
+                            0,
+                          );
+                          return total > 0 ? total.toFixed(2) : "";
                         })()}
                         onClick={handleChargesClick}
                         readOnly
@@ -2946,13 +3695,20 @@ useEffect(() => {
                       </label>
                       <div className="w-full border-2 border-green-200 bg-green-50 px-4 py-3 rounded-xl">
                         <span className="text-green-700 font-bold text-lg">
-                          ${(() => {
+                          $
+                          {(() => {
                             const lh = parseFloat(rate) || 0;
                             const fscPct = parseFloat(fscPercentage) || 0;
                             const fscVal = (lh * fscPct) / 100;
-                            const otherCharges = (ratesArray || []).reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+                            const otherCharges = (ratesArray || []).reduce(
+                              (sum, item) => sum + (Number(item.total) || 0),
+                              0,
+                            );
                             const total = lh + fscVal + otherCharges;
-                            return total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                            return total.toLocaleString(undefined, {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            });
                           })()}
                         </span>
                       </div>
@@ -2960,26 +3716,39 @@ useEffect(() => {
 
                     <div className="md:col-span-2">
                       <label className="block text-gray-700 text-sm font-semibold mb-2">
-                        Additional Message <span className="text-red-500">*</span>
+                        Additional Message{" "}
+                        <span className="text-red-500">*</span>
                       </label>
                       <textarea
                         value={message}
-                        onChange={(e) => handleFieldChange('message', e.target.value)}
-                        onBlur={() => handleFieldBlur('message')}
+                        onChange={(e) =>
+                          handleFieldChange("message", e.target.value)
+                        }
+                        onBlur={() => handleFieldBlur("message")}
                         rows={4}
                         placeholder="Add any additional notes or requirements..."
                         maxLength="500"
                         className={`w-full border-2 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 transition-all duration-200 resize-none ${
                           touchedFields.message && formErrors.message
-                            ? 'border-red-500 focus:ring-red-500 focus:border-red-500'
-                            : 'border-gray-200 focus:ring-emerald-500 focus:border-emerald-500 hover:border-gray-300'
+                            ? "border-red-500 focus:ring-red-500 focus:border-red-500"
+                            : "border-gray-200 focus:ring-emerald-500 focus:border-emerald-500 hover:border-gray-300"
                         }`}
                       />
                       <div className="flex justify-between items-center mt-1">
                         {touchedFields.message && formErrors.message ? (
                           <div className="text-sm text-red-600 flex items-center gap-1">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            <svg
+                              className="w-4 h-4"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                              />
                             </svg>
                             {formErrors.message}
                           </div>
@@ -2995,36 +3764,59 @@ useEffect(() => {
                     {/* File Upload Field */}
                     <div className="md:col-span-2">
                       <label className="block text-gray-700 text-sm font-semibold mb-2">
-                        Upload screenshot of the rate from the trucker <span className="text-red-500">*</span>
+                        Upload screenshot of the rate from the trucker{" "}
+                        <span className="text-red-500">*</span>
                       </label>
                       <div className="relative">
                         <input
                           id="file-upload"
                           type="file"
                           onChange={handleFileUpload}
-                          onBlur={() => handleFieldBlur('uploadedFile')}
+                          onBlur={() => handleFieldBlur("uploadedFile")}
                           accept=".jpg,.jpeg,.png,.gif,.pdf,.doc,.docx"
                           className={`w-full border-2 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 transition-all duration-200 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 ${
-                            touchedFields.uploadedFile && formErrors.uploadedFile
-                              ? 'border-red-500 focus:ring-red-500 focus:border-red-500'
-                              : 'border-gray-200 focus:ring-emerald-500 focus:border-emerald-500 hover:border-gray-300'
+                            touchedFields.uploadedFile &&
+                            formErrors.uploadedFile
+                              ? "border-red-500 focus:ring-red-500 focus:border-red-500"
+                              : "border-gray-200 focus:ring-emerald-500 focus:border-emerald-500 hover:border-gray-300"
                           }`}
                         />
                         <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                          <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                          <svg
+                            className="w-5 h-5 text-gray-400"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                            />
                           </svg>
                         </div>
                       </div>
-                      
-                      {touchedFields.uploadedFile && formErrors.uploadedFile && (
-                        <div className="mt-2 text-sm text-red-600 flex items-center gap-1">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          {formErrors.uploadedFile}
-                        </div>
-                      )}
+
+                      {touchedFields.uploadedFile &&
+                        formErrors.uploadedFile && (
+                          <div className="mt-2 text-sm text-red-600 flex items-center gap-1">
+                            <svg
+                              className="w-4 h-4"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                              />
+                            </svg>
+                            {formErrors.uploadedFile}
+                          </div>
+                        )}
 
                       {/* File Preview */}
                       {uploadedFile && (
@@ -3032,20 +3824,43 @@ useEffect(() => {
                           <div className="flex items-center justify-between mb-3">
                             <div className="flex items-center gap-3">
                               <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
-                                {uploadedFile.type.startsWith('image/') ? (
-                                  <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                {uploadedFile.type.startsWith("image/") ? (
+                                  <svg
+                                    className="w-5 h-5 text-emerald-600"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                                    />
                                   </svg>
                                 ) : (
-                                  <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                  <svg
+                                    className="w-5 h-5 text-emerald-600"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                    />
                                   </svg>
                                 )}
                               </div>
                               <div>
-                                <div className="font-medium text-gray-900">{uploadedFile.name}</div>
+                                <div className="font-medium text-gray-900">
+                                  {uploadedFile.name}
+                                </div>
                                 <div className="text-sm text-gray-500">
-                                  {(uploadedFile.size / 1024 / 1024).toFixed(2)} MB
+                                  {(uploadedFile.size / 1024 / 1024).toFixed(2)}{" "}
+                                  MB
                                 </div>
                               </div>
                             </div>
@@ -3055,16 +3870,28 @@ useEffect(() => {
                               className="text-red-600 hover:text-red-800 hover:bg-red-100 p-2 rounded-lg transition-all duration-150"
                               title="Remove file"
                             >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              <svg
+                                className="w-4 h-4"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M6 18L18 6M6 6l12 12"
+                                />
                               </svg>
                             </button>
                           </div>
-                          
+
                           {/* Image Preview */}
                           {filePreview && (
                             <div className="mt-3">
-                              <div className="text-sm font-medium text-gray-700 mb-2">Preview:</div>
+                              <div className="text-sm font-medium text-gray-700 mb-2">
+                                Preview:
+                              </div>
                               <div className="border-2 border-gray-200 rounded-lg overflow-hidden">
                                 <img
                                   src={filePreview}
@@ -3083,7 +3910,8 @@ useEffect(() => {
 
               <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-8 py-6 rounded-b-3xl border-t border-gray-200 flex justify-between items-center">
                 <div className="text-sm text-gray-600">
-                  <span className="font-medium">Note:</span> All fields including file upload are required to submit your bid
+                  <span className="font-medium">Note:</span> All fields
+                  including file upload are required to submit your bid
                 </div>
                 <div className="flex gap-4">
                   <button
@@ -3097,22 +3925,42 @@ useEffect(() => {
                     type="submit"
                     disabled={submitting}
                     className={`px-8 py-3 rounded-xl font-semibold text-white transition-all duration-200 flex items-center gap-2 ${
-                      submitting 
-                        ? 'bg-gray-400 cursor-not-allowed' 
-                        : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700'
+                      submitting
+                        ? "bg-gray-400 cursor-not-allowed"
+                        : "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700"
                     }`}
                   >
                     {submitting ? (
                       <>
-                        <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        <svg
+                          className="w-4 h-4 animate-spin"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                          />
                         </svg>
                         Submitting...
                       </>
                     ) : (
                       <>
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                        <svg
+                          className="w-4 h-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                          />
                         </svg>
                         Submit Bid
                       </>
@@ -3127,10 +3975,8 @@ useEffect(() => {
 
       {/* Approval/Rejection Modal */}
       {approvalModal.visible && (
-        <div 
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity duration-300"
-        >
-          <div 
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity duration-300">
+          <div
             className="bg-white/90 backdrop-blur-lg rounded-3xl w-full max-w-2xl p-8 border border-blue-100"
             onClick={(e) => e.stopPropagation()}
           >
@@ -3140,7 +3986,8 @@ useEffect(() => {
                   Accept Load
                 </h2>
                 <p className="text-sm text-blue-100 mt-1">
-                  Accept this load request or it will auto-accept in {timeRemaining} seconds
+                  Accept this load request or it will auto-accept in{" "}
+                  {timeRemaining} seconds
                 </p>
               </div>
               <div className="flex items-center gap-4">
@@ -3148,7 +3995,11 @@ useEffect(() => {
                   <div className="text-2xl font-bold">{timeRemaining}s</div>
                   <div className="text-xs text-blue-100">Auto-accept</div>
                 </div>
-                <button onClick={closeApprovalModal} type="button" className="text-white text-3xl hover:text-gray-200">
+                <button
+                  onClick={closeApprovalModal}
+                  type="button"
+                  className="text-white text-3xl hover:text-gray-200"
+                >
                   ×
                 </button>
               </div>
@@ -3159,12 +4010,12 @@ useEffect(() => {
               <div>
                 <strong>Shipment:</strong>
                 <br />
-                {approvalModal.approval?.shipmentNumber || 'N/A'}
+                {approvalModal.approval?.shipmentNumber || "N/A"}
               </div>
               <div>
                 <strong>Shipper:</strong>
                 <br />
-                {approvalModal.approval?.shipper?.compName || 'N/A'}
+                {approvalModal.approval?.shipper?.compName || "N/A"}
               </div>
               <div>
                 <strong>Weight:</strong>
@@ -3173,27 +4024,27 @@ useEffect(() => {
               </div>
               <div>
                 <strong>Rate:</strong>
-                <br />${approvalModal.approval?.rate?.toLocaleString() || '0'}
+                <br />${approvalModal.approval?.rate?.toLocaleString() || "0"}
               </div>
               <div>
                 <strong>Pickup:</strong>
                 <br />
-                {approvalModal.approval?.origin?.city || 'N/A'}
+                {approvalModal.approval?.origin?.city || "N/A"}
               </div>
               <div>
                 <strong>Drop:</strong>
                 <br />
-                {approvalModal.approval?.destination?.city || 'N/A'}
+                {approvalModal.approval?.destination?.city || "N/A"}
               </div>
               <div>
                 <strong>Vehicle:</strong>
                 <br />
-                {approvalModal.approval?.vehicleType || 'N/A'}
+                {approvalModal.approval?.vehicleType || "N/A"}
               </div>
               <div>
                 <strong>Status:</strong>
                 <br />
-                {approvalModal.approval?.status || 'N/A'}
+                {approvalModal.approval?.status || "N/A"}
               </div>
             </div>
 
@@ -3227,11 +4078,11 @@ useEffect(() => {
                 disabled={approvalSubmitting}
                 className={`px-6 py-3 rounded-lg font-semibold text-white ${
                   approvalSubmitting
-                    ? 'bg-gray-400 cursor-not-allowed'
-                    : 'bg-green-600 hover:bg-green-700'
+                    ? "bg-gray-400 cursor-not-allowed"
+                    : "bg-green-600 hover:bg-green-700"
                 }`}
               >
-                {approvalSubmitting ? 'Processing...' : 'Accept Load'}
+                {approvalSubmitting ? "Processing..." : "Accept Load"}
               </button>
             </div>
           </div>
@@ -3240,10 +4091,8 @@ useEffect(() => {
 
       {/* View Bids Modal */}
       {bidDetailsModal.visible && (
-        <div 
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md transition-opacity duration-300 p-4 overflow-hidden"
-        >
-          <div 
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md transition-opacity duration-300 p-4 overflow-hidden">
+          <div
             className="bg-white rounded-3xl w-full max-w-6xl h-[90vh] flex flex-col border border-gray-200 overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
@@ -3253,18 +4102,32 @@ useEffect(() => {
                   <BarChart3 className="w-6 h-6 text-white" size={24} />
                 </div>
                 <div>
-                  <h2 className="text-2xl font-bold flex items-center gap-2">Load Information & Bid Details</h2>
-                  <p className="text-sm text-emerald-100 mt-1">View load details and all bids for this load</p>
+                  <h2 className="text-2xl font-bold flex items-center gap-2">
+                    Load Information & Bid Details
+                  </h2>
+                  <p className="text-sm text-emerald-100 mt-1">
+                    View load details and all bids for this load
+                  </p>
                 </div>
               </div>
-              <button 
-                onClick={closeBidDetailsModal} 
-                type="button" 
+              <button
+                onClick={closeBidDetailsModal}
+                type="button"
                 className="text-white hover:text-gray-200 hover:bg-white/10 p-2 rounded-xl transition-all duration-200"
                 aria-label="Close"
               >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                <svg
+                  className="w-6 h-6"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
                 </svg>
               </button>
             </div>
@@ -3275,251 +4138,453 @@ useEffect(() => {
                 <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-8">
                   <div className="flex items-center gap-3 mb-4">
                     <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
-                      <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      <svg
+                        className="w-4 h-4 text-emerald-600"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                        />
                       </svg>
                     </div>
-                    <h3 className="text-lg font-semibold text-gray-800">Load Information</h3>
+                    <h3 className="text-lg font-semibold text-gray-800">
+                      Load Information
+                    </h3>
                   </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                  <div className="space-y-1">
-                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Load ID</div>
-                    <div className="text-sm font-semibold text-gray-800">{loadShort(bidDetailsModal.load._id || bidDetailsModal.load.loadId)}</div>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Pickup Location</div>
-                    {bidDetailsModal.load.origin?.address && (
-                      <div className="text-sm font-semibold text-gray-800">{bidDetailsModal.load.origin.address}</div>
-                    )}
-                    <div className="text-sm font-semibold text-gray-800">{bidDetailsModal.load.origin?.city || '—'}</div>
-                    <div className="text-xs text-gray-500">{bidDetailsModal.load.origin?.state || ''}</div>
-                    <div className="text-xs text-gray-400">ZIP: {bidDetailsModal.load.origin?.zipcode || 'N/A'}</div>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Delivery Location</div>
-                    {bidDetailsModal.load.destination?.address && (
-                      <div className="text-sm font-semibold text-gray-800">{bidDetailsModal.load.destination.address}</div>
-                    )}
-                    <div className="text-sm font-semibold text-gray-800">{bidDetailsModal.load.destination?.city || '—'}</div>
-                    <div className="text-xs text-gray-500">{bidDetailsModal.load.destination?.state || ''}</div>
-                    <div className="text-xs text-gray-400">ZIP: {bidDetailsModal.load.destination?.zipcode || 'N/A'}</div>
-                  </div>
-                  {(bidDetailsModal.load.returnAddress || bidDetailsModal.load.returnCity || bidDetailsModal.load.returnState || bidDetailsModal.load.returnZip) && (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                     <div className="space-y-1">
-                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Return Location</div>
-                      {bidDetailsModal.load.returnAddress && (
-                        <div className="text-sm font-semibold text-gray-800">{bidDetailsModal.load.returnAddress}</div>
-                      )}
-                      {bidDetailsModal.load.returnCity && (
-                        <div className="text-sm font-semibold text-gray-800">{bidDetailsModal.load.returnCity}</div>
-                      )}
-                      {bidDetailsModal.load.returnState && (
-                        <div className="text-xs text-gray-500">{bidDetailsModal.load.returnState}</div>
-                      )}
-                      {bidDetailsModal.load.returnZip && (
-                        <div className="text-xs text-gray-400">ZIP: {bidDetailsModal.load.returnZip}</div>
-                      )}
-                    </div>
-                  )}
-                  <div className="space-y-1">
-                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Weight</div>
-                    <div className="text-sm font-semibold text-gray-800">{bidDetailsModal.load.weight || 'N/A'} lbs</div>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Vehicle Type</div>
-                    <div className="text-sm font-semibold text-gray-800">{bidDetailsModal.load.vehicleType || '—'}</div>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Commodity</div>
-                    <div className="text-sm font-semibold text-gray-800">{bidDetailsModal.load.commodity || 'N/A'}</div>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Rate</div>
-                    <div className="text-sm font-semibold text-emerald-600">${bidDetailsModal.load.rate?.toLocaleString() || '0'}</div>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Bid Count</div>
-                    <div className="text-sm font-semibold text-gray-800">{bidDetailsModal.load.bidCount || 0}</div>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Status</div>
-                    <div className="text-sm font-semibold text-gray-800">{bidDetailsModal.load.status || 'N/A'}</div>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Created By</div>
-                    <div className="text-sm font-semibold text-gray-800">
-                      {(() => {
-                        const createdBy = bidDetailsModal.load?.createdBySalesUser || bidDetailsModal.load?.salesUserInfo;
-                        if (!createdBy) return 'N/A';
-                        
-                        const empName = createdBy.empName || createdBy.employeeName || '';
-                        const aliasName = createdBy.aliasName || '';
-                        
-                        if (empName && aliasName) {
-                          return `${empName} / ${aliasName}`;
-                        } else if (empName) {
-                          return empName;
-                        } else {
-                          return 'N/A';
-                        }
-                      })()}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Rate Details Section */}
-            {bidDetailsModal.load && (bidDetailsModal.load.rateDetails || bidDetailsData?.rateDetails) && (
-              <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-8">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <DollarSign className="w-4 h-4 text-blue-600" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-gray-800">Rate Details</h3>
-                </div>
-                {(() => {
-                  const rateDetails = bidDetailsModal.load.rateDetails || bidDetailsData?.rateDetails || {};
-                  const lineHaul = rateDetails.lineHaul || 0;
-                  const fsc = rateDetails.fsc || 0;
-                  const fscValue = (lineHaul * fsc) / 100;
-                  const otherCharges = rateDetails.other || [];
-                  const totalRates = rateDetails.totalRates || (lineHaul + fscValue + otherCharges.reduce((sum, item) => sum + (Number(item.total) || 0), 0));
-                  
-                  return (
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="space-y-1">
-                          <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Line Haul</div>
-                          <div className="text-sm font-semibold text-gray-800">${lineHaul.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                        </div>
-                        <div className="space-y-1">
-                          <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">FSC (%)</div>
-                          <div className="text-sm font-semibold text-gray-800">{fsc}%</div>
-                        </div>
-                        <div className="space-y-1">
-                          <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">FSC Value</div>
-                          <div className="text-sm font-semibold text-blue-600">${fscValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                        </div>
-                        <div className="space-y-1">
-                          <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Total Rates</div>
-                          <div className="text-sm font-semibold text-green-600">${totalRates.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                        </div>
+                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                        Load ID
                       </div>
-                      
-                      {otherCharges && otherCharges.length > 0 && (
-                        <div className="mt-4">
-                          <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Other Charges</div>
-                          <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                            <div className="space-y-2">
-                              {otherCharges.map((charge, index) => (
-                                <div key={index} className="flex justify-between items-center py-2 border-b border-gray-200 last:border-b-0">
-                                  <div>
-                                    <div className="text-sm font-medium text-gray-800">{charge.name || 'N/A'}</div>
-                                    <div className="text-xs text-gray-500">
-                                      Qty: {charge.quantity || 0} × ${(charge.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                    </div>
-                                  </div>
-                                  <div className="text-sm font-semibold text-gray-800">
-                                    ${(charge.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                  </div>
-                                </div>
-                              ))}
+                      <div className="text-sm font-semibold text-gray-800">
+                        {loadShort(
+                          bidDetailsModal.load._id ||
+                            bidDetailsModal.load.loadId,
+                        )}
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                        Pickup Location
+                      </div>
+                      {bidDetailsModal.load.origin?.address && (
+                        <div className="text-sm font-semibold text-gray-800">
+                          {bidDetailsModal.load.origin.address}
+                        </div>
+                      )}
+                      <div className="text-sm font-semibold text-gray-800">
+                        {bidDetailsModal.load.origin?.city || "—"}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {bidDetailsModal.load.origin?.state || ""}
+                      </div>
+                      <div className="text-xs text-gray-400">
+                        ZIP: {bidDetailsModal.load.origin?.zipcode || "N/A"}
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                        Delivery Location
+                      </div>
+                      {bidDetailsModal.load.destination?.address && (
+                        <div className="text-sm font-semibold text-gray-800">
+                          {bidDetailsModal.load.destination.address}
+                        </div>
+                      )}
+                      <div className="text-sm font-semibold text-gray-800">
+                        {bidDetailsModal.load.destination?.city || "—"}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {bidDetailsModal.load.destination?.state || ""}
+                      </div>
+                      <div className="text-xs text-gray-400">
+                        ZIP:{" "}
+                        {bidDetailsModal.load.destination?.zipcode || "N/A"}
+                      </div>
+                    </div>
+                    {(bidDetailsModal.load.returnAddress ||
+                      bidDetailsModal.load.returnCity ||
+                      bidDetailsModal.load.returnState ||
+                      bidDetailsModal.load.returnZip) && (
+                      <div className="space-y-1">
+                        <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                          Return Location
+                        </div>
+                        {bidDetailsModal.load.returnAddress && (
+                          <div className="text-sm font-semibold text-gray-800">
+                            {bidDetailsModal.load.returnAddress}
+                          </div>
+                        )}
+                        {bidDetailsModal.load.returnCity && (
+                          <div className="text-sm font-semibold text-gray-800">
+                            {bidDetailsModal.load.returnCity}
+                          </div>
+                        )}
+                        {bidDetailsModal.load.returnState && (
+                          <div className="text-xs text-gray-500">
+                            {bidDetailsModal.load.returnState}
+                          </div>
+                        )}
+                        {bidDetailsModal.load.returnZip && (
+                          <div className="text-xs text-gray-400">
+                            ZIP: {bidDetailsModal.load.returnZip}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <div className="space-y-1">
+                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                        Weight
+                      </div>
+                      <div className="text-sm font-semibold text-gray-800">
+                        {bidDetailsModal.load.weight || "N/A"} lbs
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                        Vehicle Type
+                      </div>
+                      <div className="text-sm font-semibold text-gray-800">
+                        {bidDetailsModal.load.vehicleType || "—"}
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                        Commodity
+                      </div>
+                      <div className="text-sm font-semibold text-gray-800">
+                        {bidDetailsModal.load.commodity || "N/A"}
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                        Rate
+                      </div>
+                      <div className="text-sm font-semibold text-emerald-600">
+                        ${bidDetailsModal.load.rate?.toLocaleString() || "0"}
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                        Bid Count
+                      </div>
+                      <div className="text-sm font-semibold text-gray-800">
+                        {bidDetailsModal.load.bidCount || 0}
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                        Status
+                      </div>
+                      <div className="text-sm font-semibold text-gray-800">
+                        {bidDetailsModal.load.status || "N/A"}
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                        Created By
+                      </div>
+                      <div className="text-sm font-semibold text-gray-800">
+                        {(() => {
+                          const createdBy =
+                            bidDetailsModal.load?.createdBySalesUser ||
+                            bidDetailsModal.load?.salesUserInfo;
+                          if (!createdBy) return "N/A";
+
+                          const empName =
+                            createdBy.empName || createdBy.employeeName || "";
+                          const aliasName = createdBy.aliasName || "";
+
+                          if (empName && aliasName) {
+                            return `${empName} / ${aliasName}`;
+                          } else if (empName) {
+                            return empName;
+                          } else {
+                            return "N/A";
+                          }
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Rate Details Section */}
+              {bidDetailsModal.load &&
+                (bidDetailsModal.load.rateDetails ||
+                  bidDetailsData?.rateDetails) && (
+                  <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-8">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <DollarSign className="w-4 h-4 text-blue-600" />
+                      </div>
+                      <h3 className="text-lg font-semibold text-gray-800">
+                        Rate Details
+                      </h3>
+                    </div>
+                    {(() => {
+                      const rateDetails =
+                        bidDetailsModal.load.rateDetails ||
+                        bidDetailsData?.rateDetails ||
+                        {};
+                      const lineHaul = rateDetails.lineHaul || 0;
+                      const fsc = rateDetails.fsc || 0;
+                      const fscValue = (lineHaul * fsc) / 100;
+                      const otherCharges = rateDetails.other || [];
+                      const totalRates =
+                        rateDetails.totalRates ||
+                        lineHaul +
+                          fscValue +
+                          otherCharges.reduce(
+                            (sum, item) => sum + (Number(item.total) || 0),
+                            0,
+                          );
+
+                      return (
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div className="space-y-1">
+                              <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                                Line Haul
+                              </div>
+                              <div className="text-sm font-semibold text-gray-800">
+                                $
+                                {lineHaul.toLocaleString("en-US", {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
+                                })}
+                              </div>
+                            </div>
+                            <div className="space-y-1">
+                              <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                                FSC (%)
+                              </div>
+                              <div className="text-sm font-semibold text-gray-800">
+                                {fsc}%
+                              </div>
+                            </div>
+                            <div className="space-y-1">
+                              <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                                FSC Value
+                              </div>
+                              <div className="text-sm font-semibold text-blue-600">
+                                $
+                                {fscValue.toLocaleString("en-US", {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
+                                })}
+                              </div>
+                            </div>
+                            <div className="space-y-1">
+                              <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                                Total Rates
+                              </div>
+                              <div className="text-sm font-semibold text-green-600">
+                                $
+                                {totalRates.toLocaleString("en-US", {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
+                                })}
+                              </div>
                             </div>
                           </div>
+
+                          {otherCharges && otherCharges.length > 0 && (
+                            <div className="mt-4">
+                              <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+                                Other Charges
+                              </div>
+                              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                                <div className="space-y-2">
+                                  {otherCharges.map((charge, index) => (
+                                    <div
+                                      key={index}
+                                      className="flex justify-between items-center py-2 border-b border-gray-200 last:border-b-0"
+                                    >
+                                      <div>
+                                        <div className="text-sm font-medium text-gray-800">
+                                          {charge.name || "N/A"}
+                                        </div>
+                                        <div className="text-xs text-gray-500">
+                                          Qty: {charge.quantity || 0} × $
+                                          {(charge.amount || 0).toLocaleString(
+                                            "en-US",
+                                            {
+                                              minimumFractionDigits: 2,
+                                              maximumFractionDigits: 2,
+                                            },
+                                          )}
+                                        </div>
+                                      </div>
+                                      <div className="text-sm font-semibold text-gray-800">
+                                        $
+                                        {(charge.total || 0).toLocaleString(
+                                          "en-US",
+                                          {
+                                            minimumFractionDigits: 2,
+                                            maximumFractionDigits: 2,
+                                          },
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                  );
-                })()}
-              </div>
-            )}
+                      );
+                    })()}
+                  </div>
+                )}
 
               {/* Bids Table */}
               <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
                 <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                      <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      <svg
+                        className="w-4 h-4 text-blue-600"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                        />
                       </svg>
                     </div>
-                    <h3 className="text-lg font-semibold text-gray-800">Recent Bids</h3>
+                    <h3 className="text-lg font-semibold text-gray-800">
+                      Recent Bids
+                    </h3>
                   </div>
                 </div>
-              
-              {bidDetailsLoading ? (
-                <div className="flex flex-col justify-center items-center h-96 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl">
-                  <div className="relative">
-                    <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
-                    <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-b-purple-600 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1s' }}></div>
+
+                {bidDetailsLoading ? (
+                  <div className="flex flex-col justify-center items-center h-96 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl">
+                    <div className="relative">
+                      <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+                      <div
+                        className="absolute inset-0 w-16 h-16 border-4 border-transparent border-b-purple-600 rounded-full animate-spin"
+                        style={{
+                          animationDirection: "reverse",
+                          animationDuration: "1s",
+                        }}
+                      ></div>
+                    </div>
+                    <div className="mt-6 text-center">
+                      <p className="text-xl font-semibold text-gray-800 mb-2">
+                        Loading Bid Details...
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        Please wait while we fetch the information
+                      </p>
+                    </div>
                   </div>
-                  <div className="mt-6 text-center">
-                    <p className="text-xl font-semibold text-gray-800 mb-2">Loading Bid Details...</p>
-                    <p className="text-sm text-gray-600">Please wait while we fetch the information</p>
-                  </div>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-gray-100">
-                      <tr>
-                        <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">S.No</th>
-                        <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier</th>
-                        <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">Rate</th>
-                        <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
-                        <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">Date</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {bidDetailsData?.recentBids?.map((bid, index) => (
-                        <tr key={bid._id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                          <td className="py-3 px-4">
-                            <span className="font-medium text-gray-700">{index + 1}</span>
-                          </td>
-                          <td className="py-3 px-4">
-                            <div>
-                              <span className="font-medium text-gray-700 text-sm">{bid.carrier?.compName || 'N/A'}</span>
-                              <p className="text-xs text-gray-500">{bid.carrier?.email || 'N/A'}</p>
-                              <p className="text-xs text-gray-500">{bid.carrier?.mc_dot_no || 'N/A'}</p>
-                            </div>
-                          </td>
-                          <td className="py-3 px-4">
-                            <span className="font-bold text-green-600">${bid.rate?.toLocaleString() || '0'}</span>
-                          </td>
-                          <td className="py-3 px-4">
-                            <span className={`text-xs px-3 py-1 rounded-full font-bold ${getStatusColor(bid.status)}`}>
-                              {bid.status || 'N/A'}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4">
-                            <span className="text-sm text-gray-600">
-                              {bid.createdAt ? new Date(bid.createdAt).toLocaleDateString('en-US', {
-                                year: 'numeric',
-                                month: 'short',
-                                day: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              }) : 'N/A'}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                      {(!bidDetailsData?.recentBids || bidDetailsData.recentBids.length === 0) && (
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-100">
                         <tr>
-                          <td colSpan="5" className="text-center py-12">
-                            <div className="text-gray-500">
-                              <Truck className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                              <p className="text-lg font-medium">No bids found</p>
-                              <p className="text-gray-400 text-sm">No carriers have placed bids for this load yet</p>
-                            </div>
-                          </td>
+                          <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">
+                            S.No
+                          </th>
+                          <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">
+                            Carrier
+                          </th>
+                          <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">
+                            Rate
+                          </th>
+                          <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">
+                            Status
+                          </th>
+                          <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">
+                            Date
+                          </th>
                         </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                      </thead>
+                      <tbody>
+                        {bidDetailsData?.recentBids?.map((bid, index) => (
+                          <tr
+                            key={bid._id}
+                            className={`border-b border-gray-100 ${index % 2 === 0 ? "bg-white" : "bg-gray-50/30"}`}
+                          >
+                            <td className="py-3 px-4">
+                              <span className="font-medium text-gray-700">
+                                {index + 1}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4">
+                              <div>
+                                <span className="font-medium text-gray-700 text-sm">
+                                  {bid.carrier?.compName || "N/A"}
+                                </span>
+                                <p className="text-xs text-gray-500">
+                                  {bid.carrier?.email || "N/A"}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  {bid.carrier?.mc_dot_no || "N/A"}
+                                </p>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className="font-bold text-green-600">
+                                ${bid.rate?.toLocaleString() || "0"}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span
+                                className={`text-xs px-3 py-1 rounded-full font-bold ${getStatusColor(bid.status)}`}
+                              >
+                                {bid.status || "N/A"}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className="text-sm text-gray-600">
+                                {bid.createdAt
+                                  ? new Date(bid.createdAt).toLocaleDateString(
+                                      "en-US",
+                                      {
+                                        year: "numeric",
+                                        month: "short",
+                                        day: "numeric",
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                      },
+                                    )
+                                  : "N/A"}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                        {(!bidDetailsData?.recentBids ||
+                          bidDetailsData.recentBids.length === 0) && (
+                          <tr>
+                            <td colSpan="5" className="text-center py-12">
+                              <div className="text-gray-500">
+                                <Truck className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                                <p className="text-lg font-medium">
+                                  No bids found
+                                </p>
+                                <p className="text-gray-400 text-sm">
+                                  No carriers have placed bids for this load yet
+                                </p>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -3538,7 +4603,7 @@ useEffect(() => {
       )}
 
       {/* All Rate Request Tab */}
-      {activeTab === 'rateDetails' && (
+      {activeTab === "rateDetails" && (
         <div>
           <div className="flex justify-between items-center mb-6">
             <div className="flex items-center gap-4 flex-wrap">
@@ -3546,13 +4611,19 @@ useEffect(() => {
               <div className="relative">
                 <button
                   type="button"
-                  onClick={() => setShowPresetMenu(v => !v)}
+                  onClick={() => setShowPresetMenu((v) => !v)}
                   className="w-[300px] text-left px-3 py-2 border border-gray-300 rounded-lg bg-white flex items-center justify-between"
                 >
-                  <span className={!dateRange.startDate || !dateRange.endDate ? 'text-gray-400' : ''}>
-                    {dateRange.startDate && dateRange.endDate 
-                      ? `${format(dateRange.startDate, 'MMM dd, yyyy')} - ${format(dateRange.endDate, 'MMM dd, yyyy')}`
-                      : 'All'}
+                  <span
+                    className={
+                      !dateRange.startDate || !dateRange.endDate
+                        ? "text-gray-400"
+                        : ""
+                    }
+                  >
+                    {dateRange.startDate && dateRange.endDate
+                      ? `${format(dateRange.startDate, "MMM dd, yyyy")} - ${format(dateRange.endDate, "MMM dd, yyyy")}`
+                      : "All"}
                   </span>
                   <span className="ml-3">▼</span>
                 </button>
@@ -3561,7 +4632,11 @@ useEffect(() => {
                   <div className="absolute z-50 mt-2 w-56 rounded-md border border-gray-200 bg-white">
                     <button
                       onClick={() => {
-                        setDateRange({ startDate: null, endDate: null, key: 'selection' });
+                        setDateRange({
+                          startDate: null,
+                          endDate: null,
+                          key: "selection",
+                        });
                         setShowPresetMenu(false);
                       }}
                       className="block w-full text-left px-3 py-2 hover:bg-gray-50 font-semibold text-blue-600"
@@ -3580,7 +4655,10 @@ useEffect(() => {
                     ))}
                     <div className="my-1 border-t" />
                     <button
-                      onClick={() => { setShowPresetMenu(false); setShowCustomRange(true); }}
+                      onClick={() => {
+                        setShowPresetMenu(false);
+                        setShowCustomRange(true);
+                      }}
                       className="block w-full text-left px-3 py-2 hover:bg-gray-50"
                     >
                       Custom Range
@@ -3588,19 +4666,33 @@ useEffect(() => {
                   </div>
                 )}
               </div>
-              
+
               <button
                 onClick={exportToCSV}
                 disabled={filteredRequests.length === 0}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all duration-200 ${
                   filteredRequests.length === 0
-                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white border border-emerald-700'
+                    ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                    : "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white border border-emerald-700"
                 }`}
-                title={filteredRequests.length === 0 ? 'No data to export' : `Export ${filteredRequests.length} records to CSV`}
+                title={
+                  filteredRequests.length === 0
+                    ? "No data to export"
+                    : `Export ${filteredRequests.length} records to CSV`
+                }
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                  />
                 </svg>
                 Export to CSV
                 {filteredRequests.length > 0 && (
@@ -3614,10 +4706,24 @@ useEffect(() => {
 
           {/* Custom Range calendars (open ONLY when 'Custom Range' clicked) */}
           {showCustomRange && (
-            <div className="fixed inset-0 z-[60] bg-black/30 flex items-center justify-center p-4" onClick={() => setShowCustomRange(false)}>
-              <div className="bg-white rounded-xl border border-gray-200 p-4" onClick={(e) => e.stopPropagation()}>
+            <div
+              className="fixed inset-0 z-[60] bg-black/30 flex items-center justify-center p-4"
+              onClick={() => setShowCustomRange(false)}
+            >
+              <div
+                className="bg-white rounded-xl border border-gray-200 p-4"
+                onClick={(e) => e.stopPropagation()}
+              >
                 <DateRange
-                  ranges={[dateRange.startDate && dateRange.endDate ? dateRange : { startDate: new Date(), endDate: new Date(), key: 'selection' }]}
+                  ranges={[
+                    dateRange.startDate && dateRange.endDate
+                      ? dateRange
+                      : {
+                          startDate: new Date(),
+                          endDate: new Date(),
+                          key: "selection",
+                        },
+                  ]}
                   onChange={(item) => {
                     if (item.selection.startDate && item.selection.endDate) {
                       setDateRange(item.selection);
@@ -3631,7 +4737,11 @@ useEffect(() => {
                   <button
                     type="button"
                     onClick={() => {
-                      setDateRange({ startDate: null, endDate: null, key: 'selection' });
+                      setDateRange({
+                        startDate: null,
+                        endDate: null,
+                        key: "selection",
+                      });
                       setShowCustomRange(false);
                     }}
                     className="px-4 py-2 border rounded-lg hover:bg-gray-50"
@@ -3654,8 +4764,8 @@ useEffect(() => {
                     }}
                     className={`px-4 py-2 rounded-lg ${
                       dateRange.startDate && dateRange.endDate
-                        ? 'bg-blue-600 text-white hover:bg-blue-700'
-                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        ? "bg-blue-600 text-white hover:bg-blue-700"
+                        : "bg-gray-300 text-gray-500 cursor-not-allowed"
                     }`}
                     disabled={!dateRange.startDate || !dateRange.endDate}
                   >
@@ -3671,11 +4781,21 @@ useEffect(() => {
               <div className="flex flex-col justify-center items-center h-96 bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl">
                 <div className="relative">
                   <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
-                  <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-b-purple-600 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1s' }}></div>
+                  <div
+                    className="absolute inset-0 w-16 h-16 border-4 border-transparent border-b-purple-600 rounded-full animate-spin"
+                    style={{
+                      animationDirection: "reverse",
+                      animationDuration: "1s",
+                    }}
+                  ></div>
                 </div>
                 <div className="mt-6 text-center">
-                  <p className="text-xl font-semibold text-gray-800 mb-2">Loading Completed Requests...</p>
-                  <p className="text-sm text-gray-600">Please wait while we fetch the information</p>
+                  <p className="text-xl font-semibold text-gray-800 mb-2">
+                    Loading Completed Requests...
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    Please wait while we fetch the information
+                  </p>
                 </div>
               </div>
             ) : (
@@ -3683,16 +4803,36 @@ useEffect(() => {
                 <table className="min-w-full text-left border-separate border-spacing-y-4">
                   <thead>
                     <tr className="bg-gray-100">
-                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y first:border-l border-gray-200 rounded-l-lg whitespace-nowrap">Load ID</th>
-                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">Weight (lbs)</th>
-                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">Pick-Up</th>
-                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">Drop</th>
-                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">Vehicle</th>
-                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">Shipment Type</th>
-                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">Date & Time</th>
-                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">Rate</th>
-                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">Bid Count</th>
-                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y last:border-r border-gray-200 rounded-r-lg">Details</th>
+                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y first:border-l border-gray-200 rounded-l-lg whitespace-nowrap">
+                        Load ID
+                      </th>
+                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200 whitespace-nowrap">
+                        Weight (lbs)
+                      </th>
+                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                        Pick-Up
+                      </th>
+                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                        Drop
+                      </th>
+                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                        Vehicle
+                      </th>
+                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                        Shipment Type
+                      </th>
+                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                        Date & Time
+                      </th>
+                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                        Rate
+                      </th>
+                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                        Bid Count
+                      </th>
+                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y last:border-r border-gray-200 rounded-r-lg">
+                        Details
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -3702,39 +4842,129 @@ useEffect(() => {
                         className="bg-white hover:bg-gray-50 transition-colors"
                       >
                         <td className="px-4 py-4 border-y first:border-l border-gray-200 first:rounded-l-lg">
-                          <span className="font-medium text-gray-700">{loadShort(item._id)}</span>
+                          <span className="font-medium text-gray-700">
+                            {loadShort(item._id)}
+                          </span>
                         </td>
                         <td className="px-4 py-4 border-y border-gray-200">
-                          <span className="font-medium text-gray-700">{item.weight} lbs</span>
+                          <span className="font-medium text-gray-700">
+                            {item.weight} lbs
+                          </span>
                         </td>
-                        <td className="px-4 py-4 border-y border-gray-200">
-                          <div>
-                            <span className="font-medium text-gray-700">{item.origin?.city || '—'}</span>
-                            <p className="text-xs text-gray-500">{item.origin?.state || ''}</p>
-                          </div>
-                        </td>
-                        <td className="px-4 py-4 border-y border-gray-200">
-                          <div>
-                            <span className="font-medium text-gray-700">{item.destination?.city || '—'}</span>
-                            <p className="text-xs text-gray-500">{item.destination?.state || ''}</p>
-                          </div>
-                        </td>
-                        <td className="px-4 py-4 border-y border-gray-200">
-                          <span className="font-medium text-gray-700">{item.vehicleType || '—'}</span>
-                        </td>
+                     <td className="px-4 py-4 border-y border-gray-200">
+  <div className="relative group max-w-[80px]">
+
+    {/* Visible (Truncated) */}
+    <div className="block truncate">
+      <span className="font-medium text-gray-700">
+        {item.origin?.city || "—"}
+      </span>
+      <p className="text-sm text-gray-500 truncate">
+        {item.origin?.state || ""}
+      </p>
+    </div>
+
+    {/* Tooltip */}
+    {item.origin?.city && (
+      <div className="absolute left-0 top-full mt-2 hidden group-hover:block
+                      bg-gray-900 text-white text-sm
+                      px-3 py-2.5
+                      rounded-lg shadow-xl
+                      max-w-[180px]
+                      break-words
+                      z-50">
+        {item.origin?.city}
+        {item.origin?.state ? `, ${item.origin?.state}` : ""}
+      </div>
+    )}
+
+  </div>
+</td>
+
+
+<td className="px-4 py-4 border-y border-gray-200">
+  <div className="relative group max-w-[80px]">
+
+    {/* Visible (Truncated) */}
+    <div className="block truncate">
+      <span className="font-medium text-gray-700">
+        {item.destination?.city || "—"}
+      </span>
+      <p className="text-sm text-gray-500 truncate">
+        {item.destination?.state || ""}
+      </p>
+    </div>
+
+    {/* Tooltip */}
+    {item.destination?.city && (
+      <div className="absolute left-0 top-full mt-2 hidden group-hover:block
+                      bg-gray-900 text-white text-sm
+                      px-3 py-2.5
+                      rounded-lg shadow-xl
+                      max-w-[180px]
+                      break-words
+                      z-50">
+        {item.destination?.city}
+        {item.destination?.state ? `, ${item.destination?.state}` : ""}
+      </div>
+    )}
+
+  </div>
+</td>
+
+
+<td className="px-4 py-4 border-y border-gray-200">
+  <div className="relative group max-w-[80px]">
+
+    {/* Truncated Text */}
+    <span className="font-medium text-gray-700 block truncate">
+      {item.vehicleType || "—"}
+    </span>
+
+    {/* Tooltip */}
+    {item.vehicleType && (
+      <div className="absolute left-0 top-full mt-2 hidden group-hover:block
+                      bg-gray-900 text-white text-sm
+                      px-3 py-2.5
+                      rounded-lg shadow-xl
+                      max-w-[160px]
+                      break-words
+                      z-50">
+        {item.vehicleType}
+      </div>
+    )}
+
+  </div>
+</td>
                         <td className="px-4 py-4 border-y border-gray-200">
                           {item.loadType ? (
-                            <span className="font-medium text-gray-700">{item.loadType}</span>
+                            <span className="font-medium text-gray-700">
+                              {item.loadType}
+                            </span>
                           ) : null}
                         </td>
                         <td className="px-4 py-4 border-y border-gray-200">
                           {item.createdAt ? (
                             <div>
                               <div className="font-medium text-gray-700">
-                                {new Date(item.createdAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}
+                                {new Date(item.createdAt).toLocaleDateString(
+                                  "en-US",
+                                  {
+                                    month: "2-digit",
+                                    day: "2-digit",
+                                    year: "numeric",
+                                  },
+                                )}
                               </div>
-                              <div className="text-xs text-gray-500">
-                                {new Date(item.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                              <div className="text-sm text-gray-500">
+                                {new Date(item.createdAt).toLocaleTimeString(
+                                  "en-US",
+                                  {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                    hour12: true,
+                                  },
+                                )}
                               </div>
                             </div>
                           ) : (
@@ -3743,7 +4973,7 @@ useEffect(() => {
                         </td>
                         <td className="px-4 py-4 border-y border-gray-200">
                           <span className="font-bold text-green-600">
-                            ${item.rate?.toLocaleString() || '0'}
+                            ${item.rate?.toLocaleString() || "0"}
                           </span>
                         </td>
                         <td className="px-4 py-4 border-y border-gray-200">
@@ -3754,161 +4984,202 @@ useEffect(() => {
                         <td className="px-4 py-4 border-y last:border-r border-gray-200 last:rounded-r-lg">
                           <div className="flex gap-2">
                             {/* Chat Button */}
-                           <button
-  onClick={async () => {
-    console.log('🔍 RateRequest (All Rate Request Tab): Chat button clicked - FULL ITEM OBJECT:', item);
-    console.log('🔍 SalesUserInfo structure:', {
-      salesUserInfo: item.salesUserInfo,
-      hasSalesUserInfo: !!item.salesUserInfo,
-      salesUserInfoType: typeof item.salesUserInfo,
-      salesUserInfoKeys: item.salesUserInfo ? Object.keys(item.salesUserInfo) : 'none'
-    });
-    
-    // Use actualLoadId if available, otherwise use loadId (should be MongoDB ID)
-    const loadId = item.actualLoadId || item.loadId;
-    
-    if (!loadId) {
-      console.error('❌ RateRequest (All Rate Request Tab): Missing loadId', item);
-      toast.error('Unable to determine load ID. Please check the request information.');
-      return;
-    }
+                            <button
+                              onClick={async () => {
+                                console.log(
+                                  "🔍 RateRequest (All Rate Request Tab): Chat button clicked - FULL ITEM OBJECT:",
+                                  item,
+                                );
+                                console.log("🔍 SalesUserInfo structure:", {
+                                  salesUserInfo: item.salesUserInfo,
+                                  hasSalesUserInfo: !!item.salesUserInfo,
+                                  salesUserInfoType: typeof item.salesUserInfo,
+                                  salesUserInfoKeys: item.salesUserInfo
+                                    ? Object.keys(item.salesUserInfo)
+                                    : "none",
+                                });
 
-    // Enhanced receiver extraction with multiple fallbacks
-    let receiverEmpId = null;
-    let receiverName = 'Sales User';
+                                // Use actualLoadId if available, otherwise use loadId (should be MongoDB ID)
+                                const loadId = item.actualLoadId || item.loadId;
 
-    // Try multiple possible paths for sales user info
-    if (item.salesUserInfo) {
-      receiverEmpId = item.salesUserInfo.empId || 
-                     item.salesUserInfo._id || 
-                     item.salesUserInfo.id;
-      receiverName = item.salesUserInfo.empName || 
-                    item.salesUserInfo.employeeName || 
-                    item.salesUserInfo.name || 
-                    item.salesUserInfo.username || 
-                    'Sales User';
+                                if (!loadId) {
+                                  console.error(
+                                    "❌ RateRequest (All Rate Request Tab): Missing loadId",
+                                    item,
+                                  );
+                                  toast.error(
+                                    "Unable to determine load ID. Please check the request information.",
+                                  );
+                                  return;
+                                }
 
-    }
-    
-    // If still no receiverEmpId, try fetch from load details
-    if (!receiverEmpId && loadId) {
+                                // Enhanced receiver extraction with multiple fallbacks
+                                let receiverEmpId = null;
+                                let receiverName = "Sales User";
 
-      toast.info('Fetching load details...', { autoClose: 2000 });
-      const salesUserInfo = await fetchLoadDetailsForChat(loadId);
-      
-      if (salesUserInfo) {
-        receiverEmpId = salesUserInfo.empId || salesUserInfo._id || salesUserInfo.id;
-        receiverName = salesUserInfo.empName || salesUserInfo.employeeName || salesUserInfo.name || 'Sales User';
+                                // Try multiple possible paths for sales user info
+                                if (item.salesUserInfo) {
+                                  receiverEmpId =
+                                    item.salesUserInfo.empId ||
+                                    item.salesUserInfo._id ||
+                                    item.salesUserInfo.id;
+                                  receiverName =
+                                    item.salesUserInfo.empName ||
+                                    item.salesUserInfo.employeeName ||
+                                    item.salesUserInfo.name ||
+                                    item.salesUserInfo.username ||
+                                    "Sales User";
+                                }
 
-      }
-    }
+                                // If still no receiverEmpId, try fetch from load details
+                                if (!receiverEmpId && loadId) {
+                                  toast.info("Fetching load details...", {
+                                    autoClose: 2000,
+                                  });
+                                  const salesUserInfo =
+                                    await fetchLoadDetailsForChat(loadId);
 
-    // Final fallback - check if there's any user info in the item itself
-    if (!receiverEmpId) {
+                                  if (salesUserInfo) {
+                                    receiverEmpId =
+                                      salesUserInfo.empId ||
+                                      salesUserInfo._id ||
+                                      salesUserInfo.id;
+                                    receiverName =
+                                      salesUserInfo.empName ||
+                                      salesUserInfo.employeeName ||
+                                      salesUserInfo.name ||
+                                      "Sales User";
+                                  }
+                                }
 
-      // Check common alternative paths in your data structure
-      const alternativePaths = [
-        item.createdBySalesUser,
-        item.createdBy,
-        item.salesUser,
-        item.user,
-        item.shipper?.createdBy, // Sometimes shipper has creator info
-      ];
-      
-      for (const alt of alternativePaths) {
-        if (alt && (alt.empId || alt._id)) {
-          receiverEmpId = alt.empId || alt._id;
-          receiverName = alt.empName || alt.employeeName || alt.name || 'Sales User';
+                                // Final fallback - check if there's any user info in the item itself
+                                if (!receiverEmpId) {
+                                  // Check common alternative paths in your data structure
+                                  const alternativePaths = [
+                                    item.createdBySalesUser,
+                                    item.createdBy,
+                                    item.salesUser,
+                                    item.user,
+                                    item.shipper?.createdBy, // Sometimes shipper has creator info
+                                  ];
 
-          break;
-        }
-      }
-    }
+                                  for (const alt of alternativePaths) {
+                                    if (alt && (alt.empId || alt._id)) {
+                                      receiverEmpId = alt.empId || alt._id;
+                                      receiverName =
+                                        alt.empName ||
+                                        alt.employeeName ||
+                                        alt.name ||
+                                        "Sales User";
 
-    if (!receiverEmpId) {
-      console.error('❌ RateRequest (All Rate Request Tab): Missing receiverEmpId after all attempts', {
-        item,
-        loadId,
-        availableKeys: Object.keys(item)
-      });
-      toast.error('Unable to determine receiver. Sales user information not available for this load.');
-      return;
-    }
+                                      break;
+                                    }
+                                  }
+                                }
 
-    console.log('🎯 RateRequest (All Rate Request Tab): Opening chat modal with final data', {
-      loadId,
-      receiverEmpId,
-      receiverName,
-      actualLoadId: item.actualLoadId
-    });
+                                if (!receiverEmpId) {
+                                  console.error(
+                                    "❌ RateRequest (All Rate Request Tab): Missing receiverEmpId after all attempts",
+                                    {
+                                      item,
+                                      loadId,
+                                      availableKeys: Object.keys(item),
+                                    },
+                                  );
+                                  toast.error(
+                                    "Unable to determine receiver. Sales user information not available for this load.",
+                                  );
+                                  return;
+                                }
 
-    setChatModal({
-      visible: true,
-      loadId: loadId,
-      receiverEmpId: receiverEmpId,
-      receiverName: receiverName
-    });
-  }}
-  className="flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700"
-  title="Chat"
->
-  <MessageCircle size={14} />
-  <span>Chat</span>
-</button>
-                          
-                          <button
-                            onClick={() => {
-                              handleViewBids(item);
-                            }}
-                            className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 py-2 rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 font-semibold"
-                          >
-                            View
-                          </button>
-                          <button
-                            onClick={() => openModal(item)}
-                            className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2 rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all duration-200 font-semibold"
-                          >
-                            Submit Rate
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {filteredRequests.length === 0 && (
-                    <tr>
-                      <td colSpan="10" className="text-center py-12">
-                        <CheckCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                        <p className="text-gray-500 text-lg">
-                          {search ? 'No requests found matching your search' : 'No requests found'}
-                        </p>
-                        <p className="text-gray-400 text-sm">
-                          {search
-                            ? 'Try adjusting your search terms'
-                            : activeTab === 'rateDetails'
-                            ? completedRequests.length > 0
-                              ? 'No completed requests found'
-                              : 'No requests available'
-                            : 'No requests have been completed yet'}
-                        </p>
-                      </td>
-                    </tr>
-                  )}
+                                console.log(
+                                  "🎯 RateRequest (All Rate Request Tab): Opening chat modal with final data",
+                                  {
+                                    loadId,
+                                    receiverEmpId,
+                                    receiverName,
+                                    actualLoadId: item.actualLoadId,
+                                  },
+                                );
+
+                                setChatModal({
+                                  visible: true,
+                                  loadId: loadId,
+                                  receiverEmpId: receiverEmpId,
+                                  receiverName: receiverName,
+                                });
+                              }}
+                              className="inline-flex items-center justify-center px-4 py-2 text-sm font-semibold rounded-lg border border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-colors cursor-pointer"
+                              title="Chat"
+                            >
+                              Chat
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                handleViewBids(item);
+                              }}
+                              className="inline-flex items-center justify-center px-4 py-2 rounded-lg text-sm font-semibold border border-green-300 text-green-700 bg-green-50 hover:bg-green-600 hover:text-white hover:border-green-600 transition-colors cursor-pointer"
+                            >
+                              View
+                            </button>
+                            <button
+                              onClick={() => openModal(item)}
+                              className="inline-flex items-center justify-center whitespace-nowrap px-4 py-2 rounded-lg text-sm font-semibold border border-indigo-300 text-indigo-700 bg-indigo-50 hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition-colors cursor-pointer"
+                            >
+                              Submit Rate
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {filteredRequests.length === 0 && (
+                      <tr>
+                        <td colSpan="10" className="text-center py-12">
+                          <CheckCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                          <p className="text-gray-500 text-lg">
+                            {search
+                              ? "No requests found matching your search"
+                              : "No requests found"}
+                          </p>
+                          <p className="text-gray-400 text-sm">
+                            {search
+                              ? "Try adjusting your search terms"
+                              : activeTab === "rateDetails"
+                                ? completedRequests.length > 0
+                                  ? "No completed requests found"
+                                  : "No requests available"
+                                : "No requests have been completed yet"}
+                          </p>
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
             )}
-            
+
             {/* Pagination Controls */}
             {rateRequestPagination && rateRequestPagination.totalPages > 1 && (
               <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50">
                 <div className="flex items-center gap-4">
                   <div className="text-sm text-gray-600">
-                    Showing {((rateRequestPagination.currentPage - 1) * rateRequestPagination.itemsPerPage) + 1} to{' '}
-                    {Math.min(rateRequestPagination.currentPage * rateRequestPagination.itemsPerPage, rateRequestPagination.totalItems)} of{' '}
-                    {rateRequestPagination.totalItems} results
+                    Showing{" "}
+                    {(rateRequestPagination.currentPage - 1) *
+                      rateRequestPagination.itemsPerPage +
+                      1}{" "}
+                    to{" "}
+                    {Math.min(
+                      rateRequestPagination.currentPage *
+                        rateRequestPagination.itemsPerPage,
+                      rateRequestPagination.totalItems,
+                    )}{" "}
+                    of {rateRequestPagination.totalItems} results
                   </div>
                   <div className="flex items-center gap-2">
-                    <label className="text-sm text-gray-600">Items per page:</label>
+                    <label className="text-sm text-gray-600">
+                      Items per page:
+                    </label>
                     <select
                       value={rateRequestLimit}
                       onChange={(e) => {
@@ -3926,43 +5197,58 @@ useEffect(() => {
                 </div>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => setRateRequestPage(prev => Math.max(1, prev - 1))}
+                    onClick={() =>
+                      setRateRequestPage((prev) => Math.max(1, prev - 1))
+                    }
                     disabled={rateRequestPage === 1 || isFetching}
                     className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     Previous
                   </button>
                   <div className="flex items-center gap-1">
-                    {Array.from({ length: Math.min(5, rateRequestPagination.totalPages) }, (_, i) => {
-                      let pageNum;
-                      if (rateRequestPagination.totalPages <= 5) {
-                        pageNum = i + 1;
-                      } else if (rateRequestPagination.currentPage <= 3) {
-                        pageNum = i + 1;
-                      } else if (rateRequestPagination.currentPage >= rateRequestPagination.totalPages - 2) {
-                        pageNum = rateRequestPagination.totalPages - 4 + i;
-                      } else {
-                        pageNum = rateRequestPagination.currentPage - 2 + i;
-                      }
-                      return (
-                        <button
-                          key={pageNum}
-                          onClick={() => setRateRequestPage(pageNum)}
-                          disabled={isFetching}
-                          className={`px-3 py-2 text-sm border rounded-lg transition-colors ${
-                            rateRequestPage === pageNum
-                              ? 'bg-green-600 text-white border-green-600'
-                              : 'border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed'
-                          }`}
-                        >
-                          {pageNum}
-                        </button>
-                      );
-                    })}
+                    {Array.from(
+                      { length: Math.min(5, rateRequestPagination.totalPages) },
+                      (_, i) => {
+                        let pageNum;
+                        if (rateRequestPagination.totalPages <= 5) {
+                          pageNum = i + 1;
+                        } else if (rateRequestPagination.currentPage <= 3) {
+                          pageNum = i + 1;
+                        } else if (
+                          rateRequestPagination.currentPage >=
+                          rateRequestPagination.totalPages - 2
+                        ) {
+                          pageNum = rateRequestPagination.totalPages - 4 + i;
+                        } else {
+                          pageNum = rateRequestPagination.currentPage - 2 + i;
+                        }
+                        return (
+                          <button
+                            key={pageNum}
+                            onClick={() => setRateRequestPage(pageNum)}
+                            disabled={isFetching}
+                            className={`px-3 py-2 text-sm border rounded-lg transition-colors ${
+                              rateRequestPage === pageNum
+                                ? "bg-green-600 text-white border-green-600"
+                                : "border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                            }`}
+                          >
+                            {pageNum}
+                          </button>
+                        );
+                      },
+                    )}
                   </div>
                   <button
-                    onClick={() => setRateRequestPage(prev => Math.min(rateRequestPagination.totalPages, prev + 1))}
-                    disabled={rateRequestPage === rateRequestPagination.totalPages || isFetching}
+                    onClick={() =>
+                      setRateRequestPage((prev) =>
+                        Math.min(rateRequestPagination.totalPages, prev + 1),
+                      )
+                    }
+                    disabled={
+                      rateRequestPage === rateRequestPagination.totalPages ||
+                      isFetching
+                    }
                     className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     Next
@@ -3976,14 +5262,11 @@ useEffect(() => {
 
       {/* Accessorial charges Popup */}
       {showChargesPopup && (
-        <div 
-          className="fixed inset-0 flex items-center justify-center z-[60]"
-        >
-          <div 
+        <div className="fixed inset-0 flex items-center justify-center z-[60]">
+          <div
             className="bg-white rounded-xl border border-gray-200 p-8 w-full max-w-5xl max-h-[85vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-
             {/* Header */}
             <div className="bg-gradient-to-r from-blue-500 to-purple-600 -m-8 mb-6 p-6 rounded-t-xl">
               <div className="flex justify-between items-center">
@@ -3991,14 +5274,26 @@ useEffect(() => {
                   <div className="bg-white bg-opacity-20 p-2 rounded-lg">
                     <DollarSign className="w-6 h-6 text-white" />
                   </div>
-                  <h2 className="text-2xl font-bold text-white">Accessorial charges</h2>
+                  <h2 className="text-2xl font-bold text-white">
+                    Accessorial charges
+                  </h2>
                 </div>
                 <button
                   onClick={closeChargesPopup}
                   className="text-white hover:text-gray-200 transition-colors p-2 rounded-full hover:bg-white hover:bg-opacity-20"
                 >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                  <svg
+                    className="w-6 h-6"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M6 18L18 6M6 6l12 12"
+                    ></path>
                   </svg>
                 </button>
               </div>
@@ -4009,15 +5304,21 @@ useEffect(() => {
               <div className="grid grid-cols-5 gap-4 bg-gradient-to-r from-gray-50 to-gray-100 p-4 rounded-xl font-semibold text-gray-700 border border-gray-200">
                 <div className="flex items-center gap-2">
                   <FileText className="w-4 h-4" />
-                  <span>Name <span className="text-red-500">*</span></span>
+                  <span>
+                    Name <span className="text-red-500">*</span>
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-lg">#</span>
-                  <span>Quantity <span className="text-red-500">*</span></span>
+                  <span>
+                    Quantity <span className="text-red-500">*</span>
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <DollarSign className="w-4 h-4" />
-                  <span>Amount <span className="text-red-500">*</span></span>
+                  <span>
+                    Amount <span className="text-red-500">*</span>
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-lg font-bold">$</span>
@@ -4028,40 +5329,67 @@ useEffect(() => {
 
               {/* Rows */}
               {charges.map((charge, index) => (
-                <div key={index} className="grid grid-cols-5 gap-4 items-start p-4 bg-white rounded-xl border border-gray-200 transition-colors hover:bg-gray-50">
+                <div
+                  key={index}
+                  className="grid grid-cols-5 gap-4 items-start p-4 bg-white rounded-xl border border-gray-200 transition-colors hover:bg-gray-50"
+                >
                   {/* Name */}
                   <div>
                     <input
                       type="text"
                       value={charge.name}
-                      onChange={(e) => handleChargeChange(index, 'name', e.target.value)}
+                      onChange={(e) =>
+                        handleChargeChange(index, "name", e.target.value)
+                      }
                       onKeyDown={(e) => {
                         const ctrl = e.ctrlKey || e.metaKey;
-                        const allow = ['Backspace', 'Delete', 'Tab', 'Enter', 'Escape', 'ArrowLeft', 'ArrowRight', 'Home', 'End'];
-                        if (allow.includes(e.key) || (ctrl && ['a', 'c', 'v', 'x'].includes(e.key.toLowerCase()))) return;
-                        if (e.key.length === 1 && !/[A-Za-z ]/.test(e.key)) e.preventDefault();
+                        const allow = [
+                          "Backspace",
+                          "Delete",
+                          "Tab",
+                          "Enter",
+                          "Escape",
+                          "ArrowLeft",
+                          "ArrowRight",
+                          "Home",
+                          "End",
+                        ];
+                        if (
+                          allow.includes(e.key) ||
+                          (ctrl &&
+                            ["a", "c", "v", "x"].includes(e.key.toLowerCase()))
+                        )
+                          return;
+                        if (e.key.length === 1 && !/[A-Za-z ]/.test(e.key))
+                          e.preventDefault();
                       }}
                       onBlur={() => {
                         setChargeErrors((prev) => {
                           const next = [...prev];
-                          const v = (charge.name || '').trim();
+                          const v = (charge.name || "").trim();
                           next[index] = { ...(next[index] || {}) };
-                          if (!v) next[index].name = 'Please enter the charge name';
-                          else if (!/^[A-Za-z ]+$/.test(v)) next[index].name = 'Name should contain only alphabets';
-                          else next[index].name = '';
+                          if (!v)
+                            next[index].name = "Please enter the charge name";
+                          else if (!/^[A-Za-z ]+$/.test(v))
+                            next[index].name =
+                              "Name should contain only alphabets";
+                          else next[index].name = "";
                           return next;
                         });
                       }}
                       aria-invalid={Boolean(chargeErrors[index]?.name)}
-                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all ${chargeErrors[index]?.name
-                        ? 'border-red-500 bg-red-50 focus:ring-red-200 error-field'
-                        : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
-                        }`}
+                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all ${
+                        chargeErrors[index]?.name
+                          ? "border-red-500 bg-red-50 focus:ring-red-200 error-field"
+                          : "border-gray-300 focus:ring-blue-500 focus:border-transparent"
+                      }`}
                       placeholder="Enter charge name"
                     />
 
                     {chargeErrors[index]?.name && (
-                      <p className="mt-1 text-xs text-red-600">{chargeErrors[index].name}</p>
+                      <p className="mt-1 text-xs text-red-600">
+                        {chargeErrors[index].name}
+                      </p>
                     )}
                   </div>
 
@@ -4074,28 +5402,36 @@ useEffect(() => {
                       inputMode="numeric"
                       onKeyDown={blockIntNoSign}
                       value={charge.quantity}
-                      onChange={(e) => handleChargeChange(index, 'quantity', e.target.value)}
+                      onChange={(e) =>
+                        handleChargeChange(index, "quantity", e.target.value)
+                      }
                       onBlur={() => {
                         setChargeErrors((prev) => {
                           const next = [...prev];
-                          const raw = String(charge.quantity ?? '');
+                          const raw = String(charge.quantity ?? "");
                           next[index] = { ...(next[index] || {}) };
-                          if (raw === '') next[index].quantity = 'Please enter the Quantity';
-                          else if (!/^[1-9]\d*$/.test(raw)) next[index].quantity = 'Quantity must be a positive integer';
-                          else next[index].quantity = '';
+                          if (raw === "")
+                            next[index].quantity = "Please enter the Quantity";
+                          else if (!/^[1-9]\d*$/.test(raw))
+                            next[index].quantity =
+                              "Quantity must be a positive integer";
+                          else next[index].quantity = "";
                           return next;
                         });
                       }}
                       aria-invalid={Boolean(chargeErrors[index]?.quantity)}
-                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all ${chargeErrors[index]?.quantity
-                        ? 'border-red-500 bg-red-50 focus:ring-red-200 error-field'
-                        : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
-                        }`}
+                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all ${
+                        chargeErrors[index]?.quantity
+                          ? "border-red-500 bg-red-50 focus:ring-red-200 error-field"
+                          : "border-gray-300 focus:ring-blue-500 focus:border-transparent"
+                      }`}
                       placeholder="0"
                     />
 
                     {chargeErrors[index]?.quantity && (
-                      <p className="mt-1 text-xs text-red-600">{chargeErrors[index].quantity}</p>
+                      <p className="mt-1 text-xs text-red-600">
+                        {chargeErrors[index].quantity}
+                      </p>
                     )}
                   </div>
 
@@ -4107,31 +5443,40 @@ useEffect(() => {
                       step="0.01"
                       inputMode="decimal"
                       onKeyDown={(e) => {
-                        if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
+                        if (["e", "E", "+", "-"].includes(e.key))
+                          e.preventDefault();
                       }}
                       value={charge.amt}
-                      onChange={(e) => handleChargeChange(index, 'amt', e.target.value)}
+                      onChange={(e) =>
+                        handleChargeChange(index, "amt", e.target.value)
+                      }
                       onBlur={() => {
                         setChargeErrors((prev) => {
                           const next = [...prev];
-                          const raw = String(charge.amt ?? '');
+                          const raw = String(charge.amt ?? "");
                           next[index] = { ...(next[index] || {}) };
-                          if (raw === '') next[index].amt = 'Please enter the amount';
-                          else if (!/^\d+(\.\d{1,2})?$/.test(raw)) next[index].amt = 'Amount must be a positive number (max 2 decimal places)';
-                          else next[index].amt = '';
+                          if (raw === "")
+                            next[index].amt = "Please enter the amount";
+                          else if (!/^\d+(\.\d{1,2})?$/.test(raw))
+                            next[index].amt =
+                              "Amount must be a positive number (max 2 decimal places)";
+                          else next[index].amt = "";
                           return next;
                         });
                       }}
                       aria-invalid={Boolean(chargeErrors[index]?.amt)}
-                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all ${chargeErrors[index]?.amt
-                        ? 'border-red-500 bg-red-50 focus:ring-red-200 error-field'
-                        : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
-                        }`}
+                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all ${
+                        chargeErrors[index]?.amt
+                          ? "border-red-500 bg-red-50 focus:ring-red-200 error-field"
+                          : "border-gray-300 focus:ring-blue-500 focus:border-transparent"
+                      }`}
                       placeholder="0.00"
                     />
 
                     {chargeErrors[index]?.amt && (
-                      <p className="mt-1 text-xs text-red-600">{chargeErrors[index].amt}</p>
+                      <p className="mt-1 text-xs text-red-600">
+                        {chargeErrors[index].amt}
+                      </p>
                     )}
                   </div>
 
@@ -4146,13 +5491,24 @@ useEffect(() => {
                       type="button"
                       onClick={() => removeCharge(index)}
                       disabled={charges.length === 1}
-                      className={`p-2 rounded-full transition-all ${charges.length === 1
-                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                        : 'bg-red-100 text-red-500 hover:bg-red-200 hover:text-red-700'
-                        }`}
+                      className={`p-2 rounded-full transition-all ${
+                        charges.length === 1
+                          ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                          : "bg-red-100 text-red-500 hover:bg-red-200 hover:text-red-700"
+                      }`}
                     >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                        ></path>
                       </svg>
                     </button>
                   </div>
@@ -4179,9 +5535,14 @@ useEffect(() => {
                       <DollarSign className="w-6 h-6 text-white" />
                     </div>
                     <div>
-                      <div className="text-sm text-gray-600 font-medium">Total Charges</div>
+                      <div className="text-sm text-gray-600 font-medium">
+                        Total Charges
+                      </div>
                       <div className="text-2xl font-bold text-gray-800">
-                        ${(charges || []).reduce((sum, ch) => sum + (Number(ch.total) || 0), 0).toFixed(2)}
+                        $
+                        {(charges || [])
+                          .reduce((sum, ch) => sum + (Number(ch.total) || 0), 0)
+                          .toFixed(2)}
                       </div>
                     </div>
                   </div>
@@ -4208,7 +5569,6 @@ useEffect(() => {
                   </div>
                 )}
               </div>
-
             </div>
           </div>
         </div>
@@ -4217,7 +5577,14 @@ useEffect(() => {
       {/* Chat Modal */}
       <LoadChatModalCMT
         isOpen={chatModal.visible}
-        onClose={() => setChatModal({ visible: false, loadId: null, receiverEmpId: null, receiverName: null })}
+        onClose={() =>
+          setChatModal({
+            visible: false,
+            loadId: null,
+            receiverEmpId: null,
+            receiverName: null,
+          })
+        }
         loadId={chatModal.loadId}
         receiverEmpId={chatModal.receiverEmpId}
         receiverName={chatModal.receiverName}
@@ -4227,5 +5594,3 @@ useEffect(() => {
 };
 
 export default RateRequest;
-
-
