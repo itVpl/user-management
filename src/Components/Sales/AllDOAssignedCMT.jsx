@@ -828,7 +828,7 @@ export default function AllDOAssignedCMT() {
                       setSelectedOrder(null);
                       setSelectedLoadData(null);
                     }}
-                    className="text-white hover:text-gray-200 text-2xl font-bold"
+                    className="text-white hover:text-gray-200 text-2xl font-bold cursor-pointer"
                   >
                     ×
                   </button>
