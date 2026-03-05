@@ -437,179 +437,177 @@ export default function AllDOAssignedCMT() {
 
   return (
     <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center gap-6">
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center">
-                <Truck className="text-indigo-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Total CMT Assigned Orders</p>
-                <p className="text-xl font-bold text-gray-800">{totalItems || filteredOrders.length}</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-                <Calendar className="text-purple-600" size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Today</p>
-                <p className="text-xl font-bold text-purple-600">{filteredOrders.filter(order => {
-                  const orderDate = order.createdAt || '';
-                  const today = ymd(new Date());
-                  return orderDate === today;
-                }).length}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-4">
-          <div className="relative flex items-center gap-2">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-              <input
-                type="text"
-                placeholder="Search: Load No (L0618), Shipment No, Carrier, Container, Date (MM/DD/YYYY), CMT ID..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                onKeyPress={handleSearchKeyPress}
-                className="w-96 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-              />
-            </div>
-            {searchTerm && (
-              <>
-                <button
-                  onClick={handleSearch}
-                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
-                >
-                  Search
-                </button>
-                <button
-                  onClick={handleClearSearch}
-                  className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-gray-700"
-                  title="Clear search"
-                >
-                  ✕
-                </button>
-              </>
-            )}
-          </div>
-          {/* Date Range dropdown */}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setShowPresetMenu(v => !v)}
-              className="w-[300px] text-left px-3 py-2 border border-gray-300 rounded-lg bg-white flex items-center justify-between"
-            >
-              <span>
-                {dateFilterApplied && range.startDate && range.endDate
-                  ? `${format(range.startDate, 'MMM dd, yyyy')} - ${format(range.endDate, 'MMM dd, yyyy')}`
-                  : 'Select Date Range'}
-              </span>
-              <span className="ml-3">▼</span>
-            </button>
-
-            {showPresetMenu && (
-              <div className="absolute z-50 mt-2 w-56 rounded-md border bg-white shadow-lg">
-                {dateFilterApplied && (
-                  <>
-                    <button
-                      onClick={() => {
-                        setDateFilterApplied(false);
-                        setRange({ startDate: null, endDate: null, key: 'selection' });
-                        setShowPresetMenu(false);
-                        setCurrentPage(1);
-                      }}
-                      className="block w-full text-left px-3 py-2 hover:bg-gray-50 text-red-600"
-                    >
-                      Clear Date Filter
-                    </button>
-                    <div className="my-1 border-t" />
-                  </>
-                )}
-                {Object.keys(presets).map((lbl) => (
-                  <button
-                    key={lbl}
-                    onClick={() => applyPreset(lbl)}
-                    className="block w-full text-left px-3 py-2 hover:bg-gray-50"
-                  >
-                    {lbl}
-                  </button>
-                ))}
-                <div className="my-1 border-t" />
-                <button
-                  onClick={() => { setShowPresetMenu(false); setShowCustomRange(true); }}
-                  className="block w-full text-left px-3 py-2 hover:bg-gray-50"
-                >
-                  Custom Range
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Custom Range calendars */}
-          {showCustomRange && (
-            <div className="fixed inset-0 z-[60] bg-black/30 flex items-center justify-center p-4" onClick={() => setShowCustomRange(false)}>
-              <div className="bg-white rounded-xl shadow-2xl p-4" onClick={(e) => e.stopPropagation()}>
-                <DateRange
-                  ranges={[range]}
-                  onChange={(item) => setRange(item.selection)}
-                  moveRangeOnFirstSelection={false}
-                  months={2}
-                  direction="horizontal"
-                />
-                <div className="flex justify-end gap-2 mt-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowCustomRange(false);
-                      // Reset date filter if cancelled
-                      if (!dateFilterApplied) {
-                        setRange({ startDate: null, endDate: null, key: 'selection' });
-                      }
-                    }}
-                    className="px-4 py-2 border rounded-lg hover:bg-gray-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDateFilterApplied(true); // Apply date filter
-                      setShowCustomRange(false);
-                      setCurrentPage(1); // Reset to page 1
-                    }}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                  >
-                    OK
-                  </button>
+      {/* Top Section: Cards + Controls in one bordered parent */}
+      <div className="mb-6">
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-white rounded-xl p-5 border border-gray-200 w-full">
+              <div className="flex items-center justify-between h-full">
+                <div>
+                  <p className="text-xl font-medium text-gray-700">Total CMT Assigned Orders</p>
+                  <p className="mt-4 text-2xl font-bold text-gray-900">{totalItems || filteredOrders.length}</p>
+                </div>
+                <div className="w-11 h-11 bg-blue-50 rounded-full flex items-center justify-center">
+                  <Truck className="text-blue-600" size={25} />
                 </div>
               </div>
             </div>
-          )}
+            <div className="bg-white rounded-xl p-5 border border-gray-200 w-full">
+              <div className="flex items-center justify-between h-full">
+                <div>
+                  <p className="text-xl font-medium text-gray-700">Today</p>
+                  <p className="mt-4 text-2xl font-bold text-purple-600">{filteredOrders.filter(order => {
+                    const orderDate = order.createdAt || '';
+                    const today = ymd(new Date());
+                    return orderDate === today;
+                  }).length}</p>
+                </div>
+                <div className="w-11 h-11 bg-purple-50 rounded-full flex items-center justify-center">
+                  <Calendar className="text-purple-600" size={25} />
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="mt-4 flex items-end gap-4">
+            <div className="relative flex items-center gap-2 flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+              <input
+                type="text"
+                placeholder="Search Load"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                onKeyPress={handleSearchKeyPress}
+                className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              {searchTerm && (
+                <>
+                  <button
+                    onClick={handleSearch}
+                    className="px-4 py-2 border border-blue-600 text-blue-700 bg-white rounded-lg hover:bg-blue-600 hover:text-white transition-colors font-medium cursor-pointer"
+                  >
+                    Search
+                  </button>
+                  <button
+                    onClick={handleClearSearch}
+                    className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-blue-50 transition-colors text-gray-700 cursor-pointer"
+                    title="Clear search"
+                  >
+                    ✕
+                  </button>
+                </>
+              )}
+            </div>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowPresetMenu(v => !v)}
+                className="w-[300px] text-left px-3 py-2 border border-gray-300 rounded-lg bg-white flex items-center justify-between hover:border-gray-400 cursor-pointer"
+              >
+                <span>
+                  {dateFilterApplied && range.startDate && range.endDate
+                    ? `${format(range.startDate, 'MMM dd, yyyy')} - ${format(range.endDate, 'MMM dd, yyyy')}`
+                    : 'Select Date Range'}
+                </span>
+                <span className="ml-3">▼</span>
+              </button>
+
+              {showPresetMenu && (
+                <div className="absolute z-50 mt-2 w-56 rounded-md border border-gray-300 bg-white">
+                  {dateFilterApplied && (
+                    <>
+                      <button
+                        onClick={() => {
+                          setDateFilterApplied(false);
+                          setRange({ startDate: null, endDate: null, key: 'selection' });
+                          setShowPresetMenu(false);
+                          setCurrentPage(1);
+                        }}
+                        className="block w-full text-left px-3 py-2 hover:bg-blue-50 text-red-600"
+                      >
+                        Clear Date Filter
+                      </button>
+                      <div className="my-1 border-t" />
+                    </>
+                  )}
+                  {Object.keys(presets).map((lbl) => (
+                    <button
+                      key={lbl}
+                      onClick={() => applyPreset(lbl)}
+                      className="block w-full text-left px-3 py-2 hover:bg-blue-50"
+                    >
+                      {lbl}
+                    </button>
+                  ))}
+                  <div className="my-1 border-t" />
+                  <button
+                    onClick={() => { setShowPresetMenu(false); setShowCustomRange(true); }}
+                    className="block w-full text-left px-3 py-2 hover:bg-blue-50"
+                  >
+                    Custom Range
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
+      {/* Custom Range calendars */}
+      {showCustomRange && (
+        <div className="fixed inset-0 z-[60] bg-black/30 flex items-center justify-center p-4" onClick={() => setShowCustomRange(false)}>
+          <div className="bg-white rounded-xl border border-gray-200 p-4" onClick={(e) => e.stopPropagation()}>
+            <DateRange
+              ranges={[range]}
+              onChange={(item) => setRange(item.selection)}
+              moveRangeOnFirstSelection={false}
+              months={2}
+              direction="horizontal"
+            />
+            <div className="flex justify-end gap-2 mt-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCustomRange(false);
+                  if (!dateFilterApplied) {
+                    setRange({ startDate: null, endDate: null, key: 'selection' });
+                  }
+                }}
+                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setDateFilterApplied(true);
+                  setShowCustomRange(false);
+                  setCurrentPage(1);
+                }}
+                className="px-4 py-2 border border-blue-600 text-blue-700 bg-white rounded-lg hover:bg-blue-600 hover:text-white"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Orders Table */}
-      <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
-              <tr>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load Num</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Shipment No</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier Name</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Container No</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Pick Up Date</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Drop Date</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Return Date</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">ASSIGNED CMT</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">CREATED BY</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">ACTIONS</th>
+      <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+        <div className="overflow-x-auto p-4">
+          <table className="w-full border-separate border-spacing-y-4">
+            <thead className="bg-slate-100">
+              <tr className="rounded-xl">
+                <th className="text-left px-5 py-3 text-gray-700 font-medium first:rounded-l-xl border-y border-gray-200 first:border-l first:border-gray-200">Load No.</th>
+                <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">Shipment No</th>
+                <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">Carrier Name</th>
+                <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">Container No</th>
+                <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">Pick Up Date</th>
+                <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">Drop Date</th>
+                <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">Return Date</th>
+                <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">ASSIGNED CMT</th>
+                <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">CREATED BY</th>
+                <th className="text-left px-5 py-3 text-gray-700 font-medium last:rounded-r-xl border-y border-gray-200 last:border-r last:border-gray-200">ACTIONS</th>
               </tr>
             </thead>
             <tbody>
@@ -668,39 +666,59 @@ export default function AllDOAssignedCMT() {
                                         order.createdBy || 'N/A';
                 
                 return (
-                  <tr key={order.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                    <td className="py-2 px-3">
+                  <tr key={order.id} className="bg-white hover:bg-gray-100 transition-colors">
+                    <td className="px-5 py-3 border-y border-gray-200 first:rounded-l-xl first:border-l first:border-gray-200">
                       <span className="font-mono text-base font-semibold text-gray-700">{loadNum}</span>
                     </td>
-                    <td className="py-2 px-3">
+                    <td className="px-5 py-3 border-y border-gray-200">
                       <span className="font-medium text-gray-700">{shipmentNo}</span>
                     </td>
-                    <td className="py-2 px-3">
-                      <span className="font-medium text-gray-700">{carrierName}</span>
-                    </td>
-                    <td className="py-2 px-3">
+                   <td className="px-5 py-3 border-y border-gray-200">
+  <div className="relative group max-w-[100px]">
+
+    {/* Truncated Text */}
+    <span className="font-medium text-gray-700 block truncate">
+      {carrierName || "-"}
+    </span>
+
+    {/* Tooltip */}
+    {carrierName && (
+      <div className="absolute left-0 top-full mt-2 hidden group-hover:block
+                      bg-gray-900 text-white text-sm
+                      px-3 py-2.5
+                      rounded-lg shadow-xl
+                      max-w-[170px]
+                      break-words
+                      z-50">
+        {carrierName}
+      </div>
+    )}
+
+  </div>
+</td>
+                    <td className="px-5 py-3 border-y border-gray-200">
                       <span className="font-medium text-gray-700">{containerNo}</span>
                     </td>
-                    <td className="py-2 px-3">
+                    <td className="px-5 py-3 border-y border-gray-200">
                       <span className="font-medium text-gray-700">{formattedPickupDate}</span>
                     </td>
-                    <td className="py-2 px-3">
+                    <td className="px-5 py-3 border-y border-gray-200">
                       <span className="font-medium text-gray-700">{formattedDropDate}</span>
                     </td>
-                    <td className="py-2 px-3">
+                    <td className="px-5 py-3 border-y border-gray-200">
                       <span className="font-medium text-gray-700">{formattedReturnDate}</span>
                     </td>
-                    <td className="py-2 px-3">
-                      <span className="font-medium text-indigo-600">{assignedCMT}</span>
+                    <td className="px-5 py-3 border-y border-gray-200">
+                      <span className="font-medium text-gray-600">{assignedCMT}</span>
                     </td>
-                    <td className="py-2 px-3">
+                    <td className="px-5 py-3 border-y border-gray-200">
                       <span className="font-medium text-gray-700">{createdByDisplay}</span>
                     </td>
-                    <td className="py-2 px-3">
+                    <td className="px-5 py-3 border-y border-gray-200 last:rounded-r-xl last:border-r last:border-gray-200">
                       <div className="flex gap-2">
                         <button
                           onClick={() => handleViewOrder(order)}
-                          className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                          className="border border-blue-300 text-blue-700 bg-white px-3 py-1 rounded-full text-base font-semibold transition-colors cursor-pointer hover:bg-blue-600 hover:text-white hover:border-blue-600"
                         >
                           View
                         </button>
@@ -727,23 +745,23 @@ export default function AllDOAssignedCMT() {
 
       {/* Pagination - Show if we have more items than per page limit */}
       {totalItems > itemsPerPage && filteredOrders.length > 0 && (
-        <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+        <div className="flex justify-between items-center mt-6 bg-white rounded-xl p-4 border border-gray-200">
           <div className="text-sm text-gray-600">
             Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems} orders
             {activeSearchTerm && ` (filtered)`}
           </div>
-          <div className="flex gap-2 items-center flex-wrap">
+          <div className="flex gap-3 items-center flex-wrap">
             <button
               onClick={() => handlePageChange(currentPage - 1)}
               disabled={currentPage === 1}
-              className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-sm font-medium"
+              className="px-2 py-1 text-gray-600 hover:text-gray-700 disabled:text-gray-300 disabled:cursor-not-allowed transition-colors text-base font-medium cursor-pointer"
             >
               Previous
             </button>
             {getPaginationPages().map((page, index) => {
               if (page === 'ellipsis') {
                 return (
-                  <span key={`ellipsis-${index}`} className="px-2 text-gray-500">
+                  <span key={`ellipsis-${index}`} className="px-1 text-gray-800 select-none">
                     ...
                   </span>
                 );
@@ -752,10 +770,10 @@ export default function AllDOAssignedCMT() {
                 <button
                   key={page}
                   onClick={() => handlePageChange(page)}
-                  className={`px-3 py-2 border rounded-lg transition-colors text-sm font-medium min-w-[40px] ${
+                  className={`w-8 h-8 flex items-center justify-center rounded-md transition-colors text-base font-medium cursor-pointer ${
                     currentPage === page
-                      ? 'bg-indigo-500 text-white border-indigo-500'
-                      : 'border-gray-300 hover:bg-gray-50 text-gray-700'
+                      ? 'border border-gray-400 text-gray-800 bg-white rounded-xl'
+                      : 'text-gray-700 hover:text-blue-700'
                   }`}
                 >
                   {page}
@@ -765,7 +783,7 @@ export default function AllDOAssignedCMT() {
             <button
               onClick={() => handlePageChange(currentPage + 1)}
               disabled={currentPage === totalPages}
-              className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-sm font-medium"
+              className="px-2 py-1 text-gray-700 hover:text-gray-700 disabled:text-gray-300 disabled:cursor-not-allowed transition-colors text-base font-medium cursor-pointer"
             >
               Next
             </button>
