@@ -7,7 +7,7 @@ export const fetchDOReport = createAsyncThunk(
   'doReport/fetchDOReport',
   async ({ 
     page = 1, 
-    limit = 15, 
+    limit = 10, 
     addDispature = null, 
     loadNumber = null,
     shipmentNo = null,
@@ -258,7 +258,7 @@ const initialState = {
     currentPage: 1,
     totalPages: 1,
     totalItems: 0,
-    itemsPerPage: 15
+    itemsPerPage: 10
   },
   loading: false,
   error: null,
