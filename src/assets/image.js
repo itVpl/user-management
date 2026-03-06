@@ -1,5 +1,5 @@
 import Group21 from '../assets/Icons super admin/Group 21.png'
-import Group22 from './Icons super admin/Group 22.png'
+const Group22 = new URL('./Icons super admin/Group 22.png', import.meta.url).href
 import Group23 from '../assets/Icons super admin/Group 23.png';
 import Group26 from './Icons super admin/Group 26.png';
 import Group28 from './Icons super admin/Group 28.png';
