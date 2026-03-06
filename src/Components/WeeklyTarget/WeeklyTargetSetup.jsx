@@ -24,12 +24,14 @@ import {
   User,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Filter,
   Edit2,
   Trash2,
   BarChart3,
   RefreshCw,
   Search,
+  X,
 } from 'lucide-react';
 
 const getToken = () =>
@@ -98,7 +100,7 @@ const SearchableDropdown = ({
   return (
     <div className={`relative ${className}`} ref={dropdownRef}>
       <div
-        className={`w-full px-4 py-3 border rounded-lg bg-white cursor-pointer border-gray-300 hover:border-gray-400 focus-within:ring-2 focus-within:ring-blue-500 ${disabled ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+        className={`w-full h-[45px] px-3 border rounded-lg bg-white cursor-pointer border-gray-300 hover:border-gray-400 focus-within:ring-2 focus-within:ring-blue-500 flex items-center ${disabled ? 'bg-gray-100 cursor-not-allowed' : ''}`}
         onClick={() => !disabled && setIsOpen(!isOpen)}
       >
         <div className="flex items-center justify-between">
@@ -396,159 +398,182 @@ export default function WeeklyTargetSetup() {
 
   return (
     <div className="p-6 bg-white min-h-screen">
-      {/* Top Section Container with Outer Border - same as DeliveryOrder */}
       <div className="flex flex-col gap-6 mb-6 border border-gray-200 rounded-xl p-6 bg-white overflow-visible">
-        {/* Row 1: Stats & Actions */}
-        <div className="flex flex-col xl:flex-row gap-6 overflow-visible">
-          {/* Left: Stats Cards - Total, Sales, CMT */}
-          <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-white rounded-xl border border-gray-200 p-6 h-[90px] flex items-center gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-white rounded-xl border border-gray-200 p-6 h-[90px]">
+            <div className="flex items-center gap-4 w-full">
               <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-gray-700 font-bold text-2xl shrink-0">
                 {pagination.total}
               </div>
-              <span className="text-gray-700 font-semibold">Total Targets</span>
+              <div className="flex-1 text-center">
+                <span className="text-gray-700 font-semibold text-lg">Total Targets</span>
+              </div>
+              <div className="w-12 shrink-0" />
             </div>
-            <div className="bg-white rounded-xl border border-gray-200 p-6 h-[90px] flex items-center gap-4">
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 p-6 h-[90px]">
+            <div className="flex items-center gap-4 w-full">
               <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-gray-700 font-bold text-2xl shrink-0">
                 {targets.filter((t) => (t.department || '').toLowerCase() === 'sales').length}
               </div>
-              <span className="text-gray-700 font-semibold">Sales</span>
+              <div className="flex-1 text-center">
+                <span className="text-gray-700 font-semibold text-lg">Sales</span>
+              </div>
+              <div className="w-12 shrink-0" />
             </div>
-            <div className="bg-white rounded-xl border border-gray-200 p-6 h-[90px] flex items-center gap-4">
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 p-6 h-[90px]">
+            <div className="flex items-center gap-4 w-full">
               <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center text-gray-700 font-bold text-2xl shrink-0">
                 {targets.filter((t) => (t.department || '').toLowerCase() === 'cmt').length}
               </div>
-              <span className="text-gray-700 font-semibold">CMT</span>
-            </div>
-          </div>
-
-          {/* Right: Date Range aage, Create Target piche - one line */}
-          <div className="flex flex-col gap-3 w-full xl:flex-1 overflow-visible">
-            <div className="flex flex-nowrap gap-2 items-stretch w-full">
-              <div className="relative flex-1 min-w-0">
-                <button
-                  type="button"
-                  onClick={() => setShowPresetMenu((v) => !v)}
-                  className="w-full text-left px-4 h-[45px] border border-gray-200 rounded-lg bg-white flex items-center justify-between text-gray-700 font-medium hover:border-gray-300 transition-colors"
-                >
-                  <span className="truncate">
-                    {range.startDate && range.endDate
-                      ? `${format(range.startDate, 'MMM dd, yyyy')} - ${format(range.endDate, 'MMM dd, yyyy')}`
-                      : 'Select Date Range'}
-                  </span>
-                  <span className="ml-2 text-gray-400 shrink-0">▼</span>
-                </button>
-                {showPresetMenu && (
-                  <div className="absolute z-50 mt-2 w-full rounded-lg border border-gray-100 bg-white shadow-lg py-1 right-0">
-                    <button
-                      onClick={() => {
-                        setRange({ startDate: null, endDate: null, key: 'selection' });
-                        setFilters((f) => ({ ...f, weekStartDate: '', weekEndDate: '' }));
-                        setPagination((p) => ({ ...p, page: 1 }));
-                        setShowPresetMenu(false);
-                      }}
-                      className="block w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-600"
-                    >
-                      Clear Filter
-                    </button>
-                    <div className="my-1 border-t border-gray-100" />
-                    {Object.keys(presets).map((lbl) => (
-                      <button
-                        key={lbl}
-                        onClick={() => applyPreset(lbl)}
-                        className="block w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-700"
-                      >
-                        {lbl}
-                      </button>
-                    ))}
-                    <div className="my-1 border-t border-gray-100" />
-                    <button
-                      onClick={() => {
-                        setShowPresetMenu(false);
-                        setShowCustomRange(true);
-                      }}
-                      className="block w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-700"
-                    >
-                      Custom Range
-                    </button>
-                  </div>
-                )}
+              <div className="flex-1 text-center">
+                <span className="text-gray-700 font-semibold text-lg">CMT</span>
               </div>
-              <button
-                type="button"
-                onClick={handleCreate}
-                className="flex items-center justify-between gap-2 px-5 h-[45px] bg-blue-600 rounded-lg text-white font-semibold hover:bg-blue-700 transition shrink-0"
-              >
-                <span>Create Target</span>
-                <Plus className="w-5 h-5" />
-              </button>
-            </div>
-            {/* Search + All Employee, All Department, All Status + Refresh - one line */}
-            <div className="flex flex-nowrap gap-2 items-center w-full min-w-0 overflow-visible">
-              <div className="relative flex-1 min-w-0" style={{ minWidth: '140px' }}>
-                <input
-                  type="text"
-                  placeholder="Search targets by employee name or ID..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full h-[45px] pl-4 pr-10 py-2 border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-colors text-gray-600 placeholder-gray-400 text-sm"
-                />
-                <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-              </div>
-              <div className="min-w-0 flex-1" style={{ minWidth: '120px' }}>
-                <SearchableDropdown
-                  value={filters.empId}
-                  onChange={(v) => handleFilterChange('empId', v)}
-                  options={[
-                    { value: '', label: 'All employees' },
-                    ...employees.map((emp) => ({
-                      value: emp.empId,
-                      label: `${emp.empId} – ${emp.employeeName || emp.name || 'N/A'}`,
-                    })),
-                  ]}
-                  placeholder="All employees"
-                  searchPlaceholder="Search employees..."
-                />
-              </div>
-              <div className="min-w-0 flex-1" style={{ minWidth: '100px' }}>
-                <SearchableDropdown
-                  value={filters.department}
-                  onChange={(v) => handleFilterChange('department', v)}
-                  options={[
-                    { value: '', label: 'All departments' },
-                    { value: 'Sales', label: 'Sales' },
-                    { value: 'CMT', label: 'CMT' },
-                  ]}
-                  placeholder="All departments"
-                  searchPlaceholder="Search..."
-                />
-              </div>
-              <div className="min-w-0 flex-1" style={{ minWidth: '100px' }}>
-                <SearchableDropdown
-                  value={filters.status}
-                  onChange={(v) => handleFilterChange('status', v)}
-                  options={[
-                    { value: '', label: 'All statuses' },
-                    { value: 'draft', label: 'Draft' },
-                    { value: 'active', label: 'Active' },
-                    { value: 'completed', label: 'Completed' },
-                  ]}
-                  placeholder="All statuses"
-                  searchPlaceholder="Search..."
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => fetchList()}
-                className="p-2.5 h-[45px] rounded-lg border border-gray-200 hover:bg-gray-50 flex items-center justify-center shrink-0"
-                title="Refresh"
-              >
-                <RefreshCw className="w-4 h-4 text-gray-600" />
-              </button>
+              <div className="w-12 shrink-0" />
             </div>
           </div>
         </div>
+        <div className="flex items-stretch gap-3">
+          <div className="relative flex-1 min-w-0">
+            <input
+              type="text"
+              placeholder="Search targets by employee name or ID..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full h-[45px] pl-10 pr-4 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-colors text-gray-700 placeholder-gray-400 text-base"
+            />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+          </div>
+          <button
+            type="button"
+            onClick={handleCreate}
+            className="px-5 h-[45px] border border-blue-600 text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors font-medium cursor-pointer flex items-center gap-2"
+          >
+            <Plus className="w-5 h-5" />
+            Create Target
+          </button>
+        </div>
       </div>
+
+       <div className="border border-gray-200 rounded-xl p-4 bg-white mb-6">
+          <div className="flex items-center gap-2 flex-nowrap overflow-visible">
+            <div className="relative w-[220px] shrink-0 z-10">
+              <button
+                type="button"
+                onClick={() => setShowPresetMenu((v) => !v)}
+                className="w-full text-left px-4 h-[45px] border border-gray-300 rounded-lg bg-white flex items-center justify-between text-gray-700 font-medium hover:bg-blue-50 transition-colors cursor-pointer"
+              >
+                <span className="truncate">
+                  {range.startDate && range.endDate
+                    ? `${format(range.startDate, 'MMM dd, yyyy')} - ${format(range.endDate, 'MMM dd, yyyy')}`
+                    : 'Select Date Range'}
+                </span>
+                <span className="ml-2 flex items-center gap-1 text-gray-500"><ChevronDown className="w-4 h-4" /></span>
+              </button>
+              {showPresetMenu && (
+                <div className="absolute z-[9999] mt-2 w-full rounded-lg border border-gray-100 bg-white shadow-lg py-1 right-0">
+                  <button
+                    onClick={() => {
+                      setRange({ startDate: null, endDate: null, key: 'selection' });
+                      setFilters((f) => ({ ...f, weekStartDate: '', weekEndDate: '' }));
+                      setPagination((p) => ({ ...p, page: 1 }));
+                      setShowPresetMenu(false);
+                    }}
+                    className="block w-full text-left px-4 py-2 hover:bg-blue-50 text-red-600"
+                  >
+                    Clear Date Filter
+                  </button>
+                  <div className="my-1 border-t border-gray-100" />
+                  {Object.keys(presets).map((lbl) => (
+                    <button
+                      key={lbl}
+                      onClick={() => applyPreset(lbl)}
+                      className="block w-full text-left px-4 py-2 hover:bg-blue-50 text-gray-700"
+                    >
+                      {lbl}
+                    </button>
+                  ))}
+                  <div className="my-1 border-t border-gray-100" />
+                  <button
+                    onClick={() => {
+                      setShowPresetMenu(false);
+                      setShowCustomRange(true);
+                    }}
+                    className="block w-full text-left px-4 py-2 hover:bg-blue-50 text-gray-700"
+                  >
+                    Custom Range
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="w-[220px] shrink-0">
+              <SearchableDropdown
+                value={filters.empId}
+                onChange={(v) => handleFilterChange('empId', v)}
+                options={[
+                  { value: '', label: 'All employees' },
+                  ...employees.map((emp) => ({
+                    value: emp.empId,
+                    label: `${emp.empId} – ${emp.employeeName || emp.name || 'N/A'}`,
+                  })),
+                ]}
+                placeholder="All employees"
+                searchPlaceholder="Search employees..."
+              />
+            </div>
+            <div className="w-[200px] shrink-0">
+              <SearchableDropdown
+                value={filters.department}
+                onChange={(v) => handleFilterChange('department', v)}
+                options={[
+                  { value: '', label: 'All departments' },
+                  { value: 'Sales', label: 'Sales' },
+                  { value: 'CMT', label: 'CMT' },
+                ]}
+                placeholder="All departments"
+                searchPlaceholder="Search..."
+              />
+            </div>
+            <div className="w-[200px] shrink-0">
+              <SearchableDropdown
+                value={filters.status}
+                onChange={(v) => handleFilterChange('status', v)}
+                options={[
+                  { value: '', label: 'All statuses' },
+                  { value: 'draft', label: 'Draft' },
+                  { value: 'active', label: 'Active' },
+                  { value: 'completed', label: 'Completed' },
+                ]}
+                placeholder="All statuses"
+                searchPlaceholder="Search..."
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setRange({ startDate: null, endDate: null, key: 'selection' });
+                setFilters({ empId: '', department: '', weekStartDate: '', weekEndDate: '', status: '' });
+                setSearchTerm('');
+                setPagination((p) => ({ ...p, page: 1 }));
+                fetchList();
+              }}
+              className="ml-auto flex items-center gap-1 px-3 h-[45px] border border-gray-300 rounded-lg bg-white hover:bg-blue-50 text-gray-700 font-medium cursor-pointer shrink-0 text-sm"
+            >
+              <X className="w-4 h-4" />
+              Clear Filters
+            </button>
+            <button
+              type="button"
+              onClick={() => fetchList()}
+              className="px-3 h-[45px] rounded-lg border border-gray-300 hover:bg-blue-50 flex items-center gap-1 justify-center shrink-0 cursor-pointer text-gray-700 font-medium text-sm"
+              title="Refresh"
+            >
+              <RefreshCw className="w-4 h-4 text-gray-600" />
+              Refresh
+            </button>
+          </div>
+        </div>
 
       {/* Custom Date Range Modal */}
       {showCustomRange && (
@@ -672,8 +697,7 @@ export default function WeeklyTargetSetup() {
         </div>
       )}
 
-      {/* Table - same card style as DeliveryOrder */}
-      <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-2xl border border-gray-200 p-4">
         <div className="overflow-x-auto">
           {loading ? (
             <div className="p-12 text-center text-gray-500">Loading...</div>
@@ -688,76 +712,90 @@ export default function WeeklyTargetSetup() {
               </p>
             </div>
           ) : (
-            <table className="w-full">
-              <thead className="bg-white border-b border-gray-200">
-                <tr>
-                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Employee</th>
-                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Department</th>
-                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Week</th>
-                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Status</th>
-                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Progress</th>
-                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Set by</th>
-                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Action</th>
+            <table className="w-full border-separate border-spacing-y-4">
+              <thead>
+                <tr className="bg-gray-100">
+                  <th className="text-left px-5 py-3 text-gray-700 font-medium first:rounded-l-xl border-y border-gray-200 first:border-l first:border-gray-200">
+                    Employee
+                  </th>
+                  <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                    Department
+                  </th>
+                  <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                    Week
+                  </th>
+                  <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                    Status
+                  </th>
+                  <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                    Progress
+                  </th>
+                  <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                    Set by
+                  </th>
+                  <th className="text-center px-5 py-3 text-gray-700 font-medium text-[15px] last:rounded-r-xl border-y border-gray-200 last:border-r last:border-gray-200">
+                    Action
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {filteredTargets.map((t) => (
-                  <tr key={t._id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                    <td className="py-4 px-4">
-                      <span className="text-sm font-medium text-gray-800">{t.employeeName}</span>
-                      <span className="text-sm text-gray-500 ml-1">({t.empId})</span>
+                  <tr key={t._id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-5 py-3 border-y border-gray-200 first:rounded-l-xl first:border-l first:border-gray-200">
+                      <span className="font-medium text-gray-700">{t.employeeName}</span>
+                      <span className="text-gray-500 ml-1">({t.empId})</span>
                     </td>
-                    <td className="py-4 px-4">
-                      <span className="text-sm font-medium text-gray-800">{t.department}</span>
+                    <td className="px-5 py-3 border-y border-gray-200">
+                      <span className="font-medium text-gray-700">{t.department}</span>
                     </td>
-                    <td className="py-4 px-4">
-                      <span className="text-sm text-gray-600">
+                    <td className="px-5 py-3 border-y border-gray-200">
+                      <span className="font-medium text-gray-700">
                         {t.weekStartDate ? new Date(t.weekStartDate).toLocaleDateString() : '–'}
                         {' – '}
                         {t.weekEndDate ? new Date(t.weekEndDate).toLocaleDateString() : '–'}
                       </span>
                     </td>
-                    <td className="py-4 px-4">
+                    <td className="px-5 py-3 border-y border-gray-200">
                       <span
-                        className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${
+                        className={`inline-flex px-2.5 py-1 rounded-full font-medium ${
                           t.status === 'completed'
-                            ? 'bg-green-100 text-green-800'
+                            ? 'bg-green-100 text-green-700'
                             : t.status === 'draft'
-                            ? 'bg-gray-100 text-gray-800'
-                            : 'bg-blue-100 text-blue-800'
+                            ? 'bg-gray-100 text-gray-700'
+                            : 'bg-blue-100 text-blue-700'
                         }`}
                       >
                         {t.status || 'active'}
                       </span>
                     </td>
-                    <td className="py-4 px-4">
-                      <span className="text-sm text-gray-700">{t.progress ?? 0}%</span>
+                    <td className="px-5 py-3 border-y border-gray-200">
+                      <span className="font-medium text-gray-700">{t.progress ?? 0}%</span>
                     </td>
-                    <td className="py-4 px-4">
-                      <span className="text-sm font-medium text-gray-800">
+                    <td className="px-5 py-3 border-y border-gray-200">
+                      <span className="font-medium text-gray-700">
                         {t.setBy?.employeeName || t.setBy?.empId || '–'}
                       </span>
                     </td>
-                    <td className="py-4 px-4">
-                      <div className="flex gap-3">
+                    <td className="px-5 py-3 border-y border-gray-200 last:rounded-r-xl last:border-r last:border-gray-200">
+                      <div className="flex gap-2">
                         <button
                           type="button"
                           onClick={() => handleView(t._id)}
-                          className="px-4 py-1 rounded border border-green-500 text-green-500 text-sm font-medium hover:bg-green-50 transition-colors min-w-[70px]"
+                          className="px-3 py-1 border border-green-600 text-green-700 bg-white rounded-xl text-base font-semibold transition-colors cursor-pointer hover:bg-green-600 hover:text-white hover:border-green-600"
                         >
                           View
                         </button>
                         <button
                           type="button"
                           onClick={() => handleEdit(t._id)}
-                          className="px-4 py-1 rounded border border-orange-500 text-orange-500 text-sm font-medium hover:bg-orange-50 transition-colors min-w-[70px]"
+                          className="px-3 py-1 border border-orange-600 text-orange-700 bg-white rounded-xl text-base font-semibold transition-colors cursor-pointer hover:bg-orange-600 hover:text-white hover:border-orange-600"
                         >
                           Edit
                         </button>
                         <button
                           type="button"
                           onClick={() => openDeleteModal(t._id)}
-                          className="px-4 py-1 rounded border border-red-500 text-red-500 text-sm font-medium hover:bg-red-50 transition-colors min-w-[70px]"
+                          className="px-3 py-1 border border-red-600 text-red-700 bg-white rounded-xl text-base font-semibold transition-colors cursor-pointer hover:bg-red-600 hover:text-white hover:border-red-600"
                         >
                           Delete
                         </button>
@@ -771,36 +809,74 @@ export default function WeeklyTargetSetup() {
         </div>
       </div>
 
-      {/* Pagination - same as DeliveryOrder */}
       {pagination.totalPages > 1 && filteredTargets.length > 0 && (
         <div className="flex justify-between items-center mt-6 bg-white rounded-2xl border border-gray-200 p-4">
           <div className="text-sm text-gray-600">
-            Showing {((pagination.page - 1) * pagination.limit) + 1} to{' '}
-            {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} targets
+            Showing {((pagination.page - 1) * pagination.limit) + 1} to {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} targets
           </div>
-          <div className="flex gap-1 items-center">
+          <div className="flex gap-3 items-center flex-wrap">
             <button
               type="button"
               onClick={() => setPagination((p) => ({ ...p, page: p.page - 1 }))}
               disabled={pagination.page <= 1}
-              className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+              className="px-2 py-1 text-black-600 hover:text-gray-700 disabled:text-gray-300 disabled:cursor-not-allowed transition-colors text-base font-medium cursor-pointer"
             >
-              <ChevronLeft size={18} />
-              <span>Previous</span>
+              Previous
             </button>
-            <div className="flex items-center gap-1 mx-4">
-              <span className="px-2 text-gray-600 text-sm font-medium">
-                Page {pagination.page} of {pagination.totalPages}
-              </span>
-            </div>
+            {(() => {
+              const pages = [];
+              const totalPages = pagination.totalPages || 1;
+              const currentPage = pagination.page || 1;
+              const maxVisible = 7;
+              if (totalPages <= maxVisible) {
+                for (let i = 1; i <= totalPages; i++) pages.push(i);
+              } else {
+                pages.push(1);
+                if (currentPage <= 4) {
+                  for (let i = 2; i <= 5; i++) pages.push(i);
+                  pages.push('ellipsis');
+                  pages.push(totalPages);
+                } else if (currentPage >= totalPages - 3) {
+                  pages.push('ellipsis');
+                  for (let i = totalPages - 4; i <= totalPages; i++) pages.push(i);
+                } else {
+                  pages.push('ellipsis');
+                  for (let i = currentPage - 1; i <= currentPage + 1; i++) pages.push(i);
+                  pages.push('ellipsis');
+                  pages.push(totalPages);
+                }
+              }
+              return pages.map((page, index) => {
+                if (page === 'ellipsis') {
+                  return (
+                    <span key={`ellipsis-${index}`} className="px-1 text-gray-800 select-none">
+                      ...
+                    </span>
+                  );
+                }
+                return (
+                  <button
+                    key={page}
+                    type="button"
+                    onClick={() => setPagination((p) => ({ ...p, page }))}
+                    className={`w-8 h-8 flex items-center justify-center rounded-md transition-colors text-base font-medium cursor-pointer ${
+                      pagination.page === page
+                        ? 'border border-gray-400 text-gray-800 bg-white rounded-xl'
+                        : 'text-gray-700 hover:text-blue-700'
+                    }`}
+                  >
+                    {page}
+                  </button>
+                );
+              });
+            })()}
             <button
               type="button"
               onClick={() => setPagination((p) => ({ ...p, page: p.page + 1 }))}
               disabled={pagination.page >= pagination.totalPages}
-              className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+              className="px-2 py-1 text-black-600 hover:text-gray-700 disabled:text-gray-300 disabled:cursor-not-allowed transition-colors text-base font-medium cursor-pointer"
             >
-              <span>Next</span>
-              <ChevronRight size={18} />
+              Next
             </button>
           </div>
         </div>
