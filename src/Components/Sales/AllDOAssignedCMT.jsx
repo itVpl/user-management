@@ -670,9 +670,29 @@ export default function AllDOAssignedCMT() {
                     <td className="px-5 py-3 border-y border-gray-200 first:rounded-l-xl first:border-l first:border-gray-200">
                       <span className="font-mono text-base font-semibold text-gray-700">{loadNum}</span>
                     </td>
-                    <td className="px-5 py-3 border-y border-gray-200">
-                      <span className="font-medium text-gray-700">{shipmentNo}</span>
-                    </td>
+                   <td className="px-5 py-3 border-y border-gray-200">
+  <div className="relative group max-w-[90px]">
+
+    {/* Truncated Text */}
+    <span className="font-medium text-gray-700 block truncate">
+      {shipmentNo || "-"}
+    </span>
+
+    {/* Tooltip */}
+    {shipmentNo && (
+      <div className="absolute left-0 top-full mt-2 hidden group-hover:block
+                      bg-gray-900 text-white text-sm
+                      px-3 py-2.5
+                      rounded-lg shadow-xl
+                      max-w-[180px]
+                      break-words
+                      z-50">
+        {shipmentNo}
+      </div>
+    )}
+
+  </div>
+</td>
                    <td className="px-5 py-3 border-y border-gray-200">
   <div className="relative group max-w-[100px]">
 
@@ -696,9 +716,29 @@ export default function AllDOAssignedCMT() {
 
   </div>
 </td>
-                    <td className="px-5 py-3 border-y border-gray-200">
-                      <span className="font-medium text-gray-700">{containerNo}</span>
-                    </td>
+                   <td className="px-5 py-3 border-y border-gray-200">
+  <div className="relative group max-w-[90px]">
+    
+    {/* Truncated Text */}
+    <span className="font-medium text-gray-700 block truncate">
+      {containerNo || "-"}
+    </span>
+
+    {/* Tooltip */}
+    {containerNo && (
+      <div className="absolute left-0 top-full mt-2 hidden group-hover:block
+                      bg-gray-900 text-white text-sm
+                      px-3 py-2.5
+                      rounded-lg shadow-xl
+                      max-w-[180px]
+                      break-words
+                      z-50">
+        {containerNo}
+      </div>
+    )}
+
+  </div>
+</td>
                     <td className="px-5 py-3 border-y border-gray-200">
                       <span className="font-medium text-gray-700">{formattedPickupDate}</span>
                     </td>
@@ -708,12 +748,53 @@ export default function AllDOAssignedCMT() {
                     <td className="px-5 py-3 border-y border-gray-200">
                       <span className="font-medium text-gray-700">{formattedReturnDate}</span>
                     </td>
-                    <td className="px-5 py-3 border-y border-gray-200">
-                      <span className="font-medium text-gray-600">{assignedCMT}</span>
-                    </td>
-                    <td className="px-5 py-3 border-y border-gray-200">
-                      <span className="font-medium text-gray-700">{createdByDisplay}</span>
-                    </td>
+                   <td className="px-5 py-3 border-y border-gray-200">
+  <div className="relative group max-w-[90px]">
+    
+    {/* Truncated Text */}
+    <span className="font-medium text-gray-600 block truncate">
+      {assignedCMT || "-"}
+    </span>
+
+    {/* Tooltip */}
+    {assignedCMT && (
+      <div className="absolute left-0 top-full mt-2 hidden group-hover:block
+                      bg-gray-900 text-white text-sm
+                      px-3 py-2.5
+                      rounded-lg shadow-xl
+                      max-w-[180px]
+                      break-words
+                      z-50">
+        {assignedCMT}
+      </div>
+    )}
+
+  </div>
+</td>
+
+<td className="px-5 py-3 border-y border-gray-200">
+  <div className="relative group max-w-[90px]">
+    
+    {/* Truncated Text */}
+    <span className="font-medium text-gray-700 block truncate">
+      {createdByDisplay || "-"}
+    </span>
+
+    {/* Tooltip */}
+    {createdByDisplay && (
+      <div className="absolute left-0 top-full mt-2 hidden group-hover:block
+                      bg-gray-900 text-white text-sm
+                      px-3 py-2.5
+                      rounded-lg shadow-xl
+                      max-w-[180px]
+                      break-words
+                      z-50">
+        {createdByDisplay}
+      </div>
+    )}
+
+  </div>
+</td>
                     <td className="px-5 py-3 border-y border-gray-200 last:rounded-r-xl last:border-r last:border-gray-200">
                       <div className="flex gap-2">
                         <button
