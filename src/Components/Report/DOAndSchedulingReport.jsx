@@ -34,6 +34,8 @@ export default function DOAndSchedulingReport() {
   const cmtFilterRef = useRef(null);
 
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [todayCount, setTodayCount] = useState(0);
   const itemsPerPage = 10;
 
   const presets = {
@@ -53,7 +55,7 @@ export default function DOAndSchedulingReport() {
 
   const ymd = (d) => (d ? format(d, 'yyyy-MM-dd') : null);
 
-  const fetchData = async () => {
+  const fetchData = async (page = currentPage, limit = itemsPerPage, startDateParam = null, endDateParam = null) => {
     setLoading(true);
     try {
       const token = sessionStorage.getItem('token') || localStorage.getItem('token');
@@ -61,34 +63,60 @@ export default function DOAndSchedulingReport() {
         alertify.error('Please login again.');
         return;
       }
-      const startDate = ymd(range.startDate);
-      const endDate = ymd(range.endDate);
+      const startDate = startDateParam ?? ymd(range.startDate);
+      const endDate = endDateParam ?? ymd(range.endDate);
       if (!startDate || !endDate) {
         setAssignedDOs([]);
+        setTotalCount(0);
         setLoading(false);
         return;
       }
+      const params = { startDate, endDate, page, limit };
+      if (searchTerm?.trim()) params.search = searchTerm.trim();
+      if (selectedCmtEmpId) params.empId = selectedCmtEmpId;
       const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/do/do/all-cmt-assignments`, {
-        params: { startDate, endDate },
+        params,
         headers: { Authorization: `Bearer ${token}` }
       });
-      if (res.data?.success && Array.isArray(res.data?.data?.assignedDOs)) {
-        setAssignedDOs(res.data.data.assignedDOs);
+      const data = res.data?.data;
+      if (res.data?.success && Array.isArray(data?.assignedDOs)) {
+        setAssignedDOs(data.assignedDOs);
+        const pagination = data.pagination || {};
+        const total = pagination.totalItems ?? data.totalCount ?? data.total ?? data.assignedDOs?.length ?? 0;
+        setTotalCount(typeof total === 'number' ? total : data.assignedDOs.length);
+        setTodayCount(data.todayCount ?? 0);
       } else {
         setAssignedDOs([]);
+        setTotalCount(0);
+        setTodayCount(0);
       }
     } catch (err) {
       console.error(err);
       alertify.error(err.response?.data?.message || 'Failed to load DO and Scheduling report');
       setAssignedDOs([]);
+      setTotalCount(0);
+      setTodayCount(0);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchData();
-  }, [range.startDate, range.endDate]);
+    setCurrentPage(1);
+  }, [range.startDate, range.endDate, searchTerm, selectedCmtEmpId]);
+
+  useEffect(() => {
+    const startDate = ymd(range.startDate);
+    const endDate = ymd(range.endDate);
+    if (startDate && endDate) {
+      fetchData(currentPage, itemsPerPage, startDate, endDate);
+    } else {
+      setAssignedDOs([]);
+      setTotalCount(0);
+      setTodayCount(0);
+      setLoading(false);
+    }
+  }, [range.startDate, range.endDate, currentPage, searchTerm, selectedCmtEmpId]);
 
   const fetchCmtUsers = async () => {
     setCmtUsersLoading(true);
@@ -134,37 +162,10 @@ export default function DOAndSchedulingReport() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showPresetMenu]);
 
-  const filteredOrders = useMemo(() => {
-    let list = [...assignedDOs];
-    const term = (searchTerm || '').trim().toLowerCase();
-    if (selectedCmtEmpId) {
-      list = list.filter((row) => (row.assignedToCMT?.empId || row.assignedToCMT?._id) === selectedCmtEmpId);
-    }
-    if (!term) return list;
-    return list.filter((row) => {
-      const createdBy = row.createdBySalesUser?.employeeName || '';
-      const assignedTo = row.assignedToCMT?.employeeName || '';
-      const customer = row.customerName || '';
-      const cust0 = row.customers?.[0] || {};
-      const loadNo = cust0.loadNo || '';
-      const dispatcherName = cust0.dispatcherName || '';
-      const carrier = row.carrier?.carrierName || '';
-      const loadType = row.loadType || '';
-      return [createdBy, assignedTo, customer, loadNo, dispatcherName, carrier, loadType].some((s) =>
-        String(s).toLowerCase().includes(term)
-      );
-    });
-  }, [assignedDOs, searchTerm, selectedCmtEmpId]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredOrders.length / itemsPerPage));
+  const totalPages = Math.max(1, Math.ceil(totalCount / itemsPerPage));
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const currentOrders = filteredOrders.slice(startIndex, startIndex + itemsPerPage);
-  const totalItems = filteredOrders.length;
-  const todayStr = format(new Date(), 'yyyy-MM-dd');
-  const todayCount = useMemo(
-    () => assignedDOs.filter((o) => o.createdAt && o.createdAt.startsWith(todayStr)).length,
-    [assignedDOs, todayStr]
-  );
+  const currentOrders = assignedDOs;
+  const totalItems = totalCount;
 
   const filteredCmtUsers = useMemo(() => {
     const q = (cmtFilterSearch || '').trim().toLowerCase();
@@ -180,10 +181,6 @@ export default function DOAndSchedulingReport() {
     () => (selectedCmtEmpId ? cmtUsers.find((u) => (u.empId || u._id) === selectedCmtEmpId) : null),
     [cmtUsers, selectedCmtEmpId]
   );
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, range.startDate, range.endDate, selectedCmtEmpId]);
 
   const handlePageChange = (page) => {
     if (page < 1 || page > totalPages) return;
@@ -209,7 +206,7 @@ export default function DOAndSchedulingReport() {
       alertify.error('No data to export');
       return;
     }
-    const headers = ['Load No', 'Dispatcher Name', 'Carrier Name', 'Load Type', 'Created By (Sales)', 'Assigned To (CMT)', 'Assigned At'];
+    const headers = ['Load No', 'Dispatcher Name', 'Carrier Name', 'Load Type', 'Created By (Sales)', 'Assigned To (CMT)', 'Assigned At', 'Status'];
     const rows = dataToExport.map((order) => {
       const cust0 = order.customers?.[0] || {};
       const loadNo = cust0.loadNo || 'N/A';
@@ -221,6 +218,9 @@ export default function DOAndSchedulingReport() {
       const assignedAt = order.assignedToCMT?.assignedAt
         ? format(new Date(order.assignedToCMT.assignedAt), 'MMM dd, yyyy HH:mm')
         : 'N/A';
+      const status = order.loadReference?.status
+        ? (order.loadReference.status[0].toUpperCase() + order.loadReference.status.slice(1).toLowerCase().replace(/-|_/g, ' '))
+        : 'N/A';
       return [
         `"${String(loadNo).replace(/"/g, '""')}"`,
         `"${String(dispatcherName).replace(/"/g, '""')}"`,
@@ -228,7 +228,8 @@ export default function DOAndSchedulingReport() {
         `"${String(loadType).replace(/"/g, '""')}"`,
         `"${String(createdBy).replace(/"/g, '""')}"`,
         `"${String(assignedTo).replace(/"/g, '""')}"`,
-        `"${String(assignedAt).replace(/"/g, '""')}"`
+        `"${String(assignedAt).replace(/"/g, '""')}"`,
+        `"${String(status).replace(/"/g, '""')}"`
       ];
     });
     let csvContent = [headers.join(','), ...rows.map((row) => row.join(','))].join('\n');
@@ -250,7 +251,7 @@ export default function DOAndSchedulingReport() {
   };
 
   const handleExportCSVClick = () => {
-    if (filteredOrders.length === 0) {
+    if (totalCount === 0) {
       alertify.error('No data to export');
       return;
     }
@@ -258,7 +259,7 @@ export default function DOAndSchedulingReport() {
     setShowESignModal(true);
   };
 
-  const handleESignConfirm = () => {
+  const handleESignConfirm = async () => {
     const name = (eSignName || '').trim();
     if (!name) {
       alertify.error('Please enter your name for E-Sign');
@@ -267,9 +268,41 @@ export default function DOAndSchedulingReport() {
     setExportLoading(true);
     setShowESignModal(false);
     setESignName('');
-    handleExportCSV(filteredOrders, name);
-    alertify.success(`Exported ${filteredOrders.length} orders`);
-    setExportLoading(false);
+    try {
+      const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+      if (!token) {
+        alertify.error('Please login again.');
+        setExportLoading(false);
+        return;
+      }
+      const startDate = ymd(range.startDate);
+      const endDate = ymd(range.endDate);
+      if (!startDate || !endDate) {
+        alertify.error('Select date range');
+        setExportLoading(false);
+        return;
+      }
+      const params = { startDate, endDate, limit: 0 };
+      if (searchTerm?.trim()) params.search = searchTerm.trim();
+      if (selectedCmtEmpId) params.empId = selectedCmtEmpId;
+      const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/do/do/all-cmt-assignments`, {
+        params,
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const list = res.data?.success && Array.isArray(res.data?.data?.assignedDOs) ? res.data.data.assignedDOs : [];
+      if (list.length === 0) {
+        alertify.error('No data to export');
+        setExportLoading(false);
+        return;
+      }
+      handleExportCSV(list, name);
+      alertify.success(`Exported ${list.length} orders`);
+    } catch (err) {
+      console.error(err);
+      alertify.error(err.response?.data?.message || 'Export failed');
+    } finally {
+      setExportLoading(false);
+    }
   };
 
   const showLoadingOverlay = loading && assignedDOs.length > 0;
@@ -306,7 +339,7 @@ export default function DOAndSchedulingReport() {
           <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-white rounded-xl border border-gray-200 p-6 h-[90px] flex items-center relative">
               <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-gray-700 font-bold text-2xl">
-                {filteredOrders.length}
+                {totalCount}
               </div>
               <div className="absolute inset-0 flex items-center justify-center text-gray-700 font-semibold">
                 Total Orders
@@ -370,7 +403,7 @@ export default function DOAndSchedulingReport() {
             <button
               type="button"
               onClick={handleExportCSVClick}
-              disabled={filteredOrders.length === 0 || exportLoading}
+              disabled={totalCount === 0 || exportLoading}
               className="mt-2 w-full flex items-center justify-center gap-2 px-4 h-[45px] bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               title="Export report to CSV (E-Sign required)"
             >
@@ -453,9 +486,10 @@ export default function DOAndSchedulingReport() {
         <div className="fixed inset-0 z-[60] bg-black/30 flex items-center justify-center p-4" onClick={() => setShowCustomRange(false)}>
           <div className="bg-white rounded-xl shadow-2xl p-4" onClick={(e) => e.stopPropagation()}>
             <DateRange
-              ranges={[range.startDate && range.endDate ? range : { startDate: new Date(), endDate: new Date(), key: 'selection' }]}
+              ranges={[range.startDate && range.endDate ? { ...range, startDate: range.startDate, endDate: range.endDate, key: 'selection' } : { startDate: new Date(), endDate: new Date(), key: 'selection' }]}
               onChange={(item) => {
-                if (item.selection?.startDate && item.selection?.endDate) setRange(item.selection);
+                const sel = item.selection;
+                if (sel?.startDate && sel?.endDate) setRange({ startDate: sel.startDate, endDate: sel.endDate, key: 'selection' });
               }}
               moveRangeOnFirstSelection={false}
               months={2}
@@ -466,11 +500,11 @@ export default function DOAndSchedulingReport() {
               <button type="button" onClick={() => setShowCustomRange(false)} className="px-4 py-2 border rounded-lg hover:bg-gray-50">Cancel</button>
               <button
                 type="button"
-                onClick={() => range.startDate && range.endDate && setShowCustomRange(false)}
+                onClick={() => { if (range.startDate && range.endDate) setShowCustomRange(false); }}
                 className={`px-4 py-2 rounded-lg ${range.startDate && range.endDate ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
                 disabled={!range.startDate || !range.endDate}
               >
-                OK
+                Apply
               </button>
             </div>
           </div>
@@ -479,7 +513,7 @@ export default function DOAndSchedulingReport() {
 
       <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
-          {filteredOrders.length === 0 ? (
+          {totalCount === 0 && !loading ? (
             <div className="text-center py-12">
               <Truck className="w-16 h-16 text-gray-300 mx-auto mb-4" />
               <p className="text-gray-500 text-lg">
@@ -500,6 +534,7 @@ export default function DOAndSchedulingReport() {
                   <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Created By (Sales)</th>
                   <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Assigned To (CMT)</th>
                   <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Assigned At</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Status</th>
                   <th className="text-center py-4 px-4 text-gray-800 font-medium text-base">Action</th>
                 </tr>
               </thead>
@@ -514,6 +549,9 @@ export default function DOAndSchedulingReport() {
                   const cust0 = order.customers?.[0] || {};
                   const loadNo = cust0.loadNo || 'N/A';
                   const dispatcherName = cust0.dispatcherName || 'N/A';
+                  const loadStatus = order.loadReference?.status
+                    ? (order.loadReference.status[0].toUpperCase() + order.loadReference.status.slice(1).toLowerCase().replace(/-|_/g, ' '))
+                    : '—';
                   const orderForModal = {
                     id: order._id,
                     doId: `DO-${String(order._id || '').slice(-6) || '—'}`,
@@ -531,6 +569,15 @@ export default function DOAndSchedulingReport() {
                       <td className="py-4 px-4"><span className="text-sm font-medium text-gray-800">{assignedTo}</span></td>
                       <td className="py-4 px-4"><span className="text-sm text-gray-700">{assignedAt}</span></td>
                       <td className="py-4 px-4">
+                        <span className={`inline-flex px-2.5 py-1 rounded-md text-xs font-medium ${
+                          (loadStatus || '').toLowerCase() === 'delivered' ? 'bg-green-100 text-green-800' :
+                          (loadStatus || '').toLowerCase().includes('transit') ? 'bg-amber-100 text-amber-800' :
+                          'bg-gray-100 text-gray-700'
+                        }`}>
+                          {loadStatus}
+                        </span>
+                      </td>
+                      <td className="py-4 px-4">
                         <button
                           onClick={() => setViewingOrder(orderForModal)}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
@@ -547,10 +594,10 @@ export default function DOAndSchedulingReport() {
         </div>
       </div>
 
-      {totalPages > 1 && (
-        <div className="flex justify-between items-center mt-6 bg-white rounded-2xl border border-gray-200 p-4">
+      {totalCount > 0 && (
+        <div className="flex flex-wrap justify-between items-center gap-4 mt-6 bg-white rounded-2xl border border-gray-200 p-4">
           <div className="text-sm text-gray-600">
-            Showing {totalItems === 0 ? 0 : startIndex + 1} to {Math.min(startIndex + itemsPerPage, totalItems)} of {totalItems} orders
+            Showing {startIndex + 1} to {startIndex + currentOrders.length} of {totalItems} orders
             {searchTerm && ` (searching: "${searchTerm}")`}
           </div>
           <div className="flex gap-1 items-center">
@@ -628,7 +675,7 @@ export default function DOAndSchedulingReport() {
         onClose={() => setViewingOrder(null)}
         order={viewingOrder}
         cmtEmpId={viewingOrder?.raw?.assignedToCMT?.empId || ''}
-        onForwardSuccess={() => fetchData()}
+        onForwardSuccess={() => { const s = ymd(range.startDate); const e = ymd(range.endDate); if (s && e) fetchData(1, itemsPerPage, s, e); }}
         reportView={true}
       />
     </div>

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import axios from 'axios';
 import { FaArrowLeft, FaDownload, FaEye, FaFileAlt } from 'react-icons/fa';
-import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Eye, Search, BarChart3, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
+import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Eye, Search, BarChart3, ChevronLeft, ChevronRight, ChevronDown, Calendar } from 'lucide-react';
 import 'react-date-range/dist/styles.css';
 import 'react-date-range/dist/theme/default.css';
 import { DateRange } from 'react-date-range';
@@ -34,17 +34,21 @@ export default function TruckerReport() {
   const [selectedTrucker, setSelectedTrucker] = useState(null);
   const [reason, setReason] = useState('');
   const [selectedDocument, setSelectedDocument] = useState(null);
-  const [searchTerm, setSearchTerm] = useState(''); // Input value (what user types)
-  const [activeSearchTerm, setActiveSearchTerm] = useState(''); // Active search term (what's actually being searched)
-  const [searchFilter, setSearchFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeSearchTerm, setActiveSearchTerm] = useState('');
   const [range, setRange] = useState({ startDate: null, endDate: null, key: 'selection' });
   const [showPresetMenu, setShowPresetMenu] = useState(false);
   const [showCustomRange, setShowCustomRange] = useState(false);
   const [showESignModal, setShowESignModal] = useState(false);
   const [eSignName, setESignName] = useState('');
   const [exportLoading, setExportLoading] = useState(false);
+  const [cmtUsers, setCmtUsers] = useState([]);
+  const [cmtUsersLoading, setCmtUsersLoading] = useState(false);
+  const [selectedCmtEmpId, setSelectedCmtEmpId] = useState('');
+  const [showCmtFilter, setShowCmtFilter] = useState(false);
+  const [cmtFilterSearch, setCmtFilterSearch] = useState('');
   const dateRangeDropdownRef = React.useRef(null);
+  const cmtFilterRef = React.useRef(null);
 
   const presets = {
     'Today': [new Date(), new Date()],
@@ -60,53 +64,49 @@ export default function TruckerReport() {
     setShowPresetMenu(false);
   };
 
+  // Fetch CMT users from GET /api/v1/inhouseUser/department/CMT
+  useEffect(() => {
+    setCmtUsersLoading(true);
+    const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+    axios.get(`${API_CONFIG.BASE_URL}/api/v1/inhouseUser/department/CMT`, {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+    }).then((res) => {
+      const list = res.data?.employees || res.data?.data || (Array.isArray(res.data) ? res.data : []);
+      setCmtUsers(Array.isArray(list) ? list : []);
+    }).catch(() => setCmtUsers([])).finally(() => setCmtUsersLoading(false));
+  }, []);
+
+  const filteredCmtUsers = useMemo(() => {
+    const q = (cmtFilterSearch || '').trim().toLowerCase();
+    if (!q) return cmtUsers;
+    return cmtUsers.filter((u) => {
+      const name = (u.employeeName || u.empName || u.aliasName || '').toLowerCase();
+      const empIdStr = String(u.empId || u._id || '').toLowerCase();
+      return name.includes(q) || empIdStr.includes(q);
+    });
+  }, [cmtUsers, cmtFilterSearch]);
+
+  const selectedCmtUser = useMemo(
+    () => (selectedCmtEmpId ? cmtUsers.find((u) => (u.empId || u._id) === selectedCmtEmpId) : null),
+    [cmtUsers, selectedCmtEmpId]
+  );
+
   const currentPage = pagination.currentPage;
-  const itemsPerPage = 10; // 10 rows per page
+  const itemsPerPage = 10;
 
-  // When date range is active, fetch more records and filter client-side (same as DeliveryOrder)
-  const isDateFilterActive = !!(range.startDate && range.endDate);
-
-  // Build search parameters for API
+  // API filters: page, limit, search, startDate, endDate, empId
   const buildSearchParams = useCallback(() => {
     const params = {
-      page: isDateFilterActive ? 1 : currentPage,
-      limit: isDateFilterActive ? 1000 : itemsPerPage,
+      page: currentPage,
+      limit: itemsPerPage,
       forceRefresh: false
     };
-
-    // Handle search term based on searchFilter (use activeSearchTerm instead of searchTerm)
-    const searchTermTrimmed = activeSearchTerm.trim();
-    
-    if (searchTermTrimmed) {
-      // Map searchFilter to API parameters
-      if (searchFilter === 'mc_dot') {
-        // Use individual field filter for MC/DOT
-        params.mcDotNo = searchTermTrimmed;
-      } else if (searchFilter === 'all') {
-        // Use general search (searches across multiple fields)
-        params.search = searchTermTrimmed;
-      } else {
-        // For 'state' and 'city', use general search (API doesn't have specific filters for these)
-        // We'll do client-side filtering for state/city after fetching
-        params.search = searchTermTrimmed;
-      }
-    }
-
-    // Status filter
-    if (statusFilter && statusFilter !== 'all') {
-      params.status = statusFilter;
-    }
-
-    // Date range filter (sent to API if it supports it; we also filter client-side so it always works)
-    if (range.startDate) {
-      params.createdFrom = format(range.startDate, 'yyyy-MM-dd');
-    }
-    if (range.endDate) {
-      params.createdTo = format(range.endDate, 'yyyy-MM-dd');
-    }
-
+    if (activeSearchTerm.trim()) params.search = activeSearchTerm.trim();
+    if (range.startDate) params.startDate = format(range.startDate, 'yyyy-MM-dd');
+    if (range.endDate) params.endDate = format(range.endDate, 'yyyy-MM-dd');
+    if (selectedCmtEmpId && selectedCmtEmpId.trim()) params.empId = selectedCmtEmpId.trim();
     return params;
-  }, [currentPage, itemsPerPage, isDateFilterActive, activeSearchTerm, searchFilter, statusFilter, range.startDate, range.endDate]);
+  }, [currentPage, itemsPerPage, activeSearchTerm, range.startDate, range.endDate, selectedCmtEmpId]);
 
   // Handle search button click
   const handleSearch = () => {
@@ -135,14 +135,14 @@ export default function TruckerReport() {
   }, [error]);
 
 
-  // Reset to first page when filters change (but not when searchTerm changes - only when activeSearchTerm changes)
+  // Reset to first page when filters change
   useEffect(() => {
-    if (activeSearchTerm || searchFilter !== 'all' || statusFilter !== 'all' || range.startDate || range.endDate) {
+    if (activeSearchTerm || range.startDate || range.endDate || selectedCmtEmpId) {
       dispatch(setCurrentPage(1));
     }
-  }, [activeSearchTerm, searchFilter, statusFilter, range.startDate, range.endDate, dispatch]);
+  }, [activeSearchTerm, range.startDate, range.endDate, selectedCmtEmpId, dispatch]);
 
-  // Close date range preset menu on outside click (same as DeliveryOrder behavior)
+  // Close date range preset menu on outside click
   useEffect(() => {
     if (!showPresetMenu) return;
     const handleClickOutside = (e) => {
@@ -153,6 +153,18 @@ export default function TruckerReport() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showPresetMenu]);
+
+  // Close CMT filter dropdown on outside click
+  useEffect(() => {
+    if (!showCmtFilter) return;
+    const handleClickOutside = (e) => {
+      if (cmtFilterRef.current && !cmtFilterRef.current.contains(e.target)) {
+        setShowCmtFilter(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showCmtFilter]);
 
   const handleStatusUpdate = async (status) => {
     try {
@@ -260,7 +272,7 @@ export default function TruckerReport() {
     URL.revokeObjectURL(url);
   };
 
-  const hasAnyFilter = isDateFilterActive || activeSearchTerm.trim() || statusFilter !== 'all';
+  const hasAnyFilter = !!(activeSearchTerm.trim() || (range.startDate && range.endDate) || (selectedCmtEmpId && selectedCmtEmpId.trim()));
 
   const handleExportCSVClick = () => {
     if (hasAnyFilter && filteredTruckers.length === 0) {
@@ -276,8 +288,13 @@ export default function TruckerReport() {
     setShowESignModal(false);
     try {
       const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+      const params = { page: 1, limit: 10000 };
+      if (activeSearchTerm.trim()) params.search = activeSearchTerm.trim();
+      if (range.startDate) params.startDate = format(range.startDate, 'yyyy-MM-dd');
+      if (range.endDate) params.endDate = format(range.endDate, 'yyyy-MM-dd');
+      if (selectedCmtEmpId && selectedCmtEmpId.trim()) params.empId = selectedCmtEmpId.trim();
       const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/shipper_driver/truckers`, {
-        params: { page: 1, limit: 10000 },
+        params,
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
       });
       const list = res.data?.data || [];
@@ -302,67 +319,15 @@ export default function TruckerReport() {
     }
     setShowESignModal(false);
     setESignName('');
-    if (!hasAnyFilter) {
-      fetchAllTruckersAndExport(name);
-    } else {
-      handleExportCSV(filteredTruckers, name);
-    }
+    // Export uses current filters (search, startDate, endDate, empId) with high limit
+    fetchAllTruckersAndExport(name);
   };
 
-  // Helper: date to YYYY-MM-DD for comparison (handles createdAt string or Date)
-  const toYmd = (d) => {
-    if (d == null || d === '') return '';
-    const date = d instanceof Date ? d : new Date(d);
-    return isNaN(date.getTime()) ? '' : format(date, 'yyyy-MM-dd');
-  };
-  // Get trucker created date (API may send createdAt or created_at)
-  const getTruckerCreatedYmd = (trucker) =>
-    toYmd(trucker?.createdAt ?? trucker?.created_at);
-
-  // -------- CLIENT-SIDE FILTERING (only for fields not supported by API) --------
-  // Handles: State/City search; Date range (so filter works even if API ignores date params)
-  const filteredTruckers = useMemo(() => {
-    let result = [...(truckers || [])];
-    const term = activeSearchTerm.trim().toLowerCase();
-
-    // State/City search (client-side only - API search doesn't include these fields)
-    if (term && (searchFilter === 'state' || searchFilter === 'city')) {
-      result = result.filter(trucker => {
-        const state = trucker.state?.toLowerCase() || '';
-        const city = trucker.city?.toLowerCase() || '';
-        
-        if (searchFilter === 'state') {
-          return state.startsWith(term) || state === term;
-        } else if (searchFilter === 'city') {
-          return city.includes(term);
-        }
-        return true;
-      });
-    }
-
-    // Date range filter (client-side so it always works)
-    if (range.startDate && range.endDate) {
-      const fromYmd = toYmd(range.startDate);
-      const endYmd = toYmd(range.endDate);
-      if (fromYmd && endYmd) {
-        result = result.filter(trucker => {
-          const createdYmd = getTruckerCreatedYmd(trucker);
-          return createdYmd && createdYmd >= fromYmd && createdYmd <= endYmd;
-        });
-      }
-    }
-
-    return result;
-  }, [truckers, activeSearchTerm, searchFilter, range.startDate, range.endDate]);
-
-  // -------- PAGINATION --------
-  // When date range is active: client-side pagination on filteredTruckers (same as DeliveryOrder)
-  const totalPages = isDateFilterActive
-    ? Math.max(1, Math.ceil(filteredTruckers.length / itemsPerPage))
-    : (pagination.totalPages || 1);
-  const currentTruckers = isDateFilterActive
-    ? filteredTruckers.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
-    : filteredTruckers;
+  // API returns filtered data; no client-side filtering
+  const filteredTruckers = truckers || [];
+  const totalPages = pagination.totalPages || 1;
+  const currentTruckers = filteredTruckers;
+  const totalItems = pagination.totalItems || 0;
 
   const handlePageChange = (page) => {
     if (page < 1 || page > totalPages) return;
@@ -444,8 +409,6 @@ export default function TruckerReport() {
     return pages;
   };
 
-  const totalItems = isDateFilterActive ? filteredTruckers.length : (pagination.totalItems || 0);
-
   return (
     <div className="p-6 bg-white min-h-screen">
       {/* Loading overlay for pagination (no blur) */}
@@ -480,18 +443,8 @@ export default function TruckerReport() {
             </div>
           </div>
 
-          {/* Right: Export CSV + Filter dropdown */}
-          <div className="flex flex-col gap-2 w-full xl:w-auto xl:min-w-[280px]">
-            <select
-              value={searchFilter}
-              onChange={(e) => setSearchFilter(e.target.value)}
-              className="w-full xl:w-full px-4 h-[45px] border border-gray-200 rounded-lg bg-white text-gray-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
-            >
-              <option value="all">All Fields</option>
-              <option value="mc_dot">MC/DOT No</option>
-              <option value="state">State</option>
-              <option value="city">City</option>
-            </select>
+          {/* Right: Export CSV */}
+          <div className="flex flex-col gap-2 w-full xl:w-auto xl:min-w-[200px]">
             <button
               onClick={handleExportCSVClick}
               disabled={(hasAnyFilter && filteredTruckers.length === 0) || exportLoading}
@@ -503,74 +456,133 @@ export default function TruckerReport() {
           </div>
         </div>
 
-        {/* Row 2: Search Bar + Date Range (same structure as DeliveryOrder - no overflow so dropdown opens) */}
-        <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center w-full">
-          <div className="relative flex-1 min-w-0">
-            <input
-              type="text"
-              placeholder={`Search by ${searchFilter === 'all' ? 'all fields' : searchFilter === 'mc_dot' ? 'MC/DOT No' : searchFilter}...`}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              onKeyPress={handleSearchKeyPress}
-              className="w-full pl-6 pr-12 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-colors text-gray-600 placeholder-gray-400"
-            />
-            <Search className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={24} />
-          </div>
-          <button
-            onClick={handleSearch}
-            className="shrink-0 flex items-center justify-center gap-2 px-5 h-[45px] bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
-            title="Search"
-          >
-            <Search size={18} />
-            Search
-          </button>
-          {/* Date Range Dropdown - larger button + dropdown */}
-          <div className="relative w-full sm:w-[300px] shrink-0" ref={dateRangeDropdownRef}>
+        {/* Row 2: Search → CMT User → Date Range (last) */}
+        <div className="flex flex-col gap-3 w-full">
+          <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center w-full flex-wrap">
+            <div className="relative flex-1 min-w-0">
+              <input
+                type="text"
+                placeholder="Search (compName, MC/DOT, email)..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                onKeyPress={handleSearchKeyPress}
+                className="w-full pl-6 pr-12 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-colors text-gray-600 placeholder-gray-400"
+              />
+              <Search className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={24} />
+            </div>
             <button
-              type="button"
-              onClick={() => setShowPresetMenu((v) => !v)}
-              className="w-full text-left px-4 h-[52px] border border-gray-200 rounded-xl bg-white flex items-center justify-between text-gray-700 font-medium hover:border-gray-300 transition-colors text-base"
+              onClick={handleSearch}
+              className="shrink-0 flex items-center justify-center gap-2 px-5 h-[45px] bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
+              title="Search"
             >
-              <span className={!range.startDate || !range.endDate ? 'text-gray-800' : 'text-gray-800'}>
-                {range.startDate && range.endDate
-                  ? `${format(range.startDate, 'MMM dd, yyyy')} - ${format(range.endDate, 'MMM dd, yyyy')}`
-                  : 'Select Date Range'}
-              </span>
-              <span className="ml-3 text-gray-400 text-lg">▼</span>
+              <Search size={18} />
+              Search
             </button>
-            {showPresetMenu && (
-              <div className="absolute z-[100] mt-2 w-full min-w-[260px] rounded-xl border border-gray-100 bg-white shadow-lg py-2 right-0 text-base">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRange({ startDate: null, endDate: null, key: 'selection' });
-                    setShowPresetMenu(false);
-                  }}
-                  className="block w-full text-left px-4 py-3 hover:bg-gray-50 text-gray-600"
-                >
-                  Clear Filter
-                </button>
-                <div className="my-1 border-t border-gray-100" />
-                {Object.keys(presets).map((lbl) => (
+            {/* CMT User (empId) filter - just after Search */}
+            <div className="relative w-full sm:w-[280px] shrink-0" ref={cmtFilterRef}>
+              <button
+                type="button"
+                onClick={() => setShowCmtFilter((v) => !v)}
+                className="w-full h-[45px] px-4 py-2 border border-gray-200 rounded-xl bg-white hover:border-gray-300 flex items-center gap-2 text-gray-700 font-medium text-left"
+              >
+                <User size={18} className="text-gray-500 shrink-0" />
+                <span className="min-w-0 flex-1 truncate">
+                  {selectedCmtUser ? (selectedCmtUser.employeeName || selectedCmtUser.empName || selectedCmtUser.empId || 'CMT User') : 'All CMT Users'}
+                </span>
+                <ChevronDown size={16} className="text-gray-400 shrink-0" />
+              </button>
+              {showCmtFilter && (
+                <div className="absolute z-50 left-0 mt-2 w-full min-w-[260px] rounded-xl border border-gray-200 bg-white shadow-lg overflow-hidden">
+                  <div className="p-2 border-b border-gray-100">
+                    <input
+                      type="text"
+                      placeholder="Search CMT user..."
+                      value={cmtFilterSearch}
+                      onChange={(e) => setCmtFilterSearch(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 placeholder-gray-400"
+                    />
+                  </div>
+                  <div className="max-h-60 overflow-y-auto py-1">
+                    <button
+                      type="button"
+                      onClick={() => { setSelectedCmtEmpId(''); setShowCmtFilter(false); setCmtFilterSearch(''); }}
+                      className={`w-full text-left px-4 py-2.5 text-sm font-medium ${!selectedCmtEmpId ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`}
+                    >
+                      All CMT Users
+                    </button>
+                    {cmtUsersLoading ? (
+                      <div className="px-4 py-4 text-sm text-gray-500 text-center">Loading...</div>
+                    ) : filteredCmtUsers.length === 0 ? (
+                      <div className="px-4 py-4 text-sm text-gray-500 text-center">No CMT user found</div>
+                    ) : (
+                      filteredCmtUsers.map((u) => {
+                        const id = u.empId || u._id || '';
+                        const name = u.employeeName || u.empName || u.aliasName || id || '—';
+                        return (
+                          <button
+                            key={id}
+                            type="button"
+                            onClick={() => { setSelectedCmtEmpId(id); setShowCmtFilter(false); setCmtFilterSearch(''); }}
+                            className={`w-full text-left px-4 py-2.5 text-sm ${selectedCmtEmpId === id ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700 hover:bg-gray-50'}`}
+                          >
+                            <span className="block truncate">{name}</span>
+                            {id && <span className="block text-xs text-gray-500 mt-0.5">ID: {id}</span>}
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+            {/* Date Range - last */}
+            <div className="relative w-full sm:w-[300px] shrink-0" ref={dateRangeDropdownRef}>
+              <button
+                type="button"
+                onClick={() => setShowPresetMenu((v) => !v)}
+                className="w-full text-left px-4 h-[52px] border border-gray-200 rounded-xl bg-white flex items-center justify-between text-gray-700 font-medium hover:border-gray-300 transition-colors text-base"
+              >
+                <span className={!range.startDate || !range.endDate ? 'text-gray-800' : 'text-gray-800'}>
+                  {range.startDate && range.endDate
+                    ? `${format(range.startDate, 'MMM dd, yyyy')} - ${format(range.endDate, 'MMM dd, yyyy')}`
+                    : 'Select Date Range'}
+                </span>
+                <span className="ml-3 text-gray-400 text-lg">▼</span>
+              </button>
+              {showPresetMenu && (
+                <div className="absolute z-[100] mt-2 w-full min-w-[260px] rounded-xl border border-gray-100 bg-white shadow-lg py-2 right-0 text-base">
                   <button
                     type="button"
-                    key={lbl}
-                    onClick={() => applyPreset(lbl)}
+                    onClick={() => {
+                      setRange({ startDate: null, endDate: null, key: 'selection' });
+                      setShowPresetMenu(false);
+                    }}
+                    className="block w-full text-left px-4 py-3 hover:bg-gray-50 text-gray-600"
+                  >
+                    Clear Filter
+                  </button>
+                  <div className="my-1 border-t border-gray-100" />
+                  {Object.keys(presets).map((lbl) => (
+                    <button
+                      type="button"
+                      key={lbl}
+                      onClick={() => applyPreset(lbl)}
+                      className="block w-full text-left px-4 py-3 hover:bg-gray-50 text-gray-700"
+                    >
+                      {lbl}
+                    </button>
+                  ))}
+                  <div className="my-1 border-t border-gray-100" />
+                  <button
+                    type="button"
+                    onClick={() => { setShowPresetMenu(false); setShowCustomRange(true); }}
                     className="block w-full text-left px-4 py-3 hover:bg-gray-50 text-gray-700"
                   >
-                    {lbl}
+                    Custom Range
                   </button>
-                ))}
-                <div className="my-1 border-t border-gray-100" />
-                <button
-                  type="button"
-                  onClick={() => { setShowPresetMenu(false); setShowCustomRange(true); }}
-                  className="block w-full text-left px-4 py-3 hover:bg-gray-50 text-gray-700"
-                >
-                  Custom Range
-                </button>
-              </div>
-            )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

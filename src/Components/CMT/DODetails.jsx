@@ -259,6 +259,8 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
     deliveryDate: getDateValue(apiImportantDates.dlvyDate)
   });
   const [updatingDates, setUpdatingDates] = useState(false);
+  const MAX_IMPORTANT_DATE_ATTACHMENTS = 5;
+  const [importantDateAttachments, setImportantDateAttachments] = useState([]); // { id, file, previewUrl }[]
 
   // Send Email to Shipper state
   const [emailSubject, setEmailSubject] = useState('');
@@ -1603,6 +1605,34 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
     }
   };
 
+  /* ---------------- Important Dates: Attachments (optional, max 5) ---------------- */
+  const isImageFileForDates = (file) => file && file.type && file.type.startsWith('image/');
+  const addImportantDateAttachments = (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    setImportantDateAttachments((prev) => {
+      const remaining = MAX_IMPORTANT_DATE_ATTACHMENTS - prev.length;
+      if (remaining <= 0) {
+        alertify.warning(`Maximum ${MAX_IMPORTANT_DATE_ATTACHMENTS} files allowed.`);
+        return prev;
+      }
+      const toAdd = files.slice(0, remaining).map((file) => {
+        const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const previewUrl = isImageFileForDates(file) ? URL.createObjectURL(file) : null;
+        return { id, file, previewUrl };
+      });
+      return [...prev, ...toAdd];
+    });
+    e.target.value = '';
+  };
+  const removeImportantDateAttachment = (id) => {
+    setImportantDateAttachments((prev) => {
+      const item = prev.find((x) => x.id === id);
+      if (item?.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      return prev.filter((x) => x.id !== id);
+    });
+  };
+
   /* ---------------- Important Dates: UPDATE ---------------- */
   const updateImportantDates = async () => {
     try {
@@ -1680,23 +1710,40 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
       console.log('Important Dates State:', importantDates);
       console.log('Important Dates Payload:', importantDatesPayload);
 
-      // Send ONLY importantDates object (without empId) 
-      // This ensures API recognizes it as importantDates-only update which is allowed in any status
-      const response = await axios.put(
-        url,
-        {
-          importantDates: importantDatesPayload
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
+      const hasAttachments = importantDateAttachments.length > 0;
+      let response;
+
+      if (hasAttachments) {
+        // API: form-data with importantDates (Text/JSON) + attachments (File, optional, max 5)
+        const formData = new FormData();
+        const payloadForForm = {};
+        Object.entries(importantDatesPayload).forEach(([k, v]) => {
+          payloadForForm[k] = typeof v === 'string' && v.includes('T') ? v.split('T')[0] : v;
+        });
+        formData.append('importantDates', JSON.stringify(payloadForForm));
+        importantDateAttachments.forEach(({ file }) => formData.append('attachments', file));
+        response = await axios.put(url, formData, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      } else {
+        response = await axios.put(
+          url,
+          { importantDates: importantDatesPayload },
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
           }
-        }
-      );
+        );
+      }
 
       if (response?.data?.success) {
         alertify.success(response?.data?.message || 'Important dates updated successfully');
+        setImportantDateAttachments((prev) => {
+          prev.forEach(({ previewUrl }) => { if (previewUrl) URL.revokeObjectURL(previewUrl); });
+          return [];
+        });
         
         // Update local order object and state with the response data
         try {
@@ -3000,6 +3047,34 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
                 </div>
               </div>
             </div>
+            {/* Attachments (optional, max 5) */}
+            {!reportView && (
+              <div className="mt-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Attachments (optional, max 5)</label>
+                <input
+                  type="file"
+                  multiple
+                  accept="image/*,.pdf,.doc,.docx"
+                  onChange={addImportantDateAttachments}
+                  className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                />
+                {importantDateAttachments.length > 0 && (
+                  <ul className="mt-2 flex flex-wrap gap-2">
+                    {importantDateAttachments.map(({ id, file, previewUrl }) => (
+                      <li key={id} className="flex items-center gap-2 bg-gray-50 rounded-lg p-2 border border-gray-200">
+                        {previewUrl ? (
+                          <img src={previewUrl} alt="" className="h-10 w-10 object-cover rounded" />
+                        ) : (
+                          <span className="h-10 w-10 flex items-center justify-center bg-gray-200 rounded text-gray-500 text-xs">File</span>
+                        )}
+                        <span className="text-sm text-gray-700 truncate max-w-[120px]" title={file.name}>{file.name}</span>
+                        <button type="button" onClick={() => removeImportantDateAttachment(id)} className="text-red-600 hover:text-red-800 p-1" title="Remove">×</button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
             <div className="mt-4 flex justify-end">
               {(() => {
                 const isDelivered = loadRef.status && loadRef.status.toLowerCase() === 'delivered';
@@ -3025,34 +3100,93 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
             </div>
           </section>
 
-          {/* Important Date Update History */}
+          {/* Important Date Update History - kon kon si important date update hui */}
           {Array.isArray(loadRef.importantDateUpdateHistory) && loadRef.importantDateUpdateHistory.length > 0 && (
             <section className="p-4 rounded-2xl border bg-[#F0FDF4] border-[#BBF7D0] md:col-span-2">
               <h3 className="text-sm font-semibold text-gray-800 mb-3">Important Date Update History</h3>
-              <div className="space-y-2 max-h-48 overflow-y-auto">
-                {loadRef.importantDateUpdateHistory.map((entry, idx) => (
-                  <div
-                    key={idx}
-                    className="flex flex-wrap items-center gap-x-4 gap-y-1 py-2 px-3 bg-white rounded-lg border border-gray-100 text-sm"
-                  >
-                    <span className="font-medium text-gray-800">{entry.employeeName || entry.empId || '—'}</span>
-                    {entry.empId && (
-                      <span className="text-gray-500 text-xs">({entry.empId})</span>
-                    )}
-                    <span className="text-gray-600 ml-auto">
-                      {entry.updatedAt ? (() => {
-                        try {
-                          return new Date(entry.updatedAt).toLocaleString();
-                        } catch {
-                          return '—';
-                        }
-                      })() : '—'}
-                    </span>
-                  </div>
-                ))}
+              <p className="text-xs text-gray-600 mb-2">Kon kon si important dates update hui hain (per entry)</p>
+              <div className="overflow-x-auto max-h-64 overflow-y-auto rounded-lg border border-gray-200 bg-white">
+                <table className="w-full text-sm min-w-[400px]">
+                  <thead className="bg-gray-50 border-b border-gray-200 sticky top-0">
+                    <tr>
+                      <th className="text-left py-2.5 px-3 text-gray-700 font-semibold">Employee Name</th>
+                      <th className="text-left py-2.5 px-3 text-gray-700 font-semibold">Emp ID</th>
+                      <th className="text-left py-2.5 px-3 text-gray-700 font-semibold">Updated At</th>
+                      <th className="text-left py-2.5 px-3 text-gray-700 font-semibold">Kon si dates update hui</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {loadRef.importantDateUpdateHistory.map((entry, idx) => (
+                      <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50 last:border-b-0">
+                        <td className="py-2.5 px-3 font-medium text-gray-800">{entry.employeeName || '—'}</td>
+                        <td className="py-2.5 px-3 text-gray-600">{entry.empId || '—'}</td>
+                        <td className="py-2.5 px-3 text-gray-600">
+                          {entry.updatedAt ? (() => {
+                            try {
+                              return new Date(entry.updatedAt).toLocaleString();
+                            } catch {
+                              return '—';
+                            }
+                          })() : '—'}
+                        </td>
+                        <td className="py-2.5 px-3 text-gray-700">
+                          {Array.isArray(entry.updatedFieldLabels) && entry.updatedFieldLabels.length > 0
+                            ? entry.updatedFieldLabels.join(', ')
+                            : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </section>
           )}
+
+          {/* Important Date Update Attachments - API: importantDateUpdateAttachments */}
+          {(() => {
+            const attachmentsList = Array.isArray(raw.importantDateUpdateAttachments)
+              ? raw.importantDateUpdateAttachments
+              : (Array.isArray(loadRef.importantDateUpdateAttachments) ? loadRef.importantDateUpdateAttachments : []);
+            if (attachmentsList.length === 0) return null;
+            return (
+              <section className="p-4 rounded-2xl border bg-[#F0FDF4] border-[#BBF7D0] md:col-span-2">
+                <h3 className="text-sm font-semibold text-gray-800 mb-3">Important Date Update Attachments</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                  {attachmentsList.map((att) => {
+                    const url = att.fileUrl || att.url || '';
+                    const name = att.fileName || getFileName(url) || 'File';
+                    const isImg = isImage(url) || (att.fileName && /\.(png|jpe?g|webp|gif)$/i.test(att.fileName));
+                    const uploadedBy = att.uploadedBy?.empName || att.uploadedBy?.employeeName || att.uploadedBy?.empId || '—';
+                    const uploadedAt = att.uploadedAt ? (() => { try { return new Date(att.uploadedAt).toLocaleString(); } catch { return '—'; } })() : '—';
+                    return (
+                      <a
+                        key={att._id || url || att.fileName}
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="rounded-lg border border-gray-200 bg-white overflow-hidden shadow-sm hover:shadow-md hover:border-[#86EFAC] transition-all flex flex-col"
+                      >
+                        <div className="aspect-square bg-gray-50 flex items-center justify-center min-h-[80px] relative">
+                          {isImg ? (
+                            <img src={url} alt={name} className="w-full h-full object-contain" onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.style.display = 'none'; const next = e.currentTarget.nextElementSibling; if (next) next.classList.remove('hidden'); }} />
+                          ) : null}
+                          <div className={`flex flex-col items-center justify-center p-2 ${isImg ? 'hidden absolute inset-0 bg-gray-50' : ''}`}>
+                            <FileText className="text-gray-400" size={32} />
+                            <span className="text-xs text-gray-500 truncate w-full text-center mt-1">{name}</span>
+                          </div>
+                        </div>
+                        <div className="p-2 border-t border-gray-100 text-xs">
+                          <p className="font-medium text-gray-800 truncate" title={name}>{name}</p>
+                          <p className="text-gray-500">By {uploadedBy}</p>
+                          <p className="text-gray-400">{uploadedAt}</p>
+                        </div>
+                      </a>
+                    );
+                  })}
+                </div>
+              </section>
+            );
+          })()}
 
           {/* Rejected by Accountant */}
           {order?.raw?.accountantApproval?.status === 'rejected' && (

@@ -3,37 +3,25 @@ import axios from 'axios';
 import API_CONFIG from '../../config/api.js';
 
 // Fetch truckers with pagination and caching
+// API: page, limit (default 10), search (compName/mc_dot_no/email), startDate, endDate, empId
 export const fetchTruckers = createAsyncThunk(
   'truckerReport/fetchTruckers',
   async ({ 
     page = 1, 
-    limit = 15, 
+    limit = 10, 
     forceRefresh = false,
-    // Search and filter parameters
     search = null,
-    userId = null,
-    compName = null,
-    mcDotNo = null,
-    email = null,
-    phone = null,
-    status = null,
-    createdFrom = null,
-    createdTo = null,
-    // Created By filters
-    createdByEmpId = null,
-    createdByEmployeeName = null,
-    createdByDepartment = null
+    startDate = null,
+    endDate = null,
+    empId = null
   }, { getState, rejectWithValue }) => {
     const state = getState();
     const { pageCache, cacheTimestamps, cacheExpiry } = state.truckerReport;
     
-    // Build cache key based on all search parameters
-    const cacheKey = `${page}_${JSON.stringify({ search, userId, compName, mcDotNo, email, phone, status, createdFrom, createdTo, createdByEmpId, createdByEmployeeName, createdByDepartment })}`;
+    const cacheKey = `${page}_${JSON.stringify({ search, startDate, endDate, empId })}`;
     
-    // Check if cache is valid for this page and filters, and no force refresh
     if (!forceRefresh && pageCache[cacheKey] && cacheTimestamps[cacheKey] && 
         (Date.now() - cacheTimestamps[cacheKey] < cacheExpiry)) {
-      console.log(`Returning cached data for Trucker Report page ${page} with filters`);
       return {
         truckers: pageCache[cacheKey],
         statistics: state.truckerReport.statistics,
@@ -45,52 +33,17 @@ export const fetchTruckers = createAsyncThunk(
     try {
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
       
-      // Build query parameters
       const params = { page, limit };
-      
-      // Add search parameter (general search - searches across multiple fields)
-      if (search && search.trim()) {
-        params.search = search.trim();
-      } else {
-        // Individual field filters (only used when search is not provided)
-        if (userId && userId.trim()) params.userId = userId.trim();
-        if (compName && compName.trim()) params.compName = compName.trim();
-        if (mcDotNo && mcDotNo.trim()) params.mcDotNo = mcDotNo.trim();
-        if (email && email.trim()) params.email = email.trim();
-        if (phone && phone.trim()) params.phone = phone.trim();
+      if (search && search.trim()) params.search = search.trim();
+      if (startDate) {
+        const d = startDate instanceof Date ? startDate.toISOString().split('T')[0] : startDate;
+        params.startDate = d;
       }
-      
-      // Status filter can be combined with search
-      if (status && status !== 'all') {
-        params.status = status;
+      if (endDate) {
+        const d = endDate instanceof Date ? endDate.toISOString().split('T')[0] : endDate;
+        params.endDate = d;
       }
-      
-      // Date range filters
-      if (createdFrom) {
-        // Convert to YYYY-MM-DD format if needed
-        const fromDate = createdFrom instanceof Date 
-          ? createdFrom.toISOString().split('T')[0]
-          : createdFrom;
-        params.createdFrom = fromDate;
-      }
-      if (createdTo) {
-        // Convert to YYYY-MM-DD format if needed
-        const toDate = createdTo instanceof Date 
-          ? createdTo.toISOString().split('T')[0]
-          : createdTo;
-        params.createdTo = toDate;
-      }
-      
-      // Created By filters
-      if (createdByEmpId && createdByEmpId.trim()) {
-        params.createdByEmpId = createdByEmpId.trim();
-      }
-      if (createdByEmployeeName && createdByEmployeeName.trim()) {
-        params.createdByEmployeeName = createdByEmployeeName.trim();
-      }
-      if (createdByDepartment && createdByDepartment.trim()) {
-        params.createdByDepartment = createdByDepartment.trim();
-      }
+      if (empId && empId.trim()) params.empId = empId.trim();
       
       const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/shipper_driver/truckers`, {
         params,
@@ -166,7 +119,7 @@ const initialState = {
     currentPage: 1,
     totalPages: 1,
     totalItems: 0,
-    itemsPerPage: 15
+    itemsPerPage: 10
   },
   loading: false,
   error: null,
