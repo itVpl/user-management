@@ -480,6 +480,7 @@ const menuItems = [
   { name: "Delivery Order", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/delivery-order" },
   { name: "DO Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/do-report" },
   { name: "DO and Scheduling Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/do-scheduling-report" },
+  { name: "Final Charges Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/final-charges-report" },
   { name: "Team Rating", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/team-rating" },
   { name: "Daily Follow-Up", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/daily-follow-up" },
   { name: "Follow Up Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/followUpReport" },
@@ -551,7 +552,8 @@ const REPORT_NAMES = [
   "QA Call Report",
   "Employee Feedback Report",
   "Attendance Leave",
-  "Leave Approval"
+  "Leave Approval",
+  "Final Charges Report"
 ];
 
 // Department-wise report categorization
@@ -572,7 +574,8 @@ const DEPARTMENT_REPORTS = {
   "Finance": [
     "Receivable Report",
     "Payable Report",
-    "DO Report"
+    "DO Report",
+    "Final Charges Report"
   ],
   "HR": [
     "Attendance Leave",

@@ -2731,27 +2731,28 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
             );
           })()}
 
-          {/* ========== Invoice (VIEW) - hidden in report view ========== */}
-          {!reportView && (
+          {/* ========== Invoice (VIEW) - shown in all views including report view ========== */}
           <section className={`${SOFT.cardBlue} md:col-span-2`}>
             <h3 className="text-sm font-semibold text-gray-800 mb-3">Invoice</h3>
 
-            {addDocsLoading ? (
+            {(!reportView && addDocsLoading) ? (
               <div className="flex items-center gap-3 text-gray-600">
                 <div className={`animate-spin rounded-full h-5 w-5 ${MS.spinner}`}></div>
                 Loading invoice...
               </div>
-            ) : invoice ? (
+            ) : (invoice || (reportView && raw?.invoice)) ? (
               <div className="p-4 bg-white border rounded-xl">
                 {(() => {
-                  const hasDueDate = invoice.dueDate;
-                  const isOverdue = hasDueDate && new Date(invoice.dueDate) < new Date();
+                  const inv = invoice || (reportView ? raw?.invoice : null);
+                  const hasDueDate = inv?.dueDate;
+                  const isOverdue = hasDueDate && new Date(inv.dueDate) < new Date();
                   return (
                     <div className={`border-2 rounded-lg p-4 ${isOverdue ? 'border-red-500 bg-red-50' : 'border-blue-200 bg-blue-50'}`}>
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1">
+                          {inv?.invoiceUrl && (
                           <a 
-                            href={invoice.invoiceUrl} 
+                            href={inv.invoiceUrl} 
                             target="_blank" 
                             rel="noreferrer" 
                             className="text-blue-600 hover:text-blue-800 font-medium flex items-center gap-2 mb-2"
@@ -2760,12 +2761,13 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
                             <span>View Invoice</span>
                             <FaDownload className="text-xs" />
                           </a>
+                          )}
                           <div className="text-sm text-gray-700 space-y-1">
                             {hasDueDate && (
                               <div>
                                 <span className="text-gray-500">Due Date:</span>{' '}
                                 <span className={`font-semibold ${isOverdue ? 'text-red-600' : 'text-gray-800'}`}>
-                                  {fmtDate(invoice.dueDate)}
+                                  {fmtDate(inv.dueDate)}
                                 </span>
                                 {isOverdue && (
                                   <span className="ml-2 px-2 py-0.5 bg-red-500 text-white text-xs font-bold rounded">OVERDUE</span>
@@ -2777,10 +2779,10 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
                             )}
                             <div>
                               <span className="text-gray-500">Uploaded By:</span>{' '}
-                              {invoice.uploadedBy?.employeeName ? `${invoice.uploadedBy.employeeName} (${invoice.uploadedBy.empId || '-'})` : '—'}
+                              {inv?.uploadedBy?.employeeName ? `${inv.uploadedBy.employeeName} (${inv.uploadedBy.empId || '-'})` : '—'}
                             </div>
-                            <div><span className="text-gray-500">Dept:</span> {invoice.uploadedBy?.department || '—'}</div>
-                            <div><span className="text-gray-500">Uploaded At:</span> {fmtDate(invoice.uploadedAt)}</div>
+                            <div><span className="text-gray-500">Dept:</span> {inv?.uploadedBy?.department || '—'}</div>
+                            <div><span className="text-gray-500">Uploaded At:</span> {inv?.uploadedAt ? fmtDate(inv.uploadedAt) : '—'}</div>
                           </div>
                         </div>
                       </div>
@@ -2791,6 +2793,15 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
             ) : (
               <div className="text-sm text-gray-500 p-4 bg-white border rounded-xl">No invoice uploaded yet.</div>
             )}
+          </section>
+
+          {/* ========== Employee ID (report view only) ========== */}
+          {reportView && raw?.empId && (
+          <section className={`${SOFT.cardBlue} md:col-span-2`}>
+            <h3 className="text-sm font-semibold text-gray-800 mb-3">Employee ID</h3>
+            <div className="p-4 bg-white border rounded-xl">
+              <span className="font-medium text-gray-800">{raw.empId}</span>
+            </div>
           </section>
           )}
 
@@ -2954,7 +2965,8 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
           </section>
           )}
 
-          {/* Important Dates - disabled in report view */}
+          {/* Important Dates - hidden in report view */}
+          {!reportView && (
           <section className="p-4 rounded-2xl border bg-[#F8FAFF] border-[#E0E7FF] md:col-span-2">
             <h3 className="text-sm font-semibold text-gray-800 mb-3">Important Dates</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -3231,9 +3243,10 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
               })()}
             </div>
           </section>
+          )}
 
-          {/* Important Date Update History - kon kon si important date update hui */}
-          {Array.isArray(loadRef.importantDateUpdateHistory) && loadRef.importantDateUpdateHistory.length > 0 && (
+          {/* Important Date Update History - hidden in report view */}
+          {!reportView && Array.isArray(loadRef.importantDateUpdateHistory) && loadRef.importantDateUpdateHistory.length > 0 && (
             <section className="p-4 rounded-2xl border bg-[#F0FDF4] border-[#BBF7D0] md:col-span-2">
               <h3 className="text-sm font-semibold text-gray-800 mb-3">Important Date Update History</h3>
               {/* <p className="text-xs text-gray-600 mb-2">Kon kon si important dates update hui hain (per entry)</p> */}
