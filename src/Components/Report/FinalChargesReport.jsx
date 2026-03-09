@@ -7,7 +7,6 @@ import {
   ChevronRight,
   Eye,
   ChevronDown,
-  Filter,
   FileText,
   User,
 } from 'lucide-react';
@@ -19,23 +18,6 @@ import API_CONFIG from '../../config/api.js';
 import { DetailsModal } from '../CMT/DODetails.jsx';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
-
-const STATUS_OPTIONS = [
-  { value: '', label: 'All statuses' },
-  { value: 'cmt_verified', label: 'CMT Verified' },
-  { value: 'accountant_approved', label: 'Accountant Approved' },
-  { value: 'sales_verified', label: 'Sales Verified' },
-  { value: 'sales_rejected', label: 'Sales Rejected' },
-  { value: 'accountant_rejected', label: 'Accountant Rejected' },
-  { value: 'completed', label: 'Completed' },
-];
-
-const ACCOUNTANT_STATUS_OPTIONS = [
-  { value: '', label: 'All' },
-  { value: 'pending', label: 'Pending' },
-  { value: 'approved', label: 'Approved' },
-  { value: 'rejected', label: 'Rejected' },
-];
 
 const ITEMS_PER_PAGE = 20;
 
@@ -59,25 +41,12 @@ export default function FinalChargesReport() {
   });
   const [appliedFilter, setAppliedFilter] = useState({});
   const [viewingOrder, setViewingOrder] = useState(null);
-  const [showFilters, setShowFilters] = useState(false);
-  const filtersRef = useRef(null);
 
   const [filters, setFilters] = useState({
     page: 1,
     limit: ITEMS_PER_PAGE,
-    status: '',
-    accountantStatus: '',
     cmtEmpId: '',
     search: '',
-    doId: '',
-    shipperName: '',
-    carrierName: '',
-    startDate: '',
-    endDate: '',
-    forwardedDateFrom: '',
-    forwardedDateTo: '',
-    hasInvoice: '',
-    invoiceOverdue: '',
   });
 
   const [cmtUsers, setCmtUsers] = useState([]);
@@ -153,19 +122,10 @@ export default function FinalChargesReport() {
   }, [
     filters.page,
     filters.limit,
-    filters.status,
-    filters.accountantStatus,
     filters.cmtEmpId,
     filters.search,
-    filters.doId,
-    filters.shipperName,
-    filters.carrierName,
-    filters.startDate,
-    filters.endDate,
     rangeForwarded.startDate,
     rangeForwarded.endDate,
-    filters.hasInvoice,
-    filters.invoiceOverdue,
   ]);
 
   const fetchCmtUsers = async () => {
@@ -235,12 +195,14 @@ export default function FinalChargesReport() {
       return;
     }
     const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const headers = ['Forwarded Date', 'CMT Employee', 'Carrier', 'Container No'];
+    const headers = ['Load No', 'Forwarded Date', 'CMT Employee', 'Carrier', 'Container No'];
     const rows = dataToExport.map((doc) => {
+      const loadNo = doc.loadNo || doc.loadReference?.loadNo || '—';
       const forwardedAt = doc.forwardedToAccountant?.forwardedAt;
       const cmtBy = doc.forwardedToAccountant?.forwardedBy;
       const containerNo = doc.loadReference?.containerNo || doc.containerNo || (doc.customers?.[0]?.containerNo) || '—';
       return [
+        esc(loadNo),
         esc(forwardedAt ? format(new Date(forwardedAt), 'MMM dd, yyyy HH:mm') : '—'),
         esc(cmtBy?.employeeName || cmtBy?.empId || '—'),
         esc(doc.carrierId?.compName || '—'),
@@ -351,21 +313,9 @@ export default function FinalChargesReport() {
     setFilters({
       page: 1,
       limit: ITEMS_PER_PAGE,
-      status: '',
-      accountantStatus: '',
       cmtEmpId: '',
       search: '',
-      doId: '',
-      shipperName: '',
-      carrierName: '',
-      startDate: '',
-      endDate: '',
-      forwardedDateFrom: '',
-      forwardedDateTo: '',
-      hasInvoice: '',
-      invoiceOverdue: '',
     });
-    setShowFilters(false);
   };
 
   const handlePageChange = (page) => {
@@ -387,35 +337,10 @@ export default function FinalChargesReport() {
     return pages;
   };
 
-  const assignmentStatusLabel = (s) => {
-    if (!s) return '—';
-    return String(s)
-      .replace(/_/g, ' ')
-      .replace(/\b\w/g, (c) => c.toUpperCase());
-  };
-
-  const invoiceDisplay = (doc) => {
-    const inv = doc.invoice;
-    if (!inv) return { text: 'No invoice', className: 'bg-gray-100 text-gray-700' };
-    const info = inv.dueDateInfo || {};
-    if (info.isOverdue) return { text: `Overdue (${info.daysOverdue}d)`, className: 'bg-red-100 text-red-800' };
-    if (inv.dueDate) return { text: format(new Date(inv.dueDate), 'MMM dd, yyyy'), className: 'bg-green-100 text-green-800' };
-    return { text: 'Has invoice', className: 'bg-green-100 text-green-800' };
-  };
-
   const hasActiveFilters =
-    filters.status ||
-    filters.accountantStatus ||
     filters.cmtEmpId ||
     filters.search ||
-    filters.doId ||
-    filters.shipperName ||
-    filters.carrierName ||
-    filters.startDate ||
-    filters.endDate ||
-    (rangeForwarded.startDate && rangeForwarded.endDate) ||
-    filters.hasInvoice ||
-    filters.invoiceOverdue;
+    (rangeForwarded.startDate && rangeForwarded.endDate);
 
   if (loading && doDocuments.length === 0) {
     return (
@@ -595,142 +520,7 @@ export default function FinalChargesReport() {
             </div>
           </div>
         </div>
-
-        {/* More filters (collapsible) */}
-        <div className="flex flex-wrap gap-2 items-center">
-          <button
-            type="button"
-            onClick={() => setShowFilters((v) => !v)}
-            className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border font-medium transition-colors ${
-              showFilters || (filters.status || filters.accountantStatus || filters.doId || filters.shipperName || filters.carrierName || filters.startDate || filters.endDate || filters.hasInvoice || filters.invoiceOverdue)
-                ? 'bg-blue-600 text-white border-blue-600'
-                : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            <Filter size={18} /> More filters
-          </button>
-        </div>
-        {showFilters && (
-          <div
-            ref={filtersRef}
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4 bg-gray-50 rounded-xl border border-gray-200"
-          >
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Assignment Status</label>
-              <select
-                value={filters.status}
-                onChange={(e) => updateFilter('status', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-white text-gray-700 focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
-              >
-                {STATUS_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Accountant Status</label>
-              <select
-                value={filters.accountantStatus}
-                onChange={(e) => updateFilter('accountantStatus', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-white text-gray-700 focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
-              >
-                {ACCOUNTANT_STATUS_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">DO ID</label>
-                <input
-                  type="text"
-                  placeholder="DO ID"
-                  value={filters.doId}
-                  onChange={(e) => updateFilter('doId', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-white text-gray-700 focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Shipper name</label>
-                <input
-                  type="text"
-                  placeholder="Shipper"
-                  value={filters.shipperName}
-                  onChange={(e) => updateFilter('shipperName', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-white text-gray-700 focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Carrier name</label>
-                <input
-                  type="text"
-                  placeholder="Carrier"
-                  value={filters.carrierName}
-                  onChange={(e) => updateFilter('carrierName', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-white text-gray-700 focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">DO created from</label>
-                <input
-                  type="date"
-                  value={filters.startDate}
-                  onChange={(e) => updateFilter('startDate', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-white text-gray-700 focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">DO created to</label>
-                <input
-                  type="date"
-                  value={filters.endDate}
-                  onChange={(e) => updateFilter('endDate', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-white text-gray-700 focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Forwarded from</label>
-                <input
-                  type="date"
-                  value={filters.forwardedDateFrom}
-                  onChange={(e) => updateFilter('forwardedDateFrom', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-white text-gray-700 focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Forwarded to</label>
-                <input
-                  type="date"
-                  value={filters.forwardedDateTo}
-                  onChange={(e) => updateFilter('forwardedDateTo', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-white text-gray-700 focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Has invoice</label>
-                <select
-                  value={filters.hasInvoice}
-                  onChange={(e) => updateFilter('hasInvoice', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-white text-gray-700 focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
-                >
-                  <option value="">All</option>
-                  <option value="true">Yes</option>
-                  <option value="false">No</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Invoice overdue</label>
-                <select
-                  value={filters.invoiceOverdue}
-                  onChange={(e) => updateFilter('invoiceOverdue', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-white text-gray-700 focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
-                >
-                  <option value="">All</option>
-                  <option value="true">Overdue only</option>
-                </select>
-              </div>
-            </div>
-          )}
-        </div>
+      </div>
 
       {/* Custom Date Range modal (forwarded date) */}
       {showCustomRange && (
@@ -786,12 +576,11 @@ export default function FinalChargesReport() {
             <table className="w-full">
               <thead className="bg-white border-b border-gray-200">
                 <tr>
-                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Employee ID</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Load No</th>
                   <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Forwarded Date</th>
                   <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">CMT Employee</th>
                   <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Carrier</th>
                   <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Container No</th>
-                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Invoice</th>
                   <th className="text-center py-4 px-4 text-gray-800 font-medium text-base">Action</th>
                 </tr>
               </thead>
@@ -800,7 +589,6 @@ export default function FinalChargesReport() {
                   const forwardedAt = doc.forwardedToAccountant?.forwardedAt;
                   const cmtForwardedBy = doc.forwardedToAccountant?.forwardedBy;
                   const containerNo = doc.loadReference?.containerNo || doc.containerNo || (doc.customers?.[0]?.containerNo) || '—';
-                  const invD = invoiceDisplay(doc);
                   const orderForModal = {
                     id: doc._id,
                     doId: doc.empId || `DO-${String(doc._id || '').slice(-6)}`,
@@ -811,7 +599,7 @@ export default function FinalChargesReport() {
                   return (
                     <tr key={doc._id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                       <td className="py-4 px-4">
-                        <span className="text-sm font-medium text-gray-800">{doc.empId || '—'}</span>
+                        <span className="text-sm font-medium text-gray-800">{doc.loadNo || doc.loadReference?.loadNo || '—'}</span>
                       </td>
                       <td className="py-4 px-4 text-sm text-gray-700">
                         {forwardedAt ? format(new Date(forwardedAt), 'MMM dd, yyyy HH:mm') : '—'}
@@ -824,11 +612,6 @@ export default function FinalChargesReport() {
                       </td>
                       <td className="py-4 px-4 text-sm text-gray-700">
                         {containerNo}
-                      </td>
-                      <td className="py-4 px-4">
-                        <span className={`inline-flex px-2.5 py-1 rounded-md text-xs font-medium ${invD.className}`}>
-                          {invD.text}
-                        </span>
                       </td>
                       <td className="py-4 px-4">
                         <button
