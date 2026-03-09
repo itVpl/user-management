@@ -201,12 +201,29 @@ export default function DOAndSchedulingReport() {
     return pages;
   };
 
+  // Build Important Date Update History for Excel (same as View popup: Employee, Emp ID, Updated At, Updated Dates)
+  const getImportantDateHistoryForExport = (order) => {
+    const history = order.loadReference?.importantDateUpdateHistory ?? order.raw?.loadReference?.importantDateUpdateHistory;
+    if (!Array.isArray(history) || history.length === 0) return '';
+    return history.map((entry) => {
+      const name = entry.employeeName || '—';
+      const empId = entry.empId || '—';
+      const updatedAt = entry.updatedAt
+        ? format(new Date(entry.updatedAt), 'MMM dd, yyyy HH:mm')
+        : '—';
+      const labels = Array.isArray(entry.updatedFieldLabels) && entry.updatedFieldLabels.length > 0
+        ? entry.updatedFieldLabels.join(', ')
+        : '—';
+      return `${name} (${empId}) - ${updatedAt} - ${labels}`;
+    }).join('; ');
+  };
+
   const handleExportCSV = (dataToExport, signedByName = '') => {
     if (!dataToExport || dataToExport.length === 0) {
       alertify.error('No data to export');
       return;
     }
-    const headers = ['Load No', 'Dispatcher Name', 'Carrier Name', 'Load Type', 'Created By (Sales)', 'Assigned To (CMT)', 'Assigned At', 'Status'];
+    const headers = ['Load No', 'Dispatcher Name', 'Carrier Name', 'Load Type', 'Created By (Sales)', 'Assigned To (CMT)', 'Assigned At', 'Status', 'Important Date History'];
     const rows = dataToExport.map((order) => {
       const cust0 = order.customers?.[0] || {};
       const loadNo = cust0.loadNo || 'N/A';
@@ -221,6 +238,7 @@ export default function DOAndSchedulingReport() {
       const status = order.loadReference?.status
         ? (order.loadReference.status[0].toUpperCase() + order.loadReference.status.slice(1).toLowerCase().replace(/-|_/g, ' '))
         : 'N/A';
+      const importantDateHistory = getImportantDateHistoryForExport(order);
       return [
         `"${String(loadNo).replace(/"/g, '""')}"`,
         `"${String(dispatcherName).replace(/"/g, '""')}"`,
@@ -229,7 +247,8 @@ export default function DOAndSchedulingReport() {
         `"${String(createdBy).replace(/"/g, '""')}"`,
         `"${String(assignedTo).replace(/"/g, '""')}"`,
         `"${String(assignedAt).replace(/"/g, '""')}"`,
-        `"${String(status).replace(/"/g, '""')}"`
+        `"${String(status).replace(/"/g, '""')}"`,
+        `"${String(importantDateHistory).replace(/"/g, '""')}"`
       ];
     });
     let csvContent = [headers.join(','), ...rows.map((row) => row.join(','))].join('\n');

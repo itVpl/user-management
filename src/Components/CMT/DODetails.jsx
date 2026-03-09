@@ -70,43 +70,8 @@ const SOFT = {
   insetWhite: 'p-3 rounded-xl border bg-white',
 };
 
-/* ============= Small helper view used in Driver Images ============= */
-function ImageStrip({ title, urls = [] }) {
-  if (!Array.isArray(urls) || urls.length === 0) return null;
-
-  return (
-    <div className="mt-3">
-      <div className="text-xs font-semibold text-gray-700 mb-2">{title}</div>
-
-      {/* Horizontal scroll row */}
-      <div className="flex overflow-x-auto gap-2 pb-1 snap-x snap-mandatory">
-        {urls.map((u, i) => (
-          <a
-            key={`${title}-${i}`}
-            href={u}
-            target="_blank"
-            rel="noreferrer"
-            className="shrink-0 snap-start w-28 h-20 md:w-32 md:h-24 rounded-lg border overflow-hidden"
-            title={`${title} ${i + 1}`}
-          >
-            <img
-              src={u}
-              alt={`${title} ${i + 1}`}
-              loading="lazy"
-              className="w-full h-full object-cover"
-              onError={(e) => { e.currentTarget.style.opacity = 0.35; }}
-            />
-          </a>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-
-
 /* ====================== Details Modal ====================== */
-function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, reportView = false }) {
+function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, reportView = false, onLoadReferenceUpdate }) {
   if (!open || !order) return null;
 
   const raw = order.raw || {};
@@ -185,11 +150,6 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
     fetchAssignedDriver();
   }, [open, cmtEmpId, loadId, loadNo, reportView]);
 
-  // Driver images
-  const [imgLoading, setImgLoading] = useState(false);
-  const [imgError, setImgError] = useState('');
-  const [imgPayload, setImgPayload] = useState(null);
-
   // Forward to accountant
   const [remarks, setRemarks] = useState('All documents verified and delivery confirmed');
   const [fwLoading, setFwLoading] = useState(false);
@@ -267,6 +227,19 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
   const [emailText, setEmailText] = useState('');
   const [emailAttachments, setEmailAttachments] = useState([]); // File[]
   const [sendingEmail, setSendingEmail] = useState(false);
+
+  // CMT Pickup / Delivery / Return image upload state
+  const [cmtPickupNotes, setCmtPickupNotes] = useState('');
+  const [cmtPickupFiles, setCmtPickupFiles] = useState([]);
+  const [cmtPickupOriginIndex, setCmtPickupOriginIndex] = useState(0);
+  const [cmtPickupUploading, setCmtPickupUploading] = useState(false);
+  const [cmtDeliveryNotes, setCmtDeliveryNotes] = useState('');
+  const [cmtDeliveryFiles, setCmtDeliveryFiles] = useState([]);
+  const [cmtDeliveryDestIndex, setCmtDeliveryDestIndex] = useState(0);
+  const [cmtDeliveryUploading, setCmtDeliveryUploading] = useState(false);
+  const [cmtReturnNotes, setCmtReturnNotes] = useState('');
+  const [cmtReturnFiles, setCmtReturnFiles] = useState([]);
+  const [cmtReturnUploading, setCmtReturnUploading] = useState(false);
 
   // Initialize important dates only when modal opens (not on order changes)
   useEffect(() => {
@@ -1316,73 +1289,6 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
 
   // Debug logging
   console.log('DO Details Modal - Order:', order?.doId, 'Already Forwarded:', alreadyForwarded, 'Assignment Status:', order?.raw?.assignmentStatus, 'Forwarded To Accountant:', isForwarded, 'Sales Verified:', isSalesVerified, 'CMT Verified:', isCmtVerified);
-  function RowImages({ groups = {} }) {
-    // groups = { Label: [urls], Label2: [urls], ... }
-    const items = [];
-    Object.entries(groups || {}).forEach(([label, arr]) => {
-      (arr || []).forEach((u, i) => items.push({ label, url: u, key: `${label}-${i}` }));
-    });
-
-    if (items.length === 0) {
-      return <div className="text-sm text-gray-400">No images.</div>;
-    }
-
-    return (
-      <div className="flex overflow-x-auto gap-2 pb-1 snap-x snap-mandatory">
-        {items.map(({ label, url, key }) => (
-          <a
-            key={key}
-            href={url}
-            target="_blank"
-            rel="noreferrer"
-            className="relative shrink-0 snap-start w-28 h-20 md:w-32 md:h-24 rounded-lg border overflow-hidden"
-            title={label}
-          >
-            <img
-              src={url}
-              alt={label}
-              loading="lazy"
-              className="w-full h-full object-cover"
-              onError={(e) => { e.currentTarget.style.opacity = 0.35; }}
-            />
-            <span className="absolute bottom-1 left-1 text-[10px] px-1.5 py-0.5 rounded bg-black/60 text-white">
-              {label}
-            </span>
-          </a>
-        ))}
-      </div>
-    );
-  }
-
-  // Fetch driver images
-  useEffect(() => {
-    let cancelled = false;
-    const run = async () => {
-      if (!open || !shipmentNumber) return;
-      try {
-        setImgLoading(true);
-        setImgError('');
-        const token = sessionStorage.getItem('token') || localStorage.getItem('token');
-        const url = `${API_CONFIG.BASE_URL}/api/v1/load/shipment/${encodeURIComponent(shipmentNumber)}/images`;
-        const res = await axios.get(url, {
-          headers: token ? { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' },
-        });
-        if (!cancelled) {
-          if (res?.data?.success) setImgPayload(res.data);
-          else setImgError('Could not load images (unexpected response).');
-        }
-      } catch (e) {
-        if (!cancelled) setImgError(e?.response?.data?.message || e?.message || 'Failed to load images');
-      } finally {
-        if (!cancelled) setImgLoading(false);
-      }
-    };
-    run();
-    return () => { cancelled = true; };
-  }, [open, shipmentNumber]);
-
-  const images = imgPayload?.images || null;
-  const loadStatus = imgPayload?.loadStatus || null;
   // filter drivers by search text (name or id)
   const filteredDrivers = (drivers || []).filter((d) => {
     const needle = (driverSearch || '').toLowerCase().trim();
@@ -1908,6 +1814,102 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
     setEmailAttachments(prev => prev.filter((_, i) => i !== index));
   };
 
+  /* ---------------- CMT Pickup / Delivery / Return Images (shipment APIs) ---------------- */
+  const uploadCmtPickupImages = async () => {
+    if (!shipmentNumber || !cmtEmpId) {
+      alertify.error('Missing shipment number or CMT EmpId');
+      return;
+    }
+    const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+    if (!token) {
+      alertify.error('Authentication required');
+      return;
+    }
+    setCmtPickupUploading(true);
+    try {
+      const form = new FormData();
+      form.append('cmtEmpId', String(cmtEmpId));
+      form.append('originIndex', String(cmtPickupOriginIndex));
+      if (cmtPickupNotes.trim()) form.append('notes', cmtPickupNotes.trim());
+      (cmtPickupFiles || []).forEach((f) => form.append('pickupImages', f));
+      const url = `${API_CONFIG.BASE_URL}/api/v1/load/shipment/${encodeURIComponent(shipmentNumber)}/cmt-pickup-images`;
+      const res = await axios.post(url, form, { headers: { Authorization: `Bearer ${token}` } });
+      if (res?.data?.success) {
+        alertify.success(res?.data?.message || 'CMT pickup images submitted.');
+        setCmtPickupFiles([]);
+        setCmtPickupNotes('');
+        onLoadReferenceUpdate?.();
+      } else alertify.error(res?.data?.message || 'Upload failed');
+    } catch (e) {
+      alertify.error(e?.response?.data?.message || e?.message || 'CMT pickup upload failed');
+    } finally {
+      setCmtPickupUploading(false);
+    }
+  };
+
+  const uploadCmtDeliveryImages = async () => {
+    if (!shipmentNumber || !cmtEmpId) {
+      alertify.error('Missing shipment number or CMT EmpId');
+      return;
+    }
+    const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+    if (!token) {
+      alertify.error('Authentication required');
+      return;
+    }
+    setCmtDeliveryUploading(true);
+    try {
+      const form = new FormData();
+      form.append('cmtEmpId', String(cmtEmpId));
+      form.append('destinationIndex', String(cmtDeliveryDestIndex));
+      if (cmtDeliveryNotes.trim()) form.append('notes', cmtDeliveryNotes.trim());
+      (cmtDeliveryFiles || []).forEach((f) => form.append('dropImages', f));
+      const url = `${API_CONFIG.BASE_URL}/api/v1/load/shipment/${encodeURIComponent(shipmentNumber)}/cmt-delivery-images`;
+      const res = await axios.post(url, form, { headers: { Authorization: `Bearer ${token}` } });
+      if (res?.data?.success) {
+        alertify.success(res?.data?.message || 'CMT delivery images submitted.');
+        setCmtDeliveryFiles([]);
+        setCmtDeliveryNotes('');
+        onLoadReferenceUpdate?.();
+      } else alertify.error(res?.data?.message || 'Upload failed');
+    } catch (e) {
+      alertify.error(e?.response?.data?.message || e?.message || 'CMT delivery upload failed');
+    } finally {
+      setCmtDeliveryUploading(false);
+    }
+  };
+
+  const uploadCmtReturnImages = async () => {
+    if (!shipmentNumber || !cmtEmpId) {
+      alertify.error('Missing shipment number or CMT EmpId');
+      return;
+    }
+    const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+    if (!token) {
+      alertify.error('Authentication required');
+      return;
+    }
+    setCmtReturnUploading(true);
+    try {
+      const form = new FormData();
+      form.append('cmtEmpId', String(cmtEmpId));
+      if (cmtReturnNotes.trim()) form.append('notes', cmtReturnNotes.trim());
+      (cmtReturnFiles || []).forEach((f) => form.append('images', f));
+      const url = `${API_CONFIG.BASE_URL}/api/v1/load/shipment/${encodeURIComponent(shipmentNumber)}/cmt-return-location-images`;
+      const res = await axios.post(url, form, { headers: { Authorization: `Bearer ${token}` } });
+      if (res?.data?.success) {
+        alertify.success(res?.data?.message || 'CMT return location images submitted.');
+        setCmtReturnFiles([]);
+        setCmtReturnNotes('');
+        onLoadReferenceUpdate?.();
+      } else alertify.error(res?.data?.message || 'Upload failed');
+    } catch (e) {
+      alertify.error(e?.response?.data?.message || e?.message || 'CMT return upload failed');
+    } finally {
+      setCmtReturnUploading(false);
+    }
+  };
+
   /* ---------------- Additional Docs: UPLOAD ---------------- */
   const MAX_SIZE_MB = 10;
   const allowed = [
@@ -2399,41 +2401,185 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
                   </div>
                 </div>
               )}
-            </div>
-          )}
 
-          {/* Return Location - Only for DRAYAGE */}
-          {raw.loadType === 'DRAYAGE' && raw.returnLocation && (
-            <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <Package className="text-indigo-600" size={20} />
-                <h3 className="text-lg font-bold text-gray-800">Return Location</h3>
-              </div>
+              {/* Return Location - sirf DRAYAGE load type par (OTR par nahi dikhega) */}
+              {(() => {
+                const loadTypeForReturn = loadRef.loadType || raw.loadType || '';
+                if (loadTypeForReturn !== 'DRAYAGE') return null;
+                const retLoc = loadRef.returnLocation || raw.loadReference?.returnLocation || {};
+                const returnDateFromLoadRef = loadRef.returnDate || raw.loadReference?.returnDate;
+                const hasApiReturn = retLoc.returnAddress || retLoc.returnCity || retLoc.returnState || retLoc.returnZip || retLoc.returnLocation;
+                const hasLegacyReturn = raw.loadType === 'DRAYAGE' && raw.returnLocation && !hasApiReturn;
+                const hasReturnDateOnly = returnDateFromLoadRef && !hasApiReturn && !hasLegacyReturn;
+                if (!hasApiReturn && !hasLegacyReturn && !hasReturnDateOnly) return null;
+                return (
+                  <div className="mt-4">
+                    <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                      <Package className="text-indigo-600" size={18} />
+                      Return Location
+                    </h4>
+                    <div className="bg-white rounded-lg p-3 border border-indigo-200">
+                      <div className="grid grid-cols-2 gap-4">
+                        {hasApiReturn ? (
+                          <>
+                            {retLoc.returnLocation && (
+                              <div className="col-span-2">
+                                <p className="text-sm text-gray-600">Return Location</p>
+                                <p className="font-medium text-gray-800">{retLoc.returnLocation}</p>
+                              </div>
+                            )}
+                            {retLoc.returnAddress && (
+                              <div className="col-span-2">
+                                <p className="text-sm text-gray-600">Address</p>
+                                <p className="font-medium text-gray-800">{retLoc.returnAddress}</p>
+                              </div>
+                            )}
+                            <div>
+                              <p className="text-sm text-gray-600">City</p>
+                              <p className="font-medium text-gray-800">{retLoc.returnCity || 'N/A'}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">State</p>
+                              <p className="font-medium text-gray-800">{retLoc.returnState || 'N/A'}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Zip Code</p>
+                              <p className="font-medium text-gray-800">{retLoc.returnZip || 'N/A'}</p>
+                            </div>
+                            {(returnDateFromLoadRef || retLoc.returnDate) && (
+                              <div>
+                                <p className="text-sm text-gray-600">Return Date</p>
+                                <p className="font-medium text-gray-800">{fmtDate(returnDateFromLoadRef || retLoc.returnDate) || 'N/A'}</p>
+                              </div>
+                            )}
+                          </>
+                        ) : hasLegacyReturn ? (
+                          <>
+                            <div className="col-span-2">
+                              <p className="text-sm text-gray-600">Return Full Address</p>
+                              <p className="font-medium text-gray-800">{raw.returnLocation?.returnFullAddress || 'N/A'}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">City</p>
+                              <p className="font-medium text-gray-800">{raw.returnLocation?.city || 'N/A'}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">State</p>
+                              <p className="font-medium text-gray-800">{raw.returnLocation?.state || 'N/A'}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Zip Code</p>
+                              <p className="font-medium text-gray-800">{raw.returnLocation?.zipCode || 'N/A'}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Return Date</p>
+                              <p className="font-medium text-gray-800">{fmtDate(raw.returnLocation?.returnDate || returnDateFromLoadRef) || 'N/A'}</p>
+                            </div>
+                          </>
+                        ) : (
+                          /* loadReference.returnDate only */
+                          <div>
+                            <p className="text-sm text-gray-600">Return Date</p>
+                            <p className="font-medium text-gray-800">{fmtDate(returnDateFromLoadRef) || 'N/A'}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
-              <div className="bg-white rounded-lg p-4 border border-indigo-200">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="col-span-2">
-                    <p className="text-sm text-gray-600">Return Full Address</p>
-                    <p className="font-medium text-gray-800">{raw.returnLocation?.returnFullAddress || 'N/A'}</p>
+              {/* CMT Upload Images - alag section, Shipper Information ke andar, address ke sath (originIndex / destinationIndex 0,1,2...) */}
+              {!reportView && shipmentNumber && cmtEmpId && (() => {
+                const originsList = loadRef.origins || raw.loadReference?.origins || [];
+                const destinationsList = loadRef.destinations || raw.loadReference?.destinations || [];
+                const originCount = Math.max(1, originsList.length);
+                const destCount = Math.max(1, destinationsList.length);
+                const loadTypeForCmt = loadRef.loadType || raw.loadType || '';
+                const isDrayage = loadTypeForCmt === 'DRAYAGE';
+                const allPickupDone = originCount > 0 && Array.from({ length: originCount }, (_, i) => originsList[i]).every((o) => Array.isArray(o?.pickupImages) && o.pickupImages.length > 0);
+                const allDeliveryDone = destCount > 0 && Array.from({ length: destCount }, (_, i) => destinationsList[i]).every((d) => Array.isArray(d?.dropImages) && d.dropImages.length > 0);
+                const returnLocationImages = loadRef.returnLocationImages || raw.loadReference?.returnLocationImages || [];
+                const returnDone = isDrayage && Array.isArray(returnLocationImages) && returnLocationImages.length > 0;
+                return (
+                  <div className="mt-4 pt-4 border-t border-orange-200">
+                    <h4 className="font-semibold text-gray-800 mb-3">Upload Images</h4>
+                    <div className={`grid grid-cols-1 gap-4 ${isDrayage ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
+                      <div className={`p-3 rounded-lg border border-orange-200 ${allPickupDone ? 'bg-orange-50/70 opacity-90' : 'bg-white'}`}>
+                        <h5 className="font-semibold text-gray-800 text-sm mb-2">Pickup (originIndex)</h5>
+                        {allPickupDone ? (
+                          <p className="text-sm text-green-700 font-medium flex items-center gap-1">All pickup indices uploaded</p>
+                        ) : (
+                          <>
+                            {originCount > 1 && (
+                              <div className="mb-2">
+                                <label className="text-xs text-gray-600">Origin Index</label>
+                                <select value={cmtPickupOriginIndex} onChange={(e) => setCmtPickupOriginIndex(Number(e.target.value))} className="mt-1 w-full text-sm border rounded px-2 py-1.5">
+                                  {Array.from({ length: originCount }, (_, i) => (
+                                    <option key={i} value={i}>
+                                      Origin {i}{originsList[i]?.addressLine1 ? ` — ${(originsList[i].addressLine1 || '').slice(0, 30)}${(originsList[i].addressLine1 || '').length > 30 ? '…' : ''}` : ''}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            )}
+                            <textarea placeholder="Notes (optional)" value={cmtPickupNotes} onChange={(e) => setCmtPickupNotes(e.target.value)} className="w-full text-sm border rounded-lg px-2 py-1.5 mb-2 min-h-[56px]" />
+                            <input type="file" multiple accept="image/*" onChange={(e) => setCmtPickupFiles(Array.from(e.target.files || []))} className="w-full text-xs mb-2" />
+                            {cmtPickupFiles.length > 0 && <p className="text-xs text-gray-600 mb-1">{cmtPickupFiles.length} file(s)</p>}
+                            <button type="button" onClick={uploadCmtPickupImages} disabled={cmtPickupUploading} className={`w-full py-2 rounded-lg text-sm font-medium ${cmtPickupUploading ? 'bg-gray-300 cursor-not-allowed' : 'bg-orange-500 text-white hover:bg-orange-600'}`}>
+                              {cmtPickupUploading ? 'Uploading...' : 'Upload Pickup'}
+                            </button>
+                          </>
+                        )}
+                      </div>
+                      <div className={`p-3 rounded-lg border border-yellow-200 ${allDeliveryDone ? 'bg-amber-50/70 opacity-90' : 'bg-white'}`}>
+                        <h5 className="font-semibold text-gray-800 text-sm mb-2">Delivery (destinationIndex)</h5>
+                        {allDeliveryDone ? (
+                          <p className="text-sm text-green-700 font-medium flex items-center gap-1">All delivery indices uploaded</p>
+                        ) : (
+                          <>
+                            {destCount > 1 && (
+                              <div className="mb-2">
+                                <label className="text-xs text-gray-600">Destination Index</label>
+                                <select value={cmtDeliveryDestIndex} onChange={(e) => setCmtDeliveryDestIndex(Number(e.target.value))} className="mt-1 w-full text-sm border rounded px-2 py-1.5">
+                                  {Array.from({ length: destCount }, (_, i) => (
+                                    <option key={i} value={i}>
+                                      Destination {i}{destinationsList[i]?.addressLine1 ? ` — ${(destinationsList[i].addressLine1 || '').slice(0, 30)}${(destinationsList[i].addressLine1 || '').length > 30 ? '…' : ''}` : ''}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            )}
+                            <textarea placeholder="Notes (optional)" value={cmtDeliveryNotes} onChange={(e) => setCmtDeliveryNotes(e.target.value)} className="w-full text-sm border rounded-lg px-2 py-1.5 mb-2 min-h-[56px]" />
+                            <input type="file" multiple accept="image/*" onChange={(e) => setCmtDeliveryFiles(Array.from(e.target.files || []))} className="w-full text-xs mb-2" />
+                            {cmtDeliveryFiles.length > 0 && <p className="text-xs text-gray-600 mb-1">{cmtDeliveryFiles.length} file(s)</p>}
+                            <button type="button" onClick={uploadCmtDeliveryImages} disabled={cmtDeliveryUploading} className={`w-full py-2 rounded-lg text-sm font-medium ${cmtDeliveryUploading ? 'bg-gray-300 cursor-not-allowed' : 'bg-amber-500 text-white hover:bg-amber-600'}`}>
+                              {cmtDeliveryUploading ? 'Uploading...' : 'Upload Delivery'}
+                            </button>
+                          </>
+                        )}
+                      </div>
+                      {isDrayage && (
+                        <div className={`p-3 rounded-lg border border-indigo-200 ${returnDone ? 'bg-indigo-50/70 opacity-90' : 'bg-white'}`}>
+                          <h5 className="font-semibold text-gray-800 text-sm mb-2">Return Location</h5>
+                          {returnDone ? (
+                            <p className="text-sm text-green-700 font-medium flex items-center gap-1">Return location images uploaded</p>
+                          ) : (
+                            <>
+                              <textarea placeholder="Notes (optional)" value={cmtReturnNotes} onChange={(e) => setCmtReturnNotes(e.target.value)} className="w-full text-sm border rounded-lg px-2 py-1.5 mb-2 min-h-[56px]" />
+                              <input type="file" multiple accept="image/*" onChange={(e) => setCmtReturnFiles(Array.from(e.target.files || []))} className="w-full text-xs mb-2" />
+                              {cmtReturnFiles.length > 0 && <p className="text-xs text-gray-600 mb-1">{cmtReturnFiles.length} file(s)</p>}
+                              <button type="button" onClick={uploadCmtReturnImages} disabled={cmtReturnUploading} className={`w-full py-2 rounded-lg text-sm font-medium ${cmtReturnUploading ? 'bg-gray-300 cursor-not-allowed' : 'bg-indigo-500 text-white hover:bg-indigo-600'}`}>
+                                {cmtReturnUploading ? 'Uploading...' : 'Upload Return'}
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm text-gray-600">City</p>
-                    <p className="font-medium text-gray-800">{raw.returnLocation?.city || 'N/A'}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">State</p>
-                    <p className="font-medium text-gray-800">{raw.returnLocation?.state || 'N/A'}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Zip Code</p>
-                    <p className="font-medium text-gray-800">{raw.returnLocation?.zipCode || 'N/A'}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Return Date</p>
-                    <p className="font-medium text-gray-800">{fmtDate(raw.returnLocation?.returnDate) || 'N/A'}</p>
-                  </div>
-                </div>
-              </div>
+                );
+              })()}
             </div>
           )}
 
@@ -2508,96 +2654,82 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
           )}
 
 
-          {/* Document Display */}
-          {/* Driver Images */}
+          {/* Load Reference Images (from loadReference.origins[].pickupImages, destinations[].dropImages, returnLocationImages) */}
+          {(() => {
+            const origins = loadRef.origins || raw.loadReference?.origins || [];
+            const destinations = loadRef.destinations || raw.loadReference?.destinations || [];
+            const returnLocationImages = loadRef.returnLocationImages || raw.loadReference?.returnLocationImages || origins[0]?.returnLocationImages || [];
+            const hasPickup = origins.some((o) => Array.isArray(o?.pickupImages) && o.pickupImages.length > 0);
+            const hasDrop = destinations.some((d) => Array.isArray(d?.dropImages) && d.dropImages.length > 0);
+            const hasReturn = Array.isArray(returnLocationImages) && returnLocationImages.length > 0;
+            if (!hasPickup && !hasDrop && !hasReturn) return null;
 
-          <section className={`${SOFT.cardBlue} md:col-span-2`}>
-            <h3 className="text-sm font-semibold text-gray-800 mb-3">Driver Images</h3>
-
-            {!shipmentNumber ? (
-              <div className="text-sm text-gray-500">Shipment number missing. Cannot fetch images.</div>
-            ) : imgLoading ? (
-              <div className="flex items-center gap-3 text-gray-600">
-                <div className={`animate-spin rounded-full h-5 w-5 ${MS.spinner}`}></div>
-                Loading images...
+            const renderImageList = (list) => (
+              <div className="flex flex-wrap gap-2">
+                {(list || []).map((item, idx) => {
+                  const url = item.imageUrl || item.url;
+                  const label = item.label || `Image ${idx + 1}`;
+                  if (!url) return null;
+                  return (
+                    <a
+                      key={item._id || idx}
+                      href={url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="relative shrink-0 w-28 h-20 md:w-32 md:h-24 rounded-lg border overflow-hidden"
+                      title={label}
+                    >
+                      <img src={url} alt={label} loading="lazy" className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.opacity = 0.35; }} />
+                      <span className="absolute bottom-1 left-1 right-1 text-[10px] px-1.5 py-0.5 rounded bg-black/60 text-white truncate">{label}</span>
+                      {item.uploadedBy?.userName && (
+                        <span className="absolute top-1 right-1 text-[9px] px-1 rounded bg-black/50 text-white">by {item.uploadedBy.userName}</span>
+                      )}
+                    </a>
+                  );
+                })}
               </div>
-            ) : imgError ? (
-              <div className="text-sm text-red-600">Error: {imgError}</div>
-            ) : images ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Pickup */}
-                <div className="p-3 bg-white border rounded-xl border-gray-200">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <div className="font-semibold text-gray-800 text-sm">Pickup</div>
-                    <div className="text-[11px] text-gray-500">{images.originPlace?.location || '—'}</div>
-                  </div>
-                  <div className="text-[11px] text-gray-500 mb-2">
-                    Arrived: {fmtDate(images.originPlace?.arrivedAt)} • Status:{' '}
-                    <span className="font-semibold">{images.originPlace?.status ?? '—'}</span>
-                    {images.notes ? <> • Notes: <span className="font-normal">{images.notes}</span></> : null}
-                  </div>
+            );
 
-                  {/* SINGLE FLEX ROW for all pickup images */}
-                  <RowImages
-                    groups={{
-                      'Empty': images.emptyTruckImages,
-                      'Loaded': images.loadedTruckImages,
-                      'POD': images.podImages,
-                      'EIR': images.eirTickets,
-                      'Container': images.containerImages,
-                      'Seal': images.sealImages,
-                    }}
-                  />
-
-                  {(!images.emptyTruckImages?.length &&
-                    !images.loadedTruckImages?.length &&
-                    !images.podImages?.length &&
-                    !images.eirTickets?.length &&
-                    !images.containerImages?.length &&
-                    !images.sealImages?.length) && (
-                      <div className="text-sm text-gray-400 mt-2">No pickup images.</div>
-                    )}
+            return (
+              <section className={`${SOFT.cardBlue} md:col-span-2`}>
+                <h3 className="text-sm font-semibold text-gray-800 mb-3">Load Reference Images</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {hasPickup && (
+                    <div className="p-3 bg-white border rounded-xl border-gray-200">
+                      <h4 className="font-semibold text-gray-800 text-sm mb-2">Pickup Images</h4>
+                      {origins.map((origin, i) => (
+                        Array.isArray(origin?.pickupImages) && origin.pickupImages.length > 0 && (
+                          <div key={i} className="mb-3">
+                            {origins.length > 1 && <p className="text-xs text-gray-500 mb-1">Origin {i + 1}: {origin.addressLine1 || origin.address || '—'}</p>}
+                            {renderImageList(origin.pickupImages)}
+                          </div>
+                        )
+                      ))}
+                    </div>
+                  )}
+                  {hasDrop && (
+                    <div className="p-3 bg-white border rounded-xl border-gray-200">
+                      <h4 className="font-semibold text-gray-800 text-sm mb-2">Drop Images</h4>
+                      {destinations.map((dest, i) => (
+                        Array.isArray(dest?.dropImages) && dest.dropImages.length > 0 && (
+                          <div key={i} className="mb-3">
+                            {destinations.length > 1 && <p className="text-xs text-gray-500 mb-1">Destination {i + 1}: {dest.addressLine1 || dest.address || '—'}</p>}
+                            {renderImageList(dest.dropImages)}
+                          </div>
+                        )
+                      ))}
+                    </div>
+                  )}
+                  {hasReturn && (
+                    <div className="p-3 bg-white border rounded-xl border-indigo-200">
+                      <h4 className="font-semibold text-gray-800 text-sm mb-2">Return Location Images</h4>
+                      {renderImageList(returnLocationImages)}
+                    </div>
+                  )}
                 </div>
-
-                {/* Drop */}
-                <div className="p-3 bg-white border rounded-xl border-gray-200">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <div className="font-semibold text-gray-800 text-sm">Drop</div>
-                    <div className="text-[11px] text-gray-500">{images.destinationPlace?.location || '—'}</div>
-                  </div>
-                  <div className="text-[11px] text-gray-500 mb-2">
-                    Arrived: {fmtDate(images.dropLocationArrivalTime)} • Completed:{' '}
-                    <span className="font-semibold">{images.dropLocationCompleted ? 'Yes' : 'No'}</span>
-                    {images.dropLocationImages?.notes ? <> • Notes: <span className="font-normal">{images.dropLocationImages.notes}</span></> : null}
-                  </div>
-
-                  {/* SINGLE FLEX ROW for all drop images */}
-                  <RowImages
-                    groups={{
-                      'Drop Loc': images.dropLocationImages?.dropLocationImages,
-                      'Loaded': images.dropLocationImages?.loadedTruckImages,
-                      'Empty': images.dropLocationImages?.emptyTruckImages,
-                      'POD': images.dropLocationImages?.podImages,
-                    }}
-                  />
-
-                  {(!images.dropLocationImages?.dropLocationImages?.length &&
-                    !images.dropLocationImages?.loadedTruckImages?.length &&
-                    !images.dropLocationImages?.emptyTruckImages?.length &&
-                    !images.dropLocationImages?.podImages?.length) && (
-                      <div className="text-sm text-gray-400 mt-2">No drop images.</div>
-                    )}
-                </div>
-              </div>
-            ) : (
-              <div className="text-sm text-gray-500">No images available.</div>
-            )}
-          </section>
-
-
-
-
-
+              </section>
+            );
+          })()}
 
           {/* ========== Invoice (VIEW) - hidden in report view ========== */}
           {!reportView && (
@@ -3104,7 +3236,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
           {Array.isArray(loadRef.importantDateUpdateHistory) && loadRef.importantDateUpdateHistory.length > 0 && (
             <section className="p-4 rounded-2xl border bg-[#F0FDF4] border-[#BBF7D0] md:col-span-2">
               <h3 className="text-sm font-semibold text-gray-800 mb-3">Important Date Update History</h3>
-              <p className="text-xs text-gray-600 mb-2">Kon kon si important dates update hui hain (per entry)</p>
+              {/* <p className="text-xs text-gray-600 mb-2">Kon kon si important dates update hui hain (per entry)</p> */}
               <div className="overflow-x-auto max-h-64 overflow-y-auto rounded-lg border border-gray-200 bg-white">
                 <table className="w-full text-sm min-w-[400px]">
                   <thead className="bg-gray-50 border-b border-gray-200 sticky top-0">
@@ -3112,7 +3244,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
                       <th className="text-left py-2.5 px-3 text-gray-700 font-semibold">Employee Name</th>
                       <th className="text-left py-2.5 px-3 text-gray-700 font-semibold">Emp ID</th>
                       <th className="text-left py-2.5 px-3 text-gray-700 font-semibold">Updated At</th>
-                      <th className="text-left py-2.5 px-3 text-gray-700 font-semibold">Kon si dates update hui</th>
+                      <th className="text-left py-2.5 px-3 text-gray-700 font-semibold">Updated Dates</th>
                     </tr>
                   </thead>
                   <tbody>

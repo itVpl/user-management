@@ -27,9 +27,10 @@ const SearchableDropdown = ({
     if (searchTerm.trim() === '') {
       setFilteredOptions(options);
     } else {
-      const filtered = options.filter(option =>
-        option.label.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+      const filtered = options.filter((option) => {
+        const labelStr = typeof option.label === 'string' ? option.label : (option.searchLabel ?? '');
+        return labelStr.toLowerCase().includes(searchTerm.toLowerCase());
+      });
       setFilteredOptions(filtered);
     }
   }, [searchTerm, options]);
@@ -103,6 +104,12 @@ const SearchableDropdown = ({
                 placeholder={searchPlaceholder}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }
+                }}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                 autoFocus
               />
@@ -691,13 +698,7 @@ const AllCustomer = () => {
               value={selectedCreatedBy}
               onChange={(value) => setSelectedCreatedBy(value)}
               options={[
-                { value: '', label: (
-          <span className="text-base font-semibold text-gray-700">
-
-
-            All Created By
-          </span>
-        ), },
+                { value: '', label: 'All Created By' },
                 ...uniqueCreatedBy
               ]}
               placeholder="Select Created By"

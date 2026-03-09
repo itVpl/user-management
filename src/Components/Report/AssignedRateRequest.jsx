@@ -240,28 +240,46 @@ export default function AssignedRateRequest() {
     return parts.length ? parts.join(', ') : (dest.addressLine1 || 'N/A');
   };
 
+  // Build bid status for Excel: only Total Rate and Created per bid
+  const getBidsDetailForExport = (load) => {
+    const bids = load.bidStatus?.bids;
+    if (!Array.isArray(bids) || bids.length === 0) return '';
+    return bids.map((bid) => {
+      const total = bid.totalrates != null ? `$${Number(bid.totalrates).toLocaleString()}` : 'N/A';
+      const created = bid.createdAt
+        ? format(new Date(bid.createdAt), 'MMM dd, yyyy HH:mm')
+        : 'N/A';
+      return `Total: ${total}, Created: ${created}`;
+    }).join('; ');
+  };
+
   const handleExportCSV = (dataToExport, signedByName = '') => {
     if (!dataToExport || dataToExport.length === 0) {
       alertify.error('No data to export');
       return;
     }
-    const headers = ['Load ID', 'Assigned CMT', 'CMT Emp ID', 'Origin', 'Destination', 'Load Type', 'Agent Name', 'Bid Count', 'Has Bid'];
+    const headers = ['Load ID', 'Assigned CMT', 'CMT Emp ID', 'Origin', 'Destination', 'Load Type', 'Agent Name', 'Created Date', 'Bid Count', 'Has Bid', 'Bids Detail'];
     const rows = dataToExport.map((load) => {
       const cmtName = load.cmtUser?.empName || load.assignedCMTUser?.empName || 'N/A';
       const cmtId = load.cmtUser?.empId || load.assignedCMTUser?.empId || 'N/A';
       const agentName = load.createdBy?.createdBySalesUser?.empName || 'N/A';
       const bidCount = load.bidStatus?.bidCount ?? 0;
       const hasBid = load.bidStatus?.hasBid ? 'Yes' : 'No';
+      const filterDate = load.assignedAt ?? load.assignedCMTUser?.assignedAt ?? load.createdAt ?? load.createdDate;
+      const createdDateStr = filterDate ? format(new Date(filterDate), 'MMM dd, yyyy') : 'N/A';
+      const bidsDetail = getBidsDetailForExport(load);
       return [
-        `"${load.loadId || 'N/A'}"`,
-        `"${cmtName}"`,
-        `"${cmtId}"`,
-        `"${getOriginText(load)}"`,
-        `"${getDestinationText(load)}"`,
-        `"${load.loadDetails?.loadType || 'N/A'}"`,
-        `"${agentName}"`,
+        `"${(load.loadId || 'N/A').toString().replace(/"/g, '""')}"`,
+        `"${(cmtName || '').toString().replace(/"/g, '""')}"`,
+        `"${(cmtId || '').toString().replace(/"/g, '""')}"`,
+        `"${(getOriginText(load) || '').replace(/"/g, '""')}"`,
+        `"${(getDestinationText(load) || '').replace(/"/g, '""')}"`,
+        `"${(load.loadDetails?.loadType || 'N/A').toString().replace(/"/g, '""')}"`,
+        `"${(agentName || '').toString().replace(/"/g, '""')}"`,
+        `"${createdDateStr}"`,
         `"${bidCount}"`,
-        `"${hasBid}"`
+        `"${hasBid}"`,
+        `"${(bidsDetail || '').replace(/"/g, '""')}"`
       ];
     });
     let csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
@@ -534,6 +552,7 @@ export default function AssignedRateRequest() {
                   <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Destination</th>
                   <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Load Type</th>
                   <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Agent Name</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Created Date</th>
                   <th className="text-center py-4 px-4 text-gray-800 font-medium text-base">Bid Count</th>
                   <th className="text-center py-4 px-4 text-gray-800 font-medium text-base">Actions</th>
                 </tr>
@@ -547,6 +566,11 @@ export default function AssignedRateRequest() {
                   const agentName = load.createdBy?.createdBySalesUser?.empName || 'N/A';
                   const bidCount = load.bidStatus?.bidCount || 0;
                   const hasBid = load.bidStatus?.hasBid || false;
+                  // Same date field used by Date Range filter (backend typically filters on assignedAt/createdAt)
+                  const filterDate = load.assignedAt ?? load.assignedCMTUser?.assignedAt ?? load.createdAt ?? load.createdDate;
+                  const filterDateStr = filterDate
+                    ? format(new Date(filterDate), 'MMM dd, yyyy')
+                    : 'N/A';
                   return (
                     <tr key={load.loadId} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                       <td className="py-4 px-4"><span className="text-sm text-gray-600 font-medium">{load.loadId?.slice(-8) || 'N/A'}</span></td>
@@ -558,6 +582,7 @@ export default function AssignedRateRequest() {
                       <td className="py-4 px-4"><span className="text-sm text-gray-700">{destinationText}</span></td>
                       <td className="py-4 px-4"><span className="text-sm text-gray-700">{load.loadDetails?.loadType || 'N/A'}</span></td>
                       <td className="py-4 px-4"><span className="text-sm text-gray-700">{agentName}</span></td>
+                      <td className="py-4 px-4"><span className="text-sm text-gray-700">{filterDateStr}</span></td>
                       <td className="py-4 px-4 text-center"><span className={`text-sm font-semibold ${hasBid ? 'text-green-600' : 'text-orange-600'}`}>{bidCount}</span></td>
                       <td className="py-4 px-4">
                         <button onClick={() => { setSelectedLoad(load); setShowLoadModal(true); }} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1 mx-auto">
