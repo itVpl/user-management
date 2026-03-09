@@ -1,11 +1,34 @@
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
-import { Dialog, DialogTitle, DialogContent, DialogActions, IconButton } from "@mui/material";
+import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  IconButton,
+} from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
-import Logo from '../../assets/LogoFinal.png';
-import IdentificaLogo from '../../assets/identifica_logo.png';
-import MtPoconoLogo from '../../assets/mtPocono.png';
-import { Search, CheckCircle, XCircle, Clock, FileText, RefreshCw, Eye, Edit, Download, User, Truck, DollarSign, MapPin, Calendar, Send, PlusCircle } from 'lucide-react';
+import Logo from "../../assets/LogoFinal.png";
+import IdentificaLogo from "../../assets/identifica_logo.png";
+import MtPoconoLogo from "../../assets/mtPocono.png";
+import {
+  Search,
+  CheckCircle,
+  XCircle,
+  Clock,
+  FileText,
+  RefreshCw,
+  Eye,
+  Edit,
+  Download,
+  User,
+  Truck,
+  DollarSign,
+  MapPin,
+  Calendar,
+  Send,
+  PlusCircle,
+} from "lucide-react";
 
 import {
   Box,
@@ -128,8 +151,16 @@ const theme = createTheme({
 // ========= Utils =========
 const fmtMoney = (v) => (typeof v === "number" ? v.toFixed(2) : "0.00");
 const fmtDateTime = (d) => (d ? new Date(d).toLocaleString() : "—");
-const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : "—");
-const shortId = (id = "") => (id?.length > 8 ? `${id.slice(0, 6)}…${id.slice(-4)}` : id);
+const fmtDate = (d) =>
+  d
+    ? new Date(d).toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      })
+    : "—";
+const shortId = (id = "") =>
+  id?.length > 8 ? `${id.slice(0, 6)}…${id.slice(-4)}` : id;
 const isImageUrl = (url = "") => /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(url);
 const isPdfUrl = (url = "") => /\.pdf$/i.test(url);
 
@@ -139,22 +170,25 @@ const getDueDateInfo = (row) => {
 };
 
 const getDueDateStatusColor = (dueDateInfo) => {
-  if (!dueDateInfo) return '#666';
-  if (dueDateInfo.isOverdue) return '#dc3545'; // Red for overdue
-  if (dueDateInfo.status === 'due_soon') return '#ffc107'; // Yellow for due soon
-  return '#28a745'; // Green for pending
+  if (!dueDateInfo) return "#666";
+  if (dueDateInfo.isOverdue) return "#dc3545"; // Red for overdue
+  if (dueDateInfo.status === "due_soon") return "#ffc107"; // Yellow for due soon
+  return "#28a745"; // Green for pending
 };
 
 const formatDueDate = (dueDateInfo) => {
-  if (!dueDateInfo || !dueDateInfo.dueDate) return 'Not set';
+  if (!dueDateInfo || !dueDateInfo.dueDate) return "Not set";
   return fmtDate(dueDateInfo.dueDate);
 };
 
 const getDueDateStatusBadge = (dueDateInfo) => {
-  if (!dueDateInfo) return { text: 'Pending Email', color: '#999', bgColor: 'transparent' };
-  if (dueDateInfo.isOverdue) return { text: 'OVERDUE', color: '#dc3545', bgColor: '#ffebee' };
-  if (dueDateInfo.status === 'due_soon') return { text: 'DUE SOON', color: '#ffc107', bgColor: '#fff8e1' };
-  return { text: 'PENDING', color: '#28a745', bgColor: '#e8f5e9' };
+  if (!dueDateInfo)
+    return { text: "Pending Email", color: "#999", bgColor: "transparent" };
+  if (dueDateInfo.isOverdue)
+    return { text: "OVERDUE", color: "#dc3545", bgColor: "#ffebee" };
+  if (dueDateInfo.status === "due_soon")
+    return { text: "DUE SOON", color: "#ffc107", bgColor: "#fff8e1" };
+  return { text: "PENDING", color: "#28a745", bgColor: "#e8f5e9" };
 };
 
 const uniqueById = (arr = []) => {
@@ -186,18 +220,31 @@ function StatusChip({ status }) {
 }
 
 const DetailsRow = ({ label, value }) => (
-  <Stack direction="row" justifyContent="space-between" gap={2} sx={{ py: 0.5 }}>
+  <Stack
+    direction="row"
+    justifyContent="space-between"
+    gap={2}
+    sx={{ py: 0.5 }}
+  >
     <Typography variant="body2" color="text.secondary">
       {label}
     </Typography>
     <Typography variant="body2" fontWeight={600}>
-      {typeof value === "string" || typeof value === "number" ? value : value || "—"}
+      {typeof value === "string" || typeof value === "number"
+        ? value
+        : value || "—"}
     </Typography>
   </Stack>
 );
 
-const EmptyState = ({ title = "No data", subtitle = "Try adjusting filters or search." }) => (
-  <Paper elevation={0} sx={{ p: 4, textAlign: "center", border: "1px dashed #ddd" }}>
+const EmptyState = ({
+  title = "No data",
+  subtitle = "Try adjusting filters or search.",
+}) => (
+  <Paper
+    elevation={0}
+    sx={{ p: 4, textAlign: "center", border: "1px dashed #ddd" }}
+  >
     <Typography variant="h6" gutterBottom>
       {title}
     </Typography>
@@ -256,55 +303,65 @@ function EditForm({ data, onSubmit, loading, onClose }) {
 
   // Initialize form data with calculated totals
   const initializeFormData = (data) => {
-    const customers = (data?.customers || []).map(customer => {
+    const customers = (data?.customers || []).map((customer) => {
       // Handle billTo - fallback to customerName from root if not in customer object
-      const billTo = customer.billTo || data.customerName || '';
-      
+      const billTo = customer.billTo || data.customerName || "";
+
       // Handle other - if it's an array, use otherTotal or sum it up; otherwise use the value directly
       let otherValue = 0;
       if (Array.isArray(customer.other)) {
-        otherValue = customer.otherTotal || customer.other.reduce((sum, item) => sum + (Number(item?.total) || 0), 0);
+        otherValue =
+          customer.otherTotal ||
+          customer.other.reduce(
+            (sum, item) => sum + (Number(item?.total) || 0),
+            0,
+          );
       } else {
         otherValue = customer.other || customer.otherTotal || 0;
       }
-      
+
       // Calculate FSC as percentage of Line Haul
       const lineHaul = toNum2(customer.lineHaul || 0);
       const fscPercent = toNum2(customer.fsc || 0);
       const fscAmount = lineHaul * (fscPercent / 100);
       const totalAmount = lineHaul + fscAmount + otherValue;
-      
+
       // Preserve chargeRows if available
-      const chargeRows = Array.isArray(customer.other) ? customer.other.map(item => ({
-        name: item?.name || '',
-        quantity: String(item?.quantity || 0),
-        amt: String(item?.amount || 0),
-        total: Number(item?.total || 0)
-      })) : [];
-      
+      const chargeRows = Array.isArray(customer.other)
+        ? customer.other.map((item) => ({
+            name: item?.name || "",
+            quantity: String(item?.quantity || 0),
+            amt: String(item?.amount || 0),
+            total: Number(item?.total || 0),
+          }))
+        : [];
+
       return {
         ...customer,
         billTo: billTo,
         other: otherValue,
         chargeRows: chargeRows,
-        totalAmount: totalAmount
+        totalAmount: totalAmount,
       };
     });
-    
-    const carrierFees = (data?.carrier?.carrierFees || []).map(fee => ({
+
+    const carrierFees = (data?.carrier?.carrierFees || []).map((fee) => ({
       ...fee,
-      total: (fee.quantity || 0) * (fee.amount || 0)
+      total: (fee.quantity || 0) * (fee.amount || 0),
     }));
-    
-    const totalCarrierFees = carrierFees.reduce((sum, fee) => sum + (fee.total || 0), 0);
-    
+
+    const totalCarrierFees = carrierFees.reduce(
+      (sum, fee) => sum + (fee.total || 0),
+      0,
+    );
+
     return {
       customers,
       carrier: {
         ...data?.carrier,
         carrierFees,
-        totalCarrierFees
-      }
+        totalCarrierFees,
+      },
     };
   };
 
@@ -313,10 +370,12 @@ function EditForm({ data, onSubmit, loading, onClose }) {
   // Charges popup state
   const [showChargesPopup, setShowChargesPopup] = useState(false);
   const [customerCharges, setCustomerCharges] = useState([
-    { name: '', quantity: '', amt: '', total: 0 }
+    { name: "", quantity: "", amt: "", total: 0 },
   ]);
   const [currentCustomerIndex, setCurrentCustomerIndex] = useState(null);
-  const [customerChargeErrors, setCustomerChargeErrors] = useState([{ name: '', quantity: '', amt: '' }]);
+  const [customerChargeErrors, setCustomerChargeErrors] = useState([
+    { name: "", quantity: "", amt: "" },
+  ]);
 
   // Update form data when data prop changes
   React.useEffect(() => {
@@ -325,51 +384,59 @@ function EditForm({ data, onSubmit, loading, onClose }) {
 
   // Keep errors array size in sync with charges rows
   React.useEffect(() => {
-    setCustomerChargeErrors(prev =>
-      (customerCharges || []).map((_, i) => prev[i] || { name: '', quantity: '', amt: '' })
+    setCustomerChargeErrors((prev) =>
+      (customerCharges || []).map(
+        (_, i) => prev[i] || { name: "", quantity: "", amt: "" },
+      ),
     );
   }, [customerCharges]);
 
   const handleCustomerChange = (index, field, value) => {
     const newCustomers = [...formData.customers];
     newCustomers[index] = { ...newCustomers[index], [field]: value };
-    
+
     // Auto-calculate total amount when line haul, FSC, or other changes
-    if (field === 'lineHaul' || field === 'fsc' || field === 'other') {
-      const lineHaul = toNum2(field === 'lineHaul' ? value : (newCustomers[index].lineHaul || 0));
-      const fscPercent = toNum2(field === 'fsc' ? value : (newCustomers[index].fsc || 0));
+    if (field === "lineHaul" || field === "fsc" || field === "other") {
+      const lineHaul = toNum2(
+        field === "lineHaul" ? value : newCustomers[index].lineHaul || 0,
+      );
+      const fscPercent = toNum2(
+        field === "fsc" ? value : newCustomers[index].fsc || 0,
+      );
       const fscAmount = lineHaul * (fscPercent / 100); // FSC is percentage of Line Haul
-      const other = toNum2(field === 'other' ? value : (newCustomers[index].other || 0));
+      const other = toNum2(
+        field === "other" ? value : newCustomers[index].other || 0,
+      );
       newCustomers[index].totalAmount = lineHaul + fscAmount + other;
     }
-    
+
     setFormData({ ...formData, customers: newCustomers });
   };
 
   // Helper functions for charges validation
-  const onlyAlpha = (s = '') => s.replace(/[^A-Za-z ]/g, '');
-  const clampPosInt = (s = '') => s.replace(/[^\d]/g, '');
+  const onlyAlpha = (s = "") => s.replace(/[^A-Za-z ]/g, "");
+  const clampPosInt = (s = "") => s.replace(/[^\d]/g, "");
   const blockIntNoSign = (e) => {
-    if (['e', 'E', '+', '-', '.'].includes(e.key)) e.preventDefault();
+    if (["e", "E", "+", "-", "."].includes(e.key)) e.preventDefault();
   };
 
   // Handle charges input change
   const handleChargeChange = (index, field, value) => {
     const updated = [...customerCharges];
 
-    if (field === 'name') value = onlyAlpha(value);
-    if (field === 'quantity') value = clampPosInt(value);
-    if (field === 'amt') {
+    if (field === "name") value = onlyAlpha(value);
+    if (field === "quantity") value = clampPosInt(value);
+    if (field === "amt") {
       // Allow decimal points for amounts (max 2 decimal places)
-      value = value.replace(/[^\d.]/g, '');
+      value = value.replace(/[^\d.]/g, "");
       // Ensure only one decimal point
-      const parts = value.split('.');
+      const parts = value.split(".");
       if (parts.length > 2) {
-        value = parts[0] + '.' + parts.slice(1).join('');
+        value = parts[0] + "." + parts.slice(1).join("");
       }
       // Limit to 2 decimal places
       if (parts[1] && parts[1].length > 2) {
-        value = parts[0] + '.' + parts[1].substring(0, 2);
+        value = parts[0] + "." + parts[1].substring(0, 2);
       }
     }
 
@@ -383,27 +450,33 @@ function EditForm({ data, onSubmit, loading, onClose }) {
     setCustomerCharges(updated);
 
     // clear inline error as user fixes the field
-    setCustomerChargeErrors(prev => {
+    setCustomerChargeErrors((prev) => {
       const next = [...prev];
       next[index] = { ...next[index] };
-      if (field === 'name') next[index].name = '';
-      if (field === 'quantity') next[index].quantity = '';
-      if (field === 'amt') next[index].amt = '';
+      if (field === "name") next[index].name = "";
+      if (field === "quantity") next[index].quantity = "";
+      if (field === "amt") next[index].amt = "";
       return next;
     });
   };
 
   // Add charge row
   const addCharge = () => {
-    setCustomerCharges(prev => [...prev, { name: '', quantity: '', amt: '', total: 0 }]);
-    setCustomerChargeErrors(prev => [...prev, { name: '', quantity: '', amt: '' }]);
+    setCustomerCharges((prev) => [
+      ...prev,
+      { name: "", quantity: "", amt: "", total: 0 },
+    ]);
+    setCustomerChargeErrors((prev) => [
+      ...prev,
+      { name: "", quantity: "", amt: "" },
+    ]);
   };
 
   // Remove charge row
   const removeCharge = (index) => {
     if (customerCharges.length > 1) {
-      setCustomerCharges(prev => prev.filter((_, i) => i !== index));
-      setCustomerChargeErrors(prev => prev.filter((_, i) => i !== index));
+      setCustomerCharges((prev) => prev.filter((_, i) => i !== index));
+      setCustomerChargeErrors((prev) => prev.filter((_, i) => i !== index));
     }
   };
 
@@ -414,14 +487,16 @@ function EditForm({ data, onSubmit, loading, onClose }) {
     const customer = formData.customers[customerIndex];
     const existingCharges = customer?.chargeRows || [];
     if (existingCharges.length > 0 && Array.isArray(existingCharges)) {
-      setCustomerCharges(existingCharges.map(ch => ({
-        name: ch.name || '',
-        quantity: String(ch.quantity || ''),
-        amt: String(ch.amount || ch.amt || ''),
-        total: ch.total || 0
-      })));
+      setCustomerCharges(
+        existingCharges.map((ch) => ({
+          name: ch.name || "",
+          quantity: String(ch.quantity || ""),
+          amt: String(ch.amount || ch.amt || ""),
+          total: ch.total || 0,
+        })),
+      );
     } else {
-      setCustomerCharges([{ name: '', quantity: '', amt: '', total: 0 }]);
+      setCustomerCharges([{ name: "", quantity: "", amt: "", total: 0 }]);
     }
     setShowChargesPopup(true);
   };
@@ -436,9 +511,10 @@ function EditForm({ data, onSubmit, loading, onClose }) {
   const applyCharges = () => {
     // 1) Check if all rows are empty
     const allEmpty = (customerCharges || []).every(
-      ch => !(ch?.name?.trim()) &&
-        !(String(ch?.quantity ?? '') !== '') &&
-        !(String(ch?.amt ?? '') !== '')
+      (ch) =>
+        !ch?.name?.trim() &&
+        !(String(ch?.quantity ?? "") !== "") &&
+        !(String(ch?.amt ?? "") !== ""),
     );
 
     if (allEmpty) {
@@ -446,11 +522,11 @@ function EditForm({ data, onSubmit, loading, onClose }) {
       const errs = (customerCharges || []).map((_, i) =>
         i === 0
           ? {
-            name: 'Please enter the charge name',
-            quantity: 'Please enter the Quantity',
-            amt: 'Please enter the amount',
-          }
-          : { name: '', quantity: '', amt: '' }
+              name: "Please enter the charge name",
+              quantity: "Please enter the Quantity",
+              amt: "Please enter the amount",
+            }
+          : { name: "", quantity: "", amt: "" },
       );
       setCustomerChargeErrors(errs);
       return;
@@ -458,26 +534,29 @@ function EditForm({ data, onSubmit, loading, onClose }) {
 
     // 2) Row-by-row validation
     const nextErrs = (customerCharges || []).map((ch) => {
-      const row = { name: '', quantity: '', amt: '' };
-      const hasAny = (ch?.name || ch?.quantity || ch?.amt);
+      const row = { name: "", quantity: "", amt: "" };
+      const hasAny = ch?.name || ch?.quantity || ch?.amt;
 
       if (hasAny) {
-        const nm = (ch?.name || '').trim();
-        if (!nm) row.name = 'Please enter the charge name';
-        else if (!/^[A-Za-z ]+$/.test(nm)) row.name = 'Name should contain only alphabets';
+        const nm = (ch?.name || "").trim();
+        if (!nm) row.name = "Please enter the charge name";
+        else if (!/^[A-Za-z ]+$/.test(nm))
+          row.name = "Name should contain only alphabets";
 
-        const qRaw = String(ch?.quantity ?? '');
-        if (qRaw === '') row.quantity = 'Please enter the Quantity';
-        else if (!/^[1-9]\d*$/.test(qRaw)) row.quantity = 'Quantity must be a positive integer';
+        const qRaw = String(ch?.quantity ?? "");
+        if (qRaw === "") row.quantity = "Please enter the Quantity";
+        else if (!/^[1-9]\d*$/.test(qRaw))
+          row.quantity = "Quantity must be a positive integer";
 
-        const aRaw = String(ch?.amt ?? '');
-        if (aRaw === '') row.amt = 'Please enter the amount';
-        else if (!/^\d+(\.\d{1,2})?$/.test(aRaw)) row.amt = 'Amount must be a positive number (max 2 decimal places)';
+        const aRaw = String(ch?.amt ?? "");
+        if (aRaw === "") row.amt = "Please enter the amount";
+        else if (!/^\d+(\.\d{1,2})?$/.test(aRaw))
+          row.amt = "Amount must be a positive number (max 2 decimal places)";
       }
       return row;
     });
 
-    const hasErrors = nextErrs.some(r => r.name || r.quantity || r.amt);
+    const hasErrors = nextErrs.some((r) => r.name || r.quantity || r.amt);
     setCustomerChargeErrors(nextErrs);
 
     if (hasErrors) {
@@ -485,106 +564,123 @@ function EditForm({ data, onSubmit, loading, onClose }) {
     }
 
     // 3) Valid -> apply totals
-    const totalCharges = (customerCharges || []).reduce((sum, ch) => sum + (Number(ch.total) || 0), 0);
-    
+    const totalCharges = (customerCharges || []).reduce(
+      (sum, ch) => sum + (Number(ch.total) || 0),
+      0,
+    );
+
     // Apply to customer
     if (currentCustomerIndex !== null) {
-      setFormData(prev => {
+      setFormData((prev) => {
         const updatedCustomers = [...prev.customers];
         if (updatedCustomers[currentCustomerIndex]) {
-          const lh = toNum2(updatedCustomers[currentCustomerIndex].lineHaul || 0);
-          const fscPercent = toNum2(updatedCustomers[currentCustomerIndex].fsc || 0);
+          const lh = toNum2(
+            updatedCustomers[currentCustomerIndex].lineHaul || 0,
+          );
+          const fscPercent = toNum2(
+            updatedCustomers[currentCustomerIndex].fsc || 0,
+          );
           const fscAmount = lh * (fscPercent / 100);
-          
+
           updatedCustomers[currentCustomerIndex] = {
             ...updatedCustomers[currentCustomerIndex],
             other: String(totalCharges),
-            chargeRows: customerCharges.map(ch => ({
+            chargeRows: customerCharges.map((ch) => ({
               name: ch.name.trim(),
               quantity: parseInt(ch.quantity, 10) || 0,
               amount: parseFloat(ch.amt) || 0,
-              total: (parseInt(ch.quantity, 10) || 0) * (parseFloat(ch.amt) || 0),
+              total:
+                (parseInt(ch.quantity, 10) || 0) * (parseFloat(ch.amt) || 0),
             })),
-            totalAmount: toNum2(lh + fscAmount + totalCharges)
+            totalAmount: toNum2(lh + fscAmount + totalCharges),
           };
         }
         return { ...prev, customers: updatedCustomers };
       });
       setCurrentCustomerIndex(null);
     }
-    
+
     setShowChargesPopup(false);
   };
 
   const handleCarrierChange = (field, value) => {
     setFormData({
       ...formData,
-      carrier: { ...formData.carrier, [field]: value }
+      carrier: { ...formData.carrier, [field]: value },
     });
   };
 
   const handleCarrierFeeChange = (index, field, value) => {
     const newFees = [...(formData.carrier.carrierFees || [])];
     newFees[index] = { ...newFees[index], [field]: value };
-    
+
     // Auto-calculate total for carrier fee when quantity or amount changes
-    if (field === 'quantity' || field === 'amount') {
-      const quantity = field === 'quantity' ? value : (newFees[index].quantity || 0);
-      const amount = field === 'amount' ? value : (newFees[index].amount || 0);
+    if (field === "quantity" || field === "amount") {
+      const quantity =
+        field === "quantity" ? value : newFees[index].quantity || 0;
+      const amount = field === "amount" ? value : newFees[index].amount || 0;
       newFees[index].total = quantity * amount;
     }
-    
+
     // Calculate total carrier fees
-    const totalCarrierFees = newFees.reduce((sum, fee) => sum + (fee.total || 0), 0);
-    
+    const totalCarrierFees = newFees.reduce(
+      (sum, fee) => sum + (fee.total || 0),
+      0,
+    );
+
     setFormData({
       ...formData,
-      carrier: { 
-        ...formData.carrier, 
+      carrier: {
+        ...formData.carrier,
         carrierFees: newFees,
-        totalCarrierFees: totalCarrierFees
-      }
+        totalCarrierFees: totalCarrierFees,
+      },
     });
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    
+
     // Transform formData to match API expectations
     const transformedData = {
       ...formData,
-      customers: formData.customers.map(c => {
+      customers: formData.customers.map((c) => {
         const lh = toNum2(c.lineHaul || 0);
         const fscPercent = toNum2(c.fsc || 0);
         const fscAmount = lh * (fscPercent / 100);
         const oth = toNum2(c.other || 0);
-        
+
         // Convert chargeRows to array format expected by API
-        const otherArray = (c.chargeRows && c.chargeRows.length > 0)
-          ? c.chargeRows.map(r => ({
-              name: r.name,
-              quantity: parseInt(r.quantity) || 0,
-              amount: parseFloat(r.amount || r.amt) || 0,
-              total: parseFloat(r.total) || 0
-            }))
-          : (oth > 0 ? [{
-              name: "Other Charges",
-              quantity: 1,
-              amount: oth,
-              total: oth
-            }] : []);
-        
+        const otherArray =
+          c.chargeRows && c.chargeRows.length > 0
+            ? c.chargeRows.map((r) => ({
+                name: r.name,
+                quantity: parseInt(r.quantity) || 0,
+                amount: parseFloat(r.amount || r.amt) || 0,
+                total: parseFloat(r.total) || 0,
+              }))
+            : oth > 0
+              ? [
+                  {
+                    name: "Other Charges",
+                    quantity: 1,
+                    amount: oth,
+                    total: oth,
+                  },
+                ]
+              : [];
+
         return {
           ...c,
           lineHaul: lh,
           fsc: fscPercent, // Store percentage value
           other: otherArray,
           otherTotal: oth,
-          totalAmount: toNum2(lh + fscAmount + oth)
+          totalAmount: toNum2(lh + fscAmount + oth),
         };
-      })
+      }),
     };
-    
+
     onSubmit(transformedData);
   };
 
@@ -598,12 +694,19 @@ function EditForm({ data, onSubmit, loading, onClose }) {
         </div>
         <div className="space-y-4">
           {formData.customers.map((customer, index) => (
-            <div key={index} className="bg-white rounded-xl p-4 border border-green-200">
+            <div
+              key={index}
+              className="bg-white rounded-xl p-4 border border-green-200"
+            >
               <div className="flex items-center gap-2 mb-3">
                 <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
-                  <span className="text-green-600 font-bold text-sm">{index + 1}</span>
+                  <span className="text-green-600 font-bold text-sm">
+                    {index + 1}
+                  </span>
                 </div>
-                <h4 className="font-semibold text-gray-800">Customer {index + 1}</h4>
+                <h4 className="font-semibold text-gray-800">
+                  Customer {index + 1}
+                </h4>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <TextField
@@ -614,9 +717,9 @@ function EditForm({ data, onSubmit, loading, onClose }) {
                     readOnly: true,
                   }}
                   sx={{
-                    '& .MuiInputBase-input': {
-                      backgroundColor: '#f5f5f5'
-                    }
+                    "& .MuiInputBase-input": {
+                      backgroundColor: "#f5f5f5",
+                    },
                   }}
                 />
                 <TextField
@@ -627,9 +730,9 @@ function EditForm({ data, onSubmit, loading, onClose }) {
                     readOnly: true,
                   }}
                   sx={{
-                    '& .MuiInputBase-input': {
-                      backgroundColor: '#f5f5f5'
-                    }
+                    "& .MuiInputBase-input": {
+                      backgroundColor: "#f5f5f5",
+                    },
                   }}
                 />
                 <TextField
@@ -640,9 +743,9 @@ function EditForm({ data, onSubmit, loading, onClose }) {
                     readOnly: true,
                   }}
                   sx={{
-                    '& .MuiInputBase-input': {
-                      backgroundColor: '#f5f5f5'
-                    }
+                    "& .MuiInputBase-input": {
+                      backgroundColor: "#f5f5f5",
+                    },
                   }}
                 />
                 <TextField
@@ -653,9 +756,9 @@ function EditForm({ data, onSubmit, loading, onClose }) {
                     readOnly: true,
                   }}
                   sx={{
-                    '& .MuiInputBase-input': {
-                      backgroundColor: '#f5f5f5'
-                    }
+                    "& .MuiInputBase-input": {
+                      backgroundColor: "#f5f5f5",
+                    },
                   }}
                 />
                 <div className="md:col-span-2">
@@ -664,7 +767,13 @@ function EditForm({ data, onSubmit, loading, onClose }) {
                     label="Line Haul"
                     type="number"
                     value={customer.lineHaul || ""}
-                    onChange={(e) => handleCustomerChange(index, 'lineHaul', parseFloat(e.target.value) || 0)}
+                    onChange={(e) =>
+                      handleCustomerChange(
+                        index,
+                        "lineHaul",
+                        parseFloat(e.target.value) || 0,
+                      )
+                    }
                   />
                 </div>
                 <TextField
@@ -672,7 +781,13 @@ function EditForm({ data, onSubmit, loading, onClose }) {
                   label="FSC"
                   type="number"
                   value={customer.fsc || ""}
-                  onChange={(e) => handleCustomerChange(index, 'fsc', parseFloat(e.target.value) || 0)}
+                  onChange={(e) =>
+                    handleCustomerChange(
+                      index,
+                      "fsc",
+                      parseFloat(e.target.value) || 0,
+                    )
+                  }
                 />
                 <TextField
                   fullWidth
@@ -683,13 +798,13 @@ function EditForm({ data, onSubmit, loading, onClose }) {
                     readOnly: true,
                   }}
                   sx={{
-                    '& .MuiInputBase-input': {
-                      backgroundColor: '#f5f5f5',
-                      cursor: 'pointer'
+                    "& .MuiInputBase-input": {
+                      backgroundColor: "#f5f5f5",
+                      cursor: "pointer",
                     },
-                    '& .MuiInputBase-root': {
-                      cursor: 'pointer'
-                    }
+                    "& .MuiInputBase-root": {
+                      cursor: "pointer",
+                    },
                   }}
                   placeholder="Click to add charges"
                 />
@@ -702,10 +817,10 @@ function EditForm({ data, onSubmit, loading, onClose }) {
                     readOnly: true,
                   }}
                   sx={{
-                    '& .MuiInputBase-input': {
-                      backgroundColor: '#f5f5f5',
-                      fontWeight: 'bold'
-                    }
+                    "& .MuiInputBase-input": {
+                      backgroundColor: "#f5f5f5",
+                      fontWeight: "bold",
+                    },
                   }}
                 />
               </div>
@@ -730,9 +845,9 @@ function EditForm({ data, onSubmit, loading, onClose }) {
                 readOnly: true,
               }}
               sx={{
-                '& .MuiInputBase-input': {
-                  backgroundColor: '#f5f5f5'
-                }
+                "& .MuiInputBase-input": {
+                  backgroundColor: "#f5f5f5",
+                },
               }}
             />
             <TextField
@@ -743,19 +858,24 @@ function EditForm({ data, onSubmit, loading, onClose }) {
                 readOnly: true,
               }}
               sx={{
-                '& .MuiInputBase-input': {
-                  backgroundColor: '#f5f5f5'
-                }
+                "& .MuiInputBase-input": {
+                  backgroundColor: "#f5f5f5",
+                },
               }}
             />
           </div>
 
           {/* Carrier Fees */}
           <div className="mt-4">
-            <h4 className="text-md font-semibold text-gray-800 mb-3">Carrier Fees</h4>
+            <h4 className="text-md font-semibold text-gray-800 mb-3">
+              Carrier Fees
+            </h4>
             <div className="space-y-3">
               {(formData.carrier.carrierFees || []).map((fee, index) => (
-                <div key={index} className="bg-white rounded-lg p-4 border border-purple-200">
+                <div
+                  key={index}
+                  className="bg-white rounded-lg p-4 border border-purple-200"
+                >
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <TextField
                       fullWidth
@@ -765,9 +885,9 @@ function EditForm({ data, onSubmit, loading, onClose }) {
                         readOnly: true,
                       }}
                       sx={{
-                        '& .MuiInputBase-input': {
-                          backgroundColor: '#f5f5f5'
-                        }
+                        "& .MuiInputBase-input": {
+                          backgroundColor: "#f5f5f5",
+                        },
                       }}
                     />
                     <TextField
@@ -775,14 +895,26 @@ function EditForm({ data, onSubmit, loading, onClose }) {
                       label="Quantity"
                       type="number"
                       value={fee.quantity || ""}
-                      onChange={(e) => handleCarrierFeeChange(index, 'quantity', parseFloat(e.target.value) || 0)}
+                      onChange={(e) =>
+                        handleCarrierFeeChange(
+                          index,
+                          "quantity",
+                          parseFloat(e.target.value) || 0,
+                        )
+                      }
                     />
                     <TextField
                       fullWidth
                       label="Amount"
                       type="number"
                       value={fee.amount || ""}
-                      onChange={(e) => handleCarrierFeeChange(index, 'amount', parseFloat(e.target.value) || 0)}
+                      onChange={(e) =>
+                        handleCarrierFeeChange(
+                          index,
+                          "amount",
+                          parseFloat(e.target.value) || 0,
+                        )
+                      }
                     />
                     <TextField
                       fullWidth
@@ -793,10 +925,10 @@ function EditForm({ data, onSubmit, loading, onClose }) {
                         readOnly: true,
                       }}
                       sx={{
-                        '& .MuiInputBase-input': {
-                          backgroundColor: '#f5f5f5',
-                          fontWeight: 'bold'
-                        }
+                        "& .MuiInputBase-input": {
+                          backgroundColor: "#f5f5f5",
+                          fontWeight: "bold",
+                        },
                       }}
                     />
                   </div>
@@ -813,10 +945,10 @@ function EditForm({ data, onSubmit, loading, onClose }) {
                   readOnly: true,
                 }}
                 sx={{
-                  '& .MuiInputBase-input': {
-                    backgroundColor: '#f5f5f5',
-                    fontWeight: 'bold'
-                  }
+                  "& .MuiInputBase-input": {
+                    backgroundColor: "#f5f5f5",
+                    fontWeight: "bold",
+                  },
                 }}
               />
             </div>
@@ -838,7 +970,7 @@ function EditForm({ data, onSubmit, loading, onClose }) {
         <button
           type="submit"
           disabled={loading}
-          className={`${onClose ? 'flex-1 max-w-[200px]' : ''} px-6 py-3 h-12 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2`}
+          className={`${onClose ? "flex-1 max-w-[200px]" : ""} px-6 py-3 h-12 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2`}
         >
           {loading ? (
             <>
@@ -856,8 +988,14 @@ function EditForm({ data, onSubmit, loading, onClose }) {
 
       {/* Charges Popup */}
       {showChargesPopup && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-[60]" onClick={closeChargesPopup}>
-          <div className="bg-white rounded-xl shadow-2xl border border-gray-200 p-8 w-full max-w-5xl max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="fixed inset-0 bg-black/30 flex items-center justify-center z-[60]"
+          onClick={closeChargesPopup}
+        >
+          <div
+            className="bg-white rounded-xl shadow-2xl border border-gray-200 p-8 w-full max-w-5xl max-h-[85vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Header */}
             <div className="bg-gradient-to-r from-blue-500 to-blue-600 -m-8 mb-6 p-6 rounded-t-xl">
               <div className="flex justify-between items-center">
@@ -870,7 +1008,9 @@ function EditForm({ data, onSubmit, loading, onClose }) {
                       Customer Charges Calculator
                     </h2>
                     {currentCustomerIndex !== null && (
-                      <p className="text-white/80 text-sm mt-1">Customer {currentCustomerIndex + 1}</p>
+                      <p className="text-white/80 text-sm mt-1">
+                        Customer {currentCustomerIndex + 1}
+                      </p>
                     )}
                   </div>
                 </div>
@@ -878,8 +1018,18 @@ function EditForm({ data, onSubmit, loading, onClose }) {
                   onClick={closeChargesPopup}
                   className="text-white hover:text-gray-200 transition-colors p-2 rounded-full hover:bg-white hover:bg-opacity-20"
                 >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                  <svg
+                    className="w-6 h-6"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M6 18L18 6M6 6l12 12"
+                    ></path>
                   </svg>
                 </button>
               </div>
@@ -890,15 +1040,21 @@ function EditForm({ data, onSubmit, loading, onClose }) {
               <div className="grid grid-cols-5 gap-4 bg-gradient-to-r from-gray-50 to-gray-100 p-4 rounded-xl font-semibold text-gray-700 border border-gray-200">
                 <div className="flex items-center gap-2">
                   <FileText className="w-4 h-4" />
-                  <span>Name <span className="text-red-500">*</span></span>
+                  <span>
+                    Name <span className="text-red-500">*</span>
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-lg">#</span>
-                  <span>Quantity <span className="text-red-500">*</span></span>
+                  <span>
+                    Quantity <span className="text-red-500">*</span>
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <DollarSign className="w-4 h-4" />
-                  <span>Amount <span className="text-red-500">*</span></span>
+                  <span>
+                    Amount <span className="text-red-500">*</span>
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-lg font-bold">$</span>
@@ -909,39 +1065,66 @@ function EditForm({ data, onSubmit, loading, onClose }) {
 
               {/* Rows */}
               {customerCharges.map((charge, index) => (
-                <div key={index} className="grid grid-cols-5 gap-4 items-start p-4 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                <div
+                  key={index}
+                  className="grid grid-cols-5 gap-4 items-start p-4 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
+                >
                   {/* Name */}
                   <div>
                     <input
                       type="text"
                       value={charge.name}
-                      onChange={(e) => handleChargeChange(index, 'name', e.target.value)}
+                      onChange={(e) =>
+                        handleChargeChange(index, "name", e.target.value)
+                      }
                       onKeyDown={(e) => {
                         const ctrl = e.ctrlKey || e.metaKey;
-                        const allow = ['Backspace', 'Delete', 'Tab', 'Enter', 'Escape', 'ArrowLeft', 'ArrowRight', 'Home', 'End'];
-                        if (allow.includes(e.key) || (ctrl && ['a', 'c', 'v', 'x'].includes(e.key.toLowerCase()))) return;
-                        if (e.key.length === 1 && !/[A-Za-z ]/.test(e.key)) e.preventDefault();
+                        const allow = [
+                          "Backspace",
+                          "Delete",
+                          "Tab",
+                          "Enter",
+                          "Escape",
+                          "ArrowLeft",
+                          "ArrowRight",
+                          "Home",
+                          "End",
+                        ];
+                        if (
+                          allow.includes(e.key) ||
+                          (ctrl &&
+                            ["a", "c", "v", "x"].includes(e.key.toLowerCase()))
+                        )
+                          return;
+                        if (e.key.length === 1 && !/[A-Za-z ]/.test(e.key))
+                          e.preventDefault();
                       }}
                       onBlur={() => {
                         setCustomerChargeErrors((prev) => {
                           const next = [...prev];
-                          const v = (charge.name || '').trim();
+                          const v = (charge.name || "").trim();
                           next[index] = { ...(next[index] || {}) };
-                          if (!v) next[index].name = 'Please enter the charge name';
-                          else if (!/^[A-Za-z ]+$/.test(v)) next[index].name = 'Name should contain only alphabets';
-                          else next[index].name = '';
+                          if (!v)
+                            next[index].name = "Please enter the charge name";
+                          else if (!/^[A-Za-z ]+$/.test(v))
+                            next[index].name =
+                              "Name should contain only alphabets";
+                          else next[index].name = "";
                           return next;
                         });
                       }}
                       aria-invalid={Boolean(customerChargeErrors[index]?.name)}
-                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all ${customerChargeErrors[index]?.name
-                        ? 'border-red-500 bg-red-50 focus:ring-red-200'
-                        : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
-                        }`}
+                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all ${
+                        customerChargeErrors[index]?.name
+                          ? "border-red-500 bg-red-50 focus:ring-red-200"
+                          : "border-gray-300 focus:ring-blue-500 focus:border-transparent"
+                      }`}
                       placeholder="Enter charge name"
                     />
                     {customerChargeErrors[index]?.name && (
-                      <p className="mt-1 text-xs text-red-600">{customerChargeErrors[index].name}</p>
+                      <p className="mt-1 text-xs text-red-600">
+                        {customerChargeErrors[index].name}
+                      </p>
                     )}
                   </div>
 
@@ -954,27 +1137,37 @@ function EditForm({ data, onSubmit, loading, onClose }) {
                       inputMode="numeric"
                       onKeyDown={blockIntNoSign}
                       value={charge.quantity}
-                      onChange={(e) => handleChargeChange(index, 'quantity', e.target.value)}
+                      onChange={(e) =>
+                        handleChargeChange(index, "quantity", e.target.value)
+                      }
                       onBlur={() => {
                         setCustomerChargeErrors((prev) => {
                           const next = [...prev];
-                          const raw = String(charge.quantity ?? '');
+                          const raw = String(charge.quantity ?? "");
                           next[index] = { ...(next[index] || {}) };
-                          if (raw === '') next[index].quantity = 'Please enter the Quantity';
-                          else if (!/^[1-9]\d*$/.test(raw)) next[index].quantity = 'Quantity must be a positive integer';
-                          else next[index].quantity = '';
+                          if (raw === "")
+                            next[index].quantity = "Please enter the Quantity";
+                          else if (!/^[1-9]\d*$/.test(raw))
+                            next[index].quantity =
+                              "Quantity must be a positive integer";
+                          else next[index].quantity = "";
                           return next;
                         });
                       }}
-                      aria-invalid={Boolean(customerChargeErrors[index]?.quantity)}
-                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all ${customerChargeErrors[index]?.quantity
-                        ? 'border-red-500 bg-red-50 focus:ring-red-200'
-                        : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
-                        }`}
+                      aria-invalid={Boolean(
+                        customerChargeErrors[index]?.quantity,
+                      )}
+                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all ${
+                        customerChargeErrors[index]?.quantity
+                          ? "border-red-500 bg-red-50 focus:ring-red-200"
+                          : "border-gray-300 focus:ring-blue-500 focus:border-transparent"
+                      }`}
                       placeholder="0"
                     />
                     {customerChargeErrors[index]?.quantity && (
-                      <p className="mt-1 text-xs text-red-600">{customerChargeErrors[index].quantity}</p>
+                      <p className="mt-1 text-xs text-red-600">
+                        {customerChargeErrors[index].quantity}
+                      </p>
                     )}
                   </div>
 
@@ -986,30 +1179,39 @@ function EditForm({ data, onSubmit, loading, onClose }) {
                       step="0.01"
                       inputMode="decimal"
                       onKeyDown={(e) => {
-                        if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
+                        if (["e", "E", "+", "-"].includes(e.key))
+                          e.preventDefault();
                       }}
                       value={charge.amt}
-                      onChange={(e) => handleChargeChange(index, 'amt', e.target.value)}
+                      onChange={(e) =>
+                        handleChargeChange(index, "amt", e.target.value)
+                      }
                       onBlur={() => {
                         setCustomerChargeErrors((prev) => {
                           const next = [...prev];
-                          const raw = String(charge.amt ?? '');
+                          const raw = String(charge.amt ?? "");
                           next[index] = { ...(next[index] || {}) };
-                          if (raw === '') next[index].amt = 'Please enter the amount';
-                          else if (!/^\d+(\.\d{1,2})?$/.test(raw)) next[index].amt = 'Amount must be a positive number (max 2 decimal places)';
-                          else next[index].amt = '';
+                          if (raw === "")
+                            next[index].amt = "Please enter the amount";
+                          else if (!/^\d+(\.\d{1,2})?$/.test(raw))
+                            next[index].amt =
+                              "Amount must be a positive number (max 2 decimal places)";
+                          else next[index].amt = "";
                           return next;
                         });
                       }}
                       aria-invalid={Boolean(customerChargeErrors[index]?.amt)}
-                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all ${customerChargeErrors[index]?.amt
-                        ? 'border-red-500 bg-red-50 focus:ring-red-200'
-                        : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
-                        }`}
+                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all ${
+                        customerChargeErrors[index]?.amt
+                          ? "border-red-500 bg-red-50 focus:ring-red-200"
+                          : "border-gray-300 focus:ring-blue-500 focus:border-transparent"
+                      }`}
                       placeholder="0.00"
                     />
                     {customerChargeErrors[index]?.amt && (
-                      <p className="mt-1 text-xs text-red-600">{customerChargeErrors[index].amt}</p>
+                      <p className="mt-1 text-xs text-red-600">
+                        {customerChargeErrors[index].amt}
+                      </p>
                     )}
                   </div>
 
@@ -1024,13 +1226,24 @@ function EditForm({ data, onSubmit, loading, onClose }) {
                       type="button"
                       onClick={() => removeCharge(index)}
                       disabled={customerCharges.length === 1}
-                      className={`p-2 rounded-full transition-all ${customerCharges.length === 1
-                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                        : 'bg-red-100 text-red-500 hover:bg-red-200 hover:text-red-700'
-                        }`}
+                      className={`p-2 rounded-full transition-all ${
+                        customerCharges.length === 1
+                          ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                          : "bg-red-100 text-red-500 hover:bg-red-200 hover:text-red-700"
+                      }`}
                     >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                        ></path>
                       </svg>
                     </button>
                   </div>
@@ -1057,9 +1270,14 @@ function EditForm({ data, onSubmit, loading, onClose }) {
                       <DollarSign className="w-6 h-6 text-white" />
                     </div>
                     <div>
-                      <div className="text-sm text-gray-600 font-medium">Total Charges</div>
+                      <div className="text-sm text-gray-600 font-medium">
+                        Total Charges
+                      </div>
                       <div className="text-2xl font-bold text-gray-800">
-                        ${(customerCharges || []).reduce((sum, ch) => sum + (Number(ch.total) || 0), 0).toFixed(2)}
+                        $
+                        {(customerCharges || [])
+                          .reduce((sum, ch) => sum + (Number(ch.total) || 0), 0)
+                          .toFixed(2)}
                       </div>
                     </div>
                   </div>
@@ -1106,13 +1324,17 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
   const [selected, setSelected] = useState(null);
 
   // toasts
-  const [toast, setToast] = useState({ open: false, severity: "success", msg: "" });
+  const [toast, setToast] = useState({
+    open: false,
+    severity: "success",
+    msg: "",
+  });
 
   // Email modal state
   const [emailModalOpen, setEmailModalOpen] = useState(false);
   const [emailData, setEmailData] = useState(null);
   const [emailForm, setEmailForm] = useState({
-    pdfFile: null
+    pdfFile: null,
   });
   const [emailLoading, setEmailLoading] = useState(false);
   const [pdfUploading, setPdfUploading] = useState(false);
@@ -1125,11 +1347,12 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     currentPage: 1,
     totalPages: 1,
     totalItems: 0,
-    itemsPerPage: 50,
+    itemsPerPage: 10,
   });
   const [accountantUser, setAccountantUser] = useState(null);
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState("all");
+  const [assignedFilteredTotal, setAssignedFilteredTotal] = useState(null);
   const [search, setSearch] = useState("");
 
   // === TAB 1: Accountant Approved (Processed) ===
@@ -1140,7 +1363,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     currentPage: 1,
     totalPages: 1,
     totalItems: 0,
-    itemsPerPage: 50,
+    itemsPerPage: 10,
   });
   const [processedPage, setProcessedPage] = useState(1);
   const [processedSearch, setProcessedSearch] = useState("");
@@ -1155,7 +1378,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     currentPage: 1,
     totalPages: 1,
     totalItems: 0,
-    itemsPerPage: 50,
+    itemsPerPage: 10,
   });
   const [acceptedPage, setAcceptedPage] = useState(1);
   const [acceptedSearch, setAcceptedSearch] = useState("");
@@ -1170,7 +1393,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     currentPage: 1,
     totalPages: 1,
     totalItems: 0,
-    itemsPerPage: 50,
+    itemsPerPage: 10,
   });
   const [rejectedPage, setRejectedPage] = useState(1);
   const [rejectedSearch, setRejectedSearch] = useState("");
@@ -1196,13 +1419,17 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
   const [resubmitCorrections, setResubmitCorrections] = useState("");
   const [resubmitRemarks, setResubmitRemarks] = useState("");
   const [resubmitPosting, setResubmitPosting] = useState(false);
-  
+
   // Resubmit to CMT form state
   const [resubmitCMTRemarks, setResubmitCMTRemarks] = useState("");
   const [resubmitCMTPosting, setResubmitCMTPosting] = useState(false);
 
   // PDF generation state
-  const [pdfLoading, setPdfLoading] = useState({ invoice: false, rate: false, bol: false });
+  const [pdfLoading, setPdfLoading] = useState({
+    invoice: false,
+    rate: false,
+    bol: false,
+  });
 
   // Edit functionality state
   const [editOpen, setEditOpen] = useState(false);
@@ -1213,10 +1440,10 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [paymentData, setPaymentData] = useState(null);
   const [paymentForm, setPaymentForm] = useState({
-    paymentMethod: '',
-    paymentReference: '',
-    paymentNotes: '',
-    paymentProof: null
+    paymentMethod: "",
+    paymentReference: "",
+    paymentNotes: "",
+    paymentProof: null,
   });
   const [paymentLoading, setPaymentLoading] = useState(false);
 
@@ -1225,10 +1452,10 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
   const [selectedDOs, setSelectedDOs] = useState(new Set());
   const [bulkPaymentDOIds, setBulkPaymentDOIds] = useState([]); // Store DO IDs when modal opens
   const [bulkPaymentForm, setBulkPaymentForm] = useState({
-    paymentMethod: '',
-    paymentReference: '',
-    paymentNotes: '',
-    paymentProof: null
+    paymentMethod: "",
+    paymentReference: "",
+    paymentNotes: "",
+    paymentProof: null,
   });
   const [bulkPaymentLoading, setBulkPaymentLoading] = useState(false);
 
@@ -1236,11 +1463,11 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
   const [shortPayModalOpen, setShortPayModalOpen] = useState(false);
   const [shortPayData, setShortPayData] = useState(null);
   const [shortPayForm, setShortPayForm] = useState({
-    paymentAmount: '',
-    paymentMethod: '',
-    paymentReference: '',
-    paymentNotes: '',
-    carrierPaymentProof: null
+    paymentAmount: "",
+    paymentMethod: "",
+    paymentReference: "",
+    paymentNotes: "",
+    carrierPaymentProof: null,
   });
   const [shortPayLoading, setShortPayLoading] = useState(false);
 
@@ -1251,30 +1478,38 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
   const generateRateLoadConfirmationPDF = async (order) => {
     try {
       // Get company info based on addDispature
-      const orderCompanyName = order?.addDispature || order?.company || '';
+      const orderCompanyName = order?.addDispature || order?.company || "";
       let pdfLogo = Logo;
-      if (orderCompanyName === 'IDENTIFICA LLC') {
+      if (orderCompanyName === "IDENTIFICA LLC") {
         pdfLogo = IdentificaLogo;
-      } else if (orderCompanyName === 'MT. POCONO TRANSPORTATION INC') {
+      } else if (orderCompanyName === "MT. POCONO TRANSPORTATION INC") {
         pdfLogo = MtPoconoLogo;
       }
-      
+
       // 1) Dispatcher info
-      let dispatcherPhone = 'N/A';
-      let dispatcherEmail = 'N/A';
+      let dispatcherPhone = "N/A";
+      let dispatcherEmail = "N/A";
       try {
-        const cmtUsers = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/cmt/users`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        const cmtUsers = await axios.get(
+          `${API_CONFIG.BASE_URL}/api/v1/cmt/users`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          },
+        );
         const dispatcher = cmtUsers.data?.data?.find(
-          (user) => user.aliasName === ((order.customers && order.customers[0] && order.customers[0].dispatcherName) || '')
+          (user) =>
+            user.aliasName ===
+            ((order.customers &&
+              order.customers[0] &&
+              order.customers[0].dispatcherName) ||
+              ""),
         );
         if (dispatcher) {
-          dispatcherPhone = dispatcher.mobileNo || 'N/A';
-          dispatcherEmail = dispatcher.email || 'N/A';
+          dispatcherPhone = dispatcher.mobileNo || "N/A";
+          dispatcherEmail = dispatcher.email || "N/A";
         }
       } catch (err) {
-        console.error('Error fetching dispatcher info:', err);
+        console.error("Error fetching dispatcher info:", err);
       }
 
       // 2) Helpers (NO nullish + logical mixing)
@@ -1283,175 +1518,243 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
         return Number.isFinite(n) ? n : 0;
       };
       const currency = (n) =>
-        Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        Number(n || 0).toLocaleString(undefined, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        });
 
       const formatDateStr = (d) => {
-        if (!d) return 'N/A';
-        try { return new Date(d).toLocaleDateString(); } catch { return 'N/A'; }
+        if (!d) return "N/A";
+        try {
+          return new Date(d).toLocaleDateString();
+        } catch {
+          return "N/A";
+        }
       };
       const formatDateStrUS = (d) => {
-        if (!d) return 'N/A';
-        try { return new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }); } catch { return 'N/A'; }
+        if (!d) return "N/A";
+        try {
+          return new Date(d).toLocaleDateString("en-US", {
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+          });
+        } catch {
+          return "N/A";
+        }
       };
       const formatAddr = (l) => {
-        if (!l) return 'N/A';
+        if (!l) return "N/A";
         const parts = [l.address, l.city, l.state, l.zipCode].filter(Boolean);
-        return parts.length ? parts.join(', ') : 'N/A';
+        return parts.length ? parts.join(", ") : "N/A";
       };
       // NEW: name + address line
       const formatLocLine = (l) => {
-        if (!l) return 'N/A';
-        const name = (l.name || '').trim();
+        if (!l) return "N/A";
+        const name = (l.name || "").trim();
         const addr = formatAddr(l);
         return name ? `${name} — ${addr}` : addr;
       };
 
       // 3) Carrier fees (names + qty + rate + total)
-      const rawFees = (order.carrier && Array.isArray(order.carrier.carrierFees)) ? order.carrier.carrierFees : [];
+      const rawFees =
+        order.carrier && Array.isArray(order.carrier.carrierFees)
+          ? order.carrier.carrierFees
+          : [];
       const feeEntries = rawFees.map((ch, idx) => {
         let qtyRaw;
         if (ch && ch.qty !== undefined && ch.qty !== null) qtyRaw = ch.qty;
-        else if (ch && ch.quantity !== undefined && ch.quantity !== null) qtyRaw = ch.quantity;
+        else if (ch && ch.quantity !== undefined && ch.quantity !== null)
+          qtyRaw = ch.quantity;
         else qtyRaw = 1;
         const qty = toNum(qtyRaw) || 1;
 
-        let rateRaw = (ch && ch.rate !== undefined && ch.rate !== null) ? ch.rate : 0;
+        let rateRaw =
+          ch && ch.rate !== undefined && ch.rate !== null ? ch.rate : 0;
         const rate = toNum(rateRaw);
 
         let totalRaw = null;
-        if (ch && ch.total !== undefined && ch.total !== null) totalRaw = ch.total;
-        else if (ch && ch.amount !== undefined && ch.amount !== null) totalRaw = ch.amount;
-        const total = totalRaw !== null ? toNum(totalRaw) : (rate * qty);
+        if (ch && ch.total !== undefined && ch.total !== null)
+          totalRaw = ch.total;
+        else if (ch && ch.amount !== undefined && ch.amount !== null)
+          totalRaw = ch.amount;
+        const total = totalRaw !== null ? toNum(totalRaw) : rate * qty;
 
-        let desc = 'Charge ' + (idx + 1);
+        let desc = "Charge " + (idx + 1);
         if (ch && ch.description) desc = ch.description;
         else if (ch && ch.name) desc = ch.name;
         else if (ch && ch.type) desc = ch.type;
 
         return { desc, qty, rate, total };
       });
-      const totalCarrierFees = feeEntries.reduce((s, it) => s + toNum(it.total), 0);
+      const totalCarrierFees = feeEntries.reduce(
+        (s, it) => s + toNum(it.total),
+        0,
+      );
 
       // Carrier Charges list (under Carrier Info)
       const chargesListItemsHTML = feeEntries.length
-        ? feeEntries.map((it) =>
-          '<div style="display:flex;justify-content:space-between;align-items:center;border:1px solid #ececec;border-radius:8px;padding:8px 10px;margin:6px 0;">' +
-          `<div><div style="font-weight:700;">${it.desc}</div><div style="font-size:11px;color:#555;">Quantity: ${it.qty} × Amount: $${currency(it.rate)}</div></div>` +
-          `<div style="font-weight:700;">$ ${currency(it.total)}</div>` +
-          '</div>'
-        ).join('')
+        ? feeEntries
+            .map(
+              (it) =>
+                '<div style="display:flex;justify-content:space-between;align-items:center;border:1px solid #ececec;border-radius:8px;padding:8px 10px;margin:6px 0;">' +
+                `<div><div style="font-weight:700;">${it.desc}</div><div style="font-size:11px;color:#555;">Quantity: ${it.qty} × Amount: $${currency(it.rate)}</div></div>` +
+                `<div style="font-weight:700;">$ ${currency(it.total)}</div>` +
+                "</div>",
+            )
+            .join("")
         : '<div style="color:#777;border:1px dashed #ccc;border-radius:8px;padding:8px 10px;">No carrier charges</div>';
 
       const chargesListHTML =
         '<div style="margin:-6px 0 10px 0;padding:10px;border:1px solid #f0e8ff;background:#fbf7ff;border-radius:10px;">' +
         '<h4 style="font-size:12px;margin:0 0 8px 0;color:#2c3e50;">Carrier Charges</h4>' +
         chargesListItemsHTML +
-        '</div>';
+        "</div>";
 
       // 4) Pickup/Drop sections (EACH location separately)
       const ship = order.shipper || {};
-      const pickUps = Array.isArray(ship.pickUpLocations) ? ship.pickUpLocations : [];
-      const drops  = Array.isArray(ship.dropLocations) ? ship.dropLocations : [];
+      const pickUps = Array.isArray(ship.pickUpLocations)
+        ? ship.pickUpLocations
+        : [];
+      const drops = Array.isArray(ship.dropLocations) ? ship.dropLocations : [];
 
       const pickupSectionsHTML = pickUps.length
-        ? pickUps.map((l, i) => {
-            const addrLine = formatLocLine(l); // << name + address
-            const dateStr = formatDateStr(l && l.pickUpDate);
-            const hoursLabel = 'Shipping Hours';
-            return (
-              '<table class="rates-table">' +
-              '<thead><tr><th colspan="2" style="text-align:left;background:#f0f0f0;font-size:14px;font-weight:bold;">Pickup Location ' + (i + 1) + '</th></tr></thead>' +
-              '<tbody>' +
-              '<tr>' +
-              '<td colspan="2" style="padding:8px;font-weight:bold;border-bottom:1px solid #ddd;">' + addrLine + '</td>' +
-              '</tr>' +
-              '<tr>' +
-              '<td style="width:50%;padding:8px;">' +
-              '<strong>Date:</strong> ' + dateStr + '<br>' +
-              '<strong>Time:</strong> N/A<br>' +
-              '<strong>Type:</strong> ' + (ship.containerType || '40HC') + '<br>' +
-              '<strong>Quantity:</strong> 1<br>' +
-              '<strong>Weight:</strong> ' + ((ship.weight !== undefined && ship.weight !== null) ? ship.weight : 'N/A') + ' lbs' +
-              '</td>' +
-              '<td style="width:50%;padding:8px;">' +
-              '<strong>Purchase Order #:</strong> N/A<br>' +
-              '<strong>' + hoursLabel + ':</strong> N/A<br>' +
-              '<strong>Appointment:</strong> No<br>' +
-              '<strong>Container/Trailer Number:</strong> ' + (ship.containerNo || 'N/A') +
-              '</td>' +
-              '</tr>' +
-              '</tbody>' +
-              '</table>'
-            );
-          }).join('')
-        : (
-          '<table class="rates-table">' +
+        ? pickUps
+            .map((l, i) => {
+              const addrLine = formatLocLine(l); // << name + address
+              const dateStr = formatDateStr(l && l.pickUpDate);
+              const hoursLabel = "Shipping Hours";
+              return (
+                '<table class="rates-table">' +
+                '<thead><tr><th colspan="2" style="text-align:left;background:#f0f0f0;font-size:14px;font-weight:bold;">Pickup Location ' +
+                (i + 1) +
+                "</th></tr></thead>" +
+                "<tbody>" +
+                "<tr>" +
+                '<td colspan="2" style="padding:8px;font-weight:bold;border-bottom:1px solid #ddd;">' +
+                addrLine +
+                "</td>" +
+                "</tr>" +
+                "<tr>" +
+                '<td style="width:50%;padding:8px;">' +
+                "<strong>Date:</strong> " +
+                dateStr +
+                "<br>" +
+                "<strong>Time:</strong> N/A<br>" +
+                "<strong>Type:</strong> " +
+                (ship.containerType || "40HC") +
+                "<br>" +
+                "<strong>Quantity:</strong> 1<br>" +
+                "<strong>Weight:</strong> " +
+                (ship.weight !== undefined && ship.weight !== null
+                  ? ship.weight
+                  : "N/A") +
+                " lbs" +
+                "</td>" +
+                '<td style="width:50%;padding:8px;">' +
+                "<strong>Purchase Order #:</strong> N/A<br>" +
+                "<strong>" +
+                hoursLabel +
+                ":</strong> N/A<br>" +
+                "<strong>Appointment:</strong> No<br>" +
+                "<strong>Container/Trailer Number:</strong> " +
+                (ship.containerNo || "N/A") +
+                "</td>" +
+                "</tr>" +
+                "</tbody>" +
+                "</table>"
+              );
+            })
+            .join("")
+        : '<table class="rates-table">' +
           '<thead><tr><th colspan="2" style="text-align:left;background:#f0f0f0;font-size:14px;font-weight:bold;">Pickup Location</th></tr></thead>' +
           '<tbody><tr><td colspan="2" style="padding:8px;">N/A</td></tr></tbody>' +
-          '</table>'
-        );
+          "</table>";
 
       const dropSectionsHTML = drops.length
-        ? drops.map((l, i) => {
-            const addrLine = formatLocLine(l); // << name + address
-            const dateStr = formatDateStr(l && l.dropDate);
-            const hoursLabel = 'Receiving Hours';
-            return (
-              '<table class="rates-table">' +
-              '<thead><tr><th colspan="2" style="text-align:left;background:#f0f0f0;font-size:14px;font-weight:bold;">Drop Location ' + (i + 1) + '</th></tr></thead>' +
-              '<tbody>' +
-              '<tr>' +
-              '<td colspan="2" style="padding:8px;font-weight:bold;border-bottom:1px solid #ddd;">' + addrLine + '</td>' +
-              '</tr>' +
-              '<tr>' +
-              '<td style="width:50%;padding:8px;">' +
-              '<strong>Date:</strong> ' + dateStr + '<br>' +
-              '<strong>Time:</strong> N/A<br>' +
-              '<strong>Type:</strong> ' + (ship.containerType || '40HC') + '<br>' +
-              '<strong>Quantity:</strong> 1<br>' +
-              '<strong>Weight:</strong> ' + ((ship.weight !== undefined && ship.weight !== null) ? ship.weight : 'N/A') + ' lbs' +
-              '</td>' +
-              '<td style="width:50%;padding:8px;">' +
-              '<strong>Purchase Order #:</strong> N/A<br>' +
-              '<strong>' + hoursLabel + ':</strong> N/A<br>' +
-              '<strong>Appointment:</strong> No<br>' +
-              '<strong>Container/Trailer Number:</strong> ' + (ship.containerNo || 'N/A') +
-              '</td>' +
-              '</tr>' +
-              '</tbody>' +
-              '</table>'
-            );
-          }).join('')
-        : (
-          '<table class="rates-table">' +
+        ? drops
+            .map((l, i) => {
+              const addrLine = formatLocLine(l); // << name + address
+              const dateStr = formatDateStr(l && l.dropDate);
+              const hoursLabel = "Receiving Hours";
+              return (
+                '<table class="rates-table">' +
+                '<thead><tr><th colspan="2" style="text-align:left;background:#f0f0f0;font-size:14px;font-weight:bold;">Drop Location ' +
+                (i + 1) +
+                "</th></tr></thead>" +
+                "<tbody>" +
+                "<tr>" +
+                '<td colspan="2" style="padding:8px;font-weight:bold;border-bottom:1px solid #ddd;">' +
+                addrLine +
+                "</td>" +
+                "</tr>" +
+                "<tr>" +
+                '<td style="width:50%;padding:8px;">' +
+                "<strong>Date:</strong> " +
+                dateStr +
+                "<br>" +
+                "<strong>Time:</strong> N/A<br>" +
+                "<strong>Type:</strong> " +
+                (ship.containerType || "40HC") +
+                "<br>" +
+                "<strong>Quantity:</strong> 1<br>" +
+                "<strong>Weight:</strong> " +
+                (ship.weight !== undefined && ship.weight !== null
+                  ? ship.weight
+                  : "N/A") +
+                " lbs" +
+                "</td>" +
+                '<td style="width:50%;padding:8px;">' +
+                "<strong>Purchase Order #:</strong> N/A<br>" +
+                "<strong>" +
+                hoursLabel +
+                ":</strong> N/A<br>" +
+                "<strong>Appointment:</strong> No<br>" +
+                "<strong>Container/Trailer Number:</strong> " +
+                (ship.containerNo || "N/A") +
+                "</td>" +
+                "</tr>" +
+                "</tbody>" +
+                "</table>"
+              );
+            })
+            .join("")
+        : '<table class="rates-table">' +
           '<thead><tr><th colspan="2" style="text-align:left;background:#f0f0f0;font-size:14px;font-weight:bold;">Drop Location</th></tr></thead>' +
           '<tbody><tr><td colspan="2" style="padding:8px;">N/A</td></tr></tbody>' +
-          '</table>'
-        );
+          "</table>";
 
       // 5) Bottom: total with signature
       const amountBottomBlockHTML =
         '<div style="margin-top: 30px; padding: 20px; border: 1px solid #ddd; border-radius: 8px; background-color: #f9f9f9; max-width: 90%; margin-left: auto; margin-right: auto;">' +
         '<h3 style="text-align: center; font-size: 14px; font-weight: bold; margin-bottom: 12px; color: #2c3e50;">Total Carrier Fees</h3>' +
-        '<p style="text-align:center; font-size: 16px; font-weight: 700; margin: 0 0 14px 0;">$ ' + currency(totalCarrierFees) + '</p>' +
+        '<p style="text-align:center; font-size: 16px; font-weight: 700; margin: 0 0 14px 0;">$ ' +
+        currency(totalCarrierFees) +
+        "</p>" +
         '<div style="margin-top: 10px; font-size: 12px; line-height: 1.6;">' +
         '<p style="margin-bottom: 10px; text-align: center;">' +
-        'Accepted By _________________________ Date ________________ Signature ____________________' +
-        '</p>' +
+        "Accepted By _________________________ Date ________________ Signature ____________________" +
+        "</p>" +
         '<p style="text-align: center;">' +
-        'Driver Name _________________________ Cell __________________ Truck _____________ Trailer _____________' +
-        '</p>' +
-        '</div>' +
-        '</div>';
+        "Driver Name _________________________ Cell __________________ Truck _____________ Trailer _____________" +
+        "</p>" +
+        "</div>" +
+        "</div>";
 
       // 6) Dates for header
       const todayUS = formatDateStrUS(new Date());
-      const shipDateUS = formatDateStrUS(order.shipper && order.shipper.pickUpDate);
+      const shipDateUS = formatDateStrUS(
+        order.shipper && order.shipper.pickUpDate,
+      );
 
       // 7) Build HTML
-      const printWindow = window.open('', '_blank');
+      const printWindow = window.open("", "_blank");
       if (!printWindow) {
-        setToast({ open: true, severity: 'error', msg: 'Popup blocked. Please allow popups and try again.' });
+        setToast({
+          open: true,
+          severity: "error",
+          msg: "Popup blocked. Please allow popups and try again.",
+        });
         return;
       }
 
@@ -1492,9 +1795,9 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
         <table style="border-collapse: collapse; width: 100%; font-size: 12px;">
           <tr>
             <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Dispatcher</td>
-            <td style="padding: 2px 8px; border: 1px solid #ddd;">${(order.customers && order.customers[0] && order.customers[0].dispatcherName) || 'N/A'}</td>
+            <td style="padding: 2px 8px; border: 1px solid #ddd;">${(order.customers && order.customers[0] && order.customers[0].dispatcherName) || "N/A"}</td>
             <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Load</td>
-            <td style="padding: 2px 8px; border: 1px solid #ddd;">${order.doNum || (order.customers && order.customers[0] && order.customers[0].loadNo) || 'N/A'}</td>
+            <td style="padding: 2px 8px; border: 1px solid #ddd;">${order.doNum || (order.customers && order.customers[0] && order.customers[0].loadNo) || "N/A"}</td>
           </tr>
           <tr>
             <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Phone</td>
@@ -1504,7 +1807,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
           </tr>
           <tr>
             <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Fax</td>
-            <td style="padding: 2px 8px; border: 1px solid #ddd;">${(order.customers && order.customers[0] && order.customers[0].fax) || 'N/A'}</td>
+            <td style="padding: 2px 8px; border: 1px solid #ddd;">${(order.customers && order.customers[0] && order.customers[0].fax) || "N/A"}</td>
             <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Today Date</td>
             <td style="padding: 2px 8px; border: 1px solid #ddd;">${todayUS}</td>
           </tr>
@@ -1512,7 +1815,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
             <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">Email</td>
             <td style="padding: 2px 8px; border: 1px solid #ddd;">${dispatcherEmail}</td>
             <td style="padding: 2px 8px; border: 1px solid #ddd; font-weight: bold; background-color: #f5f5f5;">W/O</td>
-            <td style="padding: 2px 8px; border: 1px solid #ddd;">${(order.customers && order.customers[0] && order.customers[0].workOrderNo) || 'N/A'}</td>
+            <td style="padding: 2px 8px; border: 1px solid #ddd;">${(order.customers && order.customers[0] && order.customers[0].workOrderNo) || "N/A"}</td>
           </tr>
         </table>
       </div>
@@ -1531,10 +1834,10 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
       </thead>
       <tbody>
         <tr>
-          <td>${(order.carrier && order.carrier.carrierName) || 'N/A'}</td>
-          <td>${(order.carrier && order.carrier.phone) || 'N/A'}</td>
-          <td>${(order.carrier && order.carrier.equipmentType) || 'N/A'}</td>
-          <td>${order.status ? (order.status[0].toUpperCase() + order.status.slice(1)) : 'N/A'}</td>
+          <td>${(order.carrier && order.carrier.carrierName) || "N/A"}</td>
+          <td>${(order.carrier && order.carrier.phone) || "N/A"}</td>
+          <td>${(order.carrier && order.carrier.equipmentType) || "N/A"}</td>
+          <td>${order.status ? order.status[0].toUpperCase() + order.status.slice(1) : "N/A"}</td>
           <td class="amount">$ ${currency(totalCarrierFees)}</td>
         </tr>
       </tbody>
@@ -1626,10 +1929,18 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
         printWindow.print();
         printWindow.close();
       };
-      setToast({ open: true, severity: 'success', msg: 'Rate and Load Confirmation PDF generated successfully!' });
+      setToast({
+        open: true,
+        severity: "success",
+        msg: "Rate and Load Confirmation PDF generated successfully!",
+      });
     } catch (error) {
-      console.error('Error generating PDF:', error);
-      setToast({ open: true, severity: 'error', msg: 'Failed to generate PDF. Please try again.' });
+      console.error("Error generating PDF:", error);
+      setToast({
+        open: true,
+        severity: "error",
+        msg: "Failed to generate PDF. Please try again.",
+      });
     }
   };
 
@@ -1639,58 +1950,72 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
       // Fetch shipment images and additional documents
       let shipmentImages = null;
       let additionalDocs = [];
-      
+
       try {
         const shipmentNo = order?.loadReference?.shipmentNumber;
         if (shipmentNo) {
-          const imgResp = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/load/shipment/${shipmentNo}/images`, { headers });
+          const imgResp = await axios.get(
+            `${API_CONFIG.BASE_URL}/api/v1/load/shipment/${shipmentNo}/images`,
+            { headers },
+          );
           shipmentImages = imgResp?.data || null;
         }
       } catch (e) {
-        console.warn('Could not fetch shipment images:', e);
+        console.warn("Could not fetch shipment images:", e);
       }
 
       try {
-        const docResp = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/do/do/${order._id}/additional-documents`, { headers });
-        additionalDocs = docResp?.data?.data?.documents || docResp?.data?.additionalDocuments || [];
+        const docResp = await axios.get(
+          `${API_CONFIG.BASE_URL}/api/v1/do/do/${order._id}/additional-documents`,
+          { headers },
+        );
+        additionalDocs =
+          docResp?.data?.data?.documents ||
+          docResp?.data?.additionalDocuments ||
+          [];
       } catch (e) {
-        console.warn('Could not fetch additional documents:', e);
+        console.warn("Could not fetch additional documents:", e);
       }
 
-      const printWindow = window.open('', '_blank');
+      const printWindow = window.open("", "_blank");
 
       // Get company info based on addDispature
-      const orderCompanyName = order?.addDispature || order?.company || '';
+      const orderCompanyName = order?.addDispature || order?.company || "";
       let pdfLogo = Logo;
-      let companyDisplayName = '';
-      let companyDisplayAddress = '';
-      
+      let companyDisplayName = "";
+      let companyDisplayAddress = "";
+
       // Determine logo based on company name
-      if (orderCompanyName === 'IDENTIFICA LLC') {
+      if (orderCompanyName === "IDENTIFICA LLC") {
         pdfLogo = IdentificaLogo;
-        companyDisplayName = 'IDENTIFICA LLC';
-        companyDisplayAddress = '8601 FURRAY RD HOUSTON, TX USA 77028';
-      } else if (orderCompanyName === 'MT. POCONO TRANSPORTATION INC') {
+        companyDisplayName = "IDENTIFICA LLC";
+        companyDisplayAddress = "8601 FURRAY RD HOUSTON, TX USA 77028";
+      } else if (orderCompanyName === "MT. POCONO TRANSPORTATION INC") {
         pdfLogo = MtPoconoLogo;
-        companyDisplayName = 'MT. POCONO TRANSPORTATION INC';
-        companyDisplayAddress = '1900 CORPORATE CENTER DRIVE EAST TOBYHANNA, PA 18466';
-      } else if (orderCompanyName === 'V Power Logistics') {
+        companyDisplayName = "MT. POCONO TRANSPORTATION INC";
+        companyDisplayAddress =
+          "1900 CORPORATE CENTER DRIVE EAST TOBYHANNA, PA 18466";
+      } else if (orderCompanyName === "V Power Logistics") {
         pdfLogo = Logo;
-        companyDisplayName = 'V Power Logistics';
-        companyDisplayAddress = '7945 14TH AVE SW SEATTLE, WA 98106';
+        companyDisplayName = "V Power Logistics";
+        companyDisplayAddress = "7945 14TH AVE SW SEATTLE, WA 98106";
       } else if (orderCompanyName) {
         pdfLogo = Logo;
         companyDisplayName = orderCompanyName;
-        companyDisplayAddress = '7945 14TH AVE SW SEATTLE, WA 98106';
+        companyDisplayAddress = "7945 14TH AVE SW SEATTLE, WA 98106";
       }
 
       // ---- Bill To + Address (from shippers list if available) ----
       const cust = order?.customers?.[0] || {};
-      const companyName = (cust.billTo || '').trim();
-      const billToDisplay = [companyName || 'N/A'].filter(Boolean).join('<br>');
-      const workOrderNo = cust.workOrderNo || 'N/A';
-      const invoiceNo = order.doNum || cust.loadNo || 'N/A';
-      const todayStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
+      const companyName = (cust.billTo || "").trim();
+      const billToDisplay = [companyName || "N/A"].filter(Boolean).join("<br>");
+      const workOrderNo = cust.workOrderNo || "N/A";
+      const invoiceNo = order.doNum || cust.loadNo || "N/A";
+      const todayStr = new Date().toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      });
 
       // ---- ONLY customer rates ----
       const LH = Number(cust.lineHaul) || 0;
@@ -1700,28 +2025,34 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
 
       // helpers
       const fmtDate = (d) => {
-        if (!d) return 'N/A';
+        if (!d) return "N/A";
         try {
           const dt = new Date(d);
-          if (Number.isNaN(dt.getTime())) return 'Invalid Date';
+          if (Number.isNaN(dt.getTime())) return "Invalid Date";
           // Sirf date; UTC use kiya to avoid timezone issues
-          return dt.toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            timeZone: 'UTC'
+          return dt.toLocaleDateString("en-US", {
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            timeZone: "UTC",
           });
         } catch (error) {
-          console.error('Error formatting date:', error, d);
-          return 'Invalid Date';
+          console.error("Error formatting date:", error, d);
+          return "Invalid Date";
         }
       };
 
       const fullAddr = (loc) =>
-        [loc?.address, loc?.city, loc?.state, loc?.zipCode].filter(Boolean).join(', ') || 'N/A';
+        [loc?.address, loc?.city, loc?.state, loc?.zipCode]
+          .filter(Boolean)
+          .join(", ") || "N/A";
 
-      const pickRows = Array.isArray(order?.shipper?.pickUpLocations) ? order.shipper.pickUpLocations : [];
-      const dropRows = Array.isArray(order?.shipper?.dropLocations) ? order.shipper.dropLocations : [];
+      const pickRows = Array.isArray(order?.shipper?.pickUpLocations)
+        ? order.shipper.pickUpLocations
+        : [];
+      const dropRows = Array.isArray(order?.shipper?.dropLocations)
+        ? order.shipper.dropLocations
+        : [];
 
       const html = `
 <!DOCTYPE html>
@@ -1779,9 +2110,13 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
             <div>LOGO</div>
           </div>
         </div>
-        ${companyDisplayName ? `<table class="company-table">
+        ${
+          companyDisplayName
+            ? `<table class="company-table">
           <tr><th style="width: 25%;">Bill From</th><td style="width: 75%;">${companyDisplayName}<br>${companyDisplayAddress}</td></tr>
-        </table>` : ''}
+        </table>`
+            : ""
+        }
       </div>
       <div class="header-right">
         <table class="billto">
@@ -1808,15 +2143,21 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
           </tr>
         </thead>
         <tbody>
-          ${pickRows.map(l => {
-        const weight = (l?.weight ?? '') !== '' && l?.weight !== null ? l.weight : 'N/A';
-        const contNo = l?.containerNo || order.shipper?.containerNo || 'N/A';
-        const contTp = l?.containerType || order.shipper?.containerType || 'N/A';
-        const qty = Number(l?.quantity ?? order.shipper?.quantity) || 1;
-        const dateSrc = l?.pickUpDate || order.shipper?.pickUpDate;
-        return `
+          ${pickRows
+            .map((l) => {
+              const weight =
+                (l?.weight ?? "") !== "" && l?.weight !== null
+                  ? l.weight
+                  : "N/A";
+              const contNo =
+                l?.containerNo || order.shipper?.containerNo || "N/A";
+              const contTp =
+                l?.containerType || order.shipper?.containerType || "N/A";
+              const qty = Number(l?.quantity ?? order.shipper?.quantity) || 1;
+              const dateSrc = l?.pickUpDate || order.shipper?.pickUpDate;
+              return `
               <tr>
-                <td>${l?.name || 'N/A'}</td>
+                <td>${l?.name || "N/A"}</td>
                 <td>${fullAddr(l)}</td>
                 <td>${weight}</td>
                 <td>${contNo}</td>
@@ -1825,7 +2166,8 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                 <td>${fmtDate(dateSrc)}</td>
               </tr>
             `;
-      }).join('')}
+            })
+            .join("")}
         </tbody>
       </table>
     </div>
@@ -1845,15 +2187,21 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
           </tr>
         </thead>
         <tbody>
-          ${dropRows.map(l => {
-        const weight = (l?.weight ?? '') !== '' && l?.weight !== null ? l.weight : 'N/A';
-        const contNo = l?.containerNo || order.shipper?.containerNo || 'N/A';
-        const contTp = l?.containerType || order.shipper?.containerType || 'N/A';
-        const qty = Number(l?.quantity ?? order.shipper?.quantity) || 1;
-        const dateSrc = l?.dropDate || order.shipper?.dropDate;
-        return `
+          ${dropRows
+            .map((l) => {
+              const weight =
+                (l?.weight ?? "") !== "" && l?.weight !== null
+                  ? l.weight
+                  : "N/A";
+              const contNo =
+                l?.containerNo || order.shipper?.containerNo || "N/A";
+              const contTp =
+                l?.containerType || order.shipper?.containerType || "N/A";
+              const qty = Number(l?.quantity ?? order.shipper?.quantity) || 1;
+              const dateSrc = l?.dropDate || order.shipper?.dropDate;
+              return `
               <tr>
-                <td>${l?.name || 'N/A'}</td>
+                <td>${l?.name || "N/A"}</td>
                 <td>${fullAddr(l)}</td>
                 <td>${weight}</td>
                 <td>${contNo}</td>
@@ -1862,7 +2210,8 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                 <td>${fmtDate(dateSrc)}</td>
               </tr>
             `;
-      }).join('')}
+            })
+            .join("")}
         </tbody>
       </table>
     </div>
@@ -1872,9 +2221,9 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
       <table class="tbl">
         <thead><tr><th>Description</th><th>Amount</th></tr></thead>
         <tbody>
-          ${LH > 0 ? `<tr><td>Line Haul</td><td class="amount">$${LH.toLocaleString()}</td></tr>` : ''}
-          ${FSC > 0 ? `<tr><td>FSC</td><td class="amount">$${FSC.toLocaleString()}</td></tr>` : ''}
-          ${OTH > 0 ? `<tr><td>Other</td><td class="amount">$${OTH.toLocaleString()}</td></tr>` : ''}
+          ${LH > 0 ? `<tr><td>Line Haul</td><td class="amount">$${LH.toLocaleString()}</td></tr>` : ""}
+          ${FSC > 0 ? `<tr><td>FSC</td><td class="amount">$${FSC.toLocaleString()}</td></tr>` : ""}
+          ${OTH > 0 ? `<tr><td>Other</td><td class="amount">$${OTH.toLocaleString()}</td></tr>` : ""}
           <tr class="total-row">
             <td><strong>TOTAL</strong></td>
             <td class="amount"><strong>$${CUSTOMER_TOTAL.toLocaleString()} USD</strong></td>
@@ -1892,8 +2241,9 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     
     ${(() => {
       const images = shipmentImages?.images;
-      if (!images) return '<p class="no-images-msg">No shipment images available</p>';
-      
+      if (!images)
+        return '<p class="no-images-msg">No shipment images available</p>';
+
       // Pickup Images
       const pickupImages = [
         ...(images.emptyTruckImages || []),
@@ -1914,66 +2264,76 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
 
       // Additional Images (from additionalDocuments)
       const additionalImages = (additionalDocs || [])
-        .filter(doc => {
-          const url = doc?.documentUrl || '';
+        .filter((doc) => {
+          const url = doc?.documentUrl || "";
           return /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(url);
         })
-        .map(doc => doc.documentUrl);
+        .map((doc) => doc.documentUrl);
 
-      let htmlSection = '';
+      let htmlSection = "";
       let totalImageIndex = 0;
 
       // Pickup Images Section - Each image on separate page
       if (pickupImages.length > 0) {
-        htmlSection += pickupImages.map((img, idx) => {
-          const isFirst = idx === 0;
-          return `
-            <div class="image-item" style="${isFirst ? '' : 'page-break-before: always;'}">
-              ${isFirst ? '<h3 class="section-title" style="page-break-after: avoid; margin-bottom: 15px;">Pickup Images</h3>' : ''}
+        htmlSection += pickupImages
+          .map((img, idx) => {
+            const isFirst = idx === 0;
+            return `
+            <div class="image-item" style="${isFirst ? "" : "page-break-before: always;"}">
+              ${isFirst ? '<h3 class="section-title" style="page-break-after: avoid; margin-bottom: 15px;">Pickup Images</h3>' : ""}
               <img src="${img}" alt="Pickup Image ${idx + 1}" 
                    onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
               <div style="display: none; padding: 50px 10px; color: #999; font-size: 11px; background: #f5f5f5; border-radius: 6px;">Image ${idx + 1}<br>Failed to load</div>
               <p>Pickup Image ${idx + 1}</p>
             </div>
           `;
-        }).join('');
+          })
+          .join("");
         totalImageIndex += pickupImages.length;
       }
 
       // Drop Images Section - Each image on separate page
       if (dropImages.length > 0) {
-        htmlSection += dropImages.map((img, idx) => {
-          const isFirstInSection = idx === 0;
-          return `
+        htmlSection += dropImages
+          .map((img, idx) => {
+            const isFirstInSection = idx === 0;
+            return `
             <div class="image-item" style="page-break-before: always;">
-              ${isFirstInSection ? '<h3 class="section-title drop" style="page-break-after: avoid; margin-bottom: 15px;">Drop Images</h3>' : ''}
+              ${isFirstInSection ? '<h3 class="section-title drop" style="page-break-after: avoid; margin-bottom: 15px;">Drop Images</h3>' : ""}
               <img src="${img}" alt="Drop Image ${idx + 1}" 
                    onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
               <div style="display: none; padding: 50px 10px; color: #999; font-size: 11px; background: #f5f5f5; border-radius: 6px;">Image ${idx + 1}<br>Failed to load</div>
               <p>Drop Image ${idx + 1}</p>
             </div>
           `;
-        }).join('');
+          })
+          .join("");
         totalImageIndex += dropImages.length;
       }
 
       // Additional Images Section - Each image on separate page
       if (additionalImages.length > 0) {
-        htmlSection += additionalImages.map((img, idx) => {
-          const isFirstInSection = idx === 0;
-          return `
+        htmlSection += additionalImages
+          .map((img, idx) => {
+            const isFirstInSection = idx === 0;
+            return `
             <div class="image-item" style="page-break-before: always;">
-              ${isFirstInSection ? '<h3 class="section-title additional" style="page-break-after: avoid; margin-bottom: 15px;">Additional Documents</h3>' : ''}
+              ${isFirstInSection ? '<h3 class="section-title additional" style="page-break-after: avoid; margin-bottom: 15px;">Additional Documents</h3>' : ""}
               <img src="${img}" alt="Additional Image ${idx + 1}" 
                    onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
               <div style="display: none; padding: 50px 10px; color: #999; font-size: 11px; background: #f5f5f5; border-radius: 6px;">Image ${idx + 1}<br>Failed to load</div>
               <p>Additional Image ${idx + 1}</p>
             </div>
           `;
-        }).join('');
+          })
+          .join("");
       }
 
-      if (!pickupImages.length && !dropImages.length && !additionalImages.length) {
+      if (
+        !pickupImages.length &&
+        !dropImages.length &&
+        !additionalImages.length
+      ) {
         return '<p class="no-images-msg">No images available for this shipment</p>';
       }
 
@@ -1990,10 +2350,18 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
         printWindow.print();
         printWindow.close();
       };
-      setToast({ open: true, severity: 'success', msg: 'Invoice PDF generated successfully!' });
+      setToast({
+        open: true,
+        severity: "success",
+        msg: "Invoice PDF generated successfully!",
+      });
     } catch (err) {
-      console.error('Error generating PDF:', err);
-      setToast({ open: true, severity: 'error', msg: 'Failed to generate PDF. Please try again.' });
+      console.error("Error generating PDF:", err);
+      setToast({
+        open: true,
+        severity: "error",
+        msg: "Failed to generate PDF. Please try again.",
+      });
     }
   };
 
@@ -2002,79 +2370,109 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     // ---------- SAFE DEFAULTS ----------
     const order = orderInput || {};
     const shipper = order.shipper || {};
-    const pickupLocs = Array.isArray(shipper.pickUpLocations) ? shipper.pickUpLocations : [];
-    const dropLocs = Array.isArray(shipper.dropLocations) ? shipper.dropLocations : [];
+    const pickupLocs = Array.isArray(shipper.pickUpLocations)
+      ? shipper.pickUpLocations
+      : [];
+    const dropLocs = Array.isArray(shipper.dropLocations)
+      ? shipper.dropLocations
+      : [];
 
     // Multi-key Load Number (first available)
     const getLoadNumber = () => {
       // 1) customers[].loadNo (pehle non-empty lo)
       const fromCustomers = Array.isArray(order?.customers)
-        ? (order.customers.map(c => (c?.loadNo || '').trim()).find(v => v))
+        ? order.customers.map((c) => (c?.loadNo || "").trim()).find((v) => v)
         : null;
 
       // 2) table/list me aksar doNum me loadNo aa jata hai
-      const fromDoNum = (order?.doNum || '').trim();    
+      const fromDoNum = (order?.doNum || "").trim();
 
       // 3) legacy/other fields
-      const fromOrder =
-        (order?.loadNo || order?.loadNumber || order?.loadId || order?.referenceNo || '').trim();
-      const fromShipper =
-        (shipper?.loadNo || shipper?.loadNumber || '').trim();
+      const fromOrder = (
+        order?.loadNo ||
+        order?.loadNumber ||
+        order?.loadId ||
+        order?.referenceNo ||
+        ""
+      ).trim();
+      const fromShipper = (shipper?.loadNo || shipper?.loadNumber || "").trim();
 
       // 4) (optional) last fallback: workOrderNo (agar chaho)
-      const fromWON =
-        Array.isArray(order?.customers)
-          ? (order.customers.map(c => (c?.workOrderNo || '').trim()).find(v => v) || '')
-          : '';
+      const fromWON = Array.isArray(order?.customers)
+        ? order.customers
+            .map((c) => (c?.workOrderNo || "").trim())
+            .find((v) => v) || ""
+        : "";
 
       // priority: customers.loadNo → doNum → order.* → shipper.* → workOrderNo → 'N/A'
-      return fromCustomers || fromDoNum || fromOrder || fromShipper || fromWON || 'N/A';
+      return (
+        fromCustomers ||
+        fromDoNum ||
+        fromOrder ||
+        fromShipper ||
+        fromWON ||
+        "N/A"
+      );
     };
 
     // NEW: Collect BOL(s)
     const bolLine = (() => {
       const arr = [];
       if (Array.isArray(order?.bols)) {
-        order.bols.forEach(b => {
-          const v = typeof b === 'string' ? b : (b?.bolNo || b?.number || '');
+        order.bols.forEach((b) => {
+          const v = typeof b === "string" ? b : b?.bolNo || b?.number || "";
           if (v && String(v).trim()) arr.push(String(v).trim());
         });
       }
-      if (!arr.length && order?.bolInformation) arr.push(String(order.bolInformation));
-      return arr.length ? Array.from(new Set(arr)).join(', ') : 'N/A';
+      if (!arr.length && order?.bolInformation)
+        arr.push(String(order.bolInformation));
+      return arr.length ? Array.from(new Set(arr)).join(", ") : "N/A";
     })();
 
     // Get company info based on addDispature
-    const companyName = order?.addDispature || order?.company || '';
+    const companyName = order?.addDispature || order?.company || "";
     let pdfLogo = Logo;
-    if (companyName === 'IDENTIFICA LLC') {
+    if (companyName === "IDENTIFICA LLC") {
       pdfLogo = IdentificaLogo;
-    } else if (companyName === 'MT. POCONO TRANSPORTATION INC') {
+    } else if (companyName === "MT. POCONO TRANSPORTATION INC") {
       pdfLogo = MtPoconoLogo;
     }
     const safeLogo = pdfLogo;
 
     // ---------- HELPERS ----------
     const fmtDate = (d) => {
-      if (!d) return 'N/A';
+      if (!d) return "N/A";
       const dt = new Date(d);
       return isNaN(dt)
-        ? 'N/A'
-        : dt.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
+        ? "N/A"
+        : dt.toLocaleDateString("en-US", {
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+          });
     };
 
     const fmtTime = (d) => {
-      if (!d) return '';
+      if (!d) return "";
       const dt = new Date(d);
       return isNaN(dt)
-        ? ''
-        : dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+        ? ""
+        : dt.toLocaleTimeString("en-US", {
+            hour: "2-digit",
+            minute: "2-digit",
+          });
     };
 
     const fmtAddr = (loc) => {
-      if (!loc || typeof loc !== 'object') return 'N/A';
-      const parts = [loc.name, loc.address, loc.city, loc.state, loc.zipCode].filter(Boolean);
-      return parts.length ? parts.join(', ') : 'N/A';
+      if (!loc || typeof loc !== "object") return "N/A";
+      const parts = [
+        loc.name,
+        loc.address,
+        loc.city,
+        loc.state,
+        loc.zipCode,
+      ].filter(Boolean);
+      return parts.length ? parts.join(", ") : "N/A";
     };
 
     const rowsLen = Math.max(pickupLocs.length, dropLocs.length);
@@ -2132,7 +2530,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
         <p>Date: ${fmtDate(new Date())}</p>
         <p>BOL Number(s): ${bolLine}</p>           <!-- UPDATED: BOLs -->
         <p>Load Number: ${getLoadNumber()}</p>     <!-- NEW: Load No -->
-        <p>DO ID: ${order._id || 'N/A'}</p>
+        <p>DO ID: ${order._id || "N/A"}</p>
       </div>
     </div>
 
@@ -2140,15 +2538,15 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     <div class="grid">
       <div class="box">
         <div class="box-title">Shipper Information</div>
-        <div class="field"><span class="label">Name:</span><span class="value">${shipper.name || 'N/A'}</span></div>
-        <div class="field"><span class="label">Container No:</span><span class="value">${shipper.containerNo || 'N/A'}</span></div>
-        <div class="field"><span class="label">Container Type:</span><span class="value">${shipper.containerType || 'N/A'}</span></div>
-        <div class="field"><span class="label">Weight:</span><span class="value">${shipper.weight || 'N/A'}</span></div>
+        <div class="field"><span class="label">Name:</span><span class="value">${shipper.name || "N/A"}</span></div>
+        <div class="field"><span class="label">Container No:</span><span class="value">${shipper.containerNo || "N/A"}</span></div>
+        <div class="field"><span class="label">Container Type:</span><span class="value">${shipper.containerType || "N/A"}</span></div>
+        <div class="field"><span class="label">Weight:</span><span class="value">${shipper.weight || "N/A"}</span></div>
       </div>
       <div class="box">
         <div class="box-title">Order Information</div>
-        <div class="field"><span class="label">DO ID:</span><span class="value">${order._id || 'N/A'}</span></div>
-        <div class="field"><span class="label">Status:</span><span class="value">${order.status || 'N/A'}</span></div>
+        <div class="field"><span class="label">DO ID:</span><span class="value">${order._id || "N/A"}</span></div>
+        <div class="field"><span class="label">Status:</span><span class="value">${order.status || "N/A"}</span></div>
         <div class="field"><span class="label">Created:</span><span class="value">${fmtDate(order.createdAt)}</span></div>
         <div class="field"><span class="label">Updated:</span><span class="value">${fmtDate(order.updatedAt)}</span></div>
       </div>
@@ -2167,22 +2565,27 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
             <td style="width:25%"><strong>Address</strong></td>
             <td style="width:25%"><strong>Date </strong></td>
           </tr>
-          ${rowsLen > 0
-        ? Array.from({ length: rowsLen }).map((_, i) => {
-          const pu = pickupLocs[i];
-          const dr = dropLocs[i];
-          const puDate = pu?.pickUpDate ? fmtDate(pu.pickUpDate) : 'N/A';
-          const drDate = dr?.dropDate ? fmtDate(dr.dropDate) : 'N/A';
-          return `
+          ${
+            rowsLen > 0
+              ? Array.from({ length: rowsLen })
+                  .map((_, i) => {
+                    const pu = pickupLocs[i];
+                    const dr = dropLocs[i];
+                    const puDate = pu?.pickUpDate
+                      ? fmtDate(pu.pickUpDate)
+                      : "N/A";
+                    const drDate = dr?.dropDate ? fmtDate(dr.dropDate) : "N/A";
+                    return `
                   <tr>
-                    <td>${pu ? fmtAddr(pu) : 'N/A'}</td>
+                    <td>${pu ? fmtAddr(pu) : "N/A"}</td>
                     <td>${puDate}</td>
-                    <td>${dr ? fmtAddr(dr) : 'N/A'}</td>
+                    <td>${dr ? fmtAddr(dr) : "N/A"}</td>
                     <td>${drDate}</td>
                   </tr>`;
-        }).join('')
-        : '<tr><td colspan="4" style="text-align:center;">No locations specified</td></tr>'
-      }
+                  })
+                  .join("")
+              : '<tr><td colspan="4" style="text-align:center;">No locations specified</td></tr>'
+          }
         </tbody>
       </table>
     </div>
@@ -2200,16 +2603,19 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
           </tr>
         </thead>
         <tbody>
-          ${(pickupLocs.length ? pickupLocs : [{}]).map((loc) => `
+          ${(pickupLocs.length ? pickupLocs : [{}])
+            .map(
+              (loc) => `
               <tr>
                 <td>1</td>
                 <td>${getLoadNumber()}</td>
-                <td>${loc?.weight ? loc.weight + ' lbs' : 'N/A'}</td>
-                <td>${shipper.containerType || 'N/A'}</td>
-                <td>${loc?.remarks || 'N/A'}</td>
+                <td>${loc?.weight ? loc.weight + " lbs" : "N/A"}</td>
+                <td>${shipper.containerType || "N/A"}</td>
+                <td>${loc?.remarks || "N/A"}</td>
               </tr>
-            `).join('')
-      }
+            `,
+            )
+            .join("")}
         </tbody>
       </table>
     </div>
@@ -2269,7 +2675,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
       docTarget.document.open();
       docTarget.document.write(html);
       docTarget.document.close();
-      
+
       // Add a small delay to ensure content is loaded
       setTimeout(() => {
         docTarget.focus();
@@ -2277,49 +2683,61 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
         if (docTarget !== window && docTarget.close) {
           setTimeout(() => docTarget.close(), 1000);
         }
-        setToast({ open: true, severity: 'success', msg: 'BOL PDF generated successfully!' });
+        setToast({
+          open: true,
+          severity: "success",
+          msg: "BOL PDF generated successfully!",
+        });
       }, 500);
     };
 
     try {
-      const printWindow = window.open('', '_blank', 'noopener,noreferrer');
+      const printWindow = window.open("", "_blank", "noopener,noreferrer");
       if (printWindow && !printWindow.closed) {
         openAndPrint(printWindow);
       } else {
-        const iframe = document.createElement('iframe');
-        iframe.style.position = 'fixed';
-        iframe.style.right = '0';
-        iframe.style.bottom = '0';
-        iframe.style.width = '0';
-        iframe.style.height = '0';
-        iframe.style.border = '0';
+        const iframe = document.createElement("iframe");
+        iframe.style.position = "fixed";
+        iframe.style.right = "0";
+        iframe.style.bottom = "0";
+        iframe.style.width = "0";
+        iframe.style.height = "0";
+        iframe.style.border = "0";
         document.body.appendChild(iframe);
         openAndPrint(iframe.contentWindow);
         setTimeout(() => iframe.remove(), 5000);
       }
     } catch (err) {
-      console.error('Error generating BOL PDF:', err);
-      setToast({ open: true, severity: 'error', msg: 'Failed to generate BOL PDF. Please try again.' });
+      console.error("Error generating BOL PDF:", err);
+      setToast({
+        open: true,
+        severity: "error",
+        msg: "Failed to generate BOL PDF. Please try again.",
+      });
     }
   };
 
   // Generate PDF function
   const generatePDF = async (type) => {
     if (!selected) {
-      setToast({ open: true, severity: 'error', msg: 'No order selected. Please select an order first.' });
+      setToast({
+        open: true,
+        severity: "error",
+        msg: "No order selected. Please select an order first.",
+      });
       return;
     }
-    
-    setPdfLoading(prev => ({ ...prev, [type]: true }));
+
+    setPdfLoading((prev) => ({ ...prev, [type]: true }));
     try {
       switch (type) {
-        case 'invoice':
+        case "invoice":
           generateInvoicePDF(selected);
           break;
-        case 'rate':
+        case "rate":
           generateRateLoadConfirmationPDF(selected);
           break;
-        case 'bol':
+        case "bol":
           generateBolPDF(selected);
           break;
         default:
@@ -2327,9 +2745,13 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
       }
     } catch (e) {
       console.error(`Failed to generate ${type} PDF:`, e);
-      setToast({ open: true, severity: 'error', msg: `Failed to generate ${type} PDF: ${e?.response?.data?.message || e?.message || 'Unknown error'}` });
+      setToast({
+        open: true,
+        severity: "error",
+        msg: `Failed to generate ${type} PDF: ${e?.response?.data?.message || e?.message || "Unknown error"}`,
+      });
     } finally {
-      setPdfLoading(prev => ({ ...prev, [type]: false }));
+      setPdfLoading((prev) => ({ ...prev, [type]: false }));
     }
   };
 
@@ -2340,7 +2762,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     try {
       const url = `${API_CONFIG.BASE_URL}/api/v1/accountant/assigned-to-accountant`;
       const resp = await axios.get(url, {
-        params: { accountantEmpId: empId, page: targetPage, limit: 50 },
+        params: { accountantEmpId: empId, page: targetPage, limit: 10 },
         headers,
       });
       const payload = resp?.data?.data || {};
@@ -2360,11 +2782,29 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
       // Update selected item if modal is open
       setTimeout(() => updateSelectedFromTable(), 100);
     } catch (err) {
-      const msg = err?.response?.data?.message || err?.message || "Failed to fetch invoices.";
+      const msg =
+        err?.response?.data?.message ||
+        err?.message ||
+        "Failed to fetch invoices.";
       setServerError(msg);
       setRows([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchAssignedFilteredCount = async () => {
+    try {
+      const url = `${API_CONFIG.BASE_URL}/api/v1/accountant/assigned-to-accountant`;
+      const params = { accountantEmpId: empId, page: 1, limit: 1 };
+      if (statusFilter && statusFilter !== "all") Object.assign(params, { status: statusFilter });
+      const q = (search || "").trim();
+      if (q) Object.assign(params, { q });
+      const resp = await axios.get(url, { params, headers });
+      const total = resp?.data?.data?.pagination?.totalItems;
+      setAssignedFilteredTotal(Number.isFinite(total) ? total : null);
+    } catch (e) {
+      setAssignedFilteredTotal(null);
     }
   };
 
@@ -2375,7 +2815,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     try {
       const url = `${API_CONFIG.BASE_URL}/api/v1/accountant/processed-by-accountant`;
       const resp = await axios.get(url, {
-        params: { accountantEmpId: empId, page: targetPage, limit: 50 }, // status removed
+        params: { accountantEmpId: empId, page: targetPage, limit: 10 },
         headers,
       });
       const payload = resp?.data?.data || {};
@@ -2395,7 +2835,10 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
       // Update selected item if modal is open
       setTimeout(() => updateSelectedFromTable(), 100);
     } catch (err) {
-      const msg = err?.response?.data?.message || err?.message || "Failed to fetch processed DOs.";
+      const msg =
+        err?.response?.data?.message ||
+        err?.message ||
+        "Failed to fetch processed DOs.";
       setProcessedError(msg);
       setProcessedRows([]);
     } finally {
@@ -2410,38 +2853,43 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     try {
       const url = `${API_CONFIG.BASE_URL}/api/v1/accountant/finance/sales-verified-dos`;
       const resp = await axios.get(url, {
-        params: { accountantEmpId: empId, page: targetPage, limit: 50 },
+        params: { accountantEmpId: empId, page: targetPage, limit: 10 },
         headers,
       });
       const payload = resp?.data?.data || {};
       // ensure accountantUser populated even if only accepted API hits
       setAccountantUser((prev) => prev || payload.financeEmployee || null);
       const salesVerifiedDOs = payload.salesVerifiedDOs || [];
-      
+
       // Log paid DOs for debugging
-      const paidDOs = salesVerifiedDOs.filter(doItem => {
-        const billPaid = doItem?.paymentStatus?.status === 'paid';
-        const carrierPaid = doItem?.carrierPaymentStatus?.status === 'paid';
+      const paidDOs = salesVerifiedDOs.filter((doItem) => {
+        const billPaid = doItem?.paymentStatus?.status === "paid";
+        const carrierPaid = doItem?.carrierPaymentStatus?.status === "paid";
         return billPaid || carrierPaid;
       });
-      
+
       if (paidDOs.length > 0) {
-        console.log(`📊 Found ${paidDOs.length} paid DO(s) out of ${salesVerifiedDOs.length} total:`, {
-          total: salesVerifiedDOs.length,
-          paid: paidDOs.length,
-          unpaid: salesVerifiedDOs.length - paidDOs.length,
-          paidDOs: paidDOs.map(doItem => ({
-            doId: doItem._id,
-            loadNo: doItem?.customers?.[0]?.loadNo || 'N/A',
-            billTo: doItem?.customers?.[0]?.billTo || doItem?.customerName || 'N/A',
-            billPaid: doItem?.paymentStatus?.status === 'paid',
-            carrierPaid: doItem?.carrierPaymentStatus?.status === 'paid',
-            carrierTotalPaid: doItem?.carrierPaymentStatus?.totalPaidAmount || 0,
-            carrierTotal: doItem?.carrier?.totalCarrierFees || 0
-          }))
-        });
+        console.log(
+          `📊 Found ${paidDOs.length} paid DO(s) out of ${salesVerifiedDOs.length} total:`,
+          {
+            total: salesVerifiedDOs.length,
+            paid: paidDOs.length,
+            unpaid: salesVerifiedDOs.length - paidDOs.length,
+            paidDOs: paidDOs.map((doItem) => ({
+              doId: doItem._id,
+              loadNo: doItem?.customers?.[0]?.loadNo || "N/A",
+              billTo:
+                doItem?.customers?.[0]?.billTo || doItem?.customerName || "N/A",
+              billPaid: doItem?.paymentStatus?.status === "paid",
+              carrierPaid: doItem?.carrierPaymentStatus?.status === "paid",
+              carrierTotalPaid:
+                doItem?.carrierPaymentStatus?.totalPaidAmount || 0,
+              carrierTotal: doItem?.carrier?.totalCarrierFees || 0,
+            })),
+          },
+        );
       }
-      
+
       setAcceptedRows(salesVerifiedDOs);
       if (payload.pagination) {
         setAcceptedPagination(payload.pagination);
@@ -2456,7 +2904,10 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
       // Update selected item if modal is open
       setTimeout(() => updateSelectedFromTable(), 100);
     } catch (err) {
-      const msg = err?.response?.data?.message || err?.message || "Failed to fetch approved DOs.";
+      const msg =
+        err?.response?.data?.message ||
+        err?.message ||
+        "Failed to fetch approved DOs.";
       setAcceptedError(msg);
       setAcceptedRows([]);
     } finally {
@@ -2471,7 +2922,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     try {
       const url = `${API_CONFIG.BASE_URL}/api/v1/accountant/accountant/rejected-by-sales`;
       const resp = await axios.get(url, {
-        params: { accountantEmpId: empId, page: targetPage, limit: 50 },
+        params: { accountantEmpId: empId, page: targetPage, limit: 10 },
         headers,
       });
       const payload = resp?.data?.data || {};
@@ -2491,7 +2942,10 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
       // Update selected item if modal is open
       setTimeout(() => updateSelectedFromTable(), 100);
     } catch (err) {
-      const msg = err?.response?.data?.message || err?.message || "Failed to fetch rejected DOs.";
+      const msg =
+        err?.response?.data?.message ||
+        err?.message ||
+        "Failed to fetch rejected DOs.";
       setRejectedError(msg);
       setRejectedRows([]);
     } finally {
@@ -2512,7 +2966,11 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
       const resp = await axios.get(url, { headers });
       setShipImgs(resp?.data || null);
     } catch (e) {
-      setShipImgsErr(e?.response?.data?.message || e?.message || "Failed to load shipment images");
+      setShipImgsErr(
+        e?.response?.data?.message ||
+          e?.message ||
+          "Failed to load shipment images",
+      );
       setShipImgs(null);
     } finally {
       setShipImgsLoading(false);
@@ -2533,7 +2991,11 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
       const docs = resp?.data?.data?.documents || [];
       setAddDocs(docs);
     } catch (e) {
-      setAddDocsErr(e?.response?.data?.message || e?.message || "Failed to load additional documents");
+      setAddDocsErr(
+        e?.response?.data?.message ||
+          e?.message ||
+          "Failed to load additional documents",
+      );
       setAddDocs([]);
     } finally {
       setAddDocsLoading(false);
@@ -2565,7 +3027,8 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
       const newApproval = resp?.data?.data?.accountantApproval;
       const updatedSelected = {
         ...selected,
-        assignmentStatus: resp?.data?.data?.assignmentStatus || selected.assignmentStatus,
+        assignmentStatus:
+          resp?.data?.data?.assignmentStatus || selected.assignmentStatus,
         accountantApproval: newApproval || selected.accountantApproval,
       };
       setSelected(updatedSelected);
@@ -2581,7 +3044,8 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
         fetchData(page); // Also refresh assigned tab
       }
     } catch (e) {
-      const msg = e?.response?.data?.message || e?.message || "Failed to submit approval";
+      const msg =
+        e?.response?.data?.message || e?.message || "Failed to submit approval";
       setToast({ open: true, severity: "error", msg });
     } finally {
       setPosting(false);
@@ -2596,7 +3060,11 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     }
 
     if (!rejectionReason.trim()) {
-      setToast({ open: true, severity: "error", msg: "Please provide a reason for rejection." });
+      setToast({
+        open: true,
+        severity: "error",
+        msg: "Please provide a reason for rejection.",
+      });
       return;
     }
 
@@ -2611,23 +3079,27 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
       };
       const resp = await axios.post(url, body, { headers });
 
-      const msg = resp?.data?.message || "Load rejected and sent to CMT successfully";
+      const msg =
+        resp?.data?.message || "Load rejected and sent to CMT successfully";
       setToast({ open: true, severity: "success", msg });
 
       // reset form
       setRejectionReason("");
-      
+
       // refresh assigned tab immediately
       if (activeTab === 0) {
         fetchData(page);
       }
-      
+
       // close modal after refresh
       setTimeout(() => {
         setDetailsOpen(false);
       }, 300);
     } catch (e) {
-      const msg = e?.response?.data?.message || e?.message || "Failed to reject and send to CMT";
+      const msg =
+        e?.response?.data?.message ||
+        e?.message ||
+        "Failed to reject and send to CMT";
       setToast({ open: true, severity: "error", msg });
     } finally {
       setRejectingToCMT(false);
@@ -2658,16 +3130,19 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
       // reset form
       setResubmitCorrections("");
       setResubmitRemarks("");
-      
+
       // refresh rejected tab immediately
       fetchRejected(rejectedPage);
-      
+
       // close modal after refresh
       setTimeout(() => {
         setDetailsOpen(false);
       }, 300);
     } catch (e) {
-      const msg = e?.response?.data?.message || e?.message || "Failed to resubmit to sales";
+      const msg =
+        e?.response?.data?.message ||
+        e?.message ||
+        "Failed to resubmit to sales";
       setToast({ open: true, severity: "error", msg });
     } finally {
       setResubmitPosting(false);
@@ -2682,7 +3157,11 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     }
 
     if (!resubmitCMTRemarks.trim()) {
-      setToast({ open: true, severity: "error", msg: "Please provide remarks for rejection." });
+      setToast({
+        open: true,
+        severity: "error",
+        msg: "Please provide remarks for rejection.",
+      });
       return;
     }
 
@@ -2697,21 +3176,23 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
       };
       const resp = await axios.post(url, body, { headers });
 
-      const msg = resp?.data?.message || "DO rejected and sent to CMT successfully";
+      const msg =
+        resp?.data?.message || "DO rejected and sent to CMT successfully";
       setToast({ open: true, severity: "success", msg });
 
       // reset form
       setResubmitCMTRemarks("");
-      
+
       // refresh rejected tab immediately
       fetchRejected(rejectedPage);
-      
+
       // close modal after refresh
       setTimeout(() => {
         setDetailsOpen(false);
       }, 300);
     } catch (e) {
-      const msg = e?.response?.data?.message || e?.message || "Failed to resubmit to CMT";
+      const msg =
+        e?.response?.data?.message || e?.message || "Failed to resubmit to CMT";
       setToast({ open: true, severity: "error", msg });
     } finally {
       setResubmitCMTPosting(false);
@@ -2721,7 +3202,11 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
   // ===== PUT: Edit DO Details =====
   const editDODetails = async (editFormData) => {
     if (!editData?._id) {
-      setToast({ open: true, severity: "error", msg: "No DO selected for editing." });
+      setToast({
+        open: true,
+        severity: "error",
+        msg: "No DO selected for editing.",
+      });
       return;
     }
 
@@ -2732,14 +3217,14 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
         doId: editData._id,
         accountantEmpId: empId,
         customers: editFormData.customers,
-        carrier: editFormData.carrier
+        carrier: editFormData.carrier,
       };
-      
+
       const resp = await axios.put(url, body, { headers });
-      
+
       const msg = resp?.data?.message || "DO details updated successfully";
       setToast({ open: true, severity: "success", msg });
-      
+
       // Refresh current tab data
       if (activeTab === 0) {
         fetchData(page);
@@ -2750,12 +3235,15 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
       } else if (activeTab === 3) {
         fetchRejected(rejectedPage);
       }
-      
+
       // Close edit modal
       setEditOpen(false);
       setEditData(null);
     } catch (e) {
-      const msg = e?.response?.data?.message || e?.message || "Failed to update DO details";
+      const msg =
+        e?.response?.data?.message ||
+        e?.message ||
+        "Failed to update DO details";
       setToast({ open: true, severity: "error", msg });
     } finally {
       setEditLoading(false);
@@ -2771,10 +3259,10 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
   const openPaymentModal = (row) => {
     setPaymentData(row);
     setPaymentForm({
-      paymentMethod: '',
-      paymentReference: '',
-      paymentNotes: '',
-      paymentProof: null
+      paymentMethod: "",
+      paymentReference: "",
+      paymentNotes: "",
+      paymentProof: null,
     });
     setPaymentModalOpen(true);
   };
@@ -2785,13 +3273,13 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     const carrierPaymentStatus = row?.carrierPaymentStatus || {};
     const totalPaid = carrierPaymentStatus?.totalPaidAmount || 0;
     const remaining = totals.carrierTotal - totalPaid;
-    
+
     setShortPayForm({
-      paymentAmount: '',
-      paymentMethod: '',
-      paymentReference: '',
-      paymentNotes: '',
-      carrierPaymentProof: null
+      paymentAmount: "",
+      paymentMethod: "",
+      paymentReference: "",
+      paymentNotes: "",
+      carrierPaymentProof: null,
     });
     setShortPayModalOpen(true);
   };
@@ -2799,7 +3287,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
   const openEmailModal = (row) => {
     setEmailData(row);
     setEmailForm({
-      pdfFile: null
+      pdfFile: null,
     });
     setEmailModalOpen(true);
   };
@@ -2807,17 +3295,17 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
   // Helper function to emit payment notification via BroadcastChannel
   const emitPaymentNotification = (notificationData) => {
     try {
-      if ('BroadcastChannel' in window) {
-        const channel = new BroadcastChannel('payment_notifications');
+      if ("BroadcastChannel" in window) {
+        const channel = new BroadcastChannel("payment_notifications");
         channel.postMessage({
-          type: 'PAYMENT_NOTIFICATION',
-          notification: notificationData
+          type: "PAYMENT_NOTIFICATION",
+          notification: notificationData,
         });
         channel.close();
-        console.log('📢 Payment notification broadcasted:', notificationData);
+        console.log("📢 Payment notification broadcasted:", notificationData);
       }
     } catch (error) {
-      console.warn('Failed to broadcast payment notification:', error);
+      console.warn("Failed to broadcast payment notification:", error);
     }
   };
 
@@ -2826,69 +3314,96 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
 
     // Validation
     if (!paymentForm.paymentMethod) {
-      setToast({ open: true, severity: "error", msg: "Please select a payment method" });
+      setToast({
+        open: true,
+        severity: "error",
+        msg: "Please select a payment method",
+      });
       return;
     }
     if (!paymentForm.paymentProof) {
-      setToast({ open: true, severity: "error", msg: "Please upload payment proof document" });
+      setToast({
+        open: true,
+        severity: "error",
+        msg: "Please upload payment proof document",
+      });
       return;
     }
 
     setPaymentLoading(true);
     try {
       const formData = new FormData();
-      formData.append('doId', paymentData._id);
-      formData.append('accountantEmpId', empId);
-      formData.append('paymentMethod', paymentForm.paymentMethod);
+      formData.append("doId", paymentData._id);
+      formData.append("accountantEmpId", empId);
+      formData.append("paymentMethod", paymentForm.paymentMethod);
       if (paymentForm.paymentReference) {
-        formData.append('paymentReference', paymentForm.paymentReference);
+        formData.append("paymentReference", paymentForm.paymentReference);
       }
       if (paymentForm.paymentNotes) {
-        formData.append('paymentNotes', paymentForm.paymentNotes);
+        formData.append("paymentNotes", paymentForm.paymentNotes);
       }
       // Use carrierPaymentProof as per API documentation
-      formData.append('carrierPaymentProof', paymentForm.paymentProof);
+      formData.append("carrierPaymentProof", paymentForm.paymentProof);
 
       // Use mark-carrier-as-paid endpoint as per API documentation
       const url = `${API_CONFIG.BASE_URL}/api/v1/accountant/mark-carrier-as-paid`;
       const resp = await axios.post(url, formData, {
         headers: {
           ...headers,
-          'Content-Type': 'multipart/form-data'
-        }
+          "Content-Type": "multipart/form-data",
+        },
       });
 
       if (resp?.data?.success) {
-        const isFullyPaid = resp?.data?.data?.carrierPaymentStatus?.status === 'paid';
-        const message = resp?.data?.message || (isFullyPaid ? "Carrier payment marked as paid successfully!" : "Payment recorded successfully!");
+        const isFullyPaid =
+          resp?.data?.data?.carrierPaymentStatus?.status === "paid";
+        const message =
+          resp?.data?.message ||
+          (isFullyPaid
+            ? "Carrier payment marked as paid successfully!"
+            : "Payment recorded successfully!");
         setToast({ open: true, severity: "success", msg: message });
         setPaymentModalOpen(false);
-        
+
         // Emit notification via BroadcastChannel for cross-tab communication
         const notificationData = {
           id: `payment_${paymentData._id}_${Date.now()}`,
-          type: 'carrier_payment',
+          type: "carrier_payment",
           doId: paymentData._id,
-          loadNo: paymentData.loadNo || paymentData.loadNumber || 'N/A',
-          paymentAmount: resp?.data?.data?.carrierPaymentStatus?.totalPaidAmount || paymentData.carrierTotal || '0.00',
+          loadNo: paymentData.loadNo || paymentData.loadNumber || "N/A",
+          paymentAmount:
+            resp?.data?.data?.carrierPaymentStatus?.totalPaidAmount ||
+            paymentData.carrierTotal ||
+            "0.00",
           paymentMethod: paymentForm.paymentMethod,
           paymentReference: paymentForm.paymentReference || null,
           markedBy: {
             empId: empId,
-            employeeName: sessionStorage.getItem('employeeName') || localStorage.getItem('employeeName') || 'Finance Employee'
+            employeeName:
+              sessionStorage.getItem("employeeName") ||
+              localStorage.getItem("employeeName") ||
+              "Finance Employee",
           },
           createdAt: new Date().toISOString(),
-          carrierName: paymentData.carrierName || paymentData.carrier?.name || null
+          carrierName:
+            paymentData.carrierName || paymentData.carrier?.name || null,
         };
         emitPaymentNotification(notificationData);
-        
+
         // Refresh the data
         fetchAccepted();
       } else {
-        setToast({ open: true, severity: "error", msg: resp?.data?.message || "Failed to mark carrier as paid" });
+        setToast({
+          open: true,
+          severity: "error",
+          msg: resp?.data?.message || "Failed to mark carrier as paid",
+        });
       }
     } catch (error) {
-      const errorMsg = error?.response?.data?.message || error?.message || "Failed to mark as paid";
+      const errorMsg =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Failed to mark as paid";
       setToast({ open: true, severity: "error", msg: errorMsg });
     } finally {
       setPaymentLoading(false);
@@ -2899,16 +3414,31 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     if (!shortPayData) return;
 
     // Validation
-    if (!shortPayForm.paymentAmount || parseFloat(shortPayForm.paymentAmount) <= 0) {
-      setToast({ open: true, severity: "error", msg: "Please enter a valid payment amount" });
+    if (
+      !shortPayForm.paymentAmount ||
+      parseFloat(shortPayForm.paymentAmount) <= 0
+    ) {
+      setToast({
+        open: true,
+        severity: "error",
+        msg: "Please enter a valid payment amount",
+      });
       return;
     }
     if (!shortPayForm.paymentMethod) {
-      setToast({ open: true, severity: "error", msg: "Please select a payment method" });
+      setToast({
+        open: true,
+        severity: "error",
+        msg: "Please select a payment method",
+      });
       return;
     }
     if (!shortPayForm.carrierPaymentProof) {
-      setToast({ open: true, severity: "error", msg: "Please upload payment proof document" });
+      setToast({
+        open: true,
+        severity: "error",
+        msg: "Please upload payment proof document",
+      });
       return;
     }
 
@@ -2920,10 +3450,10 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
 
     // Allow small rounding differences (0.01 tolerance)
     if (paymentAmount > remaining + 0.01) {
-      setToast({ 
-        open: true, 
-        severity: "error", 
-        msg: `Payment amount ($${paymentAmount.toFixed(2)}) exceeds remaining amount ($${remaining.toFixed(2)})` 
+      setToast({
+        open: true,
+        severity: "error",
+        msg: `Payment amount ($${paymentAmount.toFixed(2)}) exceeds remaining amount ($${remaining.toFixed(2)})`,
       });
       return;
     }
@@ -2931,68 +3461,94 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     setShortPayLoading(true);
     try {
       const formData = new FormData();
-      formData.append('doId', shortPayData._id);
-      formData.append('accountantEmpId', empId);
-      formData.append('paymentAmount', paymentAmount);
-      formData.append('paymentMethod', shortPayForm.paymentMethod);
+      formData.append("doId", shortPayData._id);
+      formData.append("accountantEmpId", empId);
+      formData.append("paymentAmount", paymentAmount);
+      formData.append("paymentMethod", shortPayForm.paymentMethod);
       if (shortPayForm.paymentReference) {
-        formData.append('paymentReference', shortPayForm.paymentReference);
+        formData.append("paymentReference", shortPayForm.paymentReference);
       }
       if (shortPayForm.paymentNotes) {
-        formData.append('paymentNotes', shortPayForm.paymentNotes);
+        formData.append("paymentNotes", shortPayForm.paymentNotes);
       }
-      formData.append('carrierPaymentProof', shortPayForm.carrierPaymentProof);
+      formData.append("carrierPaymentProof", shortPayForm.carrierPaymentProof);
 
       const url = `${API_CONFIG.BASE_URL}/api/v1/accountant/short-pay-carrier`;
       const resp = await axios.post(url, formData, {
         headers: {
           ...headers,
-          'Content-Type': 'multipart/form-data'
-        }
+          "Content-Type": "multipart/form-data",
+        },
       });
 
       if (resp?.data?.success) {
         const isFullyPaid = resp?.data?.data?.isFullyPaid;
         const responseData = resp?.data?.data || {};
         const carrierPaymentStatus = responseData.carrierPaymentStatus || {};
-        
+
         if (isFullyPaid) {
-          setToast({ open: true, severity: "success", msg: "Carrier payment fully paid through short payments!" });
+          setToast({
+            open: true,
+            severity: "success",
+            msg: "Carrier payment fully paid through short payments!",
+          });
         } else {
-          setToast({ open: true, severity: "success", msg: `Short payment of $${paymentAmount.toFixed(2)} recorded successfully!` });
+          setToast({
+            open: true,
+            severity: "success",
+            msg: `Short payment of $${paymentAmount.toFixed(2)} recorded successfully!`,
+          });
         }
         setShortPayModalOpen(false);
-        
+
         // Emit notification via BroadcastChannel for cross-tab communication
         const totals = computeTotals(shortPayData);
         const notificationData = {
           id: `short_payment_${shortPayData._id}_${Date.now()}`,
-          type: isFullyPaid ? 'short_payment_completed' : 'short_payment',
+          type: isFullyPaid ? "short_payment_completed" : "short_payment",
           doId: shortPayData._id,
-          loadNo: shortPayData.loadNo || shortPayData.loadNumber || 'N/A',
+          loadNo: shortPayData.loadNo || shortPayData.loadNumber || "N/A",
           paymentAmount: paymentAmount.toFixed(2),
           paymentMethod: shortPayForm.paymentMethod,
           paymentReference: shortPayForm.paymentReference || null,
           markedBy: {
             empId: empId,
-            employeeName: sessionStorage.getItem('employeeName') || localStorage.getItem('employeeName') || 'Finance Employee'
+            employeeName:
+              sessionStorage.getItem("employeeName") ||
+              localStorage.getItem("employeeName") ||
+              "Finance Employee",
           },
           createdAt: new Date().toISOString(),
-          carrierName: shortPayData.carrierName || shortPayData.carrier?.name || null,
-          totalCarrierFees: totals.carrierTotal?.toFixed(2) || '0.00',
-          totalPaid: carrierPaymentStatus.totalPaidAmount?.toFixed(2) || paymentAmount.toFixed(2),
-          remainingAmount: (totals.carrierTotal - (carrierPaymentStatus.totalPaidAmount || paymentAmount))?.toFixed(2) || '0.00',
-          numberOfShortPayments: carrierPaymentStatus.shortPayments?.length || 1
+          carrierName:
+            shortPayData.carrierName || shortPayData.carrier?.name || null,
+          totalCarrierFees: totals.carrierTotal?.toFixed(2) || "0.00",
+          totalPaid:
+            carrierPaymentStatus.totalPaidAmount?.toFixed(2) ||
+            paymentAmount.toFixed(2),
+          remainingAmount:
+            (
+              totals.carrierTotal -
+              (carrierPaymentStatus.totalPaidAmount || paymentAmount)
+            )?.toFixed(2) || "0.00",
+          numberOfShortPayments:
+            carrierPaymentStatus.shortPayments?.length || 1,
         };
         emitPaymentNotification(notificationData);
-        
+
         // Refresh the data
         fetchAccepted();
       } else {
-        setToast({ open: true, severity: "error", msg: resp?.data?.message || "Failed to record short payment" });
+        setToast({
+          open: true,
+          severity: "error",
+          msg: resp?.data?.message || "Failed to record short payment",
+        });
       }
     } catch (error) {
-      const errorMsg = error?.response?.data?.message || error?.message || "Failed to record short payment";
+      const errorMsg =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Failed to record short payment";
       setToast({ open: true, severity: "error", msg: errorMsg });
     } finally {
       setShortPayLoading(false);
@@ -3001,20 +3557,33 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
 
   const handleBulkPaymentSubmit = async () => {
     // Use the stored DO IDs from when modal was opened, or fallback to current selectedDOs
-    const doIdsToProcess = bulkPaymentDOIds.length > 0 ? bulkPaymentDOIds : Array.from(selectedDOs);
-    
+    const doIdsToProcess =
+      bulkPaymentDOIds.length > 0 ? bulkPaymentDOIds : Array.from(selectedDOs);
+
     if (doIdsToProcess.length === 0) {
-      setToast({ open: true, severity: "error", msg: "Please select at least one DO to mark as paid" });
+      setToast({
+        open: true,
+        severity: "error",
+        msg: "Please select at least one DO to mark as paid",
+      });
       return;
     }
 
     // Validation
     if (!bulkPaymentForm.paymentMethod) {
-      setToast({ open: true, severity: "error", msg: "Please select a payment method" });
+      setToast({
+        open: true,
+        severity: "error",
+        msg: "Please select a payment method",
+      });
       return;
     }
     if (!bulkPaymentForm.paymentProof) {
-      setToast({ open: true, severity: "error", msg: "Please upload payment proof document" });
+      setToast({
+        open: true,
+        severity: "error",
+        msg: "Please upload payment proof document",
+      });
       return;
     }
 
@@ -3022,31 +3591,37 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     try {
       const formData = new FormData();
       // Ensure we have valid DO IDs
-      const validDoIds = doIdsToProcess.filter(id => id && typeof id === 'string' && id.trim() !== '');
-      
+      const validDoIds = doIdsToProcess.filter(
+        (id) => id && typeof id === "string" && id.trim() !== "",
+      );
+
       if (validDoIds.length === 0) {
-        setToast({ open: true, severity: "error", msg: "No valid DO IDs found. Please select DOs again." });
+        setToast({
+          open: true,
+          severity: "error",
+          msg: "No valid DO IDs found. Please select DOs again.",
+        });
         setBulkPaymentLoading(false);
         return;
       }
-      
-      formData.append('doIds', JSON.stringify(validDoIds));
-      formData.append('accountantEmpId', empId);
-      formData.append('paymentMethod', bulkPaymentForm.paymentMethod);
+
+      formData.append("doIds", JSON.stringify(validDoIds));
+      formData.append("accountantEmpId", empId);
+      formData.append("paymentMethod", bulkPaymentForm.paymentMethod);
       if (bulkPaymentForm.paymentReference) {
-        formData.append('paymentReference', bulkPaymentForm.paymentReference);
+        formData.append("paymentReference", bulkPaymentForm.paymentReference);
       }
       if (bulkPaymentForm.paymentNotes) {
-        formData.append('paymentNotes', bulkPaymentForm.paymentNotes);
+        formData.append("paymentNotes", bulkPaymentForm.paymentNotes);
       }
-      formData.append('paymentProof', bulkPaymentForm.paymentProof);
+      formData.append("paymentProof", bulkPaymentForm.paymentProof);
 
       const url = `${API_CONFIG.BASE_URL}/api/v1/accountant/bulk-mark-as-paid`;
       const resp = await axios.post(url, formData, {
         headers: {
           ...headers,
-          'Content-Type': 'multipart/form-data'
-        }
+          "Content-Type": "multipart/form-data",
+        },
       });
 
       if (resp?.data?.success) {
@@ -3054,7 +3629,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
         const successfullyMarked = data.successfullyMarked || 0;
         const alreadyPaid = data.alreadyPaid || 0;
         const invalidStatus = data.invalidStatus || 0;
-        
+
         let message = `Successfully marked ${successfullyMarked} DO(s) as paid`;
         if (alreadyPaid > 0) {
           message += `. ${alreadyPaid} DO(s) were already paid`;
@@ -3062,27 +3637,34 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
         if (invalidStatus > 0) {
           message += `. ${invalidStatus} DO(s) had invalid status`;
         }
-        
+
         setToast({ open: true, severity: "success", msg: message });
         setBulkPaymentModalOpen(false);
         setSelectedDOs(new Set());
         setBulkPaymentDOIds([]);
         setBulkPaymentForm({
-          paymentMethod: '',
-          paymentReference: '',
-          paymentNotes: '',
-          paymentProof: null
+          paymentMethod: "",
+          paymentReference: "",
+          paymentNotes: "",
+          paymentProof: null,
         });
         // Refresh the data
         fetchAccepted(acceptedPage);
       } else {
-        setToast({ open: true, severity: "error", msg: resp?.data?.message || "Failed to mark DOs as paid" });
+        setToast({
+          open: true,
+          severity: "error",
+          msg: resp?.data?.message || "Failed to mark DOs as paid",
+        });
       }
     } catch (error) {
-      const errorMsg = error?.response?.data?.message || error?.message || "Failed to mark DOs as paid";
+      const errorMsg =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Failed to mark DOs as paid";
       setToast({ open: true, severity: "error", msg: errorMsg });
-      console.error('Bulk payment error:', error);
-      console.error('DO IDs being sent:', doIdsToProcess);
+      console.error("Bulk payment error:", error);
+      console.error("DO IDs being sent:", doIdsToProcess);
     } finally {
       setBulkPaymentLoading(false);
     }
@@ -3097,13 +3679,21 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
 
     // Validate PDF file is uploaded
     if (!emailForm.pdfFile) {
-      setToast({ open: true, severity: "error", msg: "Please upload a PDF file before sending email" });
+      setToast({
+        open: true,
+        severity: "error",
+        msg: "Please upload a PDF file before sending email",
+      });
       return;
     }
 
     const token = getStored("token");
     if (!token) {
-      setToast({ open: true, severity: "error", msg: "Authentication required. Please login again." });
+      setToast({
+        open: true,
+        severity: "error",
+        msg: "Authentication required. Please login again.",
+      });
       return;
     }
 
@@ -3116,13 +3706,16 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     setPdfUploading(true);
     try {
       const uploadFormData = new FormData();
-      uploadFormData.append('invoicePDF', emailForm.pdfFile);
+      uploadFormData.append("invoicePDF", emailForm.pdfFile);
 
       const uploadUrl = `${API_CONFIG.BASE_URL}/api/v1/do/do/${doId}/pdf-attachments`;
-      const uploadResp = await axios.post(uploadUrl, uploadFormData, { headers });
+      const uploadResp = await axios.post(uploadUrl, uploadFormData, {
+        headers,
+      });
 
       if (!uploadResp?.data?.success) {
-        const uploadErrorMsg = uploadResp?.data?.message || "Failed to upload PDF";
+        const uploadErrorMsg =
+          uploadResp?.data?.message || "Failed to upload PDF";
         setToast({ open: true, severity: "error", msg: uploadErrorMsg });
         setPdfUploading(false);
         return;
@@ -3136,51 +3729,71 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
       const emailUrl = `${API_CONFIG.BASE_URL}/api/v1/accountant/send-to-customer`;
       const emailHeaders = {
         ...headers,
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       };
-      const emailResp = await axios.post(emailUrl, { doId }, { headers: emailHeaders });
+      const emailResp = await axios.post(
+        emailUrl,
+        { doId },
+        { headers: emailHeaders },
+      );
 
       if (emailResp?.data?.success) {
         const data = emailResp?.data?.data || {};
         const shipperName = data.shipperName || "customer";
         const shipperEmail = data.shipperEmail || "";
         const pdfsAttached = data.frontendPDFsAttached || 0;
-        const paymentDueDate = data.paymentDueDate ? new Date(data.paymentDueDate).toLocaleDateString() : '';
-        const dueDateReset = data.dueDateReset !== undefined ? data.dueDateReset : true;
-        
-        let message = '';
+        const paymentDueDate = data.paymentDueDate
+          ? new Date(data.paymentDueDate).toLocaleDateString()
+          : "";
+        const dueDateReset =
+          data.dueDateReset !== undefined ? data.dueDateReset : true;
+
+        let message = "";
         if (dueDateReset) {
           // First email send - due date was set/reset
-          message = `Email sent to ${shipperName}${shipperEmail ? ` (${shipperEmail})` : ''} successfully${pdfsAttached > 0 ? ` with ${pdfsAttached} PDF attachment(s)` : ''}${paymentDueDate ? `. Payment due date set to: ${paymentDueDate}` : ''}`;
+          message = `Email sent to ${shipperName}${shipperEmail ? ` (${shipperEmail})` : ""} successfully${pdfsAttached > 0 ? ` with ${pdfsAttached} PDF attachment(s)` : ""}${paymentDueDate ? `. Payment due date set to: ${paymentDueDate}` : ""}`;
         } else {
           // Email resent - due date unchanged
-          message = `Email resent to ${shipperName}${shipperEmail ? ` (${shipperEmail})` : ''} successfully${pdfsAttached > 0 ? ` with ${pdfsAttached} PDF attachment(s)` : ''}. Due date remains unchanged${paymentDueDate ? `: ${paymentDueDate}` : ''}`;
+          message = `Email resent to ${shipperName}${shipperEmail ? ` (${shipperEmail})` : ""} successfully${pdfsAttached > 0 ? ` with ${pdfsAttached} PDF attachment(s)` : ""}. Due date remains unchanged${paymentDueDate ? `: ${paymentDueDate}` : ""}`;
         }
-        
+
         setToast({ open: true, severity: "success", msg: message });
         setEmailModalOpen(false);
         setEmailForm({ pdfFile: null });
         // Refresh the accepted rows to show updated email status and due date
         fetchAccepted(acceptedPage);
       } else {
-        setToast({ open: true, severity: "error", msg: emailResp?.data?.message || "Failed to send email" });
+        setToast({
+          open: true,
+          severity: "error",
+          msg: emailResp?.data?.message || "Failed to send email",
+        });
       }
     } catch (error) {
-      let errorMsg = error?.response?.data?.message || error?.message || "Failed to process request";
-      
+      let errorMsg =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Failed to process request";
+
       // Handle specific error codes with user-friendly messages
-      if (errorMsg.includes('MESSAGE_SIZE_EXCEEDED') || errorMsg.includes('Mail size too large')) {
-        errorMsg = "Email size exceeds 20MB limit. Please upload a smaller PDF file or remove other attachments. The backend-generated invoice PDF and other uploaded PDFs are included in the total size.";
-      } else if (errorMsg.includes('INVALID_SENDER')) {
-        errorMsg = "Email sending failed: Sender email not verified. Please contact support.";
-      } else if (errorMsg.includes('INVALID_RECIPIENT')) {
-        errorMsg = "Email sending failed: Invalid recipient email address. Please check the shipper's email.";
+      if (
+        errorMsg.includes("MESSAGE_SIZE_EXCEEDED") ||
+        errorMsg.includes("Mail size too large")
+      ) {
+        errorMsg =
+          "Email size exceeds 20MB limit. Please upload a smaller PDF file or remove other attachments. The backend-generated invoice PDF and other uploaded PDFs are included in the total size.";
+      } else if (errorMsg.includes("INVALID_SENDER")) {
+        errorMsg =
+          "Email sending failed: Sender email not verified. Please contact support.";
+      } else if (errorMsg.includes("INVALID_RECIPIENT")) {
+        errorMsg =
+          "Email sending failed: Invalid recipient email address. Please check the shipper's email.";
       } else if (pdfUploading) {
         errorMsg = `Failed to upload PDF: ${errorMsg}`;
       }
-      
+
       setToast({ open: true, severity: "error", msg: errorMsg });
-      console.error('Error:', error);
+      console.error("Error:", error);
     } finally {
       setPdfUploading(false);
       setEmailLoading(false);
@@ -3206,6 +3819,11 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
   }, [page]);
 
   useEffect(() => {
+    fetchAssignedFilteredCount();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter, search]);
+
+  useEffect(() => {
     fetchProcessed(processedPage);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [processedPage]);
@@ -3218,10 +3836,15 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
   // Clean up selected DOs when acceptedRows change (remove selections for DOs that are now paid or no longer exist)
   useEffect(() => {
     if (acceptedRows.length > 0) {
-      const validDOIds = new Set(acceptedRows
-        .filter(r => r?.paymentStatus?.status !== 'paid')
-        .map(r => r._id));
-      setSelectedDOs(prev => new Set([...Array.from(prev)].filter(id => validDOIds.has(id))));
+      const validDOIds = new Set(
+        acceptedRows
+          .filter((r) => r?.paymentStatus?.status !== "paid")
+          .map((r) => r._id),
+      );
+      setSelectedDOs(
+        (prev) =>
+          new Set([...Array.from(prev)].filter((id) => validDOIds.has(id))),
+      );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [acceptedRows]);
@@ -3270,12 +3893,11 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
 
   // filters (tab 1)
   const processedFiltered = useMemo(() => {
-    // First filter: Only show approved, exclude rejected and pending
     let filtered = processedRows.filter((r) => {
-      const status = r?.accountantApproval?.status;
-      return status === 'approved';
+      const status = String(r?.accountantApproval?.status || "").trim().toLowerCase();
+      return status === "approved";
     });
-    
+
     // Carrier filter
     if (processedCarrierFilter) {
       filtered = filtered.filter((r) => {
@@ -3283,7 +3905,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
         return carrierName === processedCarrierFilter.toLowerCase();
       });
     }
-    
+
     // Search filter
     if (processedSearch.trim()) {
       const q = processedSearch.toLowerCase();
@@ -3298,39 +3920,61 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
         );
       });
     }
-    
+
     return filtered;
   }, [processedRows, processedSearch, processedCarrierFilter]);
 
   // filters (tab 2 - Approved By Sales)
   const acceptedFiltered = useMemo(() => {
     let filtered = acceptedRows;
-    
+
     // Payment filter (paid/unpaid)
     if (acceptedPaymentFilter === "paid") {
       filtered = filtered.filter((r) => {
         const carrierPaymentStatus = r?.carrierPaymentStatus || {};
-        const carrierStatus = (carrierPaymentStatus?.status || '').toLowerCase().trim();
-        const carrierTotalPaid = parseFloat(carrierPaymentStatus?.totalPaidAmount || 0);
-        const carrierTotal = parseFloat((r?.carrier?.totalCarrierFees || 0));
-        const remainingAmount = carrierPaymentStatus?.remainingAmount || (carrierTotal - carrierTotalPaid);
-        const isFullyPaidByAmount = carrierTotal > 0 && carrierTotalPaid >= carrierTotal - 0.01;
+        const carrierStatus = (carrierPaymentStatus?.status || "")
+          .toLowerCase()
+          .trim();
+        const carrierTotalPaid = parseFloat(
+          carrierPaymentStatus?.totalPaidAmount || 0,
+        );
+        const carrierTotal = parseFloat(r?.carrier?.totalCarrierFees || 0);
+        const remainingAmount =
+          carrierPaymentStatus?.remainingAmount ||
+          carrierTotal - carrierTotalPaid;
+        const isFullyPaidByAmount =
+          carrierTotal > 0 && carrierTotalPaid >= carrierTotal - 0.01;
         const isFullyPaidByRemaining = parseFloat(remainingAmount) <= 0.01;
-        return carrierStatus === 'paid' || isFullyPaidByAmount || isFullyPaidByRemaining;
+        return (
+          carrierStatus === "paid" ||
+          isFullyPaidByAmount ||
+          isFullyPaidByRemaining
+        );
       });
     } else if (acceptedPaymentFilter === "unpaid") {
       filtered = filtered.filter((r) => {
         const carrierPaymentStatus = r?.carrierPaymentStatus || {};
-        const carrierStatus = (carrierPaymentStatus?.status || '').toLowerCase().trim();
-        const carrierTotalPaid = parseFloat(carrierPaymentStatus?.totalPaidAmount || 0);
-        const carrierTotal = parseFloat((r?.carrier?.totalCarrierFees || 0));
-        const remainingAmount = carrierPaymentStatus?.remainingAmount || (carrierTotal - carrierTotalPaid);
-        const isFullyPaidByAmount = carrierTotal > 0 && carrierTotalPaid >= carrierTotal - 0.01;
+        const carrierStatus = (carrierPaymentStatus?.status || "")
+          .toLowerCase()
+          .trim();
+        const carrierTotalPaid = parseFloat(
+          carrierPaymentStatus?.totalPaidAmount || 0,
+        );
+        const carrierTotal = parseFloat(r?.carrier?.totalCarrierFees || 0);
+        const remainingAmount =
+          carrierPaymentStatus?.remainingAmount ||
+          carrierTotal - carrierTotalPaid;
+        const isFullyPaidByAmount =
+          carrierTotal > 0 && carrierTotalPaid >= carrierTotal - 0.01;
         const isFullyPaidByRemaining = parseFloat(remainingAmount) <= 0.01;
-        return !(carrierStatus === 'paid' || isFullyPaidByAmount || isFullyPaidByRemaining);
+        return !(
+          carrierStatus === "paid" ||
+          isFullyPaidByAmount ||
+          isFullyPaidByRemaining
+        );
       });
     }
-    
+
     // Carrier filter
     if (acceptedCarrierFilter) {
       filtered = filtered.filter((r) => {
@@ -3338,7 +3982,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
         return carrierName === acceptedCarrierFilter.toLowerCase();
       });
     }
-    
+
     // Search filter
     if (acceptedSearch.trim()) {
       const q = acceptedSearch.toLowerCase();
@@ -3354,9 +3998,14 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
         );
       });
     }
-    
+
     return filtered;
-  }, [acceptedRows, acceptedSearch, acceptedCarrierFilter, acceptedPaymentFilter]);
+  }, [
+    acceptedRows,
+    acceptedSearch,
+    acceptedCarrierFilter,
+    acceptedPaymentFilter,
+  ]);
 
   // filters (tab 2)
   const rejectedFiltered = useMemo(() => {
@@ -3391,18 +4040,18 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
   // Update selected item when table data changes (to keep modal in sync)
   const updateSelectedFromTable = () => {
     if (!selected?._id) return;
-    
+
     let updatedRow = null;
     if (activeTab === 0) {
-      updatedRow = rows.find(r => r._id === selected._id);
+      updatedRow = rows.find((r) => r._id === selected._id);
     } else if (activeTab === 1) {
-      updatedRow = processedRows.find(r => r._id === selected._id);
+      updatedRow = processedRows.find((r) => r._id === selected._id);
     } else if (activeTab === 2) {
-      updatedRow = acceptedRows.find(r => r._id === selected._id);
+      updatedRow = acceptedRows.find((r) => r._id === selected._id);
     } else if (activeTab === 3) {
-      updatedRow = rejectedRows.find(r => r._id === selected._id);
+      updatedRow = rejectedRows.find((r) => r._id === selected._id);
     }
-    
+
     if (updatedRow) {
       setSelected(updatedRow);
     }
@@ -3415,11 +4064,10 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     fetchShipmentImages(shipmentNo);
   };
 
-
   const computeTotals = (row) => {
     const customerTotals = (row?.customers || []).reduce(
       (acc, c) => acc + (c?.calculatedTotal ?? c?.totalAmount ?? 0),
-      0
+      0,
     );
     const carrierFees = Number(row?.carrier?.totalCarrierFees ?? 0);
     return {
@@ -3431,11 +4079,11 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
 
   // Status color helper
   const statusColor = (status) => {
-    if (!status) return 'bg-yellow-100 text-yellow-700';
-    if (status === 'approved') return 'bg-green-100 text-green-700';
-    if (status === 'rejected') return 'bg-red-100 text-red-700';
-    if (status === 'pending') return 'bg-yellow-100 text-yellow-700';
-    return 'bg-blue-100 text-blue-700';
+    if (!status) return "bg-yellow-100 text-yellow-700";
+    if (status === "approved") return "bg-green-100 text-green-700";
+    if (status === "rejected") return "bg-red-100 text-red-700";
+    if (status === "pending") return "bg-yellow-100 text-yellow-700";
+    return "bg-blue-100 text-blue-700";
   };
 
   // Get unique carriers from data
@@ -3463,17 +4111,28 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
 
     if (activeTab === 1) {
       // Accountant Approved tab
-      headers = ["DO ID", "Load No", "Bill To", "Carrier", "Bill Amount", "Carrier Fees", "Status", "Approved By", "Approved At"];
+      headers = [
+        "DO ID",
+        "Load No",
+        "Bill To",
+        "Carrier",
+        "Bill Amount",
+        "Carrier Fees",
+        "Status",
+        "Approved By",
+        "Approved At",
+      ];
       rows = data.map((row) => {
         const cust = row?.customers?.[0] || {};
         const totals = computeTotals(row);
-        const apprBy = row?.accountantApproval?.approvedBy?.employeeName 
-          || row?.accountantApproval?.resubmittedBy?.employeeName 
-          || row?.accountantApproval?.assignedTo?.employeeName
-          || row?.accountantApproval?.approvedBy?.empId 
-          || row?.accountantApproval?.resubmittedBy?.empId
-          || row?.accountantApproval?.assignedTo?.empId
-          || "—";
+        const apprBy =
+          row?.accountantApproval?.approvedBy?.employeeName ||
+          row?.accountantApproval?.resubmittedBy?.employeeName ||
+          row?.accountantApproval?.assignedTo?.employeeName ||
+          row?.accountantApproval?.approvedBy?.empId ||
+          row?.accountantApproval?.resubmittedBy?.empId ||
+          row?.accountantApproval?.assignedTo?.empId ||
+          "—";
         const apprAt = row?.accountantApproval?.approvedAt || row?.updatedAt;
         return [
           row?._id || "",
@@ -3484,31 +4143,56 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
           `$${fmtMoney(totals.carrierTotal)}`,
           row?.accountantApproval?.status || "pending",
           apprBy,
-          fmtDateTime(apprAt)
+          fmtDateTime(apprAt),
         ];
       });
     } else if (activeTab === 2) {
       // Approved By Sales tab
-      headers = ["DO ID", "Load No", "Bill To", "Carrier", "Bill Amount", "Carrier Fees", "Payment Status", "Approved By", "Approved At", "Payment Due Date", "Days Remaining"];
+      headers = [
+        "DO ID",
+        "Load No",
+        "Bill To",
+        "Carrier",
+        "Bill Amount",
+        "Carrier Fees",
+        "Payment Status",
+        "Approved By",
+        "Approved At",
+        "Payment Due Date",
+        "Days Remaining",
+      ];
       rows = data.map((row) => {
         const cust = row?.customers?.[0] || {};
         const totals = computeTotals(row);
-        const apprBy = row?.salesApproval?.approvedBy?.employeeName 
-          || row?.salesApproval?.approvedBy?.empId
-          || "—";
+        const apprBy =
+          row?.salesApproval?.approvedBy?.employeeName ||
+          row?.salesApproval?.approvedBy?.empId ||
+          "—";
         const apprAt = row?.salesApproval?.approvedAt || row?.updatedAt;
         const carrierPaymentStatus = row?.carrierPaymentStatus || {};
-        const carrierStatus = (carrierPaymentStatus?.status || '').toLowerCase().trim();
-        const carrierTotalPaid = parseFloat(carrierPaymentStatus?.totalPaidAmount || 0);
+        const carrierStatus = (carrierPaymentStatus?.status || "")
+          .toLowerCase()
+          .trim();
+        const carrierTotalPaid = parseFloat(
+          carrierPaymentStatus?.totalPaidAmount || 0,
+        );
         const carrierTotal = parseFloat(totals.carrierTotal || 0);
-        const remainingAmount = carrierPaymentStatus?.remainingAmount || (carrierTotal - carrierTotalPaid);
-        const isFullyPaidByAmount = carrierTotal > 0 && carrierTotalPaid >= carrierTotal - 0.01;
+        const remainingAmount =
+          carrierPaymentStatus?.remainingAmount ||
+          carrierTotal - carrierTotalPaid;
+        const isFullyPaidByAmount =
+          carrierTotal > 0 && carrierTotalPaid >= carrierTotal - 0.01;
         const isFullyPaidByRemaining = parseFloat(remainingAmount) <= 0.01;
-        const carrierIsPaid = carrierStatus === 'paid' || isFullyPaidByAmount || isFullyPaidByRemaining;
+        const carrierIsPaid =
+          carrierStatus === "paid" ||
+          isFullyPaidByAmount ||
+          isFullyPaidByRemaining;
         const dueDateInfo = getDueDateInfo(row);
         const dueDateFormatted = dueDateInfo ? formatDueDate(dueDateInfo) : "—";
-        const daysValue = dueDateInfo 
-          ? (dueDateInfo.isOverdue ? `-${dueDateInfo.daysOverdue}` : dueDateInfo.daysRemaining)
+        const daysValue = dueDateInfo
+          ? dueDateInfo.isOverdue
+            ? `-${dueDateInfo.daysOverdue}`
+            : dueDateInfo.daysRemaining
           : "—";
         return [
           row?._id || "",
@@ -3521,7 +4205,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
           apprBy,
           fmtDateTime(apprAt),
           dueDateFormatted,
-          daysValue
+          daysValue,
         ];
       });
     }
@@ -3529,7 +4213,9 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     // Create CSV content
     const csvContent = [
       headers.join(","),
-      ...rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+      ...rows.map((row) =>
+        row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","),
+      ),
     ].join("\n");
 
     // Create blob and download
@@ -3542,744 +4228,1242 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    
-    setToast({ open: true, severity: "success", msg: "Data exported successfully!" });
+
+    setToast({
+      open: true,
+      severity: "success",
+      msg: "Data exported successfully!",
+    });
   };
 
   return (
     <ThemeProvider theme={theme}>
       <div className="p-6">
-        {/* Tabs */}
-      <div className="flex items-center gap-4 mb-6">
-        <button
-          onClick={() => setActiveTab(0)}
-          className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${activeTab === 0
-            ? 'bg-gradient-to-r from-yellow-500 to-orange-600 text-white shadow-lg'
-            : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
-            }`}
-        >
-          <div className="flex items-center gap-2">
-            <Clock size={18} />
-            <span>Assigned to Accountant</span>
-          </div>
-        </button>
-        <button
-          onClick={() => setActiveTab(1)}
-          className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${activeTab === 1
-            ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg'
-            : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
-            }`}
-        >
-          <div className="flex items-center gap-2">
-            <CheckCircle size={18} />
-            <span>Accountant Approved</span>
-          </div>
-        </button>
-        <button
-          onClick={() => setActiveTab(2)}
-          className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${activeTab === 2
-            ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg'
-            : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
-            }`}
-        >
-          <div className="flex items-center gap-2">
-            <CheckCircle size={18} />
-            <span>Approved By Sales</span>
-          </div>
-        </button>
-        <button
-          onClick={() => setActiveTab(3)}
-          className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${activeTab === 3
-            ? 'bg-gradient-to-r from-red-500 to-rose-600 text-white shadow-lg'
-            : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
-            }`}
-        >
-          <div className="flex items-center gap-2">
-            <XCircle size={18} />
-            <span>Rejected by Sales</span>
-          </div>
-        </button>
-      </div>
-
-      {/* Tab Content */}
-      <div>
-        {/* TAB 0: Assigned to Accountant */}
+        {/* Top Sections (above tabs) */}
         {activeTab === 0 && (
-          <div>
-            {/* Search and Stats */}
-            <div className="flex justify-between items-center mb-6">
-              <div className="flex items-center gap-6">
-                <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-yellow-100 rounded-xl flex items-center justify-center">
-                      <Clock className="text-yellow-600" size={20} />
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Total Invoices</p>
-                      <p className="text-xl font-bold text-gray-800">{rows.length}</p>
-                    </div>
+          <div className="mb-6 bg-white rounded-2xl border border-gray-200 p-4">
+            <div className="flex items-center gap-6 mb-4">
+              <div className="bg-white rounded-2xl p-5 border border-gray-200 w-72 h-28">
+                <div className="flex items-center justify-between gap-6 h-full">
+                  <div className="space-y-2">
+                    <p className="text-lg font-medium text-gray-700">Total Invoices</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {pagination?.totalItems || rows.length}
+                    </p>
                   </div>
-                </div>
-                <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                      <FileText className="text-blue-600" size={20} />
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Filtered</p>
-                      <p className="text-xl font-bold text-blue-600">{filtered.length}</p>
-                    </div>
+                  <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center">
+                    <Clock className="text-blue-600" size={20} />
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                  <input
-                    type="text"
-                    placeholder="Search (Load No / Bill To / Carrier / Shipper / DO ID)"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  />
-                  {search && (
-                    <button
-                      onClick={() => setSearch("")}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    >
-                      ×
-                    </button>
-                  )}
+              <div className="bg-white rounded-2xl p-5 border border-gray-200 w-72 h-28">
+                <div className="flex items-center justify-between gap-6 h-full">
+                  <div className="space-y-2">
+                    <p className="text-lg font-medium text-gray-700">Filtered</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {(() => {
+                        const q = (search || "").trim();
+                        if (!q && statusFilter === "all") return pagination?.totalItems || rows.length;
+                        return assignedFilteredTotal ?? filtered.length;
+                      })()}
+                    </p>
+                  </div>
+                  <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center">
+                    <FileText className="text-blue-600" size={20} />
+                  </div>
                 </div>
-                <button
-                  onClick={() => fetchData(page)}
-                  disabled={loading}
-                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
-                  <span>Refresh</span>
-                </button>
               </div>
             </div>
-
-            {loading && (
-              <div className="mb-4">
-                <div className="h-1 bg-gray-200 rounded-full overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-green-500 to-emerald-600 animate-pulse" style={{ width: '100%' }}></div>
-                </div>
-              </div>
-            )}
-
-            {!loading && filtered.length === 0 ? (
-              <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-12 text-center">
-                <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-gray-700 mb-2">No invoices found</h3>
-                <p className="text-sm text-gray-500">Try adjusting filters or search.</p>
-                {serverError && (
-                  <p className="text-sm text-red-600 mt-2">{serverError}</p>
+            <div className="flex items-center gap-3">
+              <div className="relative flex-1">
+                <Search
+                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                  size={18}
+                />
+                <input
+                  type="text"
+                  placeholder="Search (Load No / Bill To / Carrier / Shipper / DO ID)"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full h-11 pl-9 pr-4 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+                {search && (
+                  <button
+                    onClick={() => setSearch("")}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                  >
+                    ×
+                  </button>
                 )}
               </div>
-            ) : (
-              <>
-                <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
-                        <tr>
-                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">DO ID</th>
-                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load No</th>
-                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bill To</th>
-                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier</th>
-                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Agent Name</th>
-                          <th className="text-right py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bill Amount</th>
-                          <th className="text-right py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier Fees</th>
-                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
-                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Forwarded By</th>
-                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Updated</th>
-                          <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filtered.map((row, index) => {
-                          const cust = row?.customers?.[0] || {};
-                          const totals = computeTotals(row);
-                          const fwBy = row?.forwardedToAccountant?.forwardedBy?.employeeName || "—";
-                          const agentName = row?.loadReference?.createdBySalesUser?.empName || "—";
-                          return (
-                            <tr key={row?._id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                              <td className="py-2 px-3">
-                                <span className="font-medium text-gray-700" title={row?._id || ""}>{shortId(row?._id)}</span>
-                              </td>
-                              <td className="py-2 px-3">
-                                <span className="font-medium text-gray-700">{cust?.loadNo || "—"}</span>
-                              </td>
-                              <td className="py-2 px-3">
-                                <span className="font-medium text-gray-700">{cust?.billTo || row?.customerName || "—"}</span>
-                              </td>
-                              <td className="py-2 px-3">
-                                <span className="font-medium text-gray-700">{row?.carrier?.carrierName || "—"}</span>
-                              </td>
-                              <td className="py-2 px-3">
-                                <span className="font-medium text-gray-700">{agentName}</span>
-                              </td>
-                              <td className="py-2 px-3 text-right">
-                                <span className="font-bold text-green-600">${fmtMoney(totals.billTotal)}</span>
-                              </td>
-                              <td className="py-2 px-3 text-right">
-                                <span className="font-bold text-blue-600">${fmtMoney(totals.carrierTotal)}</span>
-                              </td>
-                              <td className="py-2 px-3">
-                                <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${statusColor(row?.accountantApproval?.status)}`}>
-                                  {row?.accountantApproval?.status === 'approved' && <CheckCircle size={12} />}
-                                  {row?.accountantApproval?.status === 'rejected' && <XCircle size={12} />}
-                                  {(!row?.accountantApproval?.status || row?.accountantApproval?.status === 'pending') && <Clock size={12} />}
-                                  {row?.accountantApproval?.status || 'Pending'}
-                                </span>
-                              </td>
-                              <td className="py-2 px-3">
-                                <span className="font-medium text-gray-700">{fwBy}</span>
-                              </td>
-                              <td className="py-2 px-3">
-                                <span className="font-medium text-gray-700">{fmtDateTime(row?.updatedAt)}</span>
-                              </td>
-                              <td className="py-2 px-3">
-                                <div className="flex items-center justify-center gap-2">
-                                  <button
-                                    onClick={() => openDetails(row)}
-                                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                    title="View Details"
-                                  >
-                                    <Eye size={16} />
-                                  </button>
-                                  <button
-                                    onClick={() => openEditModal(row)}
-                                    className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                                    title="Edit Details"
-                                  >
-                                    <Edit size={16} />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                {!loading && pagination?.totalPages > 1 && (
-                  <div className="flex justify-end mt-4">
-                    <div className="flex items-center gap-2 bg-white rounded-xl shadow-lg border border-gray-200 p-2">
-                      <button
-                        onClick={() => setPage(page - 1)}
-                        disabled={page === 1}
-                        className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                        </svg>
-                        Previous
-                      </button>
-                      <div className="flex items-center gap-1">
-                        {Array.from({ length: pagination.totalPages }, (_, i) => i + 1)
-                          .filter(p => {
-                            if (pagination.totalPages <= 7) return true;
-                            if (page <= 4) return p <= 5;
-                            if (page >= pagination.totalPages - 3) return p >= pagination.totalPages - 4;
-                            return p >= page - 2 && p <= page + 2;
-                          })
-                          .map((p) => (
-                            <button
-                              key={p}
-                              onClick={() => setPage(p)}
-                              className={`px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
-                                page === p
-                                  ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg'
-                                  : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'
-                              }`}
-                            >
-                              {p}
-                            </button>
-                          ))}
-                      </div>
-                      <button
-                        onClick={() => setPage(page + 1)}
-                        disabled={page === pagination.totalPages}
-                        className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-                      >
-                        Next
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
+              <button
+                onClick={() => fetchData(page)}
+                disabled={loading}
+                className="inline-flex items-center justify-center gap-2 h-11 px-4 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                <RefreshCw
+                  size={18}
+                  className={loading ? "animate-spin" : ""}
+                />
+                <span>Refresh</span>
+              </button>
+            </div>
           </div>
         )}
-
-        {/* TAB 1: Accountant Approved */}
         {activeTab === 1 && (
-          <div>
-            {/* Search and Stats */}
-            <div className="flex justify-between items-center mb-6">
-              <div className="flex items-center gap-6">
-                <button
-                  onClick={() => {
-                    setProcessedCarrierFilter("");
-                    setProcessedSearch("");
-                  }}
-                  className={`bg-white rounded-2xl shadow-xl p-4 border border-gray-100 transition-all duration-200 ${
-                    processedStatusFilter === "all" ? "ring-2 ring-green-500" : "hover:shadow-2xl"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-                      <CheckCircle className="text-green-600" size={20} />
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Total Approved</p>
-                      <p className="text-xl font-bold text-gray-800">{processedRows.length}</p>
-                    </div>
+          <div className="mb-6 bg-white rounded-2xl border border-gray-200 p-4">
+            <div className="flex items-center gap-6 mb-4">
+              <button
+                onClick={() => {
+                  setProcessedCarrierFilter("");
+                  setProcessedSearch("");
+                }}
+                className={`bg-white rounded-2xl p-5 border border-gray-200 w-72 h-28 transition-all duration-200 cursor-pointer ${
+                  processedStatusFilter === "all"
+                    ? "ring-2 ring-green-500"
+                    : ""
+                }`}
+              >
+                <div className="flex items-center justify-between gap-6 h-full">
+                  <div className="space-y-2">
+                    <p className="text-lg font-medium text-gray-700">Total Approved</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {processedPagination?.totalItems || processedRows.length}
+                    </p>
                   </div>
-                </button>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                  <input
-                    type="text"
-                    placeholder="Search (Load No / Bill To / Carrier / Shipper / DO ID)"
-                    value={processedSearch}
-                    onChange={(e) => setProcessedSearch(e.target.value)}
-                    className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  />
-                  {processedSearch && (
-                    <button
-                      onClick={() => setProcessedSearch("")}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    >
-                      ×
-                    </button>
-                  )}
+                  <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center">
+                    <CheckCircle className="text-blue-600" size={20} />
+                  </div>
                 </div>
-                <Autocomplete
-                  value={processedCarrierFilter || null}
-                  onChange={(event, newValue) => {
-                    setProcessedCarrierFilter(newValue || "");
-                  }}
-                  options={["", ...getUniqueCarriers(processedRows)]}
-                  getOptionLabel={(option) => option === "" ? "All Carriers" : option}
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      placeholder="Search carrier..."
-                      size="small"
-                      InputProps={{
-                        ...params.InputProps,
-                        startAdornment: (
-                          <>
-                            <SearchIcon sx={{ color: 'text.secondary', mr: 1 }} />
-                            {params.InputProps.startAdornment}
-                          </>
-                        ),
-                      }}
-                      sx={{
-                        width: 220,
-                        '& .MuiOutlinedInput-root': {
-                          borderRadius: '8px',
-                          backgroundColor: 'white',
-                        },
-                        '& .MuiOutlinedInput-input': {
-                          padding: '8px 14px',
-                        }
-                      }}
-                    />
-                  )}
-                  renderOption={(props, option) => (
-                    <Box component="li" {...props} sx={{ py: 1 }}>
-                      {option === "" ? "All Carriers" : option}
-                    </Box>
-                  )}
-                  sx={{ 
-                    width: 220,
-                    '& .MuiAutocomplete-paper': {
-                      borderRadius: '8px',
-                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                    }
-                  }}
-                />
-                <button
-                  onClick={() => exportToCSV(processedFiltered, `accountant-approved-${new Date().toISOString().split('T')[0]}.csv`)}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all duration-200 shadow-md hover:shadow-lg font-semibold"
-                >
-                  <Download size={18} />
-                  <span>Export CSV</span>
-                </button>
-                <button
-                  onClick={() => fetchProcessed(processedPage)}
-                  disabled={processedLoading}
-                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <RefreshCw size={18} className={processedLoading ? 'animate-spin' : ''} />
-                  <span>Refresh</span>
-                </button>
-              </div>
+              </button>
             </div>
-
-            {processedLoading && (
-              <div className="mb-4">
-                <div className="h-1 bg-gray-200 rounded-full overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-green-500 to-emerald-600 animate-pulse" style={{ width: '100%' }}></div>
-                </div>
-              </div>
-            )}
-
-            {!processedLoading && processedFiltered.length === 0 ? (
-              <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-12 text-center">
-                <CheckCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-gray-700 mb-2">No approved DOs</h3>
-                <p className="text-sm text-gray-500">Koi processed record nahi mila.</p>
-                {processedError && (
-                  <p className="text-sm text-red-600 mt-2">{processedError}</p>
+            {/* Controls: line 1 (primary search + Refresh) */}
+            <div className="flex items-center gap-3 mb-3">
+              <div className="relative flex-1">
+                <Search
+                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                  size={18}
+                />
+                <input
+                  type="text"
+                  placeholder="Search (Load No / Bill To / Carrier / Shipper / DO ID)"
+                  value={processedSearch}
+                  onChange={(e) => setProcessedSearch(e.target.value)}
+                  className="w-full h-11 pl-9 pr-4 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+                {processedSearch && (
+                  <button
+                    onClick={() => setProcessedSearch("")}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                  >
+                    ×
+                  </button>
                 )}
               </div>
-            ) : (
-              <>
-                <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
-                        <tr>
-                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">DO ID</th>
-                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load No</th>
-                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bill To</th>
-                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier</th>
-                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Agent Name</th>
-                          <th className="text-right py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bill Amount</th>
-                          <th className="text-right py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier Fees</th>
-                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
-                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Approved By</th>
-                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Approved At</th>
-                          <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {processedFiltered.map((row, index) => {
-                          const cust = row?.customers?.[0] || {};
-                          const totals = computeTotals(row);
-                          // Get Approved By with multiple fallbacks
-                          const apprBy = row?.accountantApproval?.approvedBy?.employeeName 
-                            || row?.accountantApproval?.resubmittedBy?.employeeName 
-                            || row?.accountantApproval?.assignedTo?.employeeName
-                            || row?.accountantApproval?.approvedBy?.empId 
-                            || row?.accountantApproval?.resubmittedBy?.empId
-                            || row?.accountantApproval?.assignedTo?.empId
-                            || "—";
-                          const apprAt = row?.accountantApproval?.approvedAt || row?.updatedAt;
-                          const agentName = row?.loadReference?.createdBySalesUser?.empName || "—";
-                          return (
-                            <tr key={row?._id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                              <td className="py-2 px-3">
-                                <span className="font-medium text-gray-700" title={row?._id || ""}>{shortId(row?._id)}</span>
-                              </td>
-                              <td className="py-2 px-3">
-                                <span className="font-medium text-gray-700">{cust?.loadNo || "—"}</span>
-                              </td>
-                              <td className="py-2 px-3">
-                                <span className="font-medium text-gray-700">{cust?.billTo || row?.customerName || "—"}</span>
-                              </td>
-                              <td className="py-2 px-3">
-                                <span className="font-medium text-gray-700">{row?.carrier?.carrierName || "—"}</span>
-                              </td>
-                              <td className="py-2 px-3">
-                                <span className="font-medium text-gray-700">{agentName}</span>
-                              </td>
-                              <td className="py-2 px-3 text-right">
-                                <span className="font-bold text-green-600">${fmtMoney(totals.billTotal)}</span>
-                              </td>
-                              <td className="py-2 px-3 text-right">
-                                <span className="font-bold text-blue-600">${fmtMoney(totals.carrierTotal)}</span>
-                              </td>
-                              <td className="py-2 px-3">
-                                <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${statusColor(row?.accountantApproval?.status)}`}>
-                                  {row?.accountantApproval?.status === 'approved' && <CheckCircle size={12} />}
-                                  {row?.accountantApproval?.status === 'rejected' && <XCircle size={12} />}
-                                  {(!row?.accountantApproval?.status || row?.accountantApproval?.status === 'pending') && <Clock size={12} />}
-                                  {row?.accountantApproval?.status || 'Pending'}
-                                </span>
-                              </td>
-                              <td className="py-2 px-3">
-                                <span className="font-medium text-gray-700">{apprBy}</span>
-                              </td>
-                              <td className="py-2 px-3">
-                                <span className="font-medium text-gray-700">{fmtDateTime(apprAt)}</span>
-                              </td>
-                              <td className="py-2 px-3">
-                                <div className="flex items-center justify-center gap-2">
-                                  <button
-                                    onClick={() => openDetails(row)}
-                                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                    title="View Details"
-                                  >
-                                    <Eye size={16} />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                {!processedLoading && processedPagination?.totalPages > 1 && (
-                  <div className="flex justify-end mt-4">
-                    <div className="flex items-center gap-2 bg-white rounded-xl shadow-lg border border-gray-200 p-2">
-                      <button
-                        onClick={() => setProcessedPage(processedPage - 1)}
-                        disabled={processedPage === 1}
-                        className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                        </svg>
-                        Previous
-                      </button>
-                      <div className="flex items-center gap-1">
-                        {Array.from({ length: processedPagination.totalPages }, (_, i) => i + 1)
-                          .filter(p => {
-                            if (processedPagination.totalPages <= 7) return true;
-                            if (processedPage <= 4) return p <= 5;
-                            if (processedPage >= processedPagination.totalPages - 3) return p >= processedPagination.totalPages - 4;
-                            return p >= processedPage - 2 && p <= processedPage + 2;
-                          })
-                          .map((p) => (
-                            <button
-                              key={p}
-                              onClick={() => setProcessedPage(p)}
-                              className={`px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
-                                processedPage === p
-                                  ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg'
-                                  : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'
-                              }`}
-                            >
-                              {p}
-                            </button>
-                          ))}
-                      </div>
-                      <button
-                        onClick={() => setProcessedPage(processedPage + 1)}
-                        disabled={processedPage === processedPagination.totalPages}
-                        className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-                      >
-                        Next
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
+              <button
+                onClick={() => fetchProcessed(processedPage)}
+                disabled={processedLoading}
+                className="inline-flex items-center justify-center gap-2 h-11 px-4 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                <RefreshCw
+                  size={18}
+                  className={processedLoading ? "animate-spin" : ""}
+                />
+                <span>Refresh</span>
+              </button>
+            </div>
+            {/* Controls: line 2 (carrier search + Export) */}
+            <div className="flex items-center gap-3">
+              <Autocomplete
+                value={processedCarrierFilter || null}
+                onChange={(event, newValue) => {
+                  setProcessedCarrierFilter(newValue || "");
+                }}
+                options={["", ...getUniqueCarriers(processedRows)]}
+                getOptionLabel={(option) =>
+                  option === "" ? "All Carriers" : option
+                }
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    placeholder="Search carrier..."
+                    size="small"
+                    InputProps={{
+                      ...params.InputProps,
+                      startAdornment: (
+                        <>
+                          <SearchIcon
+                            sx={{ color: "text.secondary", mr: 1 }}
+                          />
+                          {params.InputProps.startAdornment}
+                        </>
+                      ),
+                    }}
+                    sx={{
+                      width: "100%",
+                      "& .MuiOutlinedInput-root": {
+                        borderRadius: "8px",
+                        backgroundColor: "white",
+                        height: 44,
+                      },
+                      "& .MuiOutlinedInput-input": {
+                        padding: "8px 14px",
+                      },
+                    }}
+                  />
                 )}
-              </>
-            )}
+                renderOption={(props, option) => (
+                  <Box component="li" {...props} sx={{ py: 1 }}>
+                    {option === "" ? "All Carriers" : option}
+                  </Box>
+                )}
+                sx={{
+                  width: "100%",
+                  "& .MuiAutocomplete-paper": {
+                    borderRadius: "8px",
+                    boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
+                  },
+                }}
+              />
+              <button
+                onClick={() =>
+                  exportToCSV(
+                    processedFiltered,
+                    `accountant-approved-${new Date().toISOString().split("T")[0]}.csv`,
+                  )
+                }
+                className="inline-flex items-center justify-center gap-2 h-11 px-4 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all duration-200 shadow-md hover:shadow-lg font-semibold cursor-pointer whitespace-nowrap"
+              >
+                <Download size={18} />
+                <span>Export CSV</span>
+              </button>
+            </div>
           </div>
         )}
-
-        {/* TAB 2: Approved By Sales */}
         {activeTab === 2 && (
-          <div>
-            {/* Search and Stats */}
-            <div className="flex justify-between items-center mb-6">
-              <div className="flex items-center gap-6">
-                <button
-                  onClick={() => {
-                    setAcceptedPaymentFilter("all");
-                    setAcceptedCarrierFilter("");
-                    setAcceptedSearch("");
-                  }}
-                  className={`bg-white rounded-2xl shadow-xl p-4 border border-gray-100 transition-all duration-200 ${
-                    acceptedPaymentFilter === "all" ? "ring-2 ring-blue-500" : "hover:shadow-2xl"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                      <CheckCircle className="text-blue-600" size={20} />
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Total Approved</p>
-                      <p className="text-xl font-bold text-gray-800">{acceptedRows.length}</p>
-                    </div>
+          <div className="mb-6 bg-white rounded-2xl border border-gray-200 p-4">
+            <div className="flex items-center gap-6 mb-4">
+              <button
+                onClick={() => {
+                  setAcceptedPaymentFilter("all");
+                  setAcceptedCarrierFilter("");
+                  setAcceptedSearch("");
+                }}
+                className={`bg-white rounded-2xl p-5 border border-gray-200 w-72 h-28 transition-all duration-200 cursor-pointer ${
+                  acceptedPaymentFilter === "all" ? "ring-2 ring-blue-500" : ""
+                }`}
+              >
+                <div className="flex items-center justify-between gap-6 h-full">
+                  <div className="space-y-2">
+                    <p className="text-lg font-medium text-gray-700">Total Approved</p>
+                    <p className="text-2xl font-bold text-gray-900">{acceptedPagination?.totalItems || acceptedRows.length}</p>
                   </div>
-                </button>
-                <button
-                  onClick={() => {
-                    setAcceptedPaymentFilter("paid");
-                    setAcceptedCarrierFilter("");
-                    setAcceptedSearch("");
-                  }}
-                  className={`bg-white rounded-2xl shadow-xl p-4 border border-gray-100 transition-all duration-200 ${
-                    acceptedPaymentFilter === "paid" ? "ring-2 ring-green-500" : "hover:shadow-2xl"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-                      <CheckCircle className="text-green-600" size={20} />
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Paid</p>
-                      <p className="text-xl font-bold text-green-600">
-                        {acceptedRows.filter(r => {
-                          const carrierPaymentStatus = r?.carrierPaymentStatus || {};
-                          const carrierStatus = (carrierPaymentStatus?.status || '').toLowerCase().trim();
-                          const carrierTotalPaid = parseFloat(carrierPaymentStatus?.totalPaidAmount || 0);
-                          const carrierTotal = parseFloat((r?.carrier?.totalCarrierFees || 0));
-                          const remainingAmount = carrierPaymentStatus?.remainingAmount || (carrierTotal - carrierTotalPaid);
-                          const isFullyPaidByAmount = carrierTotal > 0 && carrierTotalPaid >= carrierTotal - 0.01;
-                          const isFullyPaidByRemaining = parseFloat(remainingAmount) <= 0.01;
-                          return carrierStatus === 'paid' || isFullyPaidByAmount || isFullyPaidByRemaining;
-                        }).length}
-                      </p>
-                    </div>
+                  <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center">
+                    <CheckCircle className="text-blue-600" size={20} />
                   </div>
-                </button>
-                <button
-                  onClick={() => {
-                    setAcceptedPaymentFilter("unpaid");
-                    setAcceptedCarrierFilter("");
-                    setAcceptedSearch("");
-                  }}
-                  className={`bg-white rounded-2xl shadow-xl p-4 border border-gray-100 transition-all duration-200 ${
-                    acceptedPaymentFilter === "unpaid" ? "ring-2 ring-orange-500" : "hover:shadow-2xl"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
-                      <Clock className="text-orange-600" size={20} />
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Unpaid/Partial</p>
-                      <p className="text-xl font-bold text-orange-600">
-                        {acceptedRows.filter(r => {
-                          const carrierPaymentStatus = r?.carrierPaymentStatus || {};
-                          const carrierStatus = (carrierPaymentStatus?.status || '').toLowerCase().trim();
-                          const carrierTotalPaid = parseFloat(carrierPaymentStatus?.totalPaidAmount || 0);
-                          const carrierTotal = parseFloat((r?.carrier?.totalCarrierFees || 0));
-                          const remainingAmount = carrierPaymentStatus?.remainingAmount || (carrierTotal - carrierTotalPaid);
-                          const isFullyPaidByAmount = carrierTotal > 0 && carrierTotalPaid >= carrierTotal - 0.01;
-                          const isFullyPaidByRemaining = parseFloat(remainingAmount) <= 0.01;
-                          return !(carrierStatus === 'paid' || isFullyPaidByAmount || isFullyPaidByRemaining);
-                        }).length}
-                      </p>
-                    </div>
+                </div>
+              </button>
+              <button
+                onClick={() => {
+                  setAcceptedPaymentFilter("paid");
+                  setAcceptedCarrierFilter("");
+                  setAcceptedSearch("");
+                }}
+                className={`bg-white rounded-2xl p-5 border border-gray-200 w-72 h-28 transition-all duration-200 cursor-pointer ${
+                  acceptedPaymentFilter === "paid" ? "ring-2 ring-green-500" : ""
+                }`}
+              >
+                <div className="flex items-center justify-between gap-6 h-full">
+                  <div className="space-y-2">
+                    <p className="text-lg font-medium text-gray-700">Paid</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {acceptedRows.filter(r => {
+                        const carrierPaymentStatus = r?.carrierPaymentStatus || {};
+                        const carrierStatus = (carrierPaymentStatus?.status || '').toLowerCase().trim();
+                        const carrierTotalPaid = parseFloat(carrierPaymentStatus?.totalPaidAmount || 0);
+                        const carrierTotal = parseFloat((r?.carrier?.totalCarrierFees || 0));
+                        const remainingAmount = carrierPaymentStatus?.remainingAmount || (carrierTotal - carrierTotalPaid);
+                        const isFullyPaidByAmount = carrierTotal > 0 && carrierTotalPaid >= carrierTotal - 0.01;
+                        const isFullyPaidByRemaining = parseFloat(remainingAmount) <= 0.01;
+                        return carrierStatus === 'paid' || isFullyPaidByAmount || isFullyPaidByRemaining;
+                      }).length}
+                    </p>
                   </div>
-                </button>
+                  <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center">
+                    <CheckCircle className="text-blue-600" size={20} />
+                  </div>
+                </div>
+              </button>
+              <button
+                onClick={() => {
+                  setAcceptedPaymentFilter("unpaid");
+                  setAcceptedCarrierFilter("");
+                  setAcceptedSearch("");
+                }}
+                className={`bg-white rounded-2xl p-5 border border-gray-200 w-72 h-28 transition-all duration-200 cursor-pointer ${
+                  acceptedPaymentFilter === "unpaid" ? "ring-2 ring-orange-500" : ""
+                }`}
+              >
+                <div className="flex items-center justify-between gap-6 h-full">
+                  <div className="space-y-2">
+                    <p className="text-lg font-medium text-gray-700">Unpaid/Partial</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {acceptedRows.filter(r => {
+                        const carrierPaymentStatus = r?.carrierPaymentStatus || {};
+                        const carrierStatus = (carrierPaymentStatus?.status || '').toLowerCase().trim();
+                        const carrierTotalPaid = parseFloat(carrierPaymentStatus?.totalPaidAmount || 0);
+                        const carrierTotal = parseFloat((r?.carrier?.totalCarrierFees || 0));
+                        const remainingAmount = carrierPaymentStatus?.remainingAmount || (carrierTotal - carrierTotalPaid);
+                        const isFullyPaidByAmount = carrierTotal > 0 && carrierTotalPaid >= carrierTotal - 0.01;
+                        const isFullyPaidByRemaining = parseFloat(remainingAmount) <= 0.01;
+                        return !(carrierStatus === 'paid' || isFullyPaidByAmount || isFullyPaidByRemaining);
+                      }).length}
+                    </p>
+                  </div>
+                  <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center">
+                    <Clock className="text-blue-600" size={20} />
+                  </div>
+                </div>
+              </button>
+            </div>
+            {/* Controls: line 1 (primary search + Refresh) */}
+            <div className="flex items-center gap-3 mb-3">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                <input
+                  type="text"
+                  placeholder="Search (Load No / Bill To / Carrier / Shipper / DO ID / Shipment#)"
+                  value={acceptedSearch}
+                  onChange={(e) => setAcceptedSearch(e.target.value)}
+                  className="w-full h-11 pl-9 pr-4 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+                {acceptedSearch && (
+                  <button
+                    onClick={() => setAcceptedSearch("")}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                  >
+                    ×
+                  </button>
+                )}
               </div>
-              <div className="flex items-center gap-3">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                  <input
-                    type="text"
-                    placeholder="Search (Load No / Bill To / Carrier / Shipper / DO ID / Shipment#)"
-                    value={acceptedSearch}
-                    onChange={(e) => setAcceptedSearch(e.target.value)}
-                    className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              <button
+                onClick={() => fetchAccepted(acceptedPage)}
+                disabled={acceptedLoading}
+                className="inline-flex items-center justify-center gap-2 h-11 px-4 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                <RefreshCw size={18} className={acceptedLoading ? 'animate-spin' : ''} />
+                <span>Refresh</span>
+              </button>
+            </div>
+            {/* Controls: line 2 (carrier search + Export) */}
+            <div className="flex items-center gap-3">
+              <Autocomplete
+                value={acceptedCarrierFilter || null}
+                onChange={(event, newValue) => {
+                  setAcceptedCarrierFilter(newValue || "");
+                }}
+                options={["", ...getUniqueCarriers(acceptedRows)]}
+                getOptionLabel={(option) => option === "" ? "All Carriers" : option}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    placeholder="Search carrier..."
+                    size="small"
+                    InputProps={{
+                      ...params.InputProps,
+                      startAdornment: (
+                        <>
+                          <SearchIcon sx={{ color: 'text.secondary', mr: 1 }} />
+                          {params.InputProps.startAdornment}
+                        </>
+                      ),
+                    }}
+                    sx={{
+                      width: '100%',
+                      '& .MuiOutlinedInput-root': {
+                        borderRadius: '8px',
+                        backgroundColor: 'white',
+                        height: 44,
+                      },
+                      '& .MuiOutlinedInput-input': {
+                        padding: '8px 14px',
+                      }
+                    }}
                   />
-                  {acceptedSearch && (
-                    <button
-                      onClick={() => setAcceptedSearch("")}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    >
-                      ×
-                    </button>
+                )}
+                renderOption={(props, option) => (
+                  <Box component="li" {...props} sx={{ py: 1 }}>
+                    {option === "" ? "All Carriers" : option}
+                  </Box>
+                )}
+                sx={{ 
+                  width: '100%',
+                  '& .MuiAutocomplete-paper': {
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                  }
+                }}
+              />
+              <button
+                onClick={() => exportToCSV(acceptedFiltered, `approved-by-sales-${new Date().toISOString().split('T')[0]}.csv`)}
+                className="inline-flex items-center justify-center gap-2 h-11 px-4 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all duration-200 shadow-md hover:shadow-lg font-semibold cursor-pointer whitespace-nowrap"
+              >
+                <Download size={18} />
+                <span>Export CSV</span>
+              </button>
+            </div>
+          </div>
+        )}
+        {activeTab === 3 && (
+          <div className="mb-6 bg-white rounded-2xl border border-gray-200 p-4">
+            <div className="flex items-center gap-6 mb-4">
+              <div className="bg-white rounded-2xl p-5 border border-gray-200 w-72 h-28">
+                <div className="flex items-center justify-between gap-6 h-full">
+                  <div className="space-y-2">
+                    <p className="text-lg font-medium text-gray-700">Total Rejected</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {rejectedPagination?.totalItems || rejectedRows.length}
+                    </p>
+                  </div>
+                  <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center">
+                    <XCircle className="text-blue-600" size={20} />
+                  </div>
+                </div>
+              </div>
+              <div className="bg-white rounded-2xl p-5 border border-gray-200 w-72 h-28">
+                <div className="flex items-center justify-between gap-6 h-full">
+                  <div className="space-y-2">
+                    <p className="text-lg font-medium text-gray-700">Filtered</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {rejectedFiltered.length}
+                    </p>
+                  </div>
+                  <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center">
+                    <FileText className="text-blue-600" size={20} />
+                  </div>
+                </div>
+              </div>
+            </div>
+            {/* Controls row (search and buttons) */}
+            <div className="flex items-center gap-3">
+              <div className="relative flex-1">
+                <Search
+                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                  size={18}
+                />
+                <input
+                  type="text"
+                  placeholder="Search (Load No / Bill To / Carrier / Shipper / DO ID)"
+                  value={rejectedSearch}
+                  onChange={(e) => setRejectedSearch(e.target.value)}
+                  className="w-full h-11 pl-9 pr-4 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+                {rejectedSearch && (
+                  <button
+                    onClick={() => setRejectedSearch("")}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+              <button
+                onClick={() => fetchRejected(rejectedPage)}
+                disabled={rejectedLoading}
+              className="inline-flex items-center justify-center gap-2 h-11 px-4 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                <RefreshCw
+                  size={18}
+                  className={rejectedLoading ? "animate-spin" : ""}
+                />
+                <span>Refresh</span>
+              </button>
+            </div>
+          </div>
+        )}
+        {/* Tabs */}
+        <div className="flex items-center justify-center gap-4 mb-6 bg-white rounded-2xl border border-gray-200 p-4">
+          <button
+            onClick={() => setActiveTab(0)}
+            className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 cursor-pointer ${
+              activeTab === 0
+                ? "bg-gradient-to-r from-yellow-500 to-orange-600 text-white shadow-lg"
+                : "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <Clock size={18} />
+              <span>Assigned to Accountant</span>
+            </div>
+          </button>
+          <button
+            onClick={() => setActiveTab(1)}
+            className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 cursor-pointer ${
+              activeTab === 1
+                ? "bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg"
+                : "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <CheckCircle size={18} />
+              <span>Accountant Approved</span>
+            </div>
+          </button>
+          <button
+            onClick={() => setActiveTab(2)}
+            className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 cursor-pointer ${
+              activeTab === 2
+                ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg"
+                : "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <CheckCircle size={18} />
+              <span>Approved By Sales</span>
+            </div>
+          </button>
+          <button
+            onClick={() => setActiveTab(3)}
+            className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 cursor-pointer ${
+              activeTab === 3
+                ? "bg-gradient-to-r from-red-500 to-rose-600 text-white shadow-lg"
+                : "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <XCircle size={18} />
+              <span>Rejected by Sales</span>
+            </div>
+          </button>
+        </div>
+
+        {/* Tab Content */}
+        <div>
+          {/* TAB 0: Assigned to Accountant */}
+          {activeTab === 0 && (
+            <div>
+
+              {loading && (
+                <div className="mb-4">
+                  <div className="h-1 bg-gray-200 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-green-500 to-emerald-600 animate-pulse"
+                      style={{ width: "100%" }}
+                    ></div>
+                  </div>
+                </div>
+              )}
+
+              {!loading && filtered.length === 0 ? (
+                <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-12 text-center">
+                  <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold text-gray-700 mb-2">
+                    No invoices found
+                  </h3>
+                  <p className="text-sm text-gray-500">
+                    Try adjusting filters or search.
+                  </p>
+                  {serverError && (
+                    <p className="text-sm text-red-600 mt-2">{serverError}</p>
                   )}
                 </div>
-                <Autocomplete
-                  value={acceptedCarrierFilter || null}
-                  onChange={(event, newValue) => {
-                    setAcceptedCarrierFilter(newValue || "");
-                  }}
-                  options={["", ...getUniqueCarriers(acceptedRows)]}
-                  getOptionLabel={(option) => option === "" ? "All Carriers" : option}
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      placeholder="Search carrier..."
-                      size="small"
-                      InputProps={{
-                        ...params.InputProps,
-                        startAdornment: (
-                          <>
-                            <SearchIcon sx={{ color: 'text.secondary', mr: 1 }} />
-                            {params.InputProps.startAdornment}
-                          </>
-                        ),
-                      }}
-                      sx={{
-                        width: 220,
-                        '& .MuiOutlinedInput-root': {
-                          borderRadius: '8px',
-                          backgroundColor: 'white',
-                        },
-                        '& .MuiOutlinedInput-input': {
-                          padding: '8px 14px',
-                        }
-                      }}
-                    />
+              ) : (
+                <>
+                  <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+                    <div className="overflow-x-auto p-4">
+                      <table className="w-full border-separate border-spacing-y-4">
+                        <thead className="bg-slate-100">
+                          <tr>
+                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200 first:rounded-l-xl first:border-l first:border-gray-200">
+                              DO ID
+                            </th>
+                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                              Load No
+                            </th>
+                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                              Bill To
+                            </th>
+                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                              Carrier
+                            </th>
+                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                              Agent Name
+                            </th>
+                            <th className="text-right px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                              Bill Amount
+                            </th>
+                            <th className="text-right px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                              Carrier Fees
+                            </th>
+                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                              Status
+                            </th>
+                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                              Forwarded By
+                            </th>
+                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                              Updated
+                            </th>
+                            <th className="text-center px-5 py-3 text-gray-700 font-medium border-y border-gray-200 last:rounded-r-xl last:border-r last:border-gray-200">
+                              Actions
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filtered.map((row, index) => {
+                            const cust = row?.customers?.[0] || {};
+                            const totals = computeTotals(row);
+                            const fwBy =
+                              row?.forwardedToAccountant?.forwardedBy
+                                ?.employeeName || "—";
+                            const agentName =
+                              row?.loadReference?.createdBySalesUser?.empName ||
+                              "—";
+                            return (
+                              <tr
+                                key={row?._id}
+                                className="bg-white hover:bg-gray-100 transition-colors"
+                              >
+                                <td className="px-5 py-3 border-y border-gray-200 first:rounded-l-xl first:border-l first:border-gray-200">
+                                  <div className="relative group max-w-[50px]">
+                                    {/* Short ID */}
+                                    <span className="font-medium text-gray-700 block truncate">
+                                      {shortId(row?._id) || "-"}
+                                    </span>
+
+                                    {/* Tooltip */}
+                                    {row?._id && (
+                                      <div
+                                        className="absolute left-0 top-full mt-2 hidden group-hover:block
+                      bg-gray-900 text-white text-sm
+                      px-3 py-2.5
+                      rounded-lg shadow-xl
+                      max-w-[200px]
+                      break-words
+                      z-50"
+                                      >
+                                        {row._id}
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-5 py-3 border-y border-gray-200">
+                                  <span className="font-medium text-gray-700">
+                                    {cust?.loadNo || "—"}
+                                  </span>
+                                </td>
+                                <td className="px-5 py-3 border-y border-gray-200">
+                                  <div className="relative group max-w-[70px]">
+                                    {/* Truncated Text */}
+                                    <span className="font-medium text-gray-700 block truncate">
+                                      {cust?.billTo || row?.customerName || "—"}
+                                    </span>
+
+                                    {/* Tooltip */}
+                                    {(cust?.billTo || row?.customerName) && (
+                                      <div
+                                        className="absolute left-0 top-full mt-2 hidden group-hover:block
+                      bg-gray-900 text-white text-sm
+                      px-3 py-2.5
+                      rounded-lg shadow-xl
+                      max-w-[200px]
+                      break-words
+                      z-50"
+                                      >
+                                        {cust?.billTo || row?.customerName}
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-5 py-3 border-y border-gray-200">
+                                  <div className="relative group max-w-[70px]">
+                                    {/* Truncated Text */}
+                                    <span className="font-medium text-gray-700 block truncate">
+                                      {row?.carrier?.carrierName || "—"}
+                                    </span>
+
+                                    {/* Tooltip */}
+                                    {row?.carrier?.carrierName && (
+                                      <div
+                                        className="absolute left-0 top-full mt-2 hidden group-hover:block
+                      bg-gray-900 text-white text-sm
+                      px-3 py-2.5
+                      rounded-lg shadow-xl
+                      max-w-[200px]
+                      break-words
+                      z-50"
+                                      >
+                                        {row.carrier.carrierName}
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+
+                                <td className="px-5 py-3 border-y border-gray-200">
+                                  <div className="relative group max-w-[70px]">
+                                    {/* Truncated Text */}
+                                    <span className="font-medium text-gray-700 block truncate">
+                                      {agentName || "—"}
+                                    </span>
+
+                                    {/* Tooltip */}
+                                    {agentName && (
+                                      <div
+                                        className="absolute left-0 top-full mt-2 hidden group-hover:block
+                      bg-gray-900 text-white text-sm
+                      px-3 py-2.5
+                      rounded-lg shadow-xl
+                      max-w-[200px]
+                      break-words
+                      z-50"
+                                      >
+                                        {agentName}
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-5 py-3 border-y border-gray-200 text-right">
+                                  <span className="font-medium text-green-600">
+                                    ${fmtMoney(totals.billTotal)}
+                                  </span>
+                                </td>
+                                <td className="px-5 py-3 border-y border-gray-200 text-right">
+                                  <span className="font-medium text-blue-600">
+                                    ${fmtMoney(totals.carrierTotal)}
+                                  </span>
+                                </td>
+                                <td className="px-5 py-3 border-y border-gray-200">
+                                  <span
+                                    className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-sm font-semibold ${statusColor(row?.accountantApproval?.status)}`}
+                                  >
+                                    {row?.accountantApproval?.status ===
+                                      "approved" && <CheckCircle size={12} />}
+                                    {row?.accountantApproval?.status ===
+                                      "rejected" && <XCircle size={12} />}
+                                    {(!row?.accountantApproval?.status ||
+                                      row?.accountantApproval?.status ===
+                                        "pending") && <Clock size={12} />}
+                                    {row?.accountantApproval?.status ||
+                                      "Pending"}
+                                  </span>
+                                </td>
+                                <td className="px-5 py-3 border-y border-gray-200">
+                                  <div className="relative group max-w-[70px]">
+                                    {/* Truncated Text */}
+                                    <span className="font-medium text-gray-700 block truncate">
+                                      {fwBy || "—"}
+                                    </span>
+
+                                    {/* Tooltip */}
+                                    {fwBy && (
+                                      <div
+                                        className="absolute left-0 top-full mt-2 hidden group-hover:block
+                      bg-gray-900 text-white text-sm
+                      px-3 py-2.5
+                      rounded-lg shadow-xl
+                      max-w-[200px]
+                      break-words
+                      z-50"
+                                      >
+                                        {fwBy}
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-5 py-3 border-y border-gray-200">
+                                  <div className="relative group max-w-[70px]">
+                                    {/* Truncated Date */}
+                                    <span className="font-medium text-gray-700 block truncate">
+                                      {fmtDateTime(row?.updatedAt) || "—"}
+                                    </span>
+
+                                    {/* Tooltip */}
+                                    {row?.updatedAt && (
+                                      <div
+                                        className="absolute left-0 top-full mt-2 hidden group-hover:block
+                      bg-gray-900 text-white text-sm
+                      px-3 py-2.5
+                      rounded-lg shadow-xl
+                      max-w-[200px]
+                      break-words
+                      z-50"
+                                      >
+                                        {fmtDateTime(row?.updatedAt)}
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-5 py-3 border-y border-gray-200 last:rounded-r-xl last:border-r last:border-gray-200">
+                                  <div className="flex items-center justify-center gap-2">
+                                    <button
+                                      onClick={() => openDetails(row)}
+                                      className="border border-blue-300 text-blue-700 bg-white px-4 py-1 rounded-full transition-colors cursor-pointer hover:bg-blue-600 hover:text-white hover:border-blue-600"
+                                      title="View Details"
+                                    >
+                                      {/* <Eye size={16} /> */}
+                                      View
+                                    </button>
+                                    <button
+                                      onClick={() => openEditModal(row)}
+                                      className="border border-green-300 text-green-700 bg-white px-5 py-1 rounded-full transition-colors cursor-pointer hover:bg-green-600 hover:text-white hover:border-green-600"
+                                      title="Edit Details"
+                                    >
+                                      {/* <Edit size={16} /> */}
+                                      Edit
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {!loading && pagination?.totalItems > 0 && (
+                    <div className="flex items-center justify-between bg-white rounded-2xl border border-gray-200 px-4 py-3 mt-4">
+                      <div className="text-sm text-gray-600">
+                        {(() => {
+                          const perPage = pagination?.itemsPerPage || 10;
+                          const start = (page - 1) * perPage + 1;
+                          const end = Math.min(page * perPage, pagination?.totalItems || 0);
+                          return `Showing ${start} to ${end} of ${pagination?.totalItems || 0} records`;
+                        })()}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setPage(page - 1)}
+                          disabled={page === 1}
+                          className="px-2 py-1 text-sm text-gray-500 hover:text-blue-600 disabled:text-gray-300"
+                        >
+                          Previous
+                        </button>
+                        {(() => {
+                          const total = pagination?.totalPages || 1;
+                          const pages = [];
+                          if (total <= 7) {
+                            for (let i = 1; i <= total; i++) pages.push(i);
+                          } else if (page <= 4) {
+                            pages.push(1, 2, 3, 4, 5, "...", total);
+                          } else if (page >= total - 3) {
+                            pages.push(1, "...", total - 4, total - 3, total - 2, total - 1, total);
+                          } else {
+                            pages.push(1, "...", page - 2, page - 1, page, page + 1, page + 2, "...", total);
+                          }
+                          return pages.map((p, idx) =>
+                            p === "..." ? (
+                              <span key={`el-${idx}`} className="px-2 text-gray-400">…</span>
+                            ) : (
+                              <button
+                                key={p}
+                                onClick={() => setPage(p)}
+                                className={`px-3 py-1 text-sm ${
+                                  page === p
+                                    ? "border border-gray-300 rounded-full text-blue-600 font-semibold"
+                                    : "text-gray-700 hover:text-blue-600"
+                                }`}
+                              >
+                                {p}
+                              </button>
+                            ),
+                          );
+                        })()}
+                        <button
+                          onClick={() => setPage(page + 1)}
+                          disabled={page === (pagination?.totalPages || 1)}
+                          className="px-2 py-1 text-sm text-gray-500 hover:text-blue-600 disabled:text-gray-300"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
                   )}
-                  renderOption={(props, option) => (
-                    <Box component="li" {...props} sx={{ py: 1 }}>
-                      {option === "" ? "All Carriers" : option}
-                    </Box>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* TAB 1: Accountant Approved */}
+          {activeTab === 1 && (
+            <div>
+            {/* Top section: cards + controls */}
+            {/* Top section moved above tabs */}
+
+              {processedLoading && (
+                <div className="mb-4">
+                  <div className="h-1 bg-gray-200 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-green-500 to-emerald-600 animate-pulse"
+                      style={{ width: "100%" }}
+                    ></div>
+                  </div>
+                </div>
+              )}
+
+              {!processedLoading && processedFiltered.length === 0 ? (
+                <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-12 text-center">
+                  <CheckCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold text-gray-700 mb-2">
+                    No approved DOs
+                  </h3>
+                  <p className="text-sm text-gray-500">
+                    Koi processed record nahi mila.
+                  </p>
+                  {processedError && (
+                    <p className="text-sm text-red-600 mt-2">
+                      {processedError}
+                    </p>
                   )}
-                  sx={{ 
-                    width: 220,
-                    '& .MuiAutocomplete-paper': {
-                      borderRadius: '8px',
-                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                    }
-                  }}
-                />
-                <button
-                  onClick={() => exportToCSV(acceptedFiltered, `approved-by-sales-${new Date().toISOString().split('T')[0]}.csv`)}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all duration-200 shadow-md hover:shadow-lg font-semibold"
-                >
-                  <Download size={18} />
-                  <span>Export CSV</span>
-                </button>
-                <button
-                  onClick={() => {
-                    if (selectedDOs.size === 0) {
-                      setToast({ open: true, severity: "error", msg: "Please select at least one DO to mark as paid" });
-                      return;
-                    }
-                    // Store the selected DO IDs when opening modal
-                    setBulkPaymentDOIds(Array.from(selectedDOs));
-                    setBulkPaymentModalOpen(true);
-                  }}
-                  disabled={acceptedLoading || selectedDOs.size === 0}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 shadow-lg ${
-                    acceptedLoading || selectedDOs.size === 0
-                      ? 'bg-gray-400 text-gray-200 cursor-not-allowed opacity-60'
-                      : 'bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700 hover:shadow-xl'
-                  }`}
-                >
-                  <DollarSign size={18} />
-                  <span>Bulk Pay ({selectedDOs.size})</span>
-                </button>
-                <button
-                  onClick={() => fetchAccepted(acceptedPage)}
-                  disabled={acceptedLoading}
-                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <RefreshCw size={18} className={acceptedLoading ? 'animate-spin' : ''} />
-                  <span>Refresh</span>
-                </button>
-              </div>
+                </div>
+              ) : (
+                <>
+                  <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+                    <div className="overflow-x-auto p-4">
+                      <table className="w-full border-separate border-spacing-y-4">
+                        <thead className="bg-slate-100">
+                          <tr>
+                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200 first:rounded-l-xl first:border-l first:border-gray-200">
+                              DO ID
+                            </th>
+                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                              Load No
+                            </th>
+                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                              Bill To
+                            </th>
+                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                              Carrier
+                            </th>
+                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                              Agent Name
+                            </th>
+                            <th className="text-right px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                              Bill Amount
+                            </th>
+                            <th className="text-right px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                              Carrier Fees
+                            </th>
+                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                              Status
+                            </th>
+                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                              Approved By
+                            </th>
+                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                              Approved At
+                            </th>
+                            <th className="text-center px-5 py-3 text-gray-700 font-medium border-y border-gray-200 last:rounded-r-xl last:border-r last:border-gray-200">
+                              Actions
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {processedFiltered.map((row, index) => {
+                            const cust = row?.customers?.[0] || {};
+                            const totals = computeTotals(row);
+                            // Get Approved By with multiple fallbacks
+                            const apprBy =
+                              row?.accountantApproval?.approvedBy
+                                ?.employeeName ||
+                              row?.accountantApproval?.resubmittedBy
+                                ?.employeeName ||
+                              row?.accountantApproval?.assignedTo
+                                ?.employeeName ||
+                              row?.accountantApproval?.approvedBy?.empId ||
+                              row?.accountantApproval?.resubmittedBy?.empId ||
+                              row?.accountantApproval?.assignedTo?.empId ||
+                              "—";
+                            const apprAt =
+                              row?.accountantApproval?.approvedAt ||
+                              row?.updatedAt;
+                            const agentName =
+                              row?.loadReference?.createdBySalesUser?.empName ||
+                              "—";
+                            return (
+                              <tr
+                                key={row?._id}
+                                className="bg-white hover:bg-gray-100 transition-colors"
+                              >
+                                <td className="px-5 py-3 border-y border-gray-200 first:rounded-l-xl first:border-l first:border-gray-200">
+                                  <div className="relative group max-w-[50px]">
+                                    {/* Short ID (Truncated Display) */}
+                                    <span className="font-medium text-gray-700 block truncate">
+                                      {shortId(row?._id) || "—"}
+                                    </span>
+
+                                    {/* Tooltip (Full ID) */}
+                                    {row?._id && (
+                                      <div
+                                        className="absolute left-0 top-full mt-2 hidden group-hover:block
+                      bg-gray-900 text-white text-sm
+                      px-3 py-2.5
+                      rounded-lg shadow-xl
+                      max-w-[220px]
+                      break-words
+                      z-50"
+                                      >
+                                        {row._id}
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-5 py-3 border-y border-gray-200">
+                                  <span className="font-medium text-gray-700">
+                                    {cust?.loadNo || "—"}
+                                  </span>
+                                </td>
+                                <td className="px-5 py-3 border-y border-gray-200">
+                                  <div className="relative group max-w-[90px]">
+                                    {/* Truncated Text */}
+                                    <span className="font-medium text-gray-700 block truncate">
+                                      {cust?.billTo || row?.customerName || "—"}
+                                    </span>
+
+                                    {/* Tooltip */}
+                                    {(cust?.billTo || row?.customerName) && (
+                                      <div
+                                        className="absolute left-0 top-full mt-2 hidden group-hover:block
+                      bg-gray-900 text-white text-sm
+                      px-3 py-2.5
+                      rounded-lg shadow-xl
+                      max-w-[200px]
+                      break-words
+                      z-50"
+                                      >
+                                        {cust?.billTo || row?.customerName}
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-5 py-3 border-y border-gray-200">
+                                  <div className="relative group max-w-[80px]">
+                                    {/* Truncated Text */}
+                                    <span className="font-medium text-gray-700 block truncate">
+                                      {row?.carrier?.carrierName || "—"}
+                                    </span>
+
+                                    {/* Tooltip */}
+                                    {row?.carrier?.carrierName && (
+                                      <div
+                                        className="absolute left-0 top-full mt-2 hidden group-hover:block
+                      bg-gray-900 text-white text-sm
+                      px-3 py-2.5
+                      rounded-lg shadow-xl
+                      max-w-[200px]
+                      break-words
+                      z-50"
+                                      >
+                                        {row.carrier.carrierName}
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-5 py-3 border-y border-gray-200">
+                                  <div className="relative group max-w-[80px]">
+                                    {/* Truncated Text */}
+                                    <span className="font-medium text-gray-700 block truncate">
+                                      {agentName || "—"}
+                                    </span>
+
+                                    {/* Tooltip */}
+                                    {agentName && (
+                                      <div
+                                        className="absolute left-0 top-full mt-2 hidden group-hover:block
+                      bg-gray-900 text-white text-sm
+                      px-3 py-2.5
+                      rounded-lg shadow-xl
+                      max-w-[200px]
+                      break-words
+                      z-50"
+                                      >
+                                        {agentName}
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-5 py-3 border-y border-gray-200 text-right">
+                                  <span className="font-medium text-green-600">
+                                    ${fmtMoney(totals.billTotal)}
+                                  </span>
+                                </td>
+                                <td className="px-5 py-3 border-y border-gray-200 text-right">
+                                  <span className="font-medium text-blue-600">
+                                    ${fmtMoney(totals.carrierTotal)}
+                                  </span>
+                                </td>
+                                <td className="px-5 py-3 border-y border-gray-200">
+                                  <span
+                                    className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-sm font-semibold ${statusColor(row?.accountantApproval?.status)}`}
+                                  >
+                                    {row?.accountantApproval?.status ===
+                                      "approved" && <CheckCircle size={12} />}
+                                    {row?.accountantApproval?.status ===
+                                      "rejected" && <XCircle size={12} />}
+                                    {(!row?.accountantApproval?.status ||
+                                      row?.accountantApproval?.status ===
+                                        "pending") && <Clock size={12} />}
+                                    {row?.accountantApproval?.status ||
+                                      "Pending"}
+                                  </span>
+                                </td>
+                                <td className="px-5 py-3 border-y border-gray-200">
+                                  <div className="relative group max-w-[90px]">
+                                    {/* Truncated Text */}
+                                    <span className="font-medium text-gray-700 block truncate">
+                                      {apprBy || "—"}
+                                    </span>
+
+                                    {/* Tooltip */}
+                                    {apprBy && (
+                                      <div
+                                        className="absolute left-0 top-full mt-2 hidden group-hover:block
+                      bg-gray-900 text-white text-sm
+                      px-3 py-2.5
+                      rounded-lg shadow-xl
+                      max-w-[200px]
+                      break-words
+                      z-50"
+                                      >
+                                        {apprBy}
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-5 py-3 border-y border-gray-200">
+                                  <div className="relative group max-w-[70px]">
+                                    {/* Truncated Date */}
+                                    <span className="font-medium text-gray-700 block truncate">
+                                      {fmtDateTime(apprAt) || "—"}
+                                    </span>
+
+                                    {/* Tooltip */}
+                                    {apprAt && (
+                                      <div
+                                        className="absolute left-0 top-full mt-2 hidden group-hover:block
+                      bg-gray-900 text-white text-sm
+                      px-3 py-2.5
+                      rounded-lg shadow-xl
+                      max-w-[200px]
+                      break-words
+                      z-50"
+                                      >
+                                        {fmtDateTime(apprAt)}
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-5 py-3 border-y border-gray-200 last:rounded-r-xl last:border-r last:border-gray-200">
+                                  <div className="flex items-center justify-center gap-2">
+                                    <button
+                                      onClick={() => openDetails(row)}
+                                      className="border border-blue-300 text-blue-700 bg-white px-3 py-1 rounded-full transition-colors cursor-pointer hover:bg-blue-600 hover:text-white hover:border-blue-600"
+                                      title="View Details"
+                                    >
+                                      {/* <Eye size={16} /> */}
+                                      View
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {!processedLoading && processedPagination?.totalItems > 0 && (
+                  <div className="flex items-center justify-between bg-white rounded-2xl border border-gray-200 px-4 py-3 mt-4">
+                    <div className="text-sm text-gray-600">
+                      {(() => {
+                        const pageSize = processedPagination?.itemsPerPage || 10;
+                        const totalShown = processedFiltered.length;
+                        if (totalShown === 0) return "Showing 0 records";
+                        const start = (processedPage - 1) * pageSize + 1;
+                        const end = Math.min(processedPage * pageSize, (processedPagination?.totalItems || totalShown));
+                        // If backend totals are not aligned with client filter, show filtered count for clarity
+                        return `Showing ${start} to ${end} of ${processedPagination?.totalItems || totalShown} records`;
+                      })()}
+                    </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setProcessedPage(processedPage - 1)}
+                          disabled={processedPage === 1}
+                          className="px-2 py-1 text-sm text-gray-500 hover:text-blue-600 disabled:text-gray-300"
+                        >
+                          Previous
+                        </button>
+                        {(() => {
+                          const total = processedPagination?.totalPages || 1;
+                          const pages = [];
+                          if (total <= 7) {
+                            for (let i = 1; i <= total; i++) pages.push(i);
+                          } else if (processedPage <= 4) {
+                            pages.push(1, 2, 3, 4, 5, "...", total);
+                          } else if (processedPage >= total - 3) {
+                            pages.push(1, "...", total - 4, total - 3, total - 2, total - 1, total);
+                          } else {
+                            pages.push(1, "...", processedPage - 2, processedPage - 1, processedPage, processedPage + 1, processedPage + 2, "...", total);
+                          }
+                          return pages.map((p, idx) =>
+                            p === "..." ? (
+                              <span key={`pel-${idx}`} className="px-2 text-gray-400">…</span>
+                            ) : (
+                              <button
+                                key={p}
+                                onClick={() => setProcessedPage(p)}
+                                className={`px-3 py-1 text-sm ${
+                                  processedPage === p
+                                    ? "border border-gray-300 rounded-full text-blue-600 font-semibold"
+                                    : "text-gray-700 hover:text-blue-600"
+                                }`}
+                              >
+                                {p}
+                              </button>
+                            ),
+                          );
+                        })()}
+                        <button
+                          onClick={() => setProcessedPage(processedPage + 1)}
+                          disabled={processedPage === (processedPagination?.totalPages || 1)}
+                          className="px-2 py-1 text-sm text-gray-500 hover:text-blue-600 disabled:text-gray-300"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* TAB 2: Approved By Sales */}
+         {activeTab === 2 && (
+          <div>
+            {/* Top section moved above tabs */}
+            {/* Controls: line 3 (Bulk Pay alone, right aligned) */}
+            <div className="flex justify-end items-center gap-3 mb-6">
+              <button
+                onClick={() => {
+                  if (selectedDOs.size === 0) {
+                    setToast({ open: true, severity: "error", msg: "Please select at least one DO to mark as paid" });
+                    return;
+                  }
+                  setBulkPaymentDOIds(Array.from(selectedDOs));
+                  setBulkPaymentModalOpen(true);
+                }}
+                disabled={acceptedLoading || selectedDOs.size === 0}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 shadow-lg cursor-pointer ${
+                  acceptedLoading || selectedDOs.size === 0
+                    ? 'bg-gray-400 text-gray-200 cursor-not-allowed opacity-60'
+                    : 'bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700 hover:shadow-xl'
+                }`}
+              >
+                <DollarSign size={18} />
+                <span>Bulk Pay ({selectedDOs.size})</span>
+              </button>
             </div>
 
             {acceptedLoading && (
@@ -4322,18 +5506,18 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                               size="small"
                             />
                           </th>
-                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">DO ID</th>
-                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load No</th>
-                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bill To</th>
-                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier</th>
-                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Agent Name</th>
-                          <th className="text-right py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bill Amount</th>
-                          <th className="text-right py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier Fees</th>
-                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Approved By</th>
-                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Approved At</th>
-                          <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Payment Due Date</th>
-                          <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Actions</th>
-                          <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Pay</th>
+                          <th className="text-left py-3 px-3 text-gray-800 font-medium text-sm uppercase tracking-wide">DO ID</th>
+                          <th className="text-left py-3 px-3 text-gray-800 font-medium text-sm uppercase tracking-wide">Load No</th>
+                          <th className="text-left py-3 px-3 text-gray-800 font-medium text-sm uppercase tracking-wide">Bill To</th>
+                          <th className="text-left py-3 px-3 text-gray-800 font-medium text-sm uppercase tracking-wide">Carrier</th>
+                          <th className="text-left py-3 px-3 text-gray-800 font-medium text-sm uppercase tracking-wide">Agent Name</th>
+                          <th className="text-right py-3 px-3 text-gray-800 font-medium text-sm uppercase tracking-wide">Bill Amount</th>
+                          <th className="text-right py-3 px-3 text-gray-800 font-medium text-sm uppercase tracking-wide">Carrier Fees</th>
+                          <th className="text-left py-3 px-3 text-gray-800 font-medium text-sm uppercase tracking-wide">Approved By</th>
+                          <th className="text-left py-3 px-3 text-gray-800 font-medium text-sm uppercase tracking-wide">Approved At</th>
+                          <th className="text-center py-3 px-3 text-gray-800 font-medium text-sm uppercase tracking-wide">Payment Due Date</th>
+                          <th className="text-center py-3 px-3 text-gray-800 font-medium text-sm uppercase tracking-wide">Actions</th>
+                          <th className="text-center py-3 px-3 text-gray-800 font-medium text-sm uppercase tracking-wide">Pay</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -4567,50 +5751,60 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                   </div>
                 </div>
 
-                {!acceptedLoading && acceptedPagination?.totalPages > 1 && (
-                  <div className="flex justify-end mt-4">
-                    <div className="flex items-center gap-2 bg-white rounded-xl shadow-lg border border-gray-200 p-2">
+                {!acceptedLoading && acceptedPagination?.totalItems > 0 && (
+                  <div className="flex items-center justify-between bg-white rounded-2xl border border-gray-200 px-4 py-3 mt-4">
+                    <div className="text-sm text-gray-600">
+                      {(() => {
+                        const perPage = acceptedPagination?.itemsPerPage || 10;
+                        const start = (acceptedPage - 1) * perPage + 1;
+                        const end = Math.min(acceptedPage * perPage, acceptedPagination?.totalItems || 0);
+                        return `Showing ${start} to ${end} of ${acceptedPagination?.totalItems || 0} records`;
+                      })()}
+                    </div>
+                    <div className="flex items-center gap-2">
                       <button
                         onClick={() => setAcceptedPage(acceptedPage - 1)}
                         disabled={acceptedPage === 1}
-                        className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                        className="px-2 py-1 text-sm text-gray-500 hover:text-blue-600 disabled:text-gray-300"
                       >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                        </svg>
                         Previous
                       </button>
-                      <div className="flex items-center gap-1">
-                        {Array.from({ length: acceptedPagination.totalPages }, (_, i) => i + 1)
-                          .filter(p => {
-                            if (acceptedPagination.totalPages <= 7) return true;
-                            if (acceptedPage <= 4) return p <= 5;
-                            if (acceptedPage >= acceptedPagination.totalPages - 3) return p >= acceptedPagination.totalPages - 4;
-                            return p >= acceptedPage - 2 && p <= acceptedPage + 2;
-                          })
-                          .map((p) => (
+                      {(() => {
+                        const total = acceptedPagination?.totalPages || 1;
+                        const pages = [];
+                        if (total <= 7) {
+                          for (let i = 1; i <= total; i++) pages.push(i);
+                        } else if (acceptedPage <= 4) {
+                          pages.push(1, 2, 3, 4, 5, '...', total);
+                        } else if (acceptedPage >= total - 3) {
+                          pages.push(1, '...', total - 4, total - 3, total - 2, total - 1, total);
+                        } else {
+                          pages.push(1, '...', acceptedPage - 2, acceptedPage - 1, acceptedPage, acceptedPage + 1, acceptedPage + 2, '...', total);
+                        }
+                        return pages.map((p, idx) =>
+                          p === '...' ? (
+                            <span key={`ael-${idx}`} className="px-2 text-gray-400">…</span>
+                          ) : (
                             <button
                               key={p}
                               onClick={() => setAcceptedPage(p)}
-                              className={`px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
+                              className={`px-3 py-1 text-sm ${
                                 acceptedPage === p
-                                  ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg'
-                                  : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'
+                                  ? 'border border-gray-300 rounded-full text-blue-600 font-semibold'
+                                  : 'text-gray-700 hover:text-blue-600'
                               }`}
                             >
                               {p}
                             </button>
-                          ))}
-                      </div>
+                          ),
+                        );
+                      })()}
                       <button
                         onClick={() => setAcceptedPage(acceptedPage + 1)}
-                        disabled={acceptedPage === acceptedPagination.totalPages}
-                        className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                        disabled={acceptedPage === (acceptedPagination?.totalPages || 1)}
+                        className="px-2 py-1 text-sm text-gray-500 hover:text-blue-600 disabled:text-gray-300"
                       >
                         Next
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
                       </button>
                     </div>
                   </div>
@@ -4620,606 +5814,918 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
           </div>
         )}
 
-        {/* TAB 3: Rejected by Sales */}
-        {activeTab === 3 && (
-          <div>
-            {/* Search and Stats */}
-            <div className="flex justify-between items-center mb-6">
-              <div className="flex items-center gap-6">
-                <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
-                      <XCircle className="text-red-600" size={20} />
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Total Rejected</p>
-                      <p className="text-xl font-bold text-gray-800">{rejectedRows.length}</p>
-                    </div>
+          {/* TAB 3: Rejected by Sales */}
+          {activeTab === 3 && (
+            <div>
+              {/* Top section moved above tabs */}
+
+              {rejectedLoading && (
+                <div className="mb-4">
+                  <div className="h-1 bg-gray-200 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-green-500 to-emerald-600 animate-pulse"
+                      style={{ width: "100%" }}
+                    ></div>
                   </div>
                 </div>
-                <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                      <FileText className="text-blue-600" size={20} />
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Filtered</p>
-                      <p className="text-xl font-bold text-blue-600">{rejectedFiltered.length}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                  <input
-                    type="text"
-                    placeholder="Search (Load No / Bill To / Carrier / Shipper / DO ID)"
-                    value={rejectedSearch}
-                    onChange={(e) => setRejectedSearch(e.target.value)}
-                    className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  />
-                  {rejectedSearch && (
-                    <button
-                      onClick={() => setRejectedSearch("")}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    >
-                      ×
-                    </button>
+              )}
+
+              {!rejectedLoading && rejectedFiltered.length === 0 ? (
+                <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-12 text-center">
+                  <XCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold text-gray-700 mb-2">
+                    No rejected DOs found
+                  </h3>
+                  <p className="text-sm text-gray-500">
+                    No DOs have been rejected by sales.
+                  </p>
+                  {rejectedError && (
+                    <p className="text-sm text-red-600 mt-2">{rejectedError}</p>
                   )}
                 </div>
-                <button
-                  onClick={() => fetchRejected(rejectedPage)}
-                  disabled={rejectedLoading}
-                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <RefreshCw size={18} className={rejectedLoading ? 'animate-spin' : ''} />
-                  <span>Refresh</span>
-                </button>
-              </div>
-            </div>
+              ) : (
+                <>
+                  <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+                    <div className="overflow-x-auto p-4">
+                      <table className="w-full border-separate border-spacing-y-4">
+                        <thead className="bg-slate-100">
+                          <tr>
+                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200 first:rounded-l-xl first:border-l first:border-gray-200">
+                              DO ID
+                            </th>
+                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                              Load No
+                            </th>
+                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                              Bill To
+                            </th>
+                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                              Carrier
+                            </th>
+                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                              Agent Name
+                            </th>
+                            <th className="text-right px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                              Bill Amount
+                            </th>
+                            <th className="text-right px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                              Carrier Fees
+                            </th>
+                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                              Status
+                            </th>
+                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                              Rejected By
+                            </th>
+                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                              Rejected At
+                            </th>
+                            <th className="text-center px-5 py-3 text-gray-700 font-medium border-y border-gray-200 last:rounded-r-xl last:border-r last:border-gray-200">
+                              Actions
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rejectedFiltered.map((row, index) => {
+                            const cust = row?.customers?.[0] || {};
+                            const totals = computeTotals(row);
+                            const rejectedBy =
+                              row?.salesApproval?.rejectedBy?.employeeName ||
+                              "—";
+                            const rejectedAt =
+                              row?.salesApproval?.rejectedAt || row?.updatedAt;
+                            const agentName =
+                              row?.loadReference?.createdBySalesUser?.empName ||
+                              "—";
+                            return (
+                              <tr
+                                key={row?._id}
+                                className="bg-white hover:bg-gray-100 transition-colors"
+                              >
+                                <td className="px-5 py-3 border-y border-gray-200 first:rounded-l-xl first:border-l first:border-gray-200">
+                                  <div className="relative group max-w-[50px]">
+                                    {/* Short ID in table */}
+                                    <span className="font-medium text-gray-700 block truncate">
+                                      {shortId(row?._id) || "—"}
+                                    </span>
 
-            {rejectedLoading && (
-              <div className="mb-4">
-                <div className="h-1 bg-gray-200 rounded-full overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-green-500 to-emerald-600 animate-pulse" style={{ width: '100%' }}></div>
-                </div>
-              </div>
-            )}
+                                    {/* Full ID tooltip */}
+                                    {row?._id && (
+                                      <div
+                                        className="absolute left-0 top-full mt-2 hidden group-hover:block
+                      bg-gray-900 text-white text-sm
+                      px-3 py-2.5
+                      rounded-lg shadow-xl
+                      max-w-[220px]
+                      break-words
+                      z-50"
+                                      >
+                                        {row._id}
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-5 py-3 border-y border-gray-200">
+                                  <span className="font-medium text-gray-700">
+                                    {cust?.loadNo || "—"}
+                                  </span>
+                                </td>
+                                <td className="px-5 py-3 border-y border-gray-200">
+                                  <div className="relative group max-w-[70px]">
+                                    {/* Truncated Text */}
+                                    <span className="font-medium text-gray-700 block truncate">
+                                      {cust?.billTo || row?.customerName || "—"}
+                                    </span>
 
-            {!rejectedLoading && rejectedFiltered.length === 0 ? (
-              <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-12 text-center">
-                <XCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-gray-700 mb-2">No rejected DOs found</h3>
-                <p className="text-sm text-gray-500">No DOs have been rejected by sales.</p>
-                {rejectedError && (
-                  <p className="text-sm text-red-600 mt-2">{rejectedError}</p>
-                )}
-              </div>
-            ) : (
-              <>
-                <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
-                        <tr>
-                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">DO ID</th>
-                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Load No</th>
-                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bill To</th>
-                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier</th>
-                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Agent Name</th>
-                          <th className="text-right py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Bill Amount</th>
-                          <th className="text-right py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Carrier Fees</th>
-                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
-                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Rejected By</th>
-                          <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Rejected At</th>
-                          <th className="text-center py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {rejectedFiltered.map((row, index) => {
-                          const cust = row?.customers?.[0] || {};
-                          const totals = computeTotals(row);
-                          const rejectedBy = row?.salesApproval?.rejectedBy?.employeeName || "—";
-                          const rejectedAt = row?.salesApproval?.rejectedAt || row?.updatedAt;
-                          const agentName = row?.loadReference?.createdBySalesUser?.empName || "—";
-                          return (
-                            <tr key={row?._id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                              <td className="py-2 px-3">
-                                <span className="font-medium text-gray-700" title={row?._id || ""}>{shortId(row?._id)}</span>
-                              </td>
-                              <td className="py-2 px-3">
-                                <span className="font-medium text-gray-700">{cust?.loadNo || "—"}</span>
-                              </td>
-                              <td className="py-2 px-3">
-                                <span className="font-medium text-gray-700">{cust?.billTo || row?.customerName || "—"}</span>
-                              </td>
-                              <td className="py-2 px-3">
-                                <span className="font-medium text-gray-700">{row?.carrier?.carrierName || "—"}</span>
-                              </td>
-                              <td className="py-2 px-3">
-                                <span className="font-medium text-gray-700">{agentName}</span>
-                              </td>
-                              <td className="py-2 px-3 text-right">
-                                <span className="font-bold text-green-600">${fmtMoney(totals.billTotal)}</span>
-                              </td>
-                              <td className="py-2 px-3 text-right">
-                                <span className="font-bold text-blue-600">${fmtMoney(totals.carrierTotal)}</span>
-                              </td>
-                              <td className="py-2 px-3">
-                                <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${statusColor(row?.salesApproval?.status)}`}>
-                                  {row?.salesApproval?.status === 'approved' && <CheckCircle size={12} />}
-                                  {row?.salesApproval?.status === 'rejected' && <XCircle size={12} />}
-                                  {(!row?.salesApproval?.status || row?.salesApproval?.status === 'pending') && <Clock size={12} />}
-                                  {row?.salesApproval?.status || 'Pending'}
-                                </span>
-                              </td>
-                              <td className="py-2 px-3">
-                                <span className="font-medium text-gray-700">{rejectedBy}</span>
-                              </td>
-                              <td className="py-2 px-3">
-                                <span className="font-medium text-gray-700">{fmtDateTime(rejectedAt)}</span>
-                              </td>
-                              <td className="py-2 px-3">
-                                <div className="flex items-center justify-center gap-2">
-                                  <button
-                                    onClick={() => openDetails(row)}
-                                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                    title="View Details"
+                                    {/* Tooltip */}
+                                    {(cust?.billTo || row?.customerName) && (
+                                      <div
+                                        className="absolute left-0 top-full mt-2 hidden group-hover:block
+                      bg-gray-900 text-white text-sm
+                      px-3 py-2.5
+                      rounded-lg shadow-xl
+                      max-w-[220px]
+                      break-words
+                      z-50"
+                                      >
+                                        {cust?.billTo || row?.customerName}
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-5 py-3 border-y border-gray-200">
+                                  <div className="relative group max-w-[80px]">
+                                    {/* Truncated Carrier Name */}
+                                    <span className="font-medium text-gray-700 block truncate">
+                                      {row?.carrier?.carrierName || "—"}
+                                    </span>
+
+                                    {/* Tooltip */}
+                                    {row?.carrier?.carrierName && (
+                                      <div
+                                        className="absolute left-0 top-full mt-2 hidden group-hover:block
+                      bg-gray-900 text-white text-sm
+                      px-3 py-2.5
+                      rounded-lg shadow-xl
+                      max-w-[200px]
+                      break-words
+                      z-50"
+                                      >
+                                        {row.carrier.carrierName}
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-5 py-3 border-y border-gray-200">
+                                  <div className="relative group max-w-[80px]">
+                                    {/* Truncated Text */}
+                                    <span className="font-medium text-gray-700 block truncate">
+                                      {agentName || "—"}
+                                    </span>
+
+                                    {/* Tooltip */}
+                                    {agentName && (
+                                      <div
+                                        className="absolute left-0 top-full mt-2 hidden group-hover:block
+                      bg-gray-900 text-white text-sm
+                      px-3 py-2.5
+                      rounded-lg shadow-xl
+                      max-w-[200px]
+                      break-words
+                      z-50"
+                                      >
+                                        {agentName}
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-5 py-3 border-y border-gray-200 text-right">
+                                  <span className="font-medium text-green-600">
+                                    ${fmtMoney(totals.billTotal)}
+                                  </span>
+                                </td>
+                                <td className="px-5 py-3 border-y border-gray-200 text-right">
+                                  <span className="font-medium text-blue-600">
+                                    ${fmtMoney(totals.carrierTotal)}
+                                  </span>
+                                </td>
+                                <td className="px-5 py-3 border-y border-gray-200">
+                                  <span
+                                    className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-sm font-semibold ${statusColor(row?.salesApproval?.status)}`}
                                   >
-                                    <Eye size={16} />
-                                  </button>
-                                  <button
-                                    onClick={() => openEditModal(row)}
-                                    className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                                    title="Edit Details"
-                                  >
-                                    <Edit size={16} />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
+                                    {row?.salesApproval?.status ===
+                                      "approved" && <CheckCircle size={12} />}
+                                    {row?.salesApproval?.status ===
+                                      "rejected" && <XCircle size={12} />}
+                                    {(!row?.salesApproval?.status ||
+                                      row?.salesApproval?.status ===
+                                        "pending") && <Clock size={12} />}
+                                    {row?.salesApproval?.status || "Pending"}
+                                  </span>
+                                </td>
+                                <td className="px-5 py-3 border-y border-gray-200">
+                                  <div className="relative group max-w-[80px]">
+                                    {/* Truncated Name */}
+                                    <span className="font-medium text-gray-700 block truncate">
+                                      {rejectedBy || "—"}
+                                    </span>
+
+                                    {/* Tooltip */}
+                                    {rejectedBy && (
+                                      <div
+                                        className="absolute left-0 top-full mt-2 hidden group-hover:block
+                      bg-gray-900 text-white text-sm
+                      px-3 py-2.5
+                      rounded-lg shadow-xl
+                      max-w-[200px]
+                      break-words
+                      z-50"
+                                      >
+                                        {rejectedBy}
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+
+                                <td className="px-5 py-3 border-y border-gray-200">
+                                  <div className="relative group max-w-[70px]">
+                                    {/* Truncated Date */}
+                                    <span className="font-medium text-gray-700 block truncate">
+                                      {fmtDateTime(rejectedAt) || "—"}
+                                    </span>
+
+                                    {/* Tooltip */}
+                                    {rejectedAt && (
+                                      <div
+                                        className="absolute left-0 top-full mt-2 hidden group-hover:block
+                      bg-gray-900 text-white text-sm
+                      px-3 py-2.5
+                      rounded-lg shadow-xl
+                      max-w-[200px]
+                      break-words
+                      z-50"
+                                      >
+                                        {fmtDateTime(rejectedAt)}
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-5 py-3 border-y border-gray-200 last:rounded-r-xl last:border-r last:border-gray-200">
+                                  <div className="flex items-center justify-center gap-2">
+                                    <button
+                                      onClick={() => openDetails(row)}
+                                      className="border border-blue-300 text-blue-700 bg-white px-3 py-1 rounded-full transition-colors cursor-pointer hover:bg-blue-600 hover:text-white hover:border-blue-600"
+                                      title="View Details"
+                                    >
+                                      {/* <Eye size={16} /> */}
+                                      View
+                                    </button>
+                                    <button
+                                      onClick={() => openEditModal(row)}
+                                      className="border border-green-300 text-green-700 bg-white px-3 py-1 rounded-full transition-colors cursor-pointer hover:bg-green-600 hover:text-white hover:border-green-600"
+                                      title="Edit Details"
+                                    >
+                                      {/* <Edit size={16} /> */}
+                                      Edit
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {!rejectedLoading && rejectedPagination?.totalItems > 0 && (
+                    <div className="flex items-center justify-between bg-white rounded-2xl border border-gray-200 px-4 py-3 mt-4">
+                      <div className="text-sm text-gray-600">
+                        {(() => {
+                          const perPage = rejectedPagination?.itemsPerPage || 10;
+                          const start = (rejectedPage - 1) * perPage + 1;
+                          const end = Math.min(rejectedPage * perPage, rejectedPagination?.totalItems || 0);
+                          return `Showing ${start} to ${end} of ${rejectedPagination?.totalItems || 0} records`;
+                        })()}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setRejectedPage(rejectedPage - 1)}
+                          disabled={rejectedPage === 1}
+                          className="px-2 py-1 text-sm text-gray-500 hover:text-blue-600 disabled:text-gray-300"
+                        >
+                          Previous
+                        </button>
+                        {(() => {
+                          const total = rejectedPagination?.totalPages || 1;
+                          const pages = [];
+                          if (total <= 7) {
+                            for (let i = 1; i <= total; i++) pages.push(i);
+                          } else if (rejectedPage <= 4) {
+                            pages.push(1, 2, 3, 4, 5, '...', total);
+                          } else if (rejectedPage >= total - 3) {
+                            pages.push(1, '...', total - 4, total - 3, total - 2, total - 1, total);
+                          } else {
+                            pages.push(1, '...', rejectedPage - 2, rejectedPage - 1, rejectedPage, rejectedPage + 1, rejectedPage + 2, '...', total);
+                          }
+                          return pages.map((p, idx) =>
+                            p === '...' ? (
+                              <span key={`rel-${idx}`} className="px-2 text-gray-400">…</span>
+                            ) : (
+                              <button
+                                key={p}
+                                onClick={() => setRejectedPage(p)}
+                                className={`px-3 py-1 text-sm ${
+                                  rejectedPage === p
+                                    ? 'border border-gray-300 rounded-full text-blue-600 font-semibold'
+                                    : 'text-gray-700 hover:text-blue-600'
+                                }`}
+                              >
+                                {p}
+                              </button>
+                            ),
                           );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                {!rejectedLoading && rejectedPagination?.totalPages > 1 && (
-                  <div className="flex justify-end mt-4">
-                    <div className="flex items-center gap-2 bg-white rounded-xl shadow-lg border border-gray-200 p-2">
-                      <button
-                        onClick={() => setRejectedPage(rejectedPage - 1)}
-                        disabled={rejectedPage === 1}
-                        className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                        </svg>
-                        Previous
-                      </button>
-                      <div className="flex items-center gap-1">
-                        {Array.from({ length: rejectedPagination.totalPages }, (_, i) => i + 1)
-                          .filter(p => {
-                            if (rejectedPagination.totalPages <= 7) return true;
-                            if (rejectedPage <= 4) return p <= 5;
-                            if (rejectedPage >= rejectedPagination.totalPages - 3) return p >= rejectedPagination.totalPages - 4;
-                            return p >= rejectedPage - 2 && p <= rejectedPage + 2;
-                          })
-                          .map((p) => (
-                            <button
-                              key={p}
-                              onClick={() => setRejectedPage(p)}
-                              className={`px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
-                                rejectedPage === p
-                                  ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg'
-                                  : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'
-                              }`}
-                            >
-                              {p}
-                            </button>
-                          ))}
+                        })()}
+                        <button
+                          onClick={() => setRejectedPage(rejectedPage + 1)}
+                          disabled={rejectedPage === (rejectedPagination?.totalPages || 1)}
+                          className="px-2 py-1 text-sm text-gray-500 hover:text-blue-600 disabled:text-gray-300"
+                        >
+                          Next
+                        </button>
                       </div>
-                      <button
-                        onClick={() => setRejectedPage(rejectedPage + 1)}
-                        disabled={rejectedPage === rejectedPagination.totalPages}
-                        className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-                      >
-                        Next
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Employee DO Data Modal */}
+        {detailsOpen && selected && (
+          <div
+            className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
+            onClick={() => setDetailsOpen(false)}
+          >
+            <div
+              className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+              style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-6 rounded-t-3xl">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                      <Truck className="text-white" size={24} />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold">Employee DO Data</h2>
+                      <p className="text-blue-100">Delivery Order Details</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setDetailsOpen(false)}
+                    className="text-white hover:text-gray-200 text-2xl font-bold"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="p-6 space-y-6">
+                {/* Customer Information */}
+                {selected?.customers?.length > 0 && (
+                  <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6">
+                    <div className="flex items-center gap-2 mb-4">
+                      <User className="text-green-600" size={20} />
+                      <h3 className="text-lg font-bold text-gray-800">
+                        Customer Information
+                      </h3>
+                    </div>
+
+                    <div className="space-y-4">
+                      {selected.customers.map((customer, index) => (
+                        <div
+                          key={customer?._id || index}
+                          className="bg-white rounded-xl p-4 border border-green-200"
+                        >
+                          <div className="flex items-center gap-2 mb-3">
+                            <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
+                              <span className="text-green-600 font-bold text-sm">
+                                {index + 1}
+                              </span>
+                            </div>
+                            <h4 className="font-semibold text-gray-800">
+                              Customer {index + 1}
+                            </h4>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <p className="text-sm text-gray-600">Bill To</p>
+                              <p className="font-medium text-gray-800">
+                                {customer?.billTo ||
+                                  selected?.customerName ||
+                                  "N/A"}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">
+                                Dispatcher Name
+                              </p>
+                              <p className="font-medium text-gray-800">
+                                {customer?.dispatcherName || "N/A"}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Load No</p>
+                              <p className="font-medium text-gray-800">
+                                {customer?.loadNo || "N/A"}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">
+                                Work Order No
+                              </p>
+                              <p className="font-medium text-gray-800">
+                                {customer?.workOrderNo || "N/A"}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Line Haul</p>
+                              <p className="font-medium text-gray-800">
+                                ${fmtMoney(customer?.lineHaul || 0)}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">FSC</p>
+                              <p className="font-medium text-gray-800">
+                                ${fmtMoney(customer?.fsc || 0)}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Other</p>
+                              <p className="font-medium text-gray-800">
+                                $
+                                {fmtMoney(
+                                  Array.isArray(customer?.other)
+                                    ? customer?.otherTotal ||
+                                        customer.other.reduce(
+                                          (sum, item) =>
+                                            sum + (Number(item?.total) || 0),
+                                          0,
+                                        )
+                                    : customer?.other ||
+                                        customer?.otherTotal ||
+                                        0,
+                                )}
+                              </p>
+                            </div>
+                            <div className="col-span-2">
+                              <p className="text-sm text-gray-600">
+                                Total Amount
+                              </p>
+                              <p className="font-bold text-lg text-green-600">
+                                $
+                                {fmtMoney(
+                                  customer?.calculatedTotal ??
+                                    customer?.totalAmount ??
+                                    0,
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
-              </>
-            )}
-          </div>
-        )}
-      </div>
 
-      {/* Employee DO Data Modal */}
-      {detailsOpen && selected && (
-        <div 
-          className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
-          onClick={() => setDetailsOpen(false)}
-        >
-          <div
-            className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
-            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-6 rounded-t-3xl">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                    <Truck className="text-white" size={24} />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-bold">Employee DO Data</h2>
-                    <p className="text-blue-100">Delivery Order Details</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setDetailsOpen(false)}
-                  className="text-white hover:text-gray-200 text-2xl font-bold"
-                >
-                  ×
-                </button>
-              </div>
-            </div>
+                {/* Company Information */}
+                {selected?.addDispature && (
+                  <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl p-6">
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
+                        <Truck className="text-indigo-600" size={20} />
+                      </div>
+                      <h3 className="text-lg font-bold text-gray-800">
+                        Company Information
+                      </h3>
+                    </div>
 
-            {/* Content */}
-            <div className="p-6 space-y-6">
-              {/* Customer Information */}
-              {selected?.customers?.length > 0 && (
-                <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6">
-                  <div className="flex items-center gap-2 mb-4">
-                    <User className="text-green-600" size={20} />
-                    <h3 className="text-lg font-bold text-gray-800">Customer Information</h3>
-                  </div>
-
-                  <div className="space-y-4">
-                    {selected.customers.map((customer, index) => (
-                      <div key={customer?._id || index} className="bg-white rounded-xl p-4 border border-green-200">
-                        <div className="flex items-center gap-2 mb-3">
-                          <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
-                            <span className="text-green-600 font-bold text-sm">{index + 1}</span>
-                          </div>
-                          <h4 className="font-semibold text-gray-800">Customer {index + 1}</h4>
+                    <div className="bg-white rounded-xl p-4 border border-indigo-200">
+                      <div className="grid grid-cols-1 gap-4">
+                        <div>
+                          <p className="text-sm text-gray-600 mb-1">
+                            Company Name
+                          </p>
+                          <p className="font-semibold text-gray-800 text-lg">
+                            {selected.addDispature ||
+                              selected?.company ||
+                              "N/A"}
+                          </p>
                         </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
-                        <div className="grid grid-cols-2 gap-4">
+                {/* Agent Information */}
+                {selected?.loadReference?.createdBySalesUser && (
+                  <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6">
+                    <div className="flex items-center gap-2 mb-4">
+                      <User className="text-blue-600" size={20} />
+                      <h3 className="text-lg font-bold text-gray-800">
+                        Agent Information
+                      </h3>
+                    </div>
+
+                    <div className="bg-white rounded-xl p-4 border border-blue-200">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-sm text-gray-600">Agent Name</p>
+                          <p className="font-semibold text-gray-800">
+                            {selected?.loadReference?.createdBySalesUser
+                              ?.empName || "N/A"}
+                          </p>
+                        </div>
+                        {selected?.loadReference?.createdBySalesUser?.empId && (
                           <div>
-                            <p className="text-sm text-gray-600">Bill To</p>
-                            <p className="font-medium text-gray-800">{customer?.billTo || selected?.customerName || 'N/A'}</p>
+                            <p className="text-sm text-gray-600">Employee ID</p>
+                            <p className="font-semibold text-gray-800">
+                              {
+                                selected?.loadReference?.createdBySalesUser
+                                  ?.empId
+                              }
+                            </p>
                           </div>
-                          <div>
-                            <p className="text-sm text-gray-600">Dispatcher Name</p>
-                            <p className="font-medium text-gray-800">{customer?.dispatcherName || 'N/A'}</p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-600">Load No</p>
-                            <p className="font-medium text-gray-800">{customer?.loadNo || 'N/A'}</p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-600">Work Order No</p>
-                            <p className="font-medium text-gray-800">{customer?.workOrderNo || 'N/A'}</p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-600">Line Haul</p>
-                            <p className="font-medium text-gray-800">${fmtMoney(customer?.lineHaul || 0)}</p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-600">FSC</p>
-                            <p className="font-medium text-gray-800">${fmtMoney(customer?.fsc || 0)}</p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-600">Other</p>
-                            <p className="font-medium text-gray-800">${fmtMoney(
-                              Array.isArray(customer?.other) 
-                                ? (customer?.otherTotal || customer.other.reduce((sum, item) => sum + (Number(item?.total) || 0), 0))
-                                : (customer?.other || customer?.otherTotal || 0)
-                            )}</p>
-                          </div>
+                        )}
+                        {selected?.loadReference?.createdBySalesUser
+                          ?.department && (
                           <div className="col-span-2">
-                            <p className="text-sm text-gray-600">Total Amount</p>
-                            <p className="font-bold text-lg text-green-600">${fmtMoney(customer?.calculatedTotal ?? customer?.totalAmount ?? 0)}</p>
+                            <p className="text-sm text-gray-600">Department</p>
+                            <p className="font-semibold text-gray-800">
+                              {
+                                selected?.loadReference?.createdBySalesUser
+                                  ?.department
+                              }
+                            </p>
                           </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Rejection Information - Only show for rejected DOs */}
+                {activeTab === 3 &&
+                  selected?.salesApproval?.status === "rejected" &&
+                  selected?.salesApproval?.rejectionReason && (
+                    <div className="bg-gradient-to-br from-red-50 to-rose-50 rounded-2xl p-6 border border-red-200">
+                      <div className="flex items-center gap-2 mb-4">
+                        <XCircle className="text-red-600" size={20} />
+                        <h3 className="text-lg font-bold text-gray-800">
+                          Rejection Details
+                        </h3>
+                      </div>
+                      <div className="bg-white rounded-xl p-4 border border-red-200">
+                        <div className="grid grid-cols-1 gap-4">
+                          <div>
+                            <p className="text-sm text-gray-600 mb-1">
+                              Rejected By
+                            </p>
+                            <p className="font-medium text-gray-800">
+                              {selected?.salesApproval?.rejectedBy
+                                ?.employeeName ||
+                                selected?.salesApproval?.rejectedBy?.empId ||
+                                "N/A"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600 mb-1">
+                              Rejected At
+                            </p>
+                            <p className="font-medium text-gray-800">
+                              {selected?.salesApproval?.rejectedAt
+                                ? fmtDateTime(selected.salesApproval.rejectedAt)
+                                : "N/A"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600 mb-1">
+                              Rejection Reason
+                            </p>
+                            <p className="font-medium text-gray-800 bg-red-50 p-3 rounded-lg border border-red-200">
+                              {selected?.salesApproval?.rejectionReason ||
+                                "N/A"}
+                            </p>
+                          </div>
+                          {selected?.salesApproval?.remarks && (
+                            <div>
+                              <p className="text-sm text-gray-600 mb-1">
+                                Remarks
+                              </p>
+                              <p className="font-medium text-gray-800 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                                {selected.salesApproval.remarks}
+                              </p>
+                            </div>
+                          )}
                         </div>
                       </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Company Information */}
-              {selected?.addDispature && (
-                <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl p-6">
-                  <div className="flex items-center gap-2 mb-4">
-                    <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
-                      <Truck className="text-indigo-600" size={20} />
                     </div>
-                    <h3 className="text-lg font-bold text-gray-800">Company Information</h3>
-                  </div>
+                  )}
 
-                  <div className="bg-white rounded-xl p-4 border border-indigo-200">
-                    <div className="grid grid-cols-1 gap-4">
-                      <div>
-                        <p className="text-sm text-gray-600 mb-1">Company Name</p>
-                        <p className="font-semibold text-gray-800 text-lg">
-                          {selected.addDispature || selected?.company || 'N/A'}
-                        </p>
-                      </div>
+                {/* Carrier Information */}
+                {selected?.carrier && (
+                  <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Truck className="text-purple-600" size={20} />
+                      <h3 className="text-lg font-bold text-gray-800">
+                        Carrier Information
+                      </h3>
                     </div>
-                  </div>
-                </div>
-              )}
 
-              {/* Agent Information */}
-              {selected?.loadReference?.createdBySalesUser && (
-                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6">
-                  <div className="flex items-center gap-2 mb-4">
-                    <User className="text-blue-600" size={20} />
-                    <h3 className="text-lg font-bold text-gray-800">Agent Information</h3>
-                  </div>
-
-                  <div className="bg-white rounded-xl p-4 border border-blue-200">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-sm text-gray-600">Agent Name</p>
-                        <p className="font-semibold text-gray-800">
-                          {selected?.loadReference?.createdBySalesUser?.empName || 'N/A'}
-                        </p>
-                      </div>
-                      {selected?.loadReference?.createdBySalesUser?.empId && (
+                    <div className="grid grid-cols-2 gap-6">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                          <Truck className="text-purple-600" size={16} />
+                        </div>
                         <div>
-                          <p className="text-sm text-gray-600">Employee ID</p>
+                          <p className="text-sm text-gray-600">Carrier Name</p>
                           <p className="font-semibold text-gray-800">
-                            {selected?.loadReference?.createdBySalesUser?.empId}
+                            {selected.carrier?.carrierName || "N/A"}
                           </p>
                         </div>
-                      )}
-                      {selected?.loadReference?.createdBySalesUser?.department && (
-                        <div className="col-span-2">
-                          <p className="text-sm text-gray-600">Department</p>
-                          <p className="font-semibold text-gray-800">
-                            {selected?.loadReference?.createdBySalesUser?.department}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
+                      </div>
 
-              {/* Rejection Information - Only show for rejected DOs */}
-              {activeTab === 3 && selected?.salesApproval?.status === 'rejected' && selected?.salesApproval?.rejectionReason && (
-                <div className="bg-gradient-to-br from-red-50 to-rose-50 rounded-2xl p-6 border border-red-200">
-                  <div className="flex items-center gap-2 mb-4">
-                    <XCircle className="text-red-600" size={20} />
-                    <h3 className="text-lg font-bold text-gray-800">Rejection Details</h3>
-                  </div>
-                  <div className="bg-white rounded-xl p-4 border border-red-200">
-                    <div className="grid grid-cols-1 gap-4">
-                      <div>
-                        <p className="text-sm text-gray-600 mb-1">Rejected By</p>
-                        <p className="font-medium text-gray-800">
-                          {selected?.salesApproval?.rejectedBy?.employeeName || selected?.salesApproval?.rejectedBy?.empId || 'N/A'}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-600 mb-1">Rejected At</p>
-                        <p className="font-medium text-gray-800">
-                          {selected?.salesApproval?.rejectedAt ? fmtDateTime(selected.salesApproval.rejectedAt) : 'N/A'}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-600 mb-1">Rejection Reason</p>
-                        <p className="font-medium text-gray-800 bg-red-50 p-3 rounded-lg border border-red-200">
-                          {selected?.salesApproval?.rejectionReason || 'N/A'}
-                        </p>
-                      </div>
-                      {selected?.salesApproval?.remarks && (
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-pink-100 rounded-full flex items-center justify-center">
+                          <Truck className="text-pink-600" size={16} />
+                        </div>
                         <div>
-                          <p className="text-sm text-gray-600 mb-1">Remarks</p>
-                          <p className="font-medium text-gray-800 bg-gray-50 p-3 rounded-lg border border-gray-200">
-                            {selected.salesApproval.remarks}
+                          <p className="text-sm text-gray-600">
+                            Equipment Type
+                          </p>
+                          <p className="font-semibold text-gray-800">
+                            {selected.carrier?.equipmentType || "N/A"}
                           </p>
                         </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Carrier Information */}
-              {selected?.carrier && (
-                <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Truck className="text-purple-600" size={20} />
-                    <h3 className="text-lg font-bold text-gray-800">Carrier Information</h3>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-6">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                        <Truck className="text-purple-600" size={16} />
                       </div>
-                      <div>
-                        <p className="text-sm text-gray-600">Carrier Name</p>
-                        <p className="font-semibold text-gray-800">{selected.carrier?.carrierName || 'N/A'}</p>
+
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                          <DollarSign className="text-green-600" size={16} />
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">
+                            Total Carrier Fees
+                          </p>
+                          <p className="font-semibold text-gray-800">
+                            ${fmtMoney(selected.carrier?.totalCarrierFees || 0)}
+                          </p>
+                        </div>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-pink-100 rounded-full flex items-center justify-center">
-                        <Truck className="text-pink-600" size={16} />
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-600">Equipment Type</p>
-                        <p className="font-semibold text-gray-800">{selected.carrier?.equipmentType || 'N/A'}</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                        <DollarSign className="text-green-600" size={16} />
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-600">Total Carrier Fees</p>
-                        <p className="font-semibold text-gray-800">${fmtMoney(selected.carrier?.totalCarrierFees || 0)}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {selected.carrier?.carrierFees?.length > 0 && (
-                    <div className="mt-4">
-                      <h4 className="font-semibold text-gray-800 mb-3">Carrier Charges</h4>
-                      <div className="space-y-2">
-                        {selected.carrier.carrierFees.map((charge, i) => (
-                          <div key={i} className="bg-white rounded-lg p-3 border border-purple-200">
-                            <div className="flex justify-between items-center">
-                              <span className="font-medium text-gray-800">{charge?.name}</span>
-                              <span className="font-bold text-green-600">${fmtMoney(charge?.total || 0)}</span>
-                            </div>
-                            <div className="text-sm text-gray-500">
-                              Quantity: {charge?.quantity || 0} × Amount: ${fmtMoney(charge?.amount || 0)}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Shipper Information */}
-              {selected?.shipper && (
-                <div className="bg-gradient-to-br from-orange-50 to-yellow-50 rounded-2xl p-6">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Truck className="text-orange-600" size={20} />
-                    <h3 className="text-lg font-bold text-gray-800">Shipper Information</h3>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-6 mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
-                        <User className="text-orange-600" size={16} />
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-600">Shipper Name</p>
-                        <p className="font-semibold text-gray-800">{selected.shipper?.name || 'N/A'}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Pickup Locations */}
-                  {((selected.shipper?.pickUpLocations || []).length > 0) && (
-                    <div className="mt-4">
-                      <h4 className="font-semibold text-gray-800 mb-3">Pickup Locations</h4>
-                      <div className="space-y-3">
-                        {(selected.shipper?.pickUpLocations || []).map((location, index) => (
-                          <div key={location?._id || index} className="bg-white rounded-lg p-3 border border-orange-200">
-                            <div className="grid grid-cols-2 gap-4">
-                              <div>
-                                <p className="text-sm text-gray-600">Name</p>
-                                <p className="font-medium text-gray-800">{location?.name || 'N/A'}</p>
+                    {selected.carrier?.carrierFees?.length > 0 && (
+                      <div className="mt-4">
+                        <h4 className="font-semibold text-gray-800 mb-3">
+                          Carrier Charges
+                        </h4>
+                        <div className="space-y-2">
+                          {selected.carrier.carrierFees.map((charge, i) => (
+                            <div
+                              key={i}
+                              className="bg-white rounded-lg p-3 border border-purple-200"
+                            >
+                              <div className="flex justify-between items-center">
+                                <span className="font-medium text-gray-800">
+                                  {charge?.name}
+                                </span>
+                                <span className="font-bold text-green-600">
+                                  ${fmtMoney(charge?.total || 0)}
+                                </span>
                               </div>
-                              <div>
-                                <p className="text-sm text-gray-600">Address</p>
-                                <p className="font-medium text-gray-800">{location?.address || 'N/A'}</p>
-                              </div>
-                              <div>
-                                <p className="text-sm text-gray-600">City</p>
-                                <p className="font-medium text-gray-800">{location?.city || 'N/A'}</p>
-                              </div>
-                              <div>
-                                <p className="text-sm text-gray-600">State</p>
-                                <p className="font-medium text-gray-800">{location?.state || 'N/A'}</p>
-                              </div>
-                              <div>
-                                <p className="text-sm text-gray-600">Zip Code</p>
-                                <p className="font-medium text-gray-800">{location?.zipCode || 'N/A'}</p>
-                              </div>
-                              <div>
-                                <p className="text-sm text-gray-600">Weight (lbs)</p>
-                                <p className="font-medium text-gray-800">
-                                  {typeof location?.weight !== 'undefined' && location?.weight !== null && location?.weight !== ''
-                                    ? location.weight
-                                    : 'N/A'}
-                                </p>
-                              </div>
-                              <div>
-                                <p className="text-sm text-gray-600">Pickup Date</p>
-                                <p className="font-medium text-gray-800">
-                                  {location?.pickUpDate ? fmtDateTime(location.pickUpDate) : 'N/A'}
-                                </p>
+                              <div className="text-sm text-gray-500">
+                                Quantity: {charge?.quantity || 0} × Amount: $
+                                {fmtMoney(charge?.amount || 0)}
                               </div>
                             </div>
-                          </div>
-                        ))}
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
+                )}
 
-                  {/* Drop Locations */}
-                  {((selected.shipper?.dropLocations || []).length > 0) && (
-                    <div className="mt-4">
-                      <h4 className="font-semibold text-gray-800 mb-3">Drop Locations</h4>
-                      <div className="space-y-3">
-                        {(selected.shipper?.dropLocations || []).map((location, index) => (
-                          <div key={location?._id || index} className="bg-white rounded-lg p-3 border border-yellow-200">
-                            <div className="grid grid-cols-2 gap-4">
-                              <div>
-                                <p className="text-sm text-gray-600">Name</p>
-                                <p className="font-medium text-gray-800">{location?.name || 'N/A'}</p>
-                              </div>
-                              <div>
-                                <p className="text-sm text-gray-600">Address</p>
-                                <p className="font-medium text-gray-800">{location?.address || 'N/A'}</p>
-                              </div>
-                              <div>
-                                <p className="text-sm text-gray-600">City</p>
-                                <p className="font-medium text-gray-800">{location?.city || 'N/A'}</p>
-                              </div>
-                              <div>
-                                <p className="text-sm text-gray-600">State</p>
-                                <p className="font-medium text-gray-800">{location?.state || 'N/A'}</p>
-                              </div>
-                              <div>
-                                <p className="text-sm text-gray-600">Zip Code</p>
-                                <p className="font-medium text-gray-800">{location?.zipCode || 'N/A'}</p>
-                              </div>
-                              <div>
-                                <p className="text-sm text-gray-600">Weight (lbs)</p>
-                                <p className="font-medium text-gray-800">
-                                  {typeof location?.weight !== 'undefined' && location?.weight !== null && location?.weight !== ''
-                                    ? location.weight
-                                    : 'N/A'}
-                                </p>
-                              </div>
-                              <div>
-                                <p className="text-sm text-gray-600">Drop Date</p>
-                                <p className="font-medium text-gray-800">
-                                  {location?.dropDate ? fmtDateTime(location.dropDate) : 'N/A'}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
+                {/* Shipper Information */}
+                {selected?.shipper && (
+                  <div className="bg-gradient-to-br from-orange-50 to-yellow-50 rounded-2xl p-6">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Truck className="text-orange-600" size={20} />
+                      <h3 className="text-lg font-bold text-gray-800">
+                        Shipper Information
+                      </h3>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-6 mb-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
+                          <User className="text-orange-600" size={16} />
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">Shipper Name</p>
+                          <p className="font-semibold text-gray-800">
+                            {selected.shipper?.name || "N/A"}
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  )}
-                </div>
-              )}
+
+                    {/* Pickup Locations */}
+                    {(selected.shipper?.pickUpLocations || []).length > 0 && (
+                      <div className="mt-4">
+                        <h4 className="font-semibold text-gray-800 mb-3">
+                          Pickup Locations
+                        </h4>
+                        <div className="space-y-3">
+                          {(selected.shipper?.pickUpLocations || []).map(
+                            (location, index) => (
+                              <div
+                                key={location?._id || index}
+                                className="bg-white rounded-lg p-3 border border-orange-200"
+                              >
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div>
+                                    <p className="text-sm text-gray-600">
+                                      Name
+                                    </p>
+                                    <p className="font-medium text-gray-800">
+                                      {location?.name || "N/A"}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-sm text-gray-600">
+                                      Address
+                                    </p>
+                                    <p className="font-medium text-gray-800">
+                                      {location?.address || "N/A"}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-sm text-gray-600">
+                                      City
+                                    </p>
+                                    <p className="font-medium text-gray-800">
+                                      {location?.city || "N/A"}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-sm text-gray-600">
+                                      State
+                                    </p>
+                                    <p className="font-medium text-gray-800">
+                                      {location?.state || "N/A"}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-sm text-gray-600">
+                                      Zip Code
+                                    </p>
+                                    <p className="font-medium text-gray-800">
+                                      {location?.zipCode || "N/A"}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-sm text-gray-600">
+                                      Weight (lbs)
+                                    </p>
+                                    <p className="font-medium text-gray-800">
+                                      {typeof location?.weight !==
+                                        "undefined" &&
+                                      location?.weight !== null &&
+                                      location?.weight !== ""
+                                        ? location.weight
+                                        : "N/A"}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-sm text-gray-600">
+                                      Pickup Date
+                                    </p>
+                                    <p className="font-medium text-gray-800">
+                                      {location?.pickUpDate
+                                        ? fmtDateTime(location.pickUpDate)
+                                        : "N/A"}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            ),
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Drop Locations */}
+                    {(selected.shipper?.dropLocations || []).length > 0 && (
+                      <div className="mt-4">
+                        <h4 className="font-semibold text-gray-800 mb-3">
+                          Drop Locations
+                        </h4>
+                        <div className="space-y-3">
+                          {(selected.shipper?.dropLocations || []).map(
+                            (location, index) => (
+                              <div
+                                key={location?._id || index}
+                                className="bg-white rounded-lg p-3 border border-yellow-200"
+                              >
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div>
+                                    <p className="text-sm text-gray-600">
+                                      Name
+                                    </p>
+                                    <p className="font-medium text-gray-800">
+                                      {location?.name || "N/A"}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-sm text-gray-600">
+                                      Address
+                                    </p>
+                                    <p className="font-medium text-gray-800">
+                                      {location?.address || "N/A"}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-sm text-gray-600">
+                                      City
+                                    </p>
+                                    <p className="font-medium text-gray-800">
+                                      {location?.city || "N/A"}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-sm text-gray-600">
+                                      State
+                                    </p>
+                                    <p className="font-medium text-gray-800">
+                                      {location?.state || "N/A"}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-sm text-gray-600">
+                                      Zip Code
+                                    </p>
+                                    <p className="font-medium text-gray-800">
+                                      {location?.zipCode || "N/A"}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-sm text-gray-600">
+                                      Weight (lbs)
+                                    </p>
+                                    <p className="font-medium text-gray-800">
+                                      {typeof location?.weight !==
+                                        "undefined" &&
+                                      location?.weight !== null &&
+                                      location?.weight !== ""
+                                        ? location.weight
+                                        : "N/A"}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-sm text-gray-600">
+                                      Drop Date
+                                    </p>
+                                    <p className="font-medium text-gray-800">
+                                      {location?.dropDate
+                                        ? fmtDateTime(location.dropDate)
+                                        : "N/A"}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            ),
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Load Reference */}
                 <Card variant="outlined">
-                  <Box sx={{ px: 2, py: 1, backgroundColor: alpha("#facc15", 0.05) }}>
+                  <Box
+                    sx={{
+                      px: 2,
+                      py: 1,
+                      backgroundColor: alpha("#facc15", 0.05),
+                    }}
+                  >
                     <Typography variant="subtitle1" fontWeight={700}>
                       Load Reference
                     </Typography>
@@ -5227,29 +6733,55 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                   <CardContent>
                     <Grid container spacing={2}>
                       <Grid item xs={12} md={6}>
-                        <DetailsRow label="Shipment #" value={selected?.loadReference?.shipmentNumber} />
-                        <DetailsRow label="PO #" value={selected?.loadReference?.poNumber} />
-                        <DetailsRow label="BOL #" value={selected?.loadReference?.bolNumber} />
-                        <DetailsRow label="Load Type" value={selected?.loadReference?.loadType} />
-                        <DetailsRow label="Vehicle" value={selected?.loadReference?.vehicleType} />
+                        <DetailsRow
+                          label="Shipment #"
+                          value={selected?.loadReference?.shipmentNumber}
+                        />
+                        <DetailsRow
+                          label="PO #"
+                          value={selected?.loadReference?.poNumber}
+                        />
+                        <DetailsRow
+                          label="BOL #"
+                          value={selected?.loadReference?.bolNumber}
+                        />
+                        <DetailsRow
+                          label="Load Type"
+                          value={selected?.loadReference?.loadType}
+                        />
+                        <DetailsRow
+                          label="Vehicle"
+                          value={selected?.loadReference?.vehicleType}
+                        />
                       </Grid>
                       <Grid item xs={12} md={6}>
                         <DetailsRow
                           label="Pickup Date"
-                          value={fmtDateTime(selected?.loadReference?.pickupDate)}
+                          value={fmtDateTime(
+                            selected?.loadReference?.pickupDate,
+                          )}
                         />
                         <DetailsRow
                           label="Delivery Date"
-                          value={fmtDateTime(selected?.loadReference?.deliveryDate)}
+                          value={fmtDateTime(
+                            selected?.loadReference?.deliveryDate,
+                          )}
                         />
                         <DetailsRow
                           label="Rate (Type)"
                           value={`$${fmtMoney(selected?.loadReference?.rate)} (${selected?.loadReference?.rateType})`}
                         />
-                        <DetailsRow label="Status" value={selected?.loadReference?.status} />
+                        <DetailsRow
+                          label="Status"
+                          value={selected?.loadReference?.status}
+                        />
                         <DetailsRow
                           label="Delivery Approved"
-                          value={selected?.loadReference?.deliveryApproval ? "Yes" : "No"}
+                          value={
+                            selected?.loadReference?.deliveryApproval
+                              ? "Yes"
+                              : "No"
+                          }
                         />
                       </Grid>
                     </Grid>
@@ -5259,19 +6791,35 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                 {/* Shipment Images & Status */}
 
                 <Card variant="outlined">
-                  <Box sx={{ px: 2, py: 1, backgroundColor: alpha("#8b5cf6", 0.05) }}>
+                  <Box
+                    sx={{
+                      px: 2,
+                      py: 1,
+                      backgroundColor: alpha("#8b5cf6", 0.05),
+                    }}
+                  >
                     <Typography variant="subtitle1" fontWeight={700}>
                       Shipment Images & Status
                     </Typography>
                   </Box>
                   <CardContent>
-                    {shipImgsLoading && <Typography variant="body2">Loading images…</Typography>}
-                    {shipImgsErr && <Typography variant="body2" color="error">{shipImgsErr}</Typography>}
+                    {shipImgsLoading && (
+                      <Typography variant="body2">Loading images…</Typography>
+                    )}
+                    {shipImgsErr && (
+                      <Typography variant="body2" color="error">
+                        {shipImgsErr}
+                      </Typography>
+                    )}
                     {!shipImgsLoading && shipImgs?.images && (
                       <Stack spacing={3}>
                         {/* Pickup Images Row */}
                         <Box>
-                          <Typography variant="body2" fontWeight={700} sx={{ mb: 1 }}>
+                          <Typography
+                            variant="body2"
+                            fontWeight={700}
+                            sx={{ mb: 1 }}
+                          >
                             Pickup Images
                           </Typography>
                           <Box
@@ -5281,8 +6829,14 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                               overflowX: "auto",
                               pb: 1,
                               "&::-webkit-scrollbar": { height: 6 },
-                              "&::-webkit-scrollbar-thumb": { background: "#c1c1c1" },
-                              "& img": { height: 100, borderRadius: 1, objectFit: "cover" },
+                              "&::-webkit-scrollbar-thumb": {
+                                background: "#c1c1c1",
+                              },
+                              "& img": {
+                                height: 100,
+                                borderRadius: 1,
+                                objectFit: "cover",
+                              },
                             }}
                           >
                             {[
@@ -5293,7 +6847,12 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                               ...(shipImgs.images.containerImages || []),
                               ...(shipImgs.images.sealImages || []),
                             ].map((img, i) => (
-                              <a key={i} href={img} target="_blank" rel="noopener noreferrer">
+                              <a
+                                key={i}
+                                href={img}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
                                 <img src={img} alt={`Pickup Image ${i + 1}`} />
                               </a>
                             ))}
@@ -5302,7 +6861,11 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
 
                         {/* Drop Images Row */}
                         <Box>
-                          <Typography variant="body2" fontWeight={700} sx={{ mb: 1 }}>
+                          <Typography
+                            variant="body2"
+                            fontWeight={700}
+                            sx={{ mb: 1 }}
+                          >
                             Drop Images
                           </Typography>
                           <Box
@@ -5312,17 +6875,32 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                               overflowX: "auto",
                               pb: 1,
                               "&::-webkit-scrollbar": { height: 6 },
-                              "&::-webkit-scrollbar-thumb": { background: "#c1c1c1" },
-                              "& img": { height: 100, borderRadius: 1, objectFit: "cover" },
+                              "&::-webkit-scrollbar-thumb": {
+                                background: "#c1c1c1",
+                              },
+                              "& img": {
+                                height: 100,
+                                borderRadius: 1,
+                                objectFit: "cover",
+                              },
                             }}
                           >
                             {[
-                              ...(shipImgs.images.dropLocationImages?.podImages || []),
-                              ...(shipImgs.images.dropLocationImages?.loadedTruckImages || []),
-                              ...(shipImgs.images.dropLocationImages?.dropLocationImages || []),
-                              ...(shipImgs.images.dropLocationImages?.emptyTruckImages || []),
+                              ...(shipImgs.images.dropLocationImages
+                                ?.podImages || []),
+                              ...(shipImgs.images.dropLocationImages
+                                ?.loadedTruckImages || []),
+                              ...(shipImgs.images.dropLocationImages
+                                ?.dropLocationImages || []),
+                              ...(shipImgs.images.dropLocationImages
+                                ?.emptyTruckImages || []),
                             ].map((img, i) => (
-                              <a key={i} href={img} target="_blank" rel="noopener noreferrer">
+                              <a
+                                key={i}
+                                href={img}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
                                 <img src={img} alt={`Drop Image ${i + 1}`} />
                               </a>
                             ))}
@@ -5332,26 +6910,58 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                         {/* Status Info */}
                         <Grid container spacing={2}>
                           <Grid item xs={12} md={4}>
-                            <Typography variant="body2" fontWeight={700}>Origin</Typography>
-                            <Typography variant="body2">{shipImgs.images.originPlace?.location || "—"}</Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              Arrived: {fmtDateTime(shipImgs.images.originPlace?.arrivedAt)}
+                            <Typography variant="body2" fontWeight={700}>
+                              Origin
                             </Typography>
-                          </Grid>
-                          <Grid item xs={12} md={4}>
-                            <Typography variant="body2" fontWeight={700}>Destination</Typography>
-                            <Typography variant="body2">{shipImgs.images.destinationPlace?.location || "—"}</Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              Arrived: {fmtDateTime(shipImgs.images.destinationPlace?.arrivedAt)}
-                            </Typography>
-                          </Grid>
-                          <Grid item xs={12} md={4}>
-                            <Typography variant="body2" fontWeight={700}>Drop Status</Typography>
                             <Typography variant="body2">
-                              Completed: {shipImgs.images.dropLocationCompleted ? "Yes" : "No"}
+                              {shipImgs.images.originPlace?.location || "—"}
                             </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              Drop Arrived: {fmtDateTime(shipImgs.images.dropLocationArrivalTime)}
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
+                              Arrived:{" "}
+                              {fmtDateTime(
+                                shipImgs.images.originPlace?.arrivedAt,
+                              )}
+                            </Typography>
+                          </Grid>
+                          <Grid item xs={12} md={4}>
+                            <Typography variant="body2" fontWeight={700}>
+                              Destination
+                            </Typography>
+                            <Typography variant="body2">
+                              {shipImgs.images.destinationPlace?.location ||
+                                "—"}
+                            </Typography>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
+                              Arrived:{" "}
+                              {fmtDateTime(
+                                shipImgs.images.destinationPlace?.arrivedAt,
+                              )}
+                            </Typography>
+                          </Grid>
+                          <Grid item xs={12} md={4}>
+                            <Typography variant="body2" fontWeight={700}>
+                              Drop Status
+                            </Typography>
+                            <Typography variant="body2">
+                              Completed:{" "}
+                              {shipImgs.images.dropLocationCompleted
+                                ? "Yes"
+                                : "No"}
+                            </Typography>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
+                              Drop Arrived:{" "}
+                              {fmtDateTime(
+                                shipImgs.images.dropLocationArrivalTime,
+                              )}
                             </Typography>
                           </Grid>
                         </Grid>
@@ -5360,20 +6970,37 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                   </CardContent>
                 </Card>
 
-
                 {/* Additional Documents */}
                 <Card variant="outlined">
-                  <Box sx={{ px: 2, py: 1, backgroundColor: alpha("#f472b6", 0.05) }}>
+                  <Box
+                    sx={{
+                      px: 2,
+                      py: 1,
+                      backgroundColor: alpha("#f472b6", 0.05),
+                    }}
+                  >
                     <Typography variant="subtitle1" fontWeight={700}>
                       Additional Documents
                     </Typography>
                   </Box>
                   <CardContent>
-                    {addDocsLoading && <Typography variant="body2">Loading documents…</Typography>}
-                    {addDocsErr && <Typography variant="body2" color="error">{addDocsErr}</Typography>}
-                    {!addDocsLoading && (!addDocs || addDocs.length === 0) && !addDocsErr && (
-                      <Typography variant="body2" color="text.secondary">No additional documents.</Typography>
+                    {addDocsLoading && (
+                      <Typography variant="body2">
+                        Loading documents…
+                      </Typography>
                     )}
+                    {addDocsErr && (
+                      <Typography variant="body2" color="error">
+                        {addDocsErr}
+                      </Typography>
+                    )}
+                    {!addDocsLoading &&
+                      (!addDocs || addDocs.length === 0) &&
+                      !addDocsErr && (
+                        <Typography variant="body2" color="text.secondary">
+                          No additional documents.
+                        </Typography>
+                      )}
                     {!addDocsLoading && addDocs.length > 0 && (
                       <Grid container spacing={2}>
                         {uniqueById(addDocs).map((doc) => {
@@ -5381,26 +7008,89 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                           const isImg = isImageUrl(url);
                           const isPdf = isPdfUrl(url);
                           return (
-                            <Grid item xs={12} sm={6} md={4} key={doc?._id ?? url}>
+                            <Grid
+                              item
+                              xs={12}
+                              sm={6}
+                              md={4}
+                              key={doc?._id ?? url}
+                            >
                               <Paper variant="outlined" sx={{ p: 1.5 }}>
-                                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-                                  {isImg ? <ImageIcon fontSize="small" /> : <DescriptionIcon fontSize="small" />}
-                                  <MuiLink href={url} target="_blank" rel="noopener" underline="hover">
-                                    {isPdf ? "PDF Document" : (isImg ? "Image" : "File")}
+                                <Stack
+                                  direction="row"
+                                  spacing={1}
+                                  alignItems="center"
+                                  sx={{ mb: 1 }}
+                                >
+                                  {isImg ? (
+                                    <ImageIcon fontSize="small" />
+                                  ) : (
+                                    <DescriptionIcon fontSize="small" />
+                                  )}
+                                  <MuiLink
+                                    href={url}
+                                    target="_blank"
+                                    rel="noopener"
+                                    underline="hover"
+                                  >
+                                    {isPdf
+                                      ? "PDF Document"
+                                      : isImg
+                                        ? "Image"
+                                        : "File"}
                                   </MuiLink>
-                                  <Chip size="small" variant="outlined" label={isPdf ? "PDF" : isImg ? "Image" : "File"} sx={{ ml: "auto" }} />
+                                  <Chip
+                                    size="small"
+                                    variant="outlined"
+                                    label={
+                                      isPdf ? "PDF" : isImg ? "Image" : "File"
+                                    }
+                                    sx={{ ml: "auto" }}
+                                  />
                                 </Stack>
                                 {isImg && (
-                                  <a href={url} target="_blank" rel="noopener noreferrer">
-                                    <img src={url} alt="additional-doc" style={{ width: "100%", height: 140, objectFit: "cover", borderRadius: 6, border: "1px solid #eee" }} />
+                                  <a
+                                    href={url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    <img
+                                      src={url}
+                                      alt="additional-doc"
+                                      style={{
+                                        width: "100%",
+                                        height: 140,
+                                        objectFit: "cover",
+                                        borderRadius: 6,
+                                        border: "1px solid #eee",
+                                      }}
+                                    />
                                   </a>
                                 )}
                                 <Divider sx={{ my: 1 }} />
-                                <Typography variant="caption" color="text.secondary" display="block">
-                                  Uploaded by: {doc?.uploadedBy?.employeeName || "—"} ({doc?.uploadedBy?.empId || "—"})
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                  display="block"
+                                >
+                                  Uploaded by:{" "}
+                                  {doc?.uploadedBy?.employeeName || "—"} (
+                                  {doc?.uploadedBy?.empId || "—"})
                                 </Typography>
-                                <Typography variant="caption" color="text.secondary" display="block">Dept: {doc?.uploadedBy?.department || "—"}</Typography>
-                                <Typography variant="caption" color="text.secondary" display="block">At: {fmtDateTime(doc?.uploadedAt)}</Typography>
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                  display="block"
+                                >
+                                  Dept: {doc?.uploadedBy?.department || "—"}
+                                </Typography>
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                  display="block"
+                                >
+                                  At: {fmtDateTime(doc?.uploadedAt)}
+                                </Typography>
                               </Paper>
                             </Grid>
                           );
@@ -5411,7 +7101,13 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                 </Card>
                 {/* Totals */}
                 <Card variant="outlined">
-                  <Box sx={{ px: 2, py: 1, backgroundColor: alpha("#22c55e", 0.05) }}>
+                  <Box
+                    sx={{
+                      px: 2,
+                      py: 1,
+                      backgroundColor: alpha("#22c55e", 0.05),
+                    }}
+                  >
                     <Typography variant="subtitle1" fontWeight={700}>
                       Totals
                     </Typography>
@@ -5421,10 +7117,23 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                       const t = computeTotals(selected);
                       return (
                         <Stack spacing={0.5}>
-                          <DetailsRow label="Bill Amount (Customer)" value={`$${fmtMoney(t.billTotal)}`} />
-                          <DetailsRow label="Carrier Fees" value={`$${fmtMoney(t.carrierTotal)}`} />
+                          <DetailsRow
+                            label="Bill Amount (Customer)"
+                            value={`$${fmtMoney(t.billTotal)}`}
+                          />
+                          <DetailsRow
+                            label="Carrier Fees"
+                            value={`$${fmtMoney(t.carrierTotal)}`}
+                          />
                           <Divider sx={{ my: 1 }} />
-                          <DetailsRow label="Net Revenue" value={<span style={{ fontWeight: 700 }}>${fmtMoney(t.netRevenue)}</span>} />
+                          <DetailsRow
+                            label="Net Revenue"
+                            value={
+                              <span style={{ fontWeight: 700 }}>
+                                ${fmtMoney(t.netRevenue)}
+                              </span>
+                            }
+                          />
                         </Stack>
                       );
                     })()}
@@ -5432,11 +7141,13 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                 </Card>
 
                 {/* Payment Information - Only show for paid DOs */}
-                {selected?.paymentStatus?.status === 'paid' && (
+                {selected?.paymentStatus?.status === "paid" && (
                   <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6 border border-green-200">
                     <div className="flex items-center gap-2 mb-4">
                       <CheckCircle className="text-green-600" size={20} />
-                      <h3 className="text-lg font-bold text-gray-800">Payment Information</h3>
+                      <h3 className="text-lg font-bold text-gray-800">
+                        Payment Information
+                      </h3>
                       <span className="ml-auto inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold bg-green-100 text-green-700">
                         <CheckCircle size={14} />
                         Paid
@@ -5445,14 +7156,21 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                     <div className="bg-white rounded-xl p-4 border border-green-200">
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <p className="text-sm text-gray-600 mb-1">Payment Method</p>
+                          <p className="text-sm text-gray-600 mb-1">
+                            Payment Method
+                          </p>
                           <p className="font-medium text-gray-800 capitalize">
-                            {selected?.paymentStatus?.paymentMethod?.replace('_', ' ') || 'N/A'}
+                            {selected?.paymentStatus?.paymentMethod?.replace(
+                              "_",
+                              " ",
+                            ) || "N/A"}
                           </p>
                         </div>
                         {selected?.paymentStatus?.paymentReference && (
                           <div>
-                            <p className="text-sm text-gray-600 mb-1">Payment Reference</p>
+                            <p className="text-sm text-gray-600 mb-1">
+                              Payment Reference
+                            </p>
                             <p className="font-medium text-gray-800">
                               {selected.paymentStatus.paymentReference}
                             </p>
@@ -5461,12 +7179,16 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                         <div>
                           <p className="text-sm text-gray-600 mb-1">Paid At</p>
                           <p className="font-medium text-gray-800">
-                            {selected?.paymentStatus?.paidAt ? fmtDateTime(selected.paymentStatus.paidAt) : 'N/A'}
+                            {selected?.paymentStatus?.paidAt
+                              ? fmtDateTime(selected.paymentStatus.paidAt)
+                              : "N/A"}
                           </p>
                         </div>
                         {selected?.paymentStatus?.paymentNotes && (
                           <div className="col-span-2">
-                            <p className="text-sm text-gray-600 mb-1">Payment Notes</p>
+                            <p className="text-sm text-gray-600 mb-1">
+                              Payment Notes
+                            </p>
                             <p className="font-medium text-gray-800 bg-gray-50 p-3 rounded-lg border border-gray-200">
                               {selected.paymentStatus.paymentNotes}
                             </p>
@@ -5474,53 +7196,97 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                         )}
                         {selected?.paymentStatus?.paymentProof && (
                           <div className="col-span-2">
-                            <p className="text-sm text-gray-600 mb-2">Payment Proof</p>
+                            <p className="text-sm text-gray-600 mb-2">
+                              Payment Proof
+                            </p>
                             <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
                               <div className="flex items-center gap-3">
-                                {isImageUrl(selected.paymentStatus.paymentProof.fileUrl) ? (
+                                {isImageUrl(
+                                  selected.paymentStatus.paymentProof.fileUrl,
+                                ) ? (
                                   <a
-                                    href={selected.paymentStatus.paymentProof.fileUrl}
+                                    href={
+                                      selected.paymentStatus.paymentProof
+                                        .fileUrl
+                                    }
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="flex items-center gap-2 text-blue-600 hover:text-blue-800 transition-colors"
                                   >
-                                    <ImageIcon className="text-blue-600" style={{ fontSize: 24 }} />
+                                    <ImageIcon
+                                      className="text-blue-600"
+                                      style={{ fontSize: 24 }}
+                                    />
                                     <div>
-                                      <p className="font-medium">{selected.paymentStatus.paymentProof.fileName || 'Payment Proof'}</p>
-                                      <p className="text-xs text-gray-500">Click to view image</p>
+                                      <p className="font-medium">
+                                        {selected.paymentStatus.paymentProof
+                                          .fileName || "Payment Proof"}
+                                      </p>
+                                      <p className="text-xs text-gray-500">
+                                        Click to view image
+                                      </p>
                                     </div>
                                   </a>
-                                ) : isPdfUrl(selected.paymentStatus.paymentProof.fileUrl) ? (
+                                ) : isPdfUrl(
+                                    selected.paymentStatus.paymentProof.fileUrl,
+                                  ) ? (
                                   <a
-                                    href={selected.paymentStatus.paymentProof.fileUrl}
+                                    href={
+                                      selected.paymentStatus.paymentProof
+                                        .fileUrl
+                                    }
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="flex items-center gap-2 text-blue-600 hover:text-blue-800 transition-colors"
                                   >
-                                    <PictureAsPdfIcon className="text-red-600" style={{ fontSize: 24 }} />
+                                    <PictureAsPdfIcon
+                                      className="text-red-600"
+                                      style={{ fontSize: 24 }}
+                                    />
                                     <div>
-                                      <p className="font-medium">{selected.paymentStatus.paymentProof.fileName || 'Payment Proof'}</p>
-                                      <p className="text-xs text-gray-500">Click to view PDF</p>
+                                      <p className="font-medium">
+                                        {selected.paymentStatus.paymentProof
+                                          .fileName || "Payment Proof"}
+                                      </p>
+                                      <p className="text-xs text-gray-500">
+                                        Click to view PDF
+                                      </p>
                                     </div>
                                   </a>
                                 ) : (
                                   <a
-                                    href={selected.paymentStatus.paymentProof.fileUrl}
+                                    href={
+                                      selected.paymentStatus.paymentProof
+                                        .fileUrl
+                                    }
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="flex items-center gap-2 text-blue-600 hover:text-blue-800 transition-colors"
                                   >
-                                    <AttachFileIcon className="text-gray-600" style={{ fontSize: 24 }} />
+                                    <AttachFileIcon
+                                      className="text-gray-600"
+                                      style={{ fontSize: 24 }}
+                                    />
                                     <div>
-                                      <p className="font-medium">{selected.paymentStatus.paymentProof.fileName || 'Payment Proof'}</p>
-                                      <p className="text-xs text-gray-500">Click to download</p>
+                                      <p className="font-medium">
+                                        {selected.paymentStatus.paymentProof
+                                          .fileName || "Payment Proof"}
+                                      </p>
+                                      <p className="text-xs text-gray-500">
+                                        Click to download
+                                      </p>
                                     </div>
                                   </a>
                                 )}
                               </div>
-                              {selected.paymentStatus.paymentProof.uploadedAt && (
+                              {selected.paymentStatus.paymentProof
+                                .uploadedAt && (
                                 <p className="text-xs text-gray-500 mt-2">
-                                  Uploaded: {fmtDateTime(selected.paymentStatus.paymentProof.uploadedAt)}
+                                  Uploaded:{" "}
+                                  {fmtDateTime(
+                                    selected.paymentStatus.paymentProof
+                                      .uploadedAt,
+                                  )}
                                 </p>
                               )}
                             </div>
@@ -5533,32 +7299,46 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
 
                 {/* Carrier Payment Information */}
                 {(() => {
-                  const carrierPaymentStatus = selected?.carrierPaymentStatus || {};
+                  const carrierPaymentStatus =
+                    selected?.carrierPaymentStatus || {};
                   const totals = computeTotals(selected);
                   const totalPaid = carrierPaymentStatus?.totalPaidAmount || 0;
                   const remaining = totals.carrierTotal - totalPaid;
-                  const shortPayments = carrierPaymentStatus?.shortPayments || [];
-                  const isFullyPaid = carrierPaymentStatus?.status === 'paid';
-                  const isPartiallyPaid = carrierPaymentStatus?.status === 'pending' && totalPaid > 0;
+                  const shortPayments =
+                    carrierPaymentStatus?.shortPayments || [];
+                  const isFullyPaid = carrierPaymentStatus?.status === "paid";
+                  const isPartiallyPaid =
+                    carrierPaymentStatus?.status === "pending" && totalPaid > 0;
 
                   if (!isFullyPaid && !isPartiallyPaid && totalPaid === 0) {
                     return null; // Don't show if no payments made
                   }
 
                   return (
-                    <div className={`bg-gradient-to-br rounded-2xl p-6 border ${
-                      isFullyPaid 
-                        ? 'from-green-50 to-emerald-50 border-green-200' 
-                        : 'from-orange-50 to-amber-50 border-orange-200'
-                    }`}>
+                    <div
+                      className={`bg-gradient-to-br rounded-2xl p-6 border ${
+                        isFullyPaid
+                          ? "from-green-50 to-emerald-50 border-green-200"
+                          : "from-orange-50 to-amber-50 border-orange-200"
+                      }`}
+                    >
                       <div className="flex items-center gap-2 mb-4">
-                        <DollarSign className={isFullyPaid ? "text-green-600" : "text-orange-600"} size={20} />
-                        <h3 className="text-lg font-bold text-gray-800">Carrier Payment Information</h3>
-                        <span className={`ml-auto inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold ${
-                          isFullyPaid 
-                            ? 'bg-green-100 text-green-700' 
-                            : 'bg-orange-100 text-orange-700'
-                        }`}>
+                        <DollarSign
+                          className={
+                            isFullyPaid ? "text-green-600" : "text-orange-600"
+                          }
+                          size={20}
+                        />
+                        <h3 className="text-lg font-bold text-gray-800">
+                          Carrier Payment Information
+                        </h3>
+                        <span
+                          className={`ml-auto inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold ${
+                            isFullyPaid
+                              ? "bg-green-100 text-green-700"
+                              : "bg-orange-100 text-orange-700"
+                          }`}
+                        >
                           {isFullyPaid ? (
                             <>
                               <CheckCircle size={14} />
@@ -5575,25 +7355,39 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                       <div className="bg-white rounded-xl p-4 border border-gray-200 mb-4">
                         <div className="grid grid-cols-2 gap-4 mb-4">
                           <div>
-                            <p className="text-sm text-gray-600 mb-1">Total Carrier Fees</p>
-                            <p className="text-lg font-bold text-gray-800">${fmtMoney(totals.carrierTotal)}</p>
+                            <p className="text-sm text-gray-600 mb-1">
+                              Total Carrier Fees
+                            </p>
+                            <p className="text-lg font-bold text-gray-800">
+                              ${fmtMoney(totals.carrierTotal)}
+                            </p>
                           </div>
                           <div>
-                            <p className="text-sm text-gray-600 mb-1">Total Paid</p>
-                            <p className={`text-lg font-bold ${isFullyPaid ? 'text-green-600' : 'text-orange-600'}`}>
+                            <p className="text-sm text-gray-600 mb-1">
+                              Total Paid
+                            </p>
+                            <p
+                              className={`text-lg font-bold ${isFullyPaid ? "text-green-600" : "text-orange-600"}`}
+                            >
                               ${fmtMoney(totalPaid)}
                             </p>
                           </div>
                           <div className="col-span-2">
-                            <p className="text-sm text-gray-600 mb-1">Remaining Amount</p>
-                            <p className={`text-xl font-bold ${isFullyPaid ? 'text-green-600' : 'text-orange-600'}`}>
+                            <p className="text-sm text-gray-600 mb-1">
+                              Remaining Amount
+                            </p>
+                            <p
+                              className={`text-xl font-bold ${isFullyPaid ? "text-green-600" : "text-orange-600"}`}
+                            >
                               ${fmtMoney(remaining)}
                             </p>
                           </div>
                         </div>
                         {isFullyPaid && carrierPaymentStatus?.paidAt && (
                           <div>
-                            <p className="text-sm text-gray-600 mb-1">Fully Paid At</p>
+                            <p className="text-sm text-gray-600 mb-1">
+                              Fully Paid At
+                            </p>
                             <p className="font-medium text-gray-800">
                               {fmtDateTime(carrierPaymentStatus.paidAt)}
                             </p>
@@ -5604,13 +7398,20 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                       {/* Payment History */}
                       {shortPayments && shortPayments.length > 0 && (
                         <div className="bg-white rounded-xl p-4 border border-gray-200">
-                          <h4 className="text-md font-bold text-gray-800 mb-3">Payment History</h4>
+                          <h4 className="text-md font-bold text-gray-800 mb-3">
+                            Payment History
+                          </h4>
                           <div className="space-y-3">
                             {shortPayments.map((payment, index) => (
-                              <div key={index} className="border border-gray-200 rounded-lg p-3 bg-gray-50">
+                              <div
+                                key={index}
+                                className="border border-gray-200 rounded-lg p-3 bg-gray-50"
+                              >
                                 <div className="flex justify-between items-start mb-2">
                                   <div>
-                                    <p className="font-semibold text-gray-800">Payment #{index + 1}</p>
+                                    <p className="font-semibold text-gray-800">
+                                      Payment #{index + 1}
+                                    </p>
                                     <p className="text-sm text-gray-600">
                                       {fmtDateTime(payment.paidAt)}
                                     </p>
@@ -5623,20 +7424,27 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                   <div>
                                     <p className="text-gray-600">Method</p>
                                     <p className="font-medium text-gray-800 capitalize">
-                                      {payment.paymentMethod?.replace('_', ' ') || 'N/A'}
+                                      {payment.paymentMethod?.replace(
+                                        "_",
+                                        " ",
+                                      ) || "N/A"}
                                     </p>
                                   </div>
                                   {payment.paymentReference && (
                                     <div>
                                       <p className="text-gray-600">Reference</p>
-                                      <p className="font-medium text-gray-800">{payment.paymentReference}</p>
+                                      <p className="font-medium text-gray-800">
+                                        {payment.paymentReference}
+                                      </p>
                                     </div>
                                   )}
                                   {payment.paidBy && (
                                     <div className="col-span-2">
                                       <p className="text-gray-600">Paid By</p>
                                       <p className="font-medium text-gray-800">
-                                        {payment.paidBy?.employeeName || payment.paidBy?.empId || 'N/A'}
+                                        {payment.paidBy?.employeeName ||
+                                          payment.paidBy?.empId ||
+                                          "N/A"}
                                       </p>
                                     </div>
                                   )}
@@ -5650,27 +7458,51 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                   )}
                                   {payment.paymentProof?.fileUrl && (
                                     <div className="col-span-2">
-                                      <p className="text-gray-600 mb-1">Proof</p>
+                                      <p className="text-gray-600 mb-1">
+                                        Proof
+                                      </p>
                                       <a
                                         href={payment.paymentProof.fileUrl}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 transition-colors"
                                       >
-                                        {isImageUrl(payment.paymentProof.fileUrl) ? (
+                                        {isImageUrl(
+                                          payment.paymentProof.fileUrl,
+                                        ) ? (
                                           <>
-                                            <ImageIcon className="text-blue-600" style={{ fontSize: 20 }} />
-                                            <span className="text-sm">{payment.paymentProof.fileName || 'View Image'}</span>
+                                            <ImageIcon
+                                              className="text-blue-600"
+                                              style={{ fontSize: 20 }}
+                                            />
+                                            <span className="text-sm">
+                                              {payment.paymentProof.fileName ||
+                                                "View Image"}
+                                            </span>
                                           </>
-                                        ) : isPdfUrl(payment.paymentProof.fileUrl) ? (
+                                        ) : isPdfUrl(
+                                            payment.paymentProof.fileUrl,
+                                          ) ? (
                                           <>
-                                            <PictureAsPdfIcon className="text-red-600" style={{ fontSize: 20 }} />
-                                            <span className="text-sm">{payment.paymentProof.fileName || 'View PDF'}</span>
+                                            <PictureAsPdfIcon
+                                              className="text-red-600"
+                                              style={{ fontSize: 20 }}
+                                            />
+                                            <span className="text-sm">
+                                              {payment.paymentProof.fileName ||
+                                                "View PDF"}
+                                            </span>
                                           </>
                                         ) : (
                                           <>
-                                            <DescriptionIcon className="text-gray-600" style={{ fontSize: 20 }} />
-                                            <span className="text-sm">{payment.paymentProof.fileName || 'View File'}</span>
+                                            <DescriptionIcon
+                                              className="text-gray-600"
+                                              style={{ fontSize: 20 }}
+                                            />
+                                            <span className="text-sm">
+                                              {payment.paymentProof.fileName ||
+                                                "View File"}
+                                            </span>
                                           </>
                                         )}
                                       </a>
@@ -5688,247 +7520,313 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
 
                 {/* Uploaded Files */}
                 <Card variant="outlined">
-                  <Box sx={{ px: 2, py: 1, backgroundColor: alpha("#0ea5e9", 0.05) }}>
+                  <Box
+                    sx={{
+                      px: 2,
+                      py: 1,
+                      backgroundColor: alpha("#0ea5e9", 0.05),
+                    }}
+                  >
                     <Typography variant="subtitle1" fontWeight={700}>
                       Files
                     </Typography>
                   </Box>
                   <CardContent>
-                    {(!selected?.uploadedFiles || selected.uploadedFiles.length === 0) ? (
-                      <Typography variant="body2" color="text.secondary">No files uploaded.</Typography>
+                    {!selected?.uploadedFiles ||
+                    selected.uploadedFiles.length === 0 ? (
+                      <Typography variant="body2" color="text.secondary">
+                        No files uploaded.
+                      </Typography>
                     ) : (
                       <Stack spacing={1}>
                         {uniqueById(selected.uploadedFiles).map((f) => (
-                          <Stack key={f?._id ?? f?.fileUrl} direction="row" alignItems="center" spacing={1}>
+                          <Stack
+                            key={f?._id ?? f?.fileUrl}
+                            direction="row"
+                            alignItems="center"
+                            spacing={1}
+                          >
                             <AttachFileIcon fontSize="small" />
-                            <MuiLink href={f?.fileUrl} target="_blank" rel="noopener">{f?.fileName}</MuiLink>
+                            <MuiLink
+                              href={f?.fileUrl}
+                              target="_blank"
+                              rel="noopener"
+                            >
+                              {f?.fileName}
+                            </MuiLink>
                             <Chip size="small" label={f?.fileType} />
-                            <Typography variant="caption" color="text.secondary" sx={{ ml: "auto" }}>{fmtDateTime(f?.uploadDate)}</Typography>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{ ml: "auto" }}
+                            >
+                              {fmtDateTime(f?.uploadDate)}
+                            </Typography>
                           </Stack>
                         ))}
                       </Stack>
                     )}
                   </CardContent>
                 </Card>
-              
-              {/* Corrections and Resubmission Information - Show for Assigned to Accountant tab (tab 0) and Accountant Approved tab (tab 1) */}
-              {(activeTab === 0 || activeTab === 1) && (selected?.accountantApproval?.corrections || selected?.accountantApproval?.resubmissionRemarks) && (
-                <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl p-6 border border-blue-200">
-                  <div className="flex items-center gap-2 mb-4">
-                    <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                      <FileText className="text-blue-600" size={20} />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-bold text-gray-800">Corrections & Resubmission Details</h3>
-                      <p className="text-sm text-gray-600">Information from previous resubmission</p>
-                    </div>
-                  </div>
 
-                  <div className="space-y-4">
-                    {/* Corrections */}
-                    {selected?.accountantApproval?.corrections && (
-                      <div className="bg-white rounded-xl p-4 border border-blue-200">
-                        <div className="flex items-center gap-2 mb-2">
-                          <CheckCircle className="text-blue-600" size={16} />
-                          <h4 className="font-semibold text-gray-800">Corrections Made</h4>
+                {/* Corrections and Resubmission Information - Show for Assigned to Accountant tab (tab 0) and Accountant Approved tab (tab 1) */}
+                {(activeTab === 0 || activeTab === 1) &&
+                  (selected?.accountantApproval?.corrections ||
+                    selected?.accountantApproval?.resubmissionRemarks) && (
+                    <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl p-6 border border-blue-200">
+                      <div className="flex items-center gap-2 mb-4">
+                        <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                          <FileText className="text-blue-600" size={20} />
                         </div>
-                        <p className="text-sm text-gray-700 bg-blue-50 p-3 rounded-lg border border-blue-100">
-                          {selected.accountantApproval.corrections}
-                        </p>
-                        {selected?.accountantApproval?.resubmittedAt && (
-                          <p className="text-xs text-gray-500 mt-2">
-                            Resubmitted at: {fmtDateTime(selected.accountantApproval.resubmittedAt)}
+                        <div>
+                          <h3 className="text-lg font-bold text-gray-800">
+                            Corrections & Resubmission Details
+                          </h3>
+                          <p className="text-sm text-gray-600">
+                            Information from previous resubmission
                           </p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-4">
+                        {/* Corrections */}
+                        {selected?.accountantApproval?.corrections && (
+                          <div className="bg-white rounded-xl p-4 border border-blue-200">
+                            <div className="flex items-center gap-2 mb-2">
+                              <CheckCircle
+                                className="text-blue-600"
+                                size={16}
+                              />
+                              <h4 className="font-semibold text-gray-800">
+                                Corrections Made
+                              </h4>
+                            </div>
+                            <p className="text-sm text-gray-700 bg-blue-50 p-3 rounded-lg border border-blue-100">
+                              {selected.accountantApproval.corrections}
+                            </p>
+                            {selected?.accountantApproval?.resubmittedAt && (
+                              <p className="text-xs text-gray-500 mt-2">
+                                Resubmitted at:{" "}
+                                {fmtDateTime(
+                                  selected.accountantApproval.resubmittedAt,
+                                )}
+                              </p>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Resubmission Remarks */}
+                        {selected?.accountantApproval?.resubmissionRemarks && (
+                          <div className="bg-white rounded-xl p-4 border border-cyan-200">
+                            <div className="flex items-center gap-2 mb-2">
+                              <FileText className="text-cyan-600" size={16} />
+                              <h4 className="font-semibold text-gray-800">
+                                Resubmission Remarks
+                              </h4>
+                            </div>
+                            <p className="text-sm text-gray-700 bg-cyan-50 p-3 rounded-lg border border-cyan-100">
+                              {selected.accountantApproval.resubmissionRemarks}
+                            </p>
+                            {selected?.accountantApproval?.resubmittedBy && (
+                              <p className="text-xs text-gray-500 mt-2">
+                                Resubmitted by:{" "}
+                                {selected.accountantApproval.resubmittedBy
+                                  ?.employeeName ||
+                                  selected.accountantApproval.resubmittedBy
+                                    ?.empId ||
+                                  "N/A"}
+                              </p>
+                            )}
+                          </div>
                         )}
                       </div>
-                    )}
+                    </div>
+                  )}
 
-                    {/* Resubmission Remarks */}
-                    {selected?.accountantApproval?.resubmissionRemarks && (
-                      <div className="bg-white rounded-xl p-4 border border-cyan-200">
-                        <div className="flex items-center gap-2 mb-2">
-                          <FileText className="text-cyan-600" size={16} />
-                          <h4 className="font-semibold text-gray-800">Resubmission Remarks</h4>
-                        </div>
-                        <p className="text-sm text-gray-700 bg-cyan-50 p-3 rounded-lg border border-cyan-100">
-                          {selected.accountantApproval.resubmissionRemarks}
+                {/* Final Approval - Only show for Assigned to Accountant tab (tab 0) */}
+                {activeTab === 0 && (
+                  <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-2xl p-6 border border-orange-200">
+                    <div className="flex items-center gap-2 mb-6">
+                      <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
+                        <CheckCircle className="text-orange-600" size={20} />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-bold text-gray-800">
+                          Final Approval
+                        </h3>
+                        <p className="text-sm text-gray-600">
+                          Review and approve this delivery order
                         </p>
-                        {selected?.accountantApproval?.resubmittedBy && (
-                          <p className="text-xs text-gray-500 mt-2">
-                            Resubmitted by: {selected.accountantApproval.resubmittedBy?.employeeName || selected.accountantApproval.resubmittedBy?.empId || 'N/A'}
-                          </p>
-                        )}
                       </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Final Approval - Only show for Assigned to Accountant tab (tab 0) */}
-              {activeTab === 0 && (
-                <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-2xl p-6 border border-orange-200">
-                  <div className="flex items-center gap-2 mb-6">
-                    <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
-                      <CheckCircle className="text-orange-600" size={20} />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-bold text-gray-800">Final Approval</h3>
-                      <p className="text-sm text-gray-600">Review and approve this delivery order</p>
-                    </div>
-                  </div>
-
-                  {/* Remarks */}
-                  <div className="mb-4">
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Remarks
-                    </label>
-                    <textarea
-                      placeholder="All charges verified and approved"
-                      value={approvalRemarks}
-                      onChange={(e) => setApprovalRemarks(e.target.value)}
-                      rows={6}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent resize-none"
-                    />
-                  </div>
-
-                  {/* Send to Sales Button */}
-                  <div className="space-y-4">
-                    <button
-                      onClick={postAccountantApproval}
-                      disabled={posting || rejectingToCMT}
-                      className="w-full flex items-center justify-center gap-2 px-6 py-3 h-12 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {posting ? (
-                        <>
-                          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                          <span>Sending...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Send size={18} />
-                          <span>Send to Sales</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-
-                  {/* Divider */}
-                  <div className="my-6 flex items-center">
-                    <div className="flex-1 border-t border-orange-300"></div>
-                    <span className="px-4 text-sm text-gray-500 font-medium">OR</span>
-                    <div className="flex-1 border-t border-orange-300"></div>
-                  </div>
-
-                  {/* Rejection Section */}
-                  <div className="mt-6">
-                    <div className="flex items-center gap-2 mb-4">
-                      <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
-                        <XCircle className="text-red-600" size={16} />
-                      </div>
-                      <h4 className="text-md font-bold text-gray-800">Reject Load</h4>
                     </div>
 
-                    {/* Rejection Reason */}
+                    {/* Remarks */}
                     <div className="mb-4">
                       <label className="block text-sm font-semibold text-gray-700 mb-2">
-                        Rejection Reason <span className="text-red-500">*</span>
+                        Remarks
                       </label>
                       <textarea
-                        placeholder="Enter reason for rejecting this load (e.g., Incorrect rates, missing documents, etc.)"
-                        value={rejectionReason}
-                        onChange={(e) => setRejectionReason(e.target.value)}
-                        rows={4}
-                        className="w-full px-4 py-3 border border-red-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none"
+                        placeholder="All charges verified and approved"
+                        value={approvalRemarks}
+                        onChange={(e) => setApprovalRemarks(e.target.value)}
+                        rows={6}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent resize-none"
                       />
                     </div>
 
-                    {/* Reject to CMT Button */}
+                    {/* Send to Sales Button */}
+                    <div className="space-y-4">
+                      <button
+                        onClick={postAccountantApproval}
+                        disabled={posting || rejectingToCMT}
+                        className="w-full flex items-center justify-center gap-2 px-6 py-3 h-12 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {posting ? (
+                          <>
+                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            <span>Sending...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Send size={18} />
+                            <span>Send to Sales</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    {/* Divider */}
+                    <div className="my-6 flex items-center">
+                      <div className="flex-1 border-t border-orange-300"></div>
+                      <span className="px-4 text-sm text-gray-500 font-medium">
+                        OR
+                      </span>
+                      <div className="flex-1 border-t border-orange-300"></div>
+                    </div>
+
+                    {/* Rejection Section */}
+                    <div className="mt-6">
+                      <div className="flex items-center gap-2 mb-4">
+                        <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                          <XCircle className="text-red-600" size={16} />
+                        </div>
+                        <h4 className="text-md font-bold text-gray-800">
+                          Reject Load
+                        </h4>
+                      </div>
+
+                      {/* Rejection Reason */}
+                      <div className="mb-4">
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Rejection Reason{" "}
+                          <span className="text-red-500">*</span>
+                        </label>
+                        <textarea
+                          placeholder="Enter reason for rejecting this load (e.g., Incorrect rates, missing documents, etc.)"
+                          value={rejectionReason}
+                          onChange={(e) => setRejectionReason(e.target.value)}
+                          rows={4}
+                          className="w-full px-4 py-3 border border-red-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none"
+                        />
+                      </div>
+
+                      {/* Reject to CMT Button */}
+                      <button
+                        onClick={postRejectToCMT}
+                        disabled={
+                          rejectingToCMT || posting || !rejectionReason.trim()
+                        }
+                        className="w-full flex items-center justify-center gap-2 px-6 py-3 h-12 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {rejectingToCMT ? (
+                          <>
+                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            <span>Rejecting...</span>
+                          </>
+                        ) : (
+                          <>
+                            <XCircle size={18} />
+                            <span>Rejected Load with reason</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Generate PDFs */}
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <FileText className="text-blue-600" size={20} />
+                    <h3 className="text-lg font-bold text-gray-800">
+                      Generate PDFs
+                    </h3>
+                  </div>
+                  <div className="flex flex-wrap gap-3">
                     <button
-                      onClick={postRejectToCMT}
-                      disabled={rejectingToCMT || posting || !rejectionReason.trim()}
-                      className="w-full flex items-center justify-center gap-2 px-6 py-3 h-12 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                      onClick={() => generatePDF("invoice")}
+                      disabled={pdfLoading.invoice}
+                      className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2.5 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {rejectingToCMT ? (
+                      {pdfLoading.invoice ? (
                         <>
-                          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                          <span>Rejecting...</span>
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                          <span>Generating...</span>
                         </>
                       ) : (
                         <>
-                          <XCircle size={18} />
-                          <span>Rejected Load with reason</span>
+                          <Download size={16} />
+                          <span>Invoice PDF</span>
+                        </>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => generatePDF("rate")}
+                      disabled={pdfLoading.rate}
+                      className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 py-2.5 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {pdfLoading.rate ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                          <span>Generating...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Download size={16} />
+                          <span>Rate Confirmation PDF</span>
+                        </>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => generatePDF("bol")}
+                      disabled={pdfLoading.bol}
+                      className="bg-gradient-to-r from-amber-500 to-orange-600 text-white px-4 py-2.5 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {pdfLoading.bol ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                          <span>Generating...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Download size={16} />
+                          <span>BOL PDF</span>
                         </>
                       )}
                     </button>
                   </div>
                 </div>
-              )}
-
-              {/* Generate PDFs */}
-              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6">
-                <div className="flex items-center gap-2 mb-4">
-                  <FileText className="text-blue-600" size={20} />
-                  <h3 className="text-lg font-bold text-gray-800">Generate PDFs</h3>
-                </div>
-                <div className="flex flex-wrap gap-3">
-                  <button
-                    onClick={() => generatePDF('invoice')}
-                    disabled={pdfLoading.invoice}
-                    className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2.5 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {pdfLoading.invoice ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                        <span>Generating...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Download size={16} />
-                        <span>Invoice PDF</span>
-                      </>
-                    )}
-                  </button>
-                  <button
-                    onClick={() => generatePDF('rate')}
-                    disabled={pdfLoading.rate}
-                    className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 py-2.5 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {pdfLoading.rate ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                        <span>Generating...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Download size={16} />
-                        <span>Rate Confirmation PDF</span>
-                      </>
-                    )}
-                  </button>
-                  <button
-                    onClick={() => generatePDF('bol')}
-                    disabled={pdfLoading.bol}
-                    className="bg-gradient-to-r from-amber-500 to-orange-600 text-white px-4 py-2.5 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {pdfLoading.bol ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                        <span>Generating...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Download size={16} />
-                        <span>BOL PDF</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
 
                 {/* Resubmit to Sales - Only show for rejected DOs */}
                 {activeTab === 3 && (
                   <Card variant="outlined">
-                    <Box sx={{ px: 2, py: 1, backgroundColor: alpha("#dc2626", 0.05) }}>
+                    <Box
+                      sx={{
+                        px: 2,
+                        py: 1,
+                        backgroundColor: alpha("#dc2626", 0.05),
+                      }}
+                    >
                       <Typography variant="subtitle1" fontWeight={700}>
                         Resubmit to Sales
                       </Typography>
@@ -5970,11 +7868,19 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                         fullWidth
                         size="large"
                       >
-                        {resubmitPosting ? "Resubmitting..." : "Resubmit to Sales"}
+                        {resubmitPosting
+                          ? "Resubmitting..."
+                          : "Resubmit to Sales"}
                       </Button>
 
-                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 2 }}>
-                        This will resubmit the DO back to sales with your corrections and remarks.
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        display="block"
+                        sx={{ mt: 2 }}
+                      >
+                        This will resubmit the DO back to sales with your
+                        corrections and remarks.
                       </Typography>
                     </CardContent>
                   </Card>
@@ -5983,7 +7889,13 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                 {/* Resubmit to CMT - Only show for rejected DOs */}
                 {activeTab === 3 && (
                   <Card variant="outlined" sx={{ mt: 2 }}>
-                    <Box sx={{ px: 2, py: 1, backgroundColor: alpha("#f59e0b", 0.05) }}>
+                    <Box
+                      sx={{
+                        px: 2,
+                        py: 1,
+                        backgroundColor: alpha("#f59e0b", 0.05),
+                      }}
+                    >
                       <Typography variant="subtitle1" fontWeight={700}>
                         Resubmit to CMT
                       </Typography>
@@ -6009,935 +7921,1266 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                         color="warning"
                         startIcon={<SendIcon />}
                         onClick={postResubmitToCMT}
-                        disabled={resubmitCMTPosting || !resubmitCMTRemarks.trim()}
+                        disabled={
+                          resubmitCMTPosting || !resubmitCMTRemarks.trim()
+                        }
                         fullWidth
                         size="large"
                       >
-                        {resubmitCMTPosting ? "Resubmitting..." : "Resubmit to CMT"}
+                        {resubmitCMTPosting
+                          ? "Resubmitting..."
+                          : "Resubmit to CMT"}
                       </Button>
 
-                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 2 }}>
-                        This will reject the DO and send it back to the assigned CMT user for corrections. The CMT user will receive an email notification with your remarks.
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        display="block"
+                        sx={{ mt: 2 }}
+                      >
+                        This will reject the DO and send it back to the assigned
+                        CMT user for corrections. The CMT user will receive an
+                        email notification with your remarks.
                       </Typography>
                     </CardContent>
                   </Card>
                 )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Edit DO Details Modal */}
-      {editOpen && (
-        <>
-          <style>{`
+        {/* Edit DO Details Modal */}
+        {editOpen && (
+          <>
+            <style>{`
             .hide-scrollbar::-webkit-scrollbar { display: none; }
             .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
           `}</style>
-          <div 
-            className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
-            onClick={() => setEditOpen(false)}
-          >
-            <div 
-              className="bg-white rounded-3xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
-              onClick={(e) => e.stopPropagation()}
+            <div
+              className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
+              onClick={() => setEditOpen(false)}
             >
-              {/* Header */}
-              <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-t-3xl">
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                      <Edit className="text-white" size={24} />
+              <div
+                className="bg-white rounded-3xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Header */}
+                <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-t-3xl">
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                        <Edit className="text-white" size={24} />
+                      </div>
+                      <div>
+                        <h2 className="text-xl font-bold">Edit DO Details</h2>
+                        <p className="text-green-100">
+                          Update delivery order details
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <h2 className="text-xl font-bold">Edit DO Details</h2>
-                      <p className="text-green-100">Update delivery order details</p>
-                    </div>
+                    <button
+                      onClick={() => setEditOpen(false)}
+                      className="text-white hover:text-gray-200 text-2xl font-bold"
+                    >
+                      ×
+                    </button>
                   </div>
-                  <button
-                    onClick={() => setEditOpen(false)}
-                    className="text-white hover:text-gray-200 text-2xl font-bold"
-                  >
-                    ×
-                  </button>
                 </div>
-              </div>
 
-              {/* Form Content */}
-              <div className="p-6">
-                {editData ? (
-                  <EditForm 
-                    data={editData} 
-                    onSubmit={editDODetails}
-                    loading={editLoading}
-                    onClose={() => setEditOpen(false)}
-                  />
-                ) : (
-                  <div className="text-center py-8">
-                    <p className="text-gray-600">No data available for editing.</p>
-                  </div>
-                )}
+                {/* Form Content */}
+                <div className="p-6">
+                  {editData ? (
+                    <EditForm
+                      data={editData}
+                      onSubmit={editDODetails}
+                      loading={editLoading}
+                      onClose={() => setEditOpen(false)}
+                    />
+                  ) : (
+                    <div className="text-center py-8">
+                      <p className="text-gray-600">
+                        No data available for editing.
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        </>
-      )}
+          </>
+        )}
 
-
-
-
-
-      {/* Payment Modal */}
-      {paymentModalOpen && (
-        <>
-          <div
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-            onClick={() => setPaymentModalOpen(false)}
-          >
-            <div 
-              className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
-              onClick={(e) => e.stopPropagation()}
+        {/* Payment Modal */}
+        {paymentModalOpen && (
+          <>
+            <div
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+              onClick={() => setPaymentModalOpen(false)}
             >
-              {/* Header */}
-              <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-t-3xl">
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                      <DollarSign size={24} className="text-white" />
+              <div
+                className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Header */}
+                <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-t-3xl">
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                        <DollarSign size={24} className="text-white" />
+                      </div>
+                      <div>
+                        <h2 className="text-2xl font-bold">Mark as Paid</h2>
+                        <p className="text-white/80 text-sm">
+                          DO ID:{" "}
+                          {paymentData?._id ? shortId(paymentData._id) : "N/A"}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <h2 className="text-2xl font-bold">Mark as Paid</h2>
-                      <p className="text-white/80 text-sm">DO ID: {paymentData?._id ? shortId(paymentData._id) : 'N/A'}</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setPaymentModalOpen(false)}
-                    className="text-white hover:text-gray-200 text-2xl font-bold"
-                  >
-                    ×
-                  </button>
-                </div>
-              </div>
-
-              {/* Form Content */}
-              <div className="p-6">
-                <div className="space-y-4">
-                  {/* Payment Method */}
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Payment Method <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={paymentForm.paymentMethod}
-                      onChange={(e) => setPaymentForm({ ...paymentForm, paymentMethod: e.target.value })}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
-                      required
-                    >
-                      <option value="">Select Payment Method</option>
-                      <option value="cash">Cash</option>
-                      <option value="check">Check</option>
-                      <option value="bank_transfer">Bank Transfer</option>
-                      <option value="online">Online</option>
-                      <option value="other">Other</option>
-                    </select>
-                  </div>
-
-                  {/* Payment Reference */}
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Payment Reference (Optional)
-                    </label>
-                    <input
-                      type="text"
-                      value={paymentForm.paymentReference}
-                      onChange={(e) => setPaymentForm({ ...paymentForm, paymentReference: e.target.value })}
-                      placeholder="Transaction ID, Check Number, etc."
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
-                    />
-                  </div>
-
-                  {/* Payment Notes */}
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Payment Notes (Optional)
-                    </label>
-                    <textarea
-                      value={paymentForm.paymentNotes}
-                      onChange={(e) => setPaymentForm({ ...paymentForm, paymentNotes: e.target.value })}
-                      placeholder="Additional notes about the payment"
-                      rows={3}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none resize-none"
-                    />
-                  </div>
-
-                  {/* Payment Proof Upload */}
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Payment Proof <span className="text-red-500">*</span>
-                    </label>
-                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-green-500 transition-colors">
-                      <input
-                        type="file"
-                        accept=".pdf,.jpg,.jpeg,.png"
-                        onChange={(e) => {
-                          const file = e.target.files[0];
-                          if (file) {
-                            if (file.size > 10 * 1024 * 1024) {
-                              setToast({ open: true, severity: "error", msg: "File size must be less than 10MB" });
-                              return;
-                            }
-                            setPaymentForm({ ...paymentForm, paymentProof: file });
-                          }
-                        }}
-                        className="hidden"
-                        id="payment-proof-upload"
-                        required
-                      />
-                      <label
-                        htmlFor="payment-proof-upload"
-                        className="cursor-pointer flex flex-col items-center justify-center"
-                      >
-                        {paymentForm.paymentProof ? (
-                          <div className="text-center">
-                            <CheckCircle size={32} className="text-green-500 mx-auto mb-2" />
-                            <p className="text-sm font-medium text-gray-700">{paymentForm.paymentProof.name}</p>
-                            <p className="text-xs text-gray-500 mt-1">
-                              {(paymentForm.paymentProof.size / 1024).toFixed(2)} KB
-                            </p>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setPaymentForm({ ...paymentForm, paymentProof: null });
-                                document.getElementById('payment-proof-upload').value = '';
-                              }}
-                              className="mt-2 text-sm text-red-500 hover:text-red-700"
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="text-center">
-                            <AttachFileIcon className="text-gray-400 mb-2" style={{ fontSize: 40 }} />
-                            <p className="text-sm font-medium text-gray-700">Click to upload payment proof</p>
-                            <p className="text-xs text-gray-500 mt-1">PDF, JPG, PNG (Max 10MB)</p>
-                          </div>
-                        )}
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Submit Button */}
-                  <div className="flex gap-3 pt-4">
                     <button
                       onClick={() => setPaymentModalOpen(false)}
-                      className="flex-1 px-4 py-2.5 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition-colors"
-                      disabled={paymentLoading}
+                      className="text-white hover:text-gray-200 text-2xl font-bold"
                     >
-                      Cancel
+                      ×
                     </button>
-                    <button
-                      onClick={handlePaymentSubmit}
-                      disabled={paymentLoading || !paymentForm.paymentMethod || !paymentForm.paymentProof}
-                      className="flex-1 px-4 py-2.5 bg-gradient-to-r from-green-500 to-green-600 text-white font-semibold rounded-lg hover:from-green-600 hover:to-green-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
-                    >
-                      {paymentLoading ? "Processing..." : "Mark as Paid"}
-                    </button>
+                  </div>
+                </div>
+
+                {/* Form Content */}
+                <div className="p-6">
+                  <div className="space-y-4">
+                    {/* Payment Method */}
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Payment Method <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        value={paymentForm.paymentMethod}
+                        onChange={(e) =>
+                          setPaymentForm({
+                            ...paymentForm,
+                            paymentMethod: e.target.value,
+                          })
+                        }
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
+                        required
+                      >
+                        <option value="">Select Payment Method</option>
+                        <option value="cash">Cash</option>
+                        <option value="check">Check</option>
+                        <option value="bank_transfer">Bank Transfer</option>
+                        <option value="online">Online</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+
+                    {/* Payment Reference */}
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Payment Reference (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={paymentForm.paymentReference}
+                        onChange={(e) =>
+                          setPaymentForm({
+                            ...paymentForm,
+                            paymentReference: e.target.value,
+                          })
+                        }
+                        placeholder="Transaction ID, Check Number, etc."
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
+                      />
+                    </div>
+
+                    {/* Payment Notes */}
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Payment Notes (Optional)
+                      </label>
+                      <textarea
+                        value={paymentForm.paymentNotes}
+                        onChange={(e) =>
+                          setPaymentForm({
+                            ...paymentForm,
+                            paymentNotes: e.target.value,
+                          })
+                        }
+                        placeholder="Additional notes about the payment"
+                        rows={3}
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none resize-none"
+                      />
+                    </div>
+
+                    {/* Payment Proof Upload */}
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Payment Proof <span className="text-red-500">*</span>
+                      </label>
+                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-green-500 transition-colors">
+                        <input
+                          type="file"
+                          accept=".pdf,.jpg,.jpeg,.png"
+                          onChange={(e) => {
+                            const file = e.target.files[0];
+                            if (file) {
+                              if (file.size > 10 * 1024 * 1024) {
+                                setToast({
+                                  open: true,
+                                  severity: "error",
+                                  msg: "File size must be less than 10MB",
+                                });
+                                return;
+                              }
+                              setPaymentForm({
+                                ...paymentForm,
+                                paymentProof: file,
+                              });
+                            }
+                          }}
+                          className="hidden"
+                          id="payment-proof-upload"
+                          required
+                        />
+                        <label
+                          htmlFor="payment-proof-upload"
+                          className="cursor-pointer flex flex-col items-center justify-center"
+                        >
+                          {paymentForm.paymentProof ? (
+                            <div className="text-center">
+                              <CheckCircle
+                                size={32}
+                                className="text-green-500 mx-auto mb-2"
+                              />
+                              <p className="text-sm font-medium text-gray-700">
+                                {paymentForm.paymentProof.name}
+                              </p>
+                              <p className="text-xs text-gray-500 mt-1">
+                                {(paymentForm.paymentProof.size / 1024).toFixed(
+                                  2,
+                                )}{" "}
+                                KB
+                              </p>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPaymentForm({
+                                    ...paymentForm,
+                                    paymentProof: null,
+                                  });
+                                  document.getElementById(
+                                    "payment-proof-upload",
+                                  ).value = "";
+                                }}
+                                className="mt-2 text-sm text-red-500 hover:text-red-700"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="text-center">
+                              <AttachFileIcon
+                                className="text-gray-400 mb-2"
+                                style={{ fontSize: 40 }}
+                              />
+                              <p className="text-sm font-medium text-gray-700">
+                                Click to upload payment proof
+                              </p>
+                              <p className="text-xs text-gray-500 mt-1">
+                                PDF, JPG, PNG (Max 10MB)
+                              </p>
+                            </div>
+                          )}
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Submit Button */}
+                    <div className="flex gap-3 pt-4">
+                      <button
+                        onClick={() => setPaymentModalOpen(false)}
+                        className="flex-1 px-4 py-2.5 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition-colors"
+                        disabled={paymentLoading}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handlePaymentSubmit}
+                        disabled={
+                          paymentLoading ||
+                          !paymentForm.paymentMethod ||
+                          !paymentForm.paymentProof
+                        }
+                        className="flex-1 px-4 py-2.5 bg-gradient-to-r from-green-500 to-green-600 text-white font-semibold rounded-lg hover:from-green-600 hover:to-green-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
+                      >
+                        {paymentLoading ? "Processing..." : "Mark as Paid"}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        </>
-      )}
+          </>
+        )}
 
-      {/* Email Modal */}
-      {emailModalOpen && (
-        <>
-          <div
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-            onClick={() => setEmailModalOpen(false)}
-          >
-            <div 
-              className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
-              onClick={(e) => e.stopPropagation()}
+        {/* Email Modal */}
+        {emailModalOpen && (
+          <>
+            <div
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+              onClick={() => setEmailModalOpen(false)}
             >
-              {/* Header */}
-              <div className="bg-gradient-to-r from-purple-500 to-purple-600 text-white p-6 rounded-t-3xl">
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                      <Send size={24} className="text-white" />
-                    </div>
-                    <div>
-                      <h2 className="text-2xl font-bold">Send Email to Customer</h2>
-                      <p className="text-white/80 text-sm">DO ID: {emailData?._id ? shortId(emailData._id) : 'N/A'}</p>
-                      {emailData?.customers?.[0]?.loadNo && (
-                        <p className="text-white/80 text-sm">Load No: {emailData.customers[0].loadNo}</p>
-                      )}
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setEmailModalOpen(false)}
-                    className="text-white hover:text-gray-200 text-2xl font-bold"
-                    disabled={emailLoading}
-                  >
-                    ×
-                  </button>
-                </div>
-              </div>
-
-              {/* Form Content */}
-              <div className="p-6">
-                <div className="space-y-4">
-                  {/* PDF Upload */}
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      PDF File <span className="text-red-500">*</span>
-                    </label>
-                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-purple-500 transition-colors">
-                      <input
-                        type="file"
-                        accept=".pdf"
-                        onChange={(e) => {
-                          const file = e.target.files[0];
-                          if (file) {
-                            if (file.type !== 'application/pdf') {
-                              setToast({ open: true, severity: "error", msg: "Please upload a PDF file only" });
-                              return;
-                            }
-                            setEmailForm({ ...emailForm, pdfFile: file });
-                          }
-                        }}
-                        className="hidden"
-                        id="email-pdf-upload"
-                      />
-                      <label
-                        htmlFor="email-pdf-upload"
-                        className="cursor-pointer flex flex-col items-center justify-center"
-                      >
-                        {emailForm.pdfFile ? (
-                          <div className="text-center">
-                            <FileText size={32} className="text-purple-500 mx-auto mb-2" />
-                            <p className="text-sm font-medium text-gray-700">{emailForm.pdfFile.name}</p>
-                            <p className="text-xs text-gray-500 mt-1">
-                              {(emailForm.pdfFile.size / 1024).toFixed(2)} KB
-                            </p>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEmailForm({ ...emailForm, pdfFile: null });
-                                document.getElementById('email-pdf-upload').value = '';
-                              }}
-                              className="mt-2 text-sm text-red-500 hover:text-red-700"
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="text-center">
-                            <AttachFileIcon className="text-gray-400 mb-2" style={{ fontSize: 40 }} />
-                            <p className="text-sm font-medium text-gray-700">Click to upload PDF file</p>
-                            <p className="text-xs text-gray-500 mt-1">PDF only</p>
-                          </div>
+              <div
+                className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Header */}
+                <div className="bg-gradient-to-r from-purple-500 to-purple-600 text-white p-6 rounded-t-3xl">
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                        <Send size={24} className="text-white" />
+                      </div>
+                      <div>
+                        <h2 className="text-2xl font-bold">
+                          Send Email to Customer
+                        </h2>
+                        <p className="text-white/80 text-sm">
+                          DO ID:{" "}
+                          {emailData?._id ? shortId(emailData._id) : "N/A"}
+                        </p>
+                        {emailData?.customers?.[0]?.loadNo && (
+                          <p className="text-white/80 text-sm">
+                            Load No: {emailData.customers[0].loadNo}
+                          </p>
                         )}
-                      </label>
+                      </div>
                     </div>
-                  </div>
-
-                  {/* Submit Button */}
-                  <div className="flex gap-3 pt-4">
                     <button
                       onClick={() => setEmailModalOpen(false)}
-                      className="flex-1 px-4 py-2.5 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition-colors"
-                      disabled={emailLoading || pdfUploading}
+                      className="text-white hover:text-gray-200 text-2xl font-bold"
+                      disabled={emailLoading}
                     >
-                      Cancel
+                      ×
                     </button>
-                    <button
-                      onClick={handleEmailSubmit}
-                      disabled={emailLoading || pdfUploading || !emailForm.pdfFile}
-                      className="flex-1 px-4 py-2.5 bg-gradient-to-r from-purple-500 to-purple-600 text-white font-semibold rounded-lg hover:from-purple-600 hover:to-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg flex items-center justify-center gap-2"
-                    >
-                      {pdfUploading ? (
-                        <>
-                          <RefreshCw size={16} className="animate-spin" />
-                          <span>Uploading PDF...</span>
-                        </>
-                      ) : emailLoading ? (
-                        <>
-                          <RefreshCw size={16} className="animate-spin" />
-                          <span>Sending Email...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Send size={16} />
-                          <span>Send Email</span>
-                        </>
-                      )}
-                    </button>
+                  </div>
+                </div>
+
+                {/* Form Content */}
+                <div className="p-6">
+                  <div className="space-y-4">
+                    {/* PDF Upload */}
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        PDF File <span className="text-red-500">*</span>
+                      </label>
+                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-purple-500 transition-colors">
+                        <input
+                          type="file"
+                          accept=".pdf"
+                          onChange={(e) => {
+                            const file = e.target.files[0];
+                            if (file) {
+                              if (file.type !== "application/pdf") {
+                                setToast({
+                                  open: true,
+                                  severity: "error",
+                                  msg: "Please upload a PDF file only",
+                                });
+                                return;
+                              }
+                              setEmailForm({ ...emailForm, pdfFile: file });
+                            }
+                          }}
+                          className="hidden"
+                          id="email-pdf-upload"
+                        />
+                        <label
+                          htmlFor="email-pdf-upload"
+                          className="cursor-pointer flex flex-col items-center justify-center"
+                        >
+                          {emailForm.pdfFile ? (
+                            <div className="text-center">
+                              <FileText
+                                size={32}
+                                className="text-purple-500 mx-auto mb-2"
+                              />
+                              <p className="text-sm font-medium text-gray-700">
+                                {emailForm.pdfFile.name}
+                              </p>
+                              <p className="text-xs text-gray-500 mt-1">
+                                {(emailForm.pdfFile.size / 1024).toFixed(2)} KB
+                              </p>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEmailForm({ ...emailForm, pdfFile: null });
+                                  document.getElementById(
+                                    "email-pdf-upload",
+                                  ).value = "";
+                                }}
+                                className="mt-2 text-sm text-red-500 hover:text-red-700"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="text-center">
+                              <AttachFileIcon
+                                className="text-gray-400 mb-2"
+                                style={{ fontSize: 40 }}
+                              />
+                              <p className="text-sm font-medium text-gray-700">
+                                Click to upload PDF file
+                              </p>
+                              <p className="text-xs text-gray-500 mt-1">
+                                PDF only
+                              </p>
+                            </div>
+                          )}
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Submit Button */}
+                    <div className="flex gap-3 pt-4">
+                      <button
+                        onClick={() => setEmailModalOpen(false)}
+                        className="flex-1 px-4 py-2.5 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition-colors"
+                        disabled={emailLoading || pdfUploading}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleEmailSubmit}
+                        disabled={
+                          emailLoading || pdfUploading || !emailForm.pdfFile
+                        }
+                        className="flex-1 px-4 py-2.5 bg-gradient-to-r from-purple-500 to-purple-600 text-white font-semibold rounded-lg hover:from-purple-600 hover:to-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg flex items-center justify-center gap-2"
+                      >
+                        {pdfUploading ? (
+                          <>
+                            <RefreshCw size={16} className="animate-spin" />
+                            <span>Uploading PDF...</span>
+                          </>
+                        ) : emailLoading ? (
+                          <>
+                            <RefreshCw size={16} className="animate-spin" />
+                            <span>Sending Email...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Send size={16} />
+                            <span>Send Email</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        </>
-      )}
+          </>
+        )}
 
-      {/* Bulk Payment Modal */}
-      {bulkPaymentModalOpen && (
-        <>
-          <div
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-            onClick={() => setBulkPaymentModalOpen(false)}
-          >
-            <div 
-              className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
-              onClick={(e) => e.stopPropagation()}
+        {/* Bulk Payment Modal */}
+        {bulkPaymentModalOpen && (
+          <>
+            <div
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+              onClick={() => setBulkPaymentModalOpen(false)}
             >
-              {/* Header */}
-              <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-t-3xl">
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                      <DollarSign size={24} className="text-white" />
+              <div
+                className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Header */}
+                <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-t-3xl">
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                        <DollarSign size={24} className="text-white" />
+                      </div>
+                      <div>
+                        <h2 className="text-2xl font-bold">
+                          Bulk Mark as Paid
+                        </h2>
+                        <p className="text-white/80 text-sm">
+                          {bulkPaymentDOIds.length || selectedDOs.size} DO(s)
+                          selected
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <h2 className="text-2xl font-bold">Bulk Mark as Paid</h2>
-                      <p className="text-white/80 text-sm">{bulkPaymentDOIds.length || selectedDOs.size} DO(s) selected</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setBulkPaymentModalOpen(false)}
-                    className="text-white hover:text-gray-200 text-2xl font-bold"
-                  >
-                    ×
-                  </button>
-                </div>
-              </div>
-
-              {/* Form Content */}
-              <div className="p-6">
-                <div className="space-y-4">
-                  {/* Selected DOs Info */}
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-                    <p className="text-sm font-semibold text-blue-800 mb-2">Selected DOs:</p>
-                    <div className="flex flex-wrap gap-2">
-                      {(bulkPaymentDOIds.length > 0 ? bulkPaymentDOIds : Array.from(selectedDOs)).slice(0, 10).map((doId) => (
-                        <span key={doId} className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded font-mono">
-                          {shortId(doId)}
-                        </span>
-                      ))}
-                      {(bulkPaymentDOIds.length || selectedDOs.size) > 10 && (
-                        <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded">
-                          +{(bulkPaymentDOIds.length || selectedDOs.size) - 10} more
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Payment Method */}
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Payment Method <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={bulkPaymentForm.paymentMethod}
-                      onChange={(e) => setBulkPaymentForm({ ...bulkPaymentForm, paymentMethod: e.target.value })}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
-                      required
-                    >
-                      <option value="">Select Payment Method</option>
-                      <option value="cash">Cash</option>
-                      <option value="check">Check</option>
-                      <option value="bank_transfer">Bank Transfer</option>
-                      <option value="online">Online</option>
-                      <option value="other">Other</option>
-                    </select>
-                  </div>
-
-                  {/* Payment Reference */}
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Payment Reference (Optional)
-                    </label>
-                    <input
-                      type="text"
-                      value={bulkPaymentForm.paymentReference}
-                      onChange={(e) => setBulkPaymentForm({ ...bulkPaymentForm, paymentReference: e.target.value })}
-                      placeholder="Transaction ID, Check Number, etc."
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
-                    />
-                  </div>
-
-                  {/* Payment Notes */}
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Payment Notes (Optional)
-                    </label>
-                    <textarea
-                      value={bulkPaymentForm.paymentNotes}
-                      onChange={(e) => setBulkPaymentForm({ ...bulkPaymentForm, paymentNotes: e.target.value })}
-                      placeholder="Additional notes about the payment"
-                      rows={3}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none resize-none"
-                    />
-                  </div>
-
-                  {/* Payment Proof Upload */}
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Payment Proof <span className="text-red-500">*</span>
-                    </label>
-                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-green-500 transition-colors">
-                      <input
-                        type="file"
-                        accept=".pdf,.jpg,.jpeg,.png"
-                        onChange={(e) => {
-                          const file = e.target.files[0];
-                          if (file) {
-                            if (file.size > 10 * 1024 * 1024) {
-                              setToast({ open: true, severity: "error", msg: "File size must be less than 10MB" });
-                              return;
-                            }
-                            setBulkPaymentForm({ ...bulkPaymentForm, paymentProof: file });
-                          }
-                        }}
-                        className="hidden"
-                        id="bulk-payment-proof-upload"
-                        required
-                      />
-                      <label
-                        htmlFor="bulk-payment-proof-upload"
-                        className="cursor-pointer flex flex-col items-center justify-center"
-                      >
-                        {bulkPaymentForm.paymentProof ? (
-                          <div className="text-center">
-                            <CheckCircle size={32} className="text-green-500 mx-auto mb-2" />
-                            <p className="text-sm font-medium text-gray-700">{bulkPaymentForm.paymentProof.name}</p>
-                            <p className="text-xs text-gray-500 mt-1">
-                              {(bulkPaymentForm.paymentProof.size / 1024).toFixed(2)} KB
-                            </p>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setBulkPaymentForm({ ...bulkPaymentForm, paymentProof: null });
-                                document.getElementById('bulk-payment-proof-upload').value = '';
-                              }}
-                              className="mt-2 text-sm text-red-500 hover:text-red-700"
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="text-center">
-                            <AttachFileIcon className="text-gray-400 mb-2" style={{ fontSize: 40 }} />
-                            <p className="text-sm font-medium text-gray-700">Click to upload payment proof</p>
-                            <p className="text-xs text-gray-500 mt-1">PDF, JPG, PNG (Max 10MB)</p>
-                          </div>
-                        )}
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Submit Button */}
-                  <div className="flex gap-3 pt-4">
                     <button
                       onClick={() => setBulkPaymentModalOpen(false)}
-                      className="flex-1 px-4 py-2.5 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition-colors"
-                      disabled={bulkPaymentLoading}
+                      className="text-white hover:text-gray-200 text-2xl font-bold"
                     >
-                      Cancel
+                      ×
                     </button>
-                    <button
-                      onClick={handleBulkPaymentSubmit}
-                      disabled={bulkPaymentLoading || !bulkPaymentForm.paymentMethod || !bulkPaymentForm.paymentProof}
-                      className="flex-1 px-4 py-2.5 bg-gradient-to-r from-green-500 to-green-600 text-white font-semibold rounded-lg hover:from-green-600 hover:to-green-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
-                    >
-                      {bulkPaymentLoading ? "Processing..." : `Mark ${bulkPaymentDOIds.length || selectedDOs.size} DO(s) as Paid`}
-                    </button>
+                  </div>
+                </div>
+
+                {/* Form Content */}
+                <div className="p-6">
+                  <div className="space-y-4">
+                    {/* Selected DOs Info */}
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                      <p className="text-sm font-semibold text-blue-800 mb-2">
+                        Selected DOs:
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {(bulkPaymentDOIds.length > 0
+                          ? bulkPaymentDOIds
+                          : Array.from(selectedDOs)
+                        )
+                          .slice(0, 10)
+                          .map((doId) => (
+                            <span
+                              key={doId}
+                              className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded font-mono"
+                            >
+                              {shortId(doId)}
+                            </span>
+                          ))}
+                        {(bulkPaymentDOIds.length || selectedDOs.size) > 10 && (
+                          <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded">
+                            +
+                            {(bulkPaymentDOIds.length || selectedDOs.size) - 10}{" "}
+                            more
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Payment Method */}
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Payment Method <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        value={bulkPaymentForm.paymentMethod}
+                        onChange={(e) =>
+                          setBulkPaymentForm({
+                            ...bulkPaymentForm,
+                            paymentMethod: e.target.value,
+                          })
+                        }
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
+                        required
+                      >
+                        <option value="">Select Payment Method</option>
+                        <option value="cash">Cash</option>
+                        <option value="check">Check</option>
+                        <option value="bank_transfer">Bank Transfer</option>
+                        <option value="online">Online</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+
+                    {/* Payment Reference */}
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Payment Reference (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={bulkPaymentForm.paymentReference}
+                        onChange={(e) =>
+                          setBulkPaymentForm({
+                            ...bulkPaymentForm,
+                            paymentReference: e.target.value,
+                          })
+                        }
+                        placeholder="Transaction ID, Check Number, etc."
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
+                      />
+                    </div>
+
+                    {/* Payment Notes */}
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Payment Notes (Optional)
+                      </label>
+                      <textarea
+                        value={bulkPaymentForm.paymentNotes}
+                        onChange={(e) =>
+                          setBulkPaymentForm({
+                            ...bulkPaymentForm,
+                            paymentNotes: e.target.value,
+                          })
+                        }
+                        placeholder="Additional notes about the payment"
+                        rows={3}
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none resize-none"
+                      />
+                    </div>
+
+                    {/* Payment Proof Upload */}
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Payment Proof <span className="text-red-500">*</span>
+                      </label>
+                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-green-500 transition-colors">
+                        <input
+                          type="file"
+                          accept=".pdf,.jpg,.jpeg,.png"
+                          onChange={(e) => {
+                            const file = e.target.files[0];
+                            if (file) {
+                              if (file.size > 10 * 1024 * 1024) {
+                                setToast({
+                                  open: true,
+                                  severity: "error",
+                                  msg: "File size must be less than 10MB",
+                                });
+                                return;
+                              }
+                              setBulkPaymentForm({
+                                ...bulkPaymentForm,
+                                paymentProof: file,
+                              });
+                            }
+                          }}
+                          className="hidden"
+                          id="bulk-payment-proof-upload"
+                          required
+                        />
+                        <label
+                          htmlFor="bulk-payment-proof-upload"
+                          className="cursor-pointer flex flex-col items-center justify-center"
+                        >
+                          {bulkPaymentForm.paymentProof ? (
+                            <div className="text-center">
+                              <CheckCircle
+                                size={32}
+                                className="text-green-500 mx-auto mb-2"
+                              />
+                              <p className="text-sm font-medium text-gray-700">
+                                {bulkPaymentForm.paymentProof.name}
+                              </p>
+                              <p className="text-xs text-gray-500 mt-1">
+                                {(
+                                  bulkPaymentForm.paymentProof.size / 1024
+                                ).toFixed(2)}{" "}
+                                KB
+                              </p>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setBulkPaymentForm({
+                                    ...bulkPaymentForm,
+                                    paymentProof: null,
+                                  });
+                                  document.getElementById(
+                                    "bulk-payment-proof-upload",
+                                  ).value = "";
+                                }}
+                                className="mt-2 text-sm text-red-500 hover:text-red-700"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="text-center">
+                              <AttachFileIcon
+                                className="text-gray-400 mb-2"
+                                style={{ fontSize: 40 }}
+                              />
+                              <p className="text-sm font-medium text-gray-700">
+                                Click to upload payment proof
+                              </p>
+                              <p className="text-xs text-gray-500 mt-1">
+                                PDF, JPG, PNG (Max 10MB)
+                              </p>
+                            </div>
+                          )}
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Submit Button */}
+                    <div className="flex gap-3 pt-4">
+                      <button
+                        onClick={() => setBulkPaymentModalOpen(false)}
+                        className="flex-1 px-4 py-2.5 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition-colors"
+                        disabled={bulkPaymentLoading}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleBulkPaymentSubmit}
+                        disabled={
+                          bulkPaymentLoading ||
+                          !bulkPaymentForm.paymentMethod ||
+                          !bulkPaymentForm.paymentProof
+                        }
+                        className="flex-1 px-4 py-2.5 bg-gradient-to-r from-green-500 to-green-600 text-white font-semibold rounded-lg hover:from-green-600 hover:to-green-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
+                      >
+                        {bulkPaymentLoading
+                          ? "Processing..."
+                          : `Mark ${bulkPaymentDOIds.length || selectedDOs.size} DO(s) as Paid`}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        </>
-      )}
+          </>
+        )}
 
-      {/* Short Pay Modal */}
-      {shortPayModalOpen && shortPayData && (
-        <>
-          <div
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-            onClick={() => setShortPayModalOpen(false)}
-          >
-            <div 
-              className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
-              onClick={(e) => e.stopPropagation()}
+        {/* Short Pay Modal */}
+        {shortPayModalOpen && shortPayData && (
+          <>
+            <div
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+              onClick={() => setShortPayModalOpen(false)}
             >
-              {/* Header */}
-              <div className="bg-gradient-to-r from-orange-500 to-orange-600 text-white p-6 rounded-t-3xl">
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                      <DollarSign size={24} className="text-white" />
-                    </div>
-                    <div>
-                      <h2 className="text-2xl font-bold">Short Pay Carrier</h2>
-                      <p className="text-white/80 text-sm">DO ID: {shortPayData?._id ? shortId(shortPayData._id) : 'N/A'}</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setShortPayModalOpen(false)}
-                    className="text-white hover:text-gray-200 text-2xl font-bold"
-                  >
-                    ×
-                  </button>
-                </div>
-              </div>
-
-              {/* Form Content */}
-              <div className="p-6">
-                {(() => {
-                  const totals = computeTotals(shortPayData);
-                  const carrierPaymentStatus = shortPayData?.carrierPaymentStatus || {};
-                  const totalPaid = carrierPaymentStatus?.totalPaidAmount || 0;
-                  const remaining = totals.carrierTotal - totalPaid;
-                  
-                  return (
-                    <div className="space-y-4">
-                      {/* Payment Summary */}
-                      <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl p-4 border border-orange-200">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <p className="text-sm text-gray-600 mb-1">Total Carrier Fees</p>
-                            <p className="text-lg font-bold text-gray-800">${fmtMoney(totals.carrierTotal)}</p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-600 mb-1">Already Paid</p>
-                            <p className="text-lg font-bold text-green-600">${fmtMoney(totalPaid)}</p>
-                          </div>
-                          <div className="col-span-2">
-                            <p className="text-sm text-gray-600 mb-1">Remaining Amount</p>
-                            <p className="text-xl font-bold text-orange-600">${fmtMoney(remaining)}</p>
-                          </div>
-                        </div>
+              <div
+                className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Header */}
+                <div className="bg-gradient-to-r from-orange-500 to-orange-600 text-white p-6 rounded-t-3xl">
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                        <DollarSign size={24} className="text-white" />
                       </div>
-
-                      {/* Payment Amount */}
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                          Payment Amount <span className="text-red-500">*</span>
-                        </label>
-                        <div className="relative">
-                          <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-600 font-bold text-lg">$</span>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0.01"
-                            max={remaining}
-                            value={shortPayForm.paymentAmount}
-                            onChange={(e) => {
-                              const value = e.target.value;
-                              if (value === '' || (parseFloat(value) > 0 && parseFloat(value) <= remaining)) {
-                                setShortPayForm({ ...shortPayForm, paymentAmount: value });
-                              } else if (parseFloat(value) > remaining) {
-                                setToast({ open: true, severity: "error", msg: `Amount cannot exceed remaining balance of $${fmtMoney(remaining)}` });
-                              }
-                            }}
-                            placeholder="0.00"
-                            className={`w-full pl-10 pr-4 py-3 text-lg font-semibold border-2 rounded-xl transition-all ${
-                              shortPayForm.paymentAmount && parseFloat(shortPayForm.paymentAmount) > remaining
-                                ? 'border-red-400 bg-red-50 focus:ring-red-500 focus:border-red-500'
-                                : 'border-gray-300 bg-white focus:ring-2 focus:ring-orange-500 focus:border-orange-500'
-                            } outline-none`}
-                            required
-                          />
+                        <h2 className="text-2xl font-bold">
+                          Short Pay Carrier
+                        </h2>
+                        <p className="text-white/80 text-sm">
+                          DO ID:{" "}
+                          {shortPayData?._id
+                            ? shortId(shortPayData._id)
+                            : "N/A"}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setShortPayModalOpen(false)}
+                      className="text-white hover:text-gray-200 text-2xl font-bold"
+                    >
+                      ×
+                    </button>
+                  </div>
+                </div>
+
+                {/* Form Content */}
+                <div className="p-6">
+                  {(() => {
+                    const totals = computeTotals(shortPayData);
+                    const carrierPaymentStatus =
+                      shortPayData?.carrierPaymentStatus || {};
+                    const totalPaid =
+                      carrierPaymentStatus?.totalPaidAmount || 0;
+                    const remaining = totals.carrierTotal - totalPaid;
+
+                    return (
+                      <div className="space-y-4">
+                        {/* Payment Summary */}
+                        <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl p-4 border border-orange-200">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <p className="text-sm text-gray-600 mb-1">
+                                Total Carrier Fees
+                              </p>
+                              <p className="text-lg font-bold text-gray-800">
+                                ${fmtMoney(totals.carrierTotal)}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600 mb-1">
+                                Already Paid
+                              </p>
+                              <p className="text-lg font-bold text-green-600">
+                                ${fmtMoney(totalPaid)}
+                              </p>
+                            </div>
+                            <div className="col-span-2">
+                              <p className="text-sm text-gray-600 mb-1">
+                                Remaining Amount
+                              </p>
+                              <p className="text-xl font-bold text-orange-600">
+                                ${fmtMoney(remaining)}
+                              </p>
+                            </div>
+                          </div>
                         </div>
-                        <div className="mt-2 flex items-center justify-between">
-                          <p className="text-xs text-gray-500">
-                            Maximum: <span className="font-semibold text-orange-600">${fmtMoney(remaining)}</span>
-                          </p>
-                          {shortPayForm.paymentAmount && parseFloat(shortPayForm.paymentAmount) > 0 && (
+
+                        {/* Payment Amount */}
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            Payment Amount{" "}
+                            <span className="text-red-500">*</span>
+                          </label>
+                          <div className="relative">
+                            <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-600 font-bold text-lg">
+                              $
+                            </span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0.01"
+                              max={remaining}
+                              value={shortPayForm.paymentAmount}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                if (
+                                  value === "" ||
+                                  (parseFloat(value) > 0 &&
+                                    parseFloat(value) <= remaining)
+                                ) {
+                                  setShortPayForm({
+                                    ...shortPayForm,
+                                    paymentAmount: value,
+                                  });
+                                } else if (parseFloat(value) > remaining) {
+                                  setToast({
+                                    open: true,
+                                    severity: "error",
+                                    msg: `Amount cannot exceed remaining balance of $${fmtMoney(remaining)}`,
+                                  });
+                                }
+                              }}
+                              placeholder="0.00"
+                              className={`w-full pl-10 pr-4 py-3 text-lg font-semibold border-2 rounded-xl transition-all ${
+                                shortPayForm.paymentAmount &&
+                                parseFloat(shortPayForm.paymentAmount) >
+                                  remaining
+                                  ? "border-red-400 bg-red-50 focus:ring-red-500 focus:border-red-500"
+                                  : "border-gray-300 bg-white focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                              } outline-none`}
+                              required
+                            />
+                          </div>
+                          <div className="mt-2 flex items-center justify-between">
                             <p className="text-xs text-gray-500">
-                              Remaining after payment: <span className="font-semibold text-gray-700">
-                                ${fmtMoney(remaining - parseFloat(shortPayForm.paymentAmount || 0))}
+                              Maximum:{" "}
+                              <span className="font-semibold text-orange-600">
+                                ${fmtMoney(remaining)}
                               </span>
+                            </p>
+                            {shortPayForm.paymentAmount &&
+                              parseFloat(shortPayForm.paymentAmount) > 0 && (
+                                <p className="text-xs text-gray-500">
+                                  Remaining after payment:{" "}
+                                  <span className="font-semibold text-gray-700">
+                                    $
+                                    {fmtMoney(
+                                      remaining -
+                                        parseFloat(
+                                          shortPayForm.paymentAmount || 0,
+                                        ),
+                                    )}
+                                  </span>
+                                </p>
+                              )}
+                          </div>
+                          {/* Quick Fill Buttons */}
+                          {remaining > 0 && (
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setShortPayForm({
+                                    ...shortPayForm,
+                                    paymentAmount: remaining.toFixed(2),
+                                  })
+                                }
+                                className="px-3 py-1.5 text-xs font-semibold bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors border border-orange-300"
+                              >
+                                Pay Full (${fmtMoney(remaining)})
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setShortPayForm({
+                                    ...shortPayForm,
+                                    paymentAmount: (remaining / 2).toFixed(2),
+                                  })
+                                }
+                                className="px-3 py-1.5 text-xs font-semibold bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors border border-gray-300"
+                              >
+                                Pay Half (${fmtMoney(remaining / 2)})
+                              </button>
+                              {remaining >= 100 && (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setShortPayForm({
+                                        ...shortPayForm,
+                                        paymentAmount: "100.00",
+                                      })
+                                    }
+                                    className="px-3 py-1.5 text-xs font-semibold bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors border border-gray-300"
+                                  >
+                                    $100
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setShortPayForm({
+                                        ...shortPayForm,
+                                        paymentAmount: "500.00",
+                                      })
+                                    }
+                                    className="px-3 py-1.5 text-xs font-semibold bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors border border-gray-300"
+                                  >
+                                    $500
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Payment Method */}
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            Payment Method{" "}
+                            <span className="text-red-500">*</span>
+                          </label>
+                          <select
+                            value={shortPayForm.paymentMethod}
+                            onChange={(e) =>
+                              setShortPayForm({
+                                ...shortPayForm,
+                                paymentMethod: e.target.value,
+                              })
+                            }
+                            className={`w-full px-4 py-3 border-2 rounded-xl transition-all ${
+                              shortPayForm.paymentMethod
+                                ? "border-green-300 bg-green-50 focus:ring-green-500 focus:border-green-500"
+                                : "border-gray-300 bg-white focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                            } outline-none font-medium`}
+                            required
+                          >
+                            <option value="">Select Payment Method</option>
+                            <option value="cash">💵 Cash</option>
+                            <option value="check">📝 Check</option>
+                            <option value="bank_transfer">
+                              🏦 Bank Transfer
+                            </option>
+                            <option value="online">💻 Online Payment</option>
+                            <option value="other">📄 Other</option>
+                          </select>
+                          {shortPayForm.paymentMethod && (
+                            <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                              <CheckCircle size={12} />
+                              Payment method selected
                             </p>
                           )}
                         </div>
-                        {/* Quick Fill Buttons */}
-                        {remaining > 0 && (
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setShortPayForm({ ...shortPayForm, paymentAmount: remaining.toFixed(2) })}
-                              className="px-3 py-1.5 text-xs font-semibold bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors border border-orange-300"
-                            >
-                              Pay Full (${fmtMoney(remaining)})
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setShortPayForm({ ...shortPayForm, paymentAmount: (remaining / 2).toFixed(2) })}
-                              className="px-3 py-1.5 text-xs font-semibold bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors border border-gray-300"
-                            >
-                              Pay Half (${fmtMoney(remaining / 2)})
-                            </button>
-                            {remaining >= 100 && (
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={() => setShortPayForm({ ...shortPayForm, paymentAmount: '100.00' })}
-                                  className="px-3 py-1.5 text-xs font-semibold bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors border border-gray-300"
-                                >
-                                  $100
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setShortPayForm({ ...shortPayForm, paymentAmount: '500.00' })}
-                                  className="px-3 py-1.5 text-xs font-semibold bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors border border-gray-300"
-                                >
-                                  $500
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        )}
-                      </div>
 
-                      {/* Payment Method */}
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                          Payment Method <span className="text-red-500">*</span>
-                        </label>
-                        <select
-                          value={shortPayForm.paymentMethod}
-                          onChange={(e) => setShortPayForm({ ...shortPayForm, paymentMethod: e.target.value })}
-                          className={`w-full px-4 py-3 border-2 rounded-xl transition-all ${
-                            shortPayForm.paymentMethod
-                              ? 'border-green-300 bg-green-50 focus:ring-green-500 focus:border-green-500'
-                              : 'border-gray-300 bg-white focus:ring-2 focus:ring-orange-500 focus:border-orange-500'
-                          } outline-none font-medium`}
-                          required
-                        >
-                          <option value="">Select Payment Method</option>
-                          <option value="cash">💵 Cash</option>
-                          <option value="check">📝 Check</option>
-                          <option value="bank_transfer">🏦 Bank Transfer</option>
-                          <option value="online">💻 Online Payment</option>
-                          <option value="other">📄 Other</option>
-                        </select>
-                        {shortPayForm.paymentMethod && (
-                          <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
-                            <CheckCircle size={12} />
-                            Payment method selected
-                          </p>
-                        )}
-                      </div>
-
-                      {/* Payment Reference */}
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                          Payment Reference <span className="text-gray-400 text-xs font-normal">(Optional)</span>
-                        </label>
-                        <input
-                          type="text"
-                          value={shortPayForm.paymentReference}
-                          onChange={(e) => setShortPayForm({ ...shortPayForm, paymentReference: e.target.value })}
-                          placeholder="e.g., TXN123456, Check #789, Wire Transfer ID"
-                          className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all bg-white hover:border-gray-400"
-                        />
-                        <p className="text-xs text-gray-500 mt-1">Helpful for tracking and reconciliation</p>
-                      </div>
-
-                      {/* Payment Notes */}
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                          Payment Notes <span className="text-gray-400 text-xs font-normal">(Optional)</span>
-                        </label>
-                        <textarea
-                          value={shortPayForm.paymentNotes}
-                          onChange={(e) => setShortPayForm({ ...shortPayForm, paymentNotes: e.target.value })}
-                          placeholder="Add any additional notes about this payment (e.g., reason for partial payment, special instructions, etc.)"
-                          rows={4}
-                          maxLength={500}
-                          className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none resize-none transition-all bg-white hover:border-gray-400"
-                        />
-                        <div className="flex justify-between items-center mt-1">
-                          <p className="text-xs text-gray-500">Optional notes for internal records</p>
-                          <p className={`text-xs ${shortPayForm.paymentNotes?.length > 450 ? 'text-orange-600' : 'text-gray-400'}`}>
-                            {shortPayForm.paymentNotes?.length || 0}/500
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Payment Proof Upload */}
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                          Payment Proof <span className="text-red-500">*</span>
-                        </label>
-                        <div className={`border-2 border-dashed rounded-xl p-6 transition-all ${
-                          shortPayForm.carrierPaymentProof
-                            ? 'border-green-400 bg-green-50'
-                            : 'border-gray-300 bg-gray-50 hover:border-orange-400 hover:bg-orange-50'
-                        }`}>
-                          <input
-                            type="file"
-                            accept=".pdf,.jpg,.jpeg,.png"
-                            onChange={(e) => {
-                              const file = e.target.files[0];
-                              if (file) {
-                                if (file.size > 10 * 1024 * 1024) {
-                                  setToast({ open: true, severity: "error", msg: "File size must be less than 10MB" });
-                                  return;
-                                }
-                                setShortPayForm({ ...shortPayForm, carrierPaymentProof: file });
-                              }
-                            }}
-                            className="hidden"
-                            id="short-pay-proof-upload"
-                            required
-                          />
-                          <label
-                            htmlFor="short-pay-proof-upload"
-                            className="cursor-pointer flex flex-col items-center justify-center min-h-[120px]"
-                          >
-                            {shortPayForm.carrierPaymentProof ? (
-                              <div className="text-center w-full">
-                                <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-3">
-                                  <CheckCircle size={32} className="text-green-600" />
-                                </div>
-                                <p className="text-sm font-semibold text-gray-800 mb-1">{shortPayForm.carrierPaymentProof.name}</p>
-                                <p className="text-xs text-gray-600 mb-3">
-                                  {(shortPayForm.carrierPaymentProof.size / 1024).toFixed(2)} KB
-                                </p>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setShortPayForm({ ...shortPayForm, carrierPaymentProof: null });
-                                    document.getElementById('short-pay-proof-upload').value = '';
-                                  }}
-                                  className="px-4 py-2 text-sm font-semibold bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors border border-red-300"
-                                >
-                                  Remove File
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="text-center">
-                                <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-200 rounded-full mb-3">
-                                  <AttachFileIcon className="text-gray-500" style={{ fontSize: 32 }} />
-                                </div>
-                                <p className="text-sm font-semibold text-gray-700 mb-1">Click to upload payment proof</p>
-                                <p className="text-xs text-gray-500 mb-2">PDF, JPG, PNG files supported</p>
-                                <p className="text-xs text-gray-400">Maximum file size: 10MB</p>
-                              </div>
-                            )}
+                        {/* Payment Reference */}
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            Payment Reference{" "}
+                            <span className="text-gray-400 text-xs font-normal">
+                              (Optional)
+                            </span>
                           </label>
-                        </div>
-                        {!shortPayForm.carrierPaymentProof && (
-                          <p className="text-xs text-orange-600 mt-2 flex items-center gap-1">
-                            <Clock size={12} />
-                            Payment proof is required to complete the transaction
+                          <input
+                            type="text"
+                            value={shortPayForm.paymentReference}
+                            onChange={(e) =>
+                              setShortPayForm({
+                                ...shortPayForm,
+                                paymentReference: e.target.value,
+                              })
+                            }
+                            placeholder="e.g., TXN123456, Check #789, Wire Transfer ID"
+                            className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all bg-white hover:border-gray-400"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">
+                            Helpful for tracking and reconciliation
                           </p>
-                        )}
-                      </div>
-
-                      {/* Submit Button */}
-                      <div className="pt-6 border-t border-gray-200">
-                        <div className="flex gap-3">
-                          <button
-                            onClick={() => setShortPayModalOpen(false)}
-                            className="flex-1 px-6 py-3 bg-gray-100 text-gray-700 font-semibold rounded-xl hover:bg-gray-200 transition-colors border-2 border-gray-300"
-                            disabled={shortPayLoading}
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            onClick={handleShortPaySubmit}
-                            disabled={(() => {
-                              const amount = parseFloat(shortPayForm.paymentAmount || 0);
-                              const isAmountValid = amount > 0 && amount <= remaining + 0.01; // Allow small rounding differences
-                              return shortPayLoading || 
-                                     !shortPayForm.paymentAmount || 
-                                     !shortPayForm.paymentMethod || 
-                                     !shortPayForm.carrierPaymentProof || 
-                                     !isAmountValid;
-                            })()}
-                            className="flex-1 px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-bold rounded-xl hover:from-orange-600 hover:to-orange-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl text-lg"
-                            title={(() => {
-                              if (shortPayLoading) return "Processing payment...";
-                              if (!shortPayForm.paymentAmount) return "Please enter payment amount";
-                              if (!shortPayForm.paymentMethod) return "Please select payment method";
-                              if (!shortPayForm.carrierPaymentProof) return "Please upload payment proof";
-                              const amount = parseFloat(shortPayForm.paymentAmount || 0);
-                              if (amount <= 0) return "Payment amount must be greater than 0";
-                              if (amount > remaining + 0.01) return `Amount cannot exceed remaining balance of $${fmtMoney(remaining)}`;
-                              return "Click to record short payment";
-                            })()}
-                          >
-                            {shortPayLoading ? (
-                              <span className="flex items-center justify-center gap-2">
-                                <RefreshCw size={18} className="animate-spin" />
-                                Processing...
-                              </span>
-                            ) : (
-                              <span className="flex items-center justify-center gap-2">
-                                <DollarSign size={18} />
-                                Record Short Payment
-                              </span>
-                            )}
-                          </button>
                         </div>
-                        {/* Validation Messages */}
-                        {(() => {
-                          const amount = parseFloat(shortPayForm.paymentAmount || 0);
-                          const isAmountValid = amount > 0 && amount <= remaining + 0.01;
-                          const missingFields = [];
-                          
-                          if (!shortPayForm.paymentAmount) missingFields.push("Payment Amount");
-                          if (!shortPayForm.paymentMethod) missingFields.push("Payment Method");
-                          if (!shortPayForm.carrierPaymentProof) missingFields.push("Payment Proof");
-                          if (amount <= 0 && shortPayForm.paymentAmount) missingFields.push("Valid Payment Amount (> 0)");
-                          if (amount > remaining + 0.01) missingFields.push(`Amount within limit (max $${fmtMoney(remaining)})`);
 
-                          if (missingFields.length > 0 && shortPayForm.paymentAmount) {
-                            return (
-                              <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
-                                <p className="text-xs text-red-800 font-semibold mb-1">⚠️ Please complete the following:</p>
-                                <ul className="text-xs text-red-700 list-disc list-inside space-y-0.5">
-                                  {missingFields.map((field, idx) => (
-                                    <li key={idx}>{field}</li>
-                                  ))}
-                                </ul>
-                              </div>
+                        {/* Payment Notes */}
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            Payment Notes{" "}
+                            <span className="text-gray-400 text-xs font-normal">
+                              (Optional)
+                            </span>
+                          </label>
+                          <textarea
+                            value={shortPayForm.paymentNotes}
+                            onChange={(e) =>
+                              setShortPayForm({
+                                ...shortPayForm,
+                                paymentNotes: e.target.value,
+                              })
+                            }
+                            placeholder="Add any additional notes about this payment (e.g., reason for partial payment, special instructions, etc.)"
+                            rows={4}
+                            maxLength={500}
+                            className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none resize-none transition-all bg-white hover:border-gray-400"
+                          />
+                          <div className="flex justify-between items-center mt-1">
+                            <p className="text-xs text-gray-500">
+                              Optional notes for internal records
+                            </p>
+                            <p
+                              className={`text-xs ${shortPayForm.paymentNotes?.length > 450 ? "text-orange-600" : "text-gray-400"}`}
+                            >
+                              {shortPayForm.paymentNotes?.length || 0}/500
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Payment Proof Upload */}
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            Payment Proof{" "}
+                            <span className="text-red-500">*</span>
+                          </label>
+                          <div
+                            className={`border-2 border-dashed rounded-xl p-6 transition-all ${
+                              shortPayForm.carrierPaymentProof
+                                ? "border-green-400 bg-green-50"
+                                : "border-gray-300 bg-gray-50 hover:border-orange-400 hover:bg-orange-50"
+                            }`}
+                          >
+                            <input
+                              type="file"
+                              accept=".pdf,.jpg,.jpeg,.png"
+                              onChange={(e) => {
+                                const file = e.target.files[0];
+                                if (file) {
+                                  if (file.size > 10 * 1024 * 1024) {
+                                    setToast({
+                                      open: true,
+                                      severity: "error",
+                                      msg: "File size must be less than 10MB",
+                                    });
+                                    return;
+                                  }
+                                  setShortPayForm({
+                                    ...shortPayForm,
+                                    carrierPaymentProof: file,
+                                  });
+                                }
+                              }}
+                              className="hidden"
+                              id="short-pay-proof-upload"
+                              required
+                            />
+                            <label
+                              htmlFor="short-pay-proof-upload"
+                              className="cursor-pointer flex flex-col items-center justify-center min-h-[120px]"
+                            >
+                              {shortPayForm.carrierPaymentProof ? (
+                                <div className="text-center w-full">
+                                  <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-3">
+                                    <CheckCircle
+                                      size={32}
+                                      className="text-green-600"
+                                    />
+                                  </div>
+                                  <p className="text-sm font-semibold text-gray-800 mb-1">
+                                    {shortPayForm.carrierPaymentProof.name}
+                                  </p>
+                                  <p className="text-xs text-gray-600 mb-3">
+                                    {(
+                                      shortPayForm.carrierPaymentProof.size /
+                                      1024
+                                    ).toFixed(2)}{" "}
+                                    KB
+                                  </p>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setShortPayForm({
+                                        ...shortPayForm,
+                                        carrierPaymentProof: null,
+                                      });
+                                      document.getElementById(
+                                        "short-pay-proof-upload",
+                                      ).value = "";
+                                    }}
+                                    className="px-4 py-2 text-sm font-semibold bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors border border-red-300"
+                                  >
+                                    Remove File
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="text-center">
+                                  <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-200 rounded-full mb-3">
+                                    <AttachFileIcon
+                                      className="text-gray-500"
+                                      style={{ fontSize: 32 }}
+                                    />
+                                  </div>
+                                  <p className="text-sm font-semibold text-gray-700 mb-1">
+                                    Click to upload payment proof
+                                  </p>
+                                  <p className="text-xs text-gray-500 mb-2">
+                                    PDF, JPG, PNG files supported
+                                  </p>
+                                  <p className="text-xs text-gray-400">
+                                    Maximum file size: 10MB
+                                  </p>
+                                </div>
+                              )}
+                            </label>
+                          </div>
+                          {!shortPayForm.carrierPaymentProof && (
+                            <p className="text-xs text-orange-600 mt-2 flex items-center gap-1">
+                              <Clock size={12} />
+                              Payment proof is required to complete the
+                              transaction
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Submit Button */}
+                        <div className="pt-6 border-t border-gray-200">
+                          <div className="flex gap-3">
+                            <button
+                              onClick={() => setShortPayModalOpen(false)}
+                              className="flex-1 px-6 py-3 bg-gray-100 text-gray-700 font-semibold rounded-xl hover:bg-gray-200 transition-colors border-2 border-gray-300"
+                              disabled={shortPayLoading}
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={handleShortPaySubmit}
+                              disabled={(() => {
+                                const amount = parseFloat(
+                                  shortPayForm.paymentAmount || 0,
+                                );
+                                const isAmountValid =
+                                  amount > 0 && amount <= remaining + 0.01; // Allow small rounding differences
+                                return (
+                                  shortPayLoading ||
+                                  !shortPayForm.paymentAmount ||
+                                  !shortPayForm.paymentMethod ||
+                                  !shortPayForm.carrierPaymentProof ||
+                                  !isAmountValid
+                                );
+                              })()}
+                              className="flex-1 px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-bold rounded-xl hover:from-orange-600 hover:to-orange-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl text-lg"
+                              title={(() => {
+                                if (shortPayLoading)
+                                  return "Processing payment...";
+                                if (!shortPayForm.paymentAmount)
+                                  return "Please enter payment amount";
+                                if (!shortPayForm.paymentMethod)
+                                  return "Please select payment method";
+                                if (!shortPayForm.carrierPaymentProof)
+                                  return "Please upload payment proof";
+                                const amount = parseFloat(
+                                  shortPayForm.paymentAmount || 0,
+                                );
+                                if (amount <= 0)
+                                  return "Payment amount must be greater than 0";
+                                if (amount > remaining + 0.01)
+                                  return `Amount cannot exceed remaining balance of $${fmtMoney(remaining)}`;
+                                return "Click to record short payment";
+                              })()}
+                            >
+                              {shortPayLoading ? (
+                                <span className="flex items-center justify-center gap-2">
+                                  <RefreshCw
+                                    size={18}
+                                    className="animate-spin"
+                                  />
+                                  Processing...
+                                </span>
+                              ) : (
+                                <span className="flex items-center justify-center gap-2">
+                                  <DollarSign size={18} />
+                                  Record Short Payment
+                                </span>
+                              )}
+                            </button>
+                          </div>
+                          {/* Validation Messages */}
+                          {(() => {
+                            const amount = parseFloat(
+                              shortPayForm.paymentAmount || 0,
                             );
-                          }
-                          
-                          if (shortPayForm.paymentAmount && isAmountValid && shortPayForm.paymentMethod && shortPayForm.carrierPaymentProof) {
-                            return (
-                              <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-                                <p className="text-xs text-green-800 font-medium">
-                                  ✅ Ready to submit! You're about to record a payment of <span className="font-bold">${fmtMoney(amount)}</span>. 
-                                  After this payment, <span className="font-bold">${fmtMoney(Math.max(0, remaining - amount))}</span> will remain.
-                                </p>
-                              </div>
-                            );
-                          }
-                          
-                          return null;
-                        })()}
+                            const isAmountValid =
+                              amount > 0 && amount <= remaining + 0.01;
+                            const missingFields = [];
+
+                            if (!shortPayForm.paymentAmount)
+                              missingFields.push("Payment Amount");
+                            if (!shortPayForm.paymentMethod)
+                              missingFields.push("Payment Method");
+                            if (!shortPayForm.carrierPaymentProof)
+                              missingFields.push("Payment Proof");
+                            if (amount <= 0 && shortPayForm.paymentAmount)
+                              missingFields.push("Valid Payment Amount (> 0)");
+                            if (amount > remaining + 0.01)
+                              missingFields.push(
+                                `Amount within limit (max $${fmtMoney(remaining)})`,
+                              );
+
+                            if (
+                              missingFields.length > 0 &&
+                              shortPayForm.paymentAmount
+                            ) {
+                              return (
+                                <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                                  <p className="text-xs text-red-800 font-semibold mb-1">
+                                    ⚠️ Please complete the following:
+                                  </p>
+                                  <ul className="text-xs text-red-700 list-disc list-inside space-y-0.5">
+                                    {missingFields.map((field, idx) => (
+                                      <li key={idx}>{field}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              );
+                            }
+
+                            if (
+                              shortPayForm.paymentAmount &&
+                              isAmountValid &&
+                              shortPayForm.paymentMethod &&
+                              shortPayForm.carrierPaymentProof
+                            ) {
+                              return (
+                                <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                                  <p className="text-xs text-green-800 font-medium">
+                                    ✅ Ready to submit! You're about to record a
+                                    payment of{" "}
+                                    <span className="font-bold">
+                                      ${fmtMoney(amount)}
+                                    </span>
+                                    . After this payment,{" "}
+                                    <span className="font-bold">
+                                      $
+                                      {fmtMoney(
+                                        Math.max(0, remaining - amount),
+                                      )}
+                                    </span>{" "}
+                                    will remain.
+                                  </p>
+                                </div>
+                              );
+                            }
+
+                            return null;
+                          })()}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })()}
+                    );
+                  })()}
+                </div>
               </div>
             </div>
-          </div>
-        </>
-      )}
+          </>
+        )}
 
         {/* Snackbar */}
         <Snackbar
@@ -6959,5 +9202,3 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     </ThemeProvider>
   );
 }
-
-
