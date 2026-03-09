@@ -2815,7 +2815,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     try {
       const url = `${API_CONFIG.BASE_URL}/api/v1/accountant/processed-by-accountant`;
       const resp = await axios.get(url, {
-        params: { accountantEmpId: empId, page: targetPage, limit: 10 },
+        params: { accountantEmpId: empId, page: targetPage, limit: 10, status: "approved" },
         headers,
       });
       const payload = resp?.data?.data || {};
@@ -3827,6 +3827,21 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     fetchProcessed(processedPage);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [processedPage]);
+
+  useEffect(() => {
+    // When filters/search change on Approved tab, reset to first page to avoid empty pages
+    setProcessedPage(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [processedSearch, processedCarrierFilter]);
+
+  useEffect(() => {
+    // Clamp current page if it exceeds new totalPages
+    const total = processedPagination?.totalPages || 1;
+    if (processedPage > total) {
+      setProcessedPage(total);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [processedPagination?.totalPages]);
 
   useEffect(() => {
     fetchAccepted(acceptedPage);
@@ -5035,7 +5050,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                         <button
                           onClick={() => setPage(page - 1)}
                           disabled={page === 1}
-                          className="px-2 py-1 text-sm text-gray-500 hover:text-blue-600 disabled:text-gray-300"
+                          className="px-3 h-[36px] rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-50 transition-colors text-gray-700 cursor-pointer"
                         >
                           Previous
                         </button>
@@ -5060,7 +5075,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                 onClick={() => setPage(p)}
                                 className={`px-3 py-1 text-sm ${
                                   page === p
-                                    ? "border border-gray-300 rounded-full text-blue-600 font-semibold"
+                                    ? "border border-black-300 rounded-lg text-black-600 font-semibold"
                                     : "text-gray-700 hover:text-blue-600"
                                 }`}
                               >
@@ -5072,7 +5087,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                         <button
                           onClick={() => setPage(page + 1)}
                           disabled={page === (pagination?.totalPages || 1)}
-                          className="px-2 py-1 text-sm text-gray-500 hover:text-blue-600 disabled:text-gray-300"
+                          className="px-3 h-[36px] rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-50 transition-colors text-gray-700 cursor-pointer"
                         >
                           Next
                         </button>
@@ -5390,7 +5405,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                         <button
                           onClick={() => setProcessedPage(processedPage - 1)}
                           disabled={processedPage === 1}
-                          className="px-2 py-1 text-sm text-gray-500 hover:text-blue-600 disabled:text-gray-300"
+                          className="px-3 h-[36px] rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-50 transition-colors text-gray-700 cursor-pointer"
                         >
                           Previous
                         </button>
@@ -5415,7 +5430,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                 onClick={() => setProcessedPage(p)}
                                 className={`px-3 py-1 text-sm ${
                                   processedPage === p
-                                    ? "border border-gray-300 rounded-full text-blue-600 font-semibold"
+                                    ? "border border-black-300 rounded-lg text-black-600 font-semibold"
                                     : "text-gray-700 hover:text-blue-600"
                                 }`}
                               >
@@ -5427,7 +5442,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                         <button
                           onClick={() => setProcessedPage(processedPage + 1)}
                           disabled={processedPage === (processedPagination?.totalPages || 1)}
-                          className="px-2 py-1 text-sm text-gray-500 hover:text-blue-600 disabled:text-gray-300"
+                          className="px-3 h-[36px] rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-50 transition-colors text-gray-700 cursor-pointer"
                         >
                           Next
                         </button>
@@ -5663,10 +5678,11 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                 <div className="flex items-center justify-center gap-2 flex-wrap">
                                   <button
                                     onClick={() => openDetails(row)}
-                                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                    className="border border-blue-300 text-blue-700 bg-white px-3 py-1 rounded-full transition-colors cursor-pointer hover:bg-blue-600 hover:text-white hover:border-blue-600"
                                     title="View Details"
                                   >
-                                    <Eye size={16} />
+                                    {/* <Eye size={16} /> */}
+                                    View
                                   </button>
                                   {row?.emailNotification?.sentToShipper ? (
                                     <div className="flex flex-col items-center gap-1">
@@ -5765,7 +5781,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                       <button
                         onClick={() => setAcceptedPage(acceptedPage - 1)}
                         disabled={acceptedPage === 1}
-                        className="px-2 py-1 text-sm text-gray-500 hover:text-blue-600 disabled:text-gray-300"
+                        className="px-3 h-[36px] rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-50 transition-colors text-gray-700 cursor-pointer"
                       >
                         Previous
                       </button>
@@ -5790,7 +5806,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                               onClick={() => setAcceptedPage(p)}
                               className={`px-3 py-1 text-sm ${
                                 acceptedPage === p
-                                  ? 'border border-gray-300 rounded-full text-blue-600 font-semibold'
+                                  ? 'border border-black-300 rounded-lg text-black-600 font-semibold'
                                   : 'text-gray-700 hover:text-blue-600'
                               }`}
                             >
@@ -5802,7 +5818,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                       <button
                         onClick={() => setAcceptedPage(acceptedPage + 1)}
                         disabled={acceptedPage === (acceptedPagination?.totalPages || 1)}
-                        className="px-2 py-1 text-sm text-gray-500 hover:text-blue-600 disabled:text-gray-300"
+                        className="px-3 h-[36px] rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-50 transition-colors text-gray-700 cursor-pointer"
                       >
                         Next
                       </button>
@@ -6112,7 +6128,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                         <button
                           onClick={() => setRejectedPage(rejectedPage - 1)}
                           disabled={rejectedPage === 1}
-                          className="px-2 py-1 text-sm text-gray-500 hover:text-blue-600 disabled:text-gray-300"
+                          className="px-3 h-[36px] rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-50 transition-colors text-gray-700 cursor-pointer"
                         >
                           Previous
                         </button>
@@ -6137,7 +6153,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                 onClick={() => setRejectedPage(p)}
                                 className={`px-3 py-1 text-sm ${
                                   rejectedPage === p
-                                    ? 'border border-gray-300 rounded-full text-blue-600 font-semibold'
+                                    ? 'border border-black-300 rounded-lg text-black-600 font-semibold'
                                     : 'text-gray-700 hover:text-blue-600'
                                 }`}
                               >
@@ -6149,7 +6165,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                         <button
                           onClick={() => setRejectedPage(rejectedPage + 1)}
                           disabled={rejectedPage === (rejectedPagination?.totalPages || 1)}
-                          className="px-2 py-1 text-sm text-gray-500 hover:text-blue-600 disabled:text-gray-300"
+                          className="px-3 h-[36px] rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-50 transition-colors text-gray-700 cursor-pointer"
                         >
                           Next
                         </button>
