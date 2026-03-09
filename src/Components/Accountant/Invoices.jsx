@@ -5678,10 +5678,11 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                 <div className="flex items-center justify-center gap-2 flex-wrap">
                                   <button
                                     onClick={() => openDetails(row)}
-                                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                    className="border border-blue-300 text-blue-700 bg-white px-3 py-1 rounded-full transition-colors cursor-pointer hover:bg-blue-600 hover:text-white hover:border-blue-600"
                                     title="View Details"
                                   >
-                                    <Eye size={16} />
+                                    {/* <Eye size={16} /> */}
+                                    View
                                   </button>
                                   {row?.emailNotification?.sentToShipper ? (
                                     <div className="flex flex-col items-center gap-1">
