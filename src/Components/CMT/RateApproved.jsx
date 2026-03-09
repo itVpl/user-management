@@ -14,6 +14,9 @@ const alphaNum = /^[A-Za-z0-9\s-]+$/;        // letters, numbers, space, dash
 const sanitizeAlphaNum = (v) => (v || '').replace(/[^a-zA-Z0-9]/g, ''); // A-Z a-z 0-9 only
 const sanitizeAlpha = (v) => (v || '').replace(/[^a-zA-Z\s]/g, '').replace(/\s{2,}/g, ' '); // alphabets + single spaces
 
+// One-time prefetch guard (avoids duplicate calls on React Strict Mode double-mount → prevents "cancelled" status)
+let rateApprovedInitialPrefetchRan = false;
+
 export default function RateApproved() {
   const [pendingRates, setPendingRates] = useState([]);
   const [completedRates, setCompletedRates] = useState([]);
@@ -787,18 +790,18 @@ export default function RateApproved() {
   });
 
   // Add after fetchApprovedRates function
-  const fetchPendingApprovals = async () => {
+  const fetchPendingApprovals = async (signal = null) => {
     try {
-
       const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/bid/pending-intermediate-approval`, {
-        timeout: 10000,
-        headers: API_CONFIG.getAuthHeaders()
+        timeout: 60000, // 60s – backend can be slow on heavy bid queries
+        headers: API_CONFIG.getAuthHeaders(),
+        ...(signal && { signal })
       });
 
 
       if (response.data && response.data.success) {
-        const currentUserEmpId = salesUserId || sessionStorage.getItem('empId') || localStorage.getItem('empId');
-        
+        const currentUserEmpId = sessionStorage.getItem('empId') || localStorage.getItem('empId') || salesUserId;
+        if (!currentUserEmpId) return [];
         // Filter bids to show only current user's data
         const userSpecificBids = response.data.bids.filter(bid => {
           // Check if bid belongs to current user
@@ -855,19 +858,21 @@ export default function RateApproved() {
       }
       return [];
     } catch (error) {
-      console.error('Error fetching pending approvals:', error);
+      if (axios.isCancel(error)) return [];
+      console.error('Error fetching pending approvals:', error?.response?.status, error?.response?.data || error.message);
       return [];
     }
   };
 
   // Add after fetchPendingApprovals function
-  const fetchPendingBidsBySalesUser = async (userId = null) => {
+  const fetchPendingBidsBySalesUser = async (userId = null, signal = null) => {
     try {
       const userEmpId = userId || salesUserId || sessionStorage.getItem('empId') || localStorage.getItem('empId');
 
       const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/bid/pending-by-sales-user/${userEmpId}`, {
-        timeout: 10000,
-        headers: API_CONFIG.getAuthHeaders()
+        timeout: 60000, // 60s – backend can be slow on heavy bid queries
+        headers: API_CONFIG.getAuthHeaders(),
+        ...(signal && { signal })
       });
 
 
@@ -944,21 +949,30 @@ export default function RateApproved() {
       }
       return [];
     } catch (error) {
-      console.error('Error fetching pending bids by sales user:', error);
+      if (axios.isCancel(error)) return [];
+      console.error('Error fetching pending bids by sales user:', error?.response?.status, error?.response?.data || error.message);
       return [];
     }
   };
 
   // Define fetchAllData at the component level
-  const fetchAllData = async ({ withLoading = true } = {}) => {
+  const fetchAllData = async ({ withLoading = true, signal = null } = {}) => {
     if (withLoading) {
       setLoading(true);
+    }
+    const empIdForFetch = sessionStorage.getItem('empId') || localStorage.getItem('empId') || salesUserId;
+    if (!empIdForFetch) {
+      if (withLoading) setLoading(false);
+      setPendingRates([]);
+      setTabCounts(prev => ({ ...prev, pending: 0 }));
+      setPendingLoaded(true);
+      return;
     }
     try {
       const [approvedData, pendingData, salesUserBids] = await Promise.all([
         fetchApprovedRates(),
-        fetchPendingApprovals(),
-        fetchPendingBidsBySalesUser(salesUserId) // Use state variable
+        fetchPendingApprovals(signal),
+        fetchPendingBidsBySalesUser(empIdForFetch, signal)
       ]);
 
       // Combine all datasets
@@ -978,7 +992,11 @@ export default function RateApproved() {
       const pendingTotal = uniqueRates.filter(rate => rate.status === 'pending').length;
       setTabCounts(prev => ({ ...prev, pending: pendingTotal }));
     } catch (error) {
-      console.error('Error fetching data:', error);
+      if (axios.isCancel(error)) {
+        // Request was aborted (e.g. component unmount / Strict Mode) - don't show error
+        return;
+      }
+      console.error('Error fetching data:', error?.response?.status, error?.response?.data || error.message);
       alertify.error('Error refreshing data');
       setTabCounts(prev => ({ ...prev, pending: 0 }));
     } finally {
@@ -1197,8 +1215,11 @@ export default function RateApproved() {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [showCustomerDropdown]);
-  // Replace the existing useEffect
+  // Prefetch once on mount (guard prevents duplicate run on Strict Mode remount → no "cancelled" requests)
   useEffect(() => {
+    if (rateApprovedInitialPrefetchRan) return;
+    rateApprovedInitialPrefetchRan = true;
+
     const prefetchAllTabs = async () => {
       await Promise.allSettled([
         fetchAllData({ withLoading: true }),
