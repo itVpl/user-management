@@ -205,104 +205,132 @@ export default function AllLeads() {
 
   return (
     <div className="p-6">
-      {/* Stats Cards */}
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center gap-6">
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                <User className="text-blue-600" size={20} />
+      <div className="flex flex-col gap-6 mb-6 border border-gray-200 rounded-xl p-6 bg-white">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="bg-white rounded-xl border border-gray-200 p-6 h-[90px]">
+            <div className="flex items-center gap-4 w-full">
+              <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-gray-700 font-bold text-2xl shrink-0">
+                {statistics.totalLeads}
               </div>
-              <div>
-                <p className="text-sm text-gray-600">Total Leads</p>
-                <p className="text-xl font-bold text-gray-800">{statistics.totalLeads}</p>
+              <div className="flex-1 text-center">
+                <span className="text-gray-700 font-semibold text-lg">Total Leads</span>
               </div>
+              <div className="w-12 shrink-0" />
             </div>
           </div>
+          {/* <div className="bg-white rounded-xl border border-gray-200 p-6 h-[90px]">
+            <div className="flex items-center gap-4 w-full">
+              <div className="w-12 h-12 rounded-full bg-yellow-100 flex items-center justify-center text-gray-700 font-bold text-2xl shrink-0">
+                {statistics.newLeads}
+              </div>
+              <div className="flex-1 text-center">
+                <span className="text-gray-700 font-semibold">New</span>
+              </div>
+              <div className="w-12 shrink-0" />
+            </div>
+          </div> */}
+          {/* <div className="bg-white rounded-xl border border-gray-200 p-6 h-[90px]">
+            <div className="flex items-center gap-4 w-full">
+              <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center text-gray-700 font-bold text-2xl shrink-0">
+                {statistics.contactedLeads}
+              </div>
+              <div className="flex-1 text-center">
+                <span className="text-gray-700 font-semibold">Contacted</span>
+              </div>
+              <div className="w-12 shrink-0" />
+            </div>
+          </div> */}
+          {/* <div className="bg-white rounded-xl border border-gray-200 p-6 h-[90px]">
+            <div className="flex items-center gap-4 w-full">
+              <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center text-gray-700 font-bold text-2xl shrink-0">
+                {statistics.convertedLeads}
+              </div>
+              <div className="flex-1 text-center">
+                <span className="text-gray-700 font-semibold">Converted</span>
+              </div>
+              <div className="w-12 shrink-0" />
+            </div>
+          </div> */}
         </div>
-
-        {/* Search + Export */}
-        <div className="flex items-center gap-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+        <div className="flex items-stretch gap-3">
+          <div className="relative flex-1 min-w-0">
             <input
               type="text"
               placeholder="Search leads..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full h-[45px] pl-10 pr-4 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-colors text-gray-700 placeholder-gray-400 text-base"
             />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
           </div>
           <button
             onClick={handleExportToExcel}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-medium shadow-lg hover:from-green-600 hover:to-green-700 transition-all duration-200 hover:shadow-xl"
+            className="px-5 h-[45px] border border-green-600 text-green-700 bg-white rounded-lg hover:bg-green-600 hover:text-white transition-colors font-medium cursor-pointer flex items-center gap-2"
           >
             <Download size={18} />
             Export to Excel
           </button>
         </div>
       </div>
-
-      {/* Table with Sticky Header + Scroll */}
-      <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-        <div className="relative max-h-[70vh] overflow-y-auto overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gradient-to-r from-gray-100 to-gray-200 sticky top-0 z-10">
-              <tr>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Name</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Email</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Phone</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Company</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Country</th>
-                <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Created</th>
+      
+      <div className="bg-white rounded-2xl border border-gray-200 p-4 mb-6">
+        <div className="overflow-x-auto">
+          <table className="w-full border-separate border-spacing-y-4">
+            <thead>
+              <tr className="bg-gray-100">
+                <th className="text-left px-5 py-3 text-gray-600 font-medium first:rounded-l-xl border-y border-gray-200 first:border-l first:border-gray-200">Name</th>
+                <th className="text-left px-5 py-3 text-gray-600 font-medium border-y border-gray-200">Email</th>
+                <th className="text-left px-5 py-3 text-gray-600 font-medium border-y border-gray-200">Phone</th>
+                <th className="text-left px-5 py-3 text-gray-600 font-medium border-y border-gray-200">Company</th>
+                <th className="text-left px-5 py-3 text-gray-600 font-medium border-y border-gray-200">Country</th>
+                <th className="text-left px-5 py-3 text-gray-600 font-medium text-[15px] last:rounded-r-xl border-y border-gray-200 last:border-r last:border-gray-200">Created</th>
               </tr>
             </thead>
             <tbody>
-              {currentLeads.map((lead, index) => (
-                <tr key={lead._id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                  <td className="py-2 px-3">
+              {currentLeads.map((lead) => (
+                <tr key={lead._id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-5 py-3 border-y border-gray-200 first:rounded-l-xl first:border-l first:border-gray-200">
                     <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                      {/* <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
                         <User className="text-blue-600" size={16} />
-                      </div>
+                      </div> */}
                       <span className="font-medium text-gray-700">{lead.name || 'N/A'}</span>
                     </div>
                   </td>
-                  <td className="py-2 px-3">
+                  <td className="px-5 py-3 border-y border-gray-200">
                     <div className="flex items-center gap-2">
-                      <Mail className="text-gray-400" size={14} />
-                      <span className="text-sm text-gray-700">{lead.email || 'N/A'}</span>
+                      {/* <Mail className="text-gray-400" size={14} /> */}
+                      <span className="font-medium text-gray-700">{lead.email || 'N/A'}</span>
                     </div>
                   </td>
-                  <td className="py-2 px-3">
+                  <td className="px-5 py-3 border-y border-gray-200">
                     <div className="flex items-center gap-2">
-                      <Phone className="text-gray-400" size={14} />
-                      <span className="text-sm text-gray-700">{lead.phoneNumber || 'N/A'}</span>
+                      {/* <Phone className="text-gray-400" size={14} /> */}
+                      <span className="font-medium text-gray-700">{lead.phoneNumber || 'N/A'}</span>
                     </div>
                   </td>
-                  <td className="py-2 px-3">
+                  <td className="px-5 py-3 border-y border-gray-200">
                     <div className="flex items-center gap-2">
-                      <Building className="text-gray-400" size={14} />
-                      <span className="text-sm text-gray-700">{lead.companyName || 'N/A'}</span>
+                      {/* <Building className="text-gray-400" size={14} /> */}
+                      <span className="font-medium text-gray-700">{lead.companyName || 'N/A'}</span>
                     </div>
                   </td>
-                  <td className="py-2 px-3">
+                  <td className="px-5 py-3 border-y border-gray-200">
                     <div className="flex items-center gap-2">
-                      <Globe className="text-gray-400" size={14} />
-                      <span className="text-sm text-gray-700">{lead.country || 'N/A'}</span>
+                      {/* <Globe className="text-gray-400" size={14} /> */}
+                      <span className="font-medium text-gray-700">{lead.country || 'N/A'}</span>
                     </div>
                   </td>
-                  <td className="py-2 px-3">
+                  <td className="px-5 py-3 border-y border-gray-200 last:rounded-r-xl last:border-r last:border-gray-200">
                     <div>
-                      <p className="text-sm text-gray-800">{formatDate(lead.createdAt)}</p>
-                      <p className="text-xs text-gray-500">{lead.createdAt ? new Date(lead.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : ''}</p>
+                      <p className="font-medium text-gray-800">{formatDate(lead.createdAt)}</p>
+                      <p className="text-sm text-gray-500">{lead.createdAt ? new Date(lead.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : ''}</p>
                     </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-
           {filteredLeads.length === 0 && (
             <div className="text-center py-12">
               <BarChart3 className="w-16 h-16 text-gray-300 mx-auto mb-4" />
@@ -316,40 +344,25 @@ export default function AllLeads() {
           )}
         </div>
       </div>
-
-      {/* Pagination */}
+      
       {totalPages > 1 && filteredLeads.length > 0 && (
-        <div className="flex justify-between items-center mt-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+        <div className="flex justify-between items-center bg-white rounded-xl p-4 border border-gray-200">
           <div className="text-sm text-gray-600">
             Showing {filteredLeads.length === 0 ? 0 : startIndex + 1} to {Math.min(endIndex, filteredLeads.length)} of {filteredLeads.length} leads
             {searchTerm && ` (filtered from ${leads.length} total)`}
           </div>
-
-          <div className="flex items-center gap-2 bg-white rounded-xl shadow-lg border border-gray-200 p-2">
+          <div className="flex items-center gap-2">
             <button
               onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
               disabled={currentPage === 1}
-              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+              className="flex items-center gap-2 px-3 h-[36px] text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
               Previous
             </button>
-
             <div className="flex items-center gap-1">
-              {currentPage > 3 && (
-                <>
-                  <button
-                    onClick={() => setCurrentPage(1)}
-                    className="px-3 py-2 text-sm font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-all duration-200"
-                  >
-                    1
-                  </button>
-                  {currentPage > 4 && <span className="px-2 text-gray-400">...</span>}
-                </>
-              )}
-
               {Array.from({ length: totalPages }, (_, i) => i + 1)
                 .filter(page => {
                   if (totalPages <= 7) return true;
@@ -361,31 +374,18 @@ export default function AllLeads() {
                   <button
                     key={page}
                     onClick={() => setCurrentPage(page)}
-                    className={`px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${currentPage === page
-                      ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg'
+                    className={`px-3 h-[36px] text-sm font-medium rounded-lg ${currentPage === page
+                      ? 'bg-blue-600 text-white'
                       : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'}`}
                   >
                     {page}
                   </button>
                 ))}
-
-              {currentPage < totalPages - 2 && totalPages > 7 && (
-                <>
-                  {currentPage < totalPages - 3 && <span className="px-2 text-gray-400">...</span>}
-                  <button
-                    onClick={() => setCurrentPage(totalPages)}
-                    className="px-3 py-2 text-sm font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-all duration-200"
-                  >
-                    {totalPages}
-                  </button>
-                </>
-              )}
             </div>
-
             <button
               onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
               disabled={currentPage === totalPages}
-              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+              className="flex items-center gap-2 px-3 h-[36px] text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Next
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
