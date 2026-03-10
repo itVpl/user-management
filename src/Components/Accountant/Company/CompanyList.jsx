@@ -1,26 +1,38 @@
-  import { useState, useEffect } from 'react';
-import { Search, Plus, Power, RefreshCw, Building, Settings } from 'lucide-react';
-import companyService from '../../../services/companyService';
-import CompanyForm from './CompanyForm';
-import CompanyDetails from './CompanyDetails';
-import CompanyFeaturesModal from './CompanyFeaturesModal';
+import { useState, useEffect } from "react";
+import {
+  Search,
+  Plus,
+  Power,
+  RefreshCw,
+  Building,
+  Settings,
+} from "lucide-react";
+import companyService from "../../../services/companyService";
+import CompanyForm from "./CompanyForm";
+import CompanyDetails from "./CompanyDetails";
+import CompanyFeaturesModal from "./CompanyFeaturesModal";
 
 const CompanyList = () => {
   const [companies, setCompanies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, pages: 0 });
-  
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 7,
+    total: 0,
+    pages: 0,
+  });
+
   // Filters
-  const [searchTerm, setSearchTerm] = useState('');
-  const [activeFilter, setActiveFilter] = useState('all');
-  
+  const [searchTerm, setSearchTerm] = useState("");
+  const [activeFilter, setActiveFilter] = useState("all");
+
   // Modals
   const [showForm, setShowForm] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const [showFeatures, setShowFeatures] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState(null);
-  const [formMode, setFormMode] = useState('create');
+  const [formMode, setFormMode] = useState("create");
 
   useEffect(() => {
     fetchCompanies();
@@ -30,40 +42,40 @@ const CompanyList = () => {
     try {
       setLoading(true);
       setError(null);
-      
+
       const filters = {
         page: pagination.page,
         limit: pagination.limit,
         search: searchTerm,
-        sortBy: 'createdAt',
-        sortOrder: 'desc'
+        sortBy: "createdAt",
+        sortOrder: "desc",
       };
-      
-      if (activeFilter !== 'all') {
-        filters.isActive = activeFilter === 'active';
+
+      if (activeFilter !== "all") {
+        filters.isActive = activeFilter === "active";
       }
-      
+
       const response = await companyService.getAllCompanies(filters);
-      
+
       if (response.success) {
         setCompanies(response.companies || []);
         setPagination(response.pagination || pagination);
       }
     } catch (err) {
-      setError(err.message || 'Failed to fetch companies');
+      setError(err.message || "Failed to fetch companies");
     } finally {
       setLoading(false);
     }
   };
 
   const handleCreate = () => {
-    setFormMode('create');
+    setFormMode("create");
     setSelectedCompany(null);
     setShowForm(true);
   };
 
   const handleEdit = (company) => {
-    setFormMode('edit');
+    setFormMode("edit");
     setSelectedCompany(company);
     setShowForm(true);
   };
@@ -79,15 +91,16 @@ const CompanyList = () => {
   };
 
   const handleDelete = async (companyId) => {
-    if (!window.confirm('Are you sure you want to deactivate this company?')) return;
-    
+    if (!window.confirm("Are you sure you want to deactivate this company?"))
+      return;
+
     try {
       const response = await companyService.deleteCompany(companyId);
       if (response.success) {
         fetchCompanies();
       }
     } catch (err) {
-      alert(err.message || 'Failed to deactivate company');
+      alert(err.message || "Failed to deactivate company");
     }
   };
 
@@ -98,7 +111,7 @@ const CompanyList = () => {
         fetchCompanies();
       }
     } catch (err) {
-      alert(err.message || 'Failed to activate company');
+      alert(err.message || "Failed to activate company");
     }
   };
 
@@ -109,7 +122,7 @@ const CompanyList = () => {
         fetchCompanies();
       }
     } catch (err) {
-      alert(err.message || 'Failed to set default company');
+      alert(err.message || "Failed to set default company");
     }
   };
 
@@ -119,89 +132,98 @@ const CompanyList = () => {
     fetchCompanies();
   };
 
+  const getPaginationPages = () => {
+    const total = pagination.pages || 1;
+    const current = pagination.page || 1;
+    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+    const pages = [];
+    if (current > 3) pages.push(1, "ellipsis");
+    const start = Math.max(1, current - 2);
+    const end = Math.min(total, current + 2);
+    for (let i = start; i <= end; i++) pages.push(i);
+    if (current < total - 2) pages.push("ellipsis", total);
+    return pages;
+  };
+
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
-
-      {/* Stats Cards and Actions - Same Row */}
-      <div className="flex items-center justify-between gap-6 mb-6">
-        {/* Left Side: Stats Cards */}
-        <div className="flex items-center gap-4">
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100 cursor-pointer hover:shadow-2xl transition-shadow" onClick={() => setActiveFilter('all')}>
-            <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                activeFilter === 'all' ? 'bg-blue-600' : 'bg-blue-100'
-              }`}>
-                <Building className={activeFilter === 'all' ? 'text-white' : 'text-blue-600'} size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Total Companies</p>
-                <p className="text-xl font-bold text-gray-800">{pagination.total || 0}</p>
-              </div>
+      <div className="mb-6 bg-white rounded-2xl border border-gray-200 p-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <button
+            type="button"
+            onClick={() => setActiveFilter("all")}
+            className="relative bg-white rounded-xl p-4 border border-gray-200 hover:bg-blue-50 transition-colors cursor-pointer text-left h-[84px] flex items-center gap-4"
+          >
+            <div
+              className={`w-10 h-10 rounded-full text-2xl flex items-center justify-center ${activeFilter === "all" ? "bg-blue-100 text-gray-800" : "bg-blue-50 text-gray-700"} font-bold`}
+            >
+              {pagination.total || 0}
             </div>
-          </div>
-          
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100 cursor-pointer hover:shadow-2xl transition-shadow" onClick={() => setActiveFilter('active')}>
-            <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                activeFilter === 'active' ? 'bg-green-600' : 'bg-green-100'
-              }`}>
-                <Power className={activeFilter === 'active' ? 'text-white' : 'text-green-600'} size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Active</p>
-                <p className="text-xl font-bold text-green-600">{companies.filter(c => c.isActive).length}</p>
-              </div>
+            <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-gray-700 font-medium text-lg">
+              Total Companies
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveFilter("active")}
+            className="relative bg-white rounded-xl p-4 border border-gray-200 hover:bg-blue-50 transition-colors cursor-pointer text-left h-[84px] flex items-center gap-4"
+          >
+            <div
+              className={`w-10 h-10 rounded-full text-2xl flex items-center justify-center ${activeFilter === "active" ? "bg-green-100 text-gray-800" : "bg-green-50 text-gray-700"} font-bold`}
+            >
+              {companies.filter((c) => c.isActive).length}
             </div>
-          </div>
-          
-          <div className="bg-white rounded-2xl shadow-xl p-4 border border-gray-100 cursor-pointer hover:shadow-2xl transition-shadow" onClick={() => setActiveFilter('inactive')}>
-            <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                activeFilter === 'inactive' ? 'bg-red-600' : 'bg-red-100'
-              }`}>
-                <Power className={activeFilter === 'inactive' ? 'text-white' : 'text-red-600'} size={20} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Inactive</p>
-                <p className="text-xl font-bold text-red-600">{companies.filter(c => !c.isActive).length}</p>
-              </div>
+            <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-gray-700 font-medium text-lg">
+              Active
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveFilter("inactive")}
+            className="relative bg-white rounded-xl p-4 border border-gray-200 hover:bg-blue-50 transition-colors cursor-pointer text-left h-[84px] flex items-center gap-4"
+          >
+            <div
+              className={`w-10 h-10 rounded-full text-2xl flex items-center justify-center ${activeFilter === "inactive" ? "bg-purple-100 text-gray-800" : "bg-purple-50 text-gray-700"} font-bold`}
+            >
+              {companies.filter((c) => !c.isActive).length}
             </div>
-          </div>
+            <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-gray-700 font-medium text-lg">
+              Inactive
+            </span>
+          </button>
         </div>
-
-        {/* Right Side: Search, Refresh, Add Company */}
-        <div className="flex items-center gap-3">
-            {/* Search */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-              <input
-                type="text"
-                placeholder="Search companies..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-64 pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-            
-            {/* Refresh Button */}
+        <div className="flex items-stretch gap-3 mt-4 justify-between">
+          <div className="relative flex-1">
+            <input
+              type="text"
+              placeholder="Search companies..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl bg-white focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-300 focus:border-blue-300 text-gray-700 placeholder-gray-400"
+            />
+            <Search
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              size={20}
+            />
+          </div>
+          <div className="flex items-center gap-3 shrink-0">
             <button
               onClick={fetchCompanies}
-              className="flex items-center gap-2 px-5 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all font-medium"
+              className="flex items-center gap-2 px-5 py-3 rounded-xl border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 transition-colors font-medium cursor-pointer"
               title="Refresh list"
             >
               <RefreshCw size={18} />
               Refresh
             </button>
-
-            {/* Add Company Button */}
             <button
               onClick={handleCreate}
-              className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all font-medium shadow-md"
+              className="flex items-center gap-2 px-5 py-3 rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-colors font-medium cursor-pointer"
             >
               <Plus size={18} />
               Add Company
             </button>
           </div>
+        </div>
       </div>
 
       {/* Error Message */}
@@ -218,73 +240,102 @@ const CompanyList = () => {
         </div>
       ) : (
         <>
-          {/* Companies Table - EXACT Same as Delivery Order */}
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
+          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+            <div className="overflow-x-auto px-4 md:px-6">
+              <table className="w-full border-separate border-spacing-y-4">
+                <thead>
                   <tr>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Company Name</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Company Code</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">City</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Currency</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">GST</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Status</th>
-                    <th className="text-left py-3 px-3 text-gray-800 font-bold text-sm uppercase tracking-wide">Actions</th>
+                    <th className="text-left py-3 px-4 text-gray-700 font-medium text-base bg-gray-100 border-y border-gray-200 first:rounded-l-xl last:rounded-r-xl first:border-l">
+                      Company Name
+                    </th>
+                    <th className="text-left py-3 px-4 text-gray-700 font-medium text-base bg-gray-100 border-y border-gray-200">
+                      Company Code
+                    </th>
+                    <th className="text-left py-3 px-4 text-gray-700 font-medium text-base bg-gray-100 border-y border-gray-200">
+                      City
+                    </th>
+                    <th className="text-left py-3 px-4 text-gray-700 font-medium text-base bg-gray-100 border-y border-gray-200">
+                      Currency
+                    </th>
+                    <th className="text-left py-3 px-4 text-gray-700 font-medium text-base bg-gray-100 border-y border-gray-200">
+                      GST
+                    </th>
+                    <th className="text-left py-3 px-4 text-gray-700 font-medium text-base bg-gray-100 border-y border-gray-200">
+                      Status
+                    </th>
+                    <th className="text-left py-3 px-4 text-gray-700 font-medium text-base bg-gray-100 border-y border-gray-200 last:rounded-r-xl last:border-r">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {companies.map((company, index) => (
-                    <tr key={company._id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                      <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">{company.companyName}</span>
-                      </td>
-                      <td className="py-2 px-3">
-                        <span className="font-mono text-base font-semibold text-gray-700">{company.companyCode}</span>
-                      </td>
-                      <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">{company.address?.city || 'N/A'}</span>
-                      </td>
-                      <td className="py-2 px-3">
-                        <span className="font-medium text-gray-700">{company.baseCurrency || 'INR'}</span>
-                      </td>
-                      <td className="py-2 px-3">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          company.enableGST ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                        }`}>
-                          {company.enableGST ? 'Enabled' : 'Disabled'}
+                  {companies.map((company) => (
+                    <tr key={company._id}>
+                      <td className="py-3 px-4 bg-white border-y border-gray-200 first:rounded-l-xl first:border-l">
+                        <span className="font-medium text-gray-700">
+                          {company.companyName}
                         </span>
                       </td>
-                      <td className="py-2 px-3">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          company.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                        }`}>
-                          {company.isActive ? 'Open' : 'Close'}
+                      <td className="py-3 px-4 bg-white border-y border-gray-200">
+                        <span className="font-medium text-gray-700">
+                          {company.companyCode}
                         </span>
                       </td>
-                      <td className="py-2 px-3">
-                        <div className="flex gap-2">
+                      <td className="py-3 px-4 bg-white border-y border-gray-200">
+                        <span className="font-medium text-gray-700">
+                          {company.address?.city || "N/A"}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 bg-white border-y border-gray-200">
+                        <span className="font-medium text-gray-700">
+                          {company.baseCurrency || "INR"}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 bg-white border-y border-gray-200">
+                        <span
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium ${
+                            company.enableGST
+                              ? "bg-green-100 text-green-800"
+                              : "bg-gray-100 text-gray-800"
+                          }`}
+                        >
+                          {company.enableGST ? "Enabled" : "Disabled"}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 bg-white border-y border-gray-200">
+                        <span
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium ${
+                            company.isActive
+                              ? "bg-green-100 text-green-800"
+                              : "bg-red-100 text-red-800"
+                          }`}
+                        >
+                          {company.isActive ? "Open" : "Close"}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 bg-white border-y border-gray-200 last:rounded-r-xl last:border-r">
+                        <div className="flex gap-2 flex-wrap">
                           <button
                             onClick={() => handleView(company)}
-                            className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                            className="px-3 py-1.5 rounded-lg text-base font-medium border border-blue-600 text-blue-600 bg-transparent hover:bg-blue-600 hover:text-white transition-colors cursor-pointer"
                           >
                             View
                           </button>
                           <button
                             onClick={() => handleEdit(company)}
-                            className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                            className="px-3 py-1.5 rounded-lg text-base font-medium border border-green-600 text-green-600 bg-transparent hover:bg-green-600 hover:text-white transition-colors cursor-pointer"
                           >
                             Edit
                           </button>
                           <button
                             onClick={() => handleDelete(company._id)}
-                            className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors"
+                            className="px-3 py-1.5 rounded-lg text-base font-medium border border-red-600 text-red-600 bg-transparent hover:bg-red-600 hover:text-white transition-colors cursor-pointer"
                           >
                             Delete
                           </button>
                           <button
                             onClick={() => handleManageFeatures(company)}
-                            className="bg-purple-500 hover:bg-purple-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition-colors flex items-center gap-1"
+                            className="px-3 py-1.5 rounded-lg text-base font-medium border border-purple-600 text-purple-600 bg-transparent hover:bg-purple-600 hover:text-white transition-colors flex items-center gap-1 cursor-pointer"
                             title="Manage Features"
                           >
                             <Settings size={14} />
@@ -313,26 +364,67 @@ const CompanyList = () => {
             </div>
           )}
 
-          {/* Pagination */}
-          {pagination.pages > 1 && (
-            <div className="flex justify-center items-center gap-2">
-              <button
-                onClick={() => setPagination({ ...pagination, page: pagination.page - 1 })}
-                disabled={pagination.page === 1}
-                className="px-4 py-2 bg-white border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-              >
-                Previous
-              </button>
-              <span className="px-4 py-2 text-gray-700">
-                Page {pagination.page} of {pagination.pages}
-              </span>
-              <button
-                onClick={() => setPagination({ ...pagination, page: pagination.page + 1 })}
-                disabled={pagination.page === pagination.pages}
-                className="px-4 py-2 bg-white border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-              >
-                Next
-              </button>
+          {pagination.pages > 0 && (
+            <div className="flex flex-wrap justify-between items-center gap-4 mt-6 bg-white rounded-2xl border border-gray-200 p-4">
+              <div className="text-sm text-gray-600">
+                {(() => {
+                  const hasRows = companies.length > 0;
+                  const start = hasRows
+                    ? (pagination.page - 1) * pagination.limit + 1
+                    : 0;
+                  const total = pagination.total ?? companies.length ?? 0;
+                  const end = hasRows
+                    ? Math.min(pagination.page * pagination.limit, total)
+                    : 0;
+                  return `Showing ${start} to ${end} of ${total} companies (Page ${pagination.page} of ${pagination.pages || 1})`;
+                })()}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() =>
+                    setPagination({ ...pagination, page: pagination.page - 1 })
+                  }
+                  disabled={pagination.page === 1}
+                  className="px-4 h-9 rounded-lg text-black-500 hover:text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  Previous
+                </button>
+                <div className="flex items-center gap-2">
+                  {getPaginationPages().map((p, i) =>
+                    p === "ellipsis" ? (
+                      <span
+                        key={`ellipsis-${i}`}
+                        className="px-2 text-gray-400"
+                      >
+                        ...
+                      </span>
+                    ) : (
+                      <button
+                        key={p}
+                        onClick={() =>
+                          setPagination({ ...pagination, page: p })
+                        }
+                        className={`w-9 h-9 flex items-center justify-center rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                          pagination.page === p
+                            ? "border border-black text-black bg-white"
+                            : "border border-gray-300 text-gray-700 bg-white hover:bg-gray-50"
+                        }`}
+                      >
+                        {p}
+                      </button>
+                    ),
+                  )}
+                </div>
+                <button
+                  onClick={() =>
+                    setPagination({ ...pagination, page: pagination.page + 1 })
+                  }
+                  disabled={pagination.page === pagination.pages}
+                  className="px-4 h-9 rounded-lg text-black-500 hover:text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  Next
+                </button>
+              </div>
             </div>
           )}
         </>
