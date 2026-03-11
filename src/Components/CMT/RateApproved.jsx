@@ -3397,16 +3397,16 @@ export default function RateApproved() {
       )}
 
       {/* Enhanced Pagination */}
-      {totalPages > 1 && filteredRates.length > 0 && (
+      {/* {totalPages > 1 && filteredRates.length > 0 && (
         <div className="flex justify-between items-center mt-6 bg-white rounded-2xl p-4 border border-gray-100">
           <div className="text-sm text-gray-600">
             Showing {startIndex + 1} to {Math.min(endIndex, filteredRates.length)} of {filteredRates.length} bids/rates
             {searchTerm && ` (filtered from ${activeTabRates.length} total)`}
-          </div>
+          </div> */}
 
-          <div className="flex items-center gap-2 bg-white rounded-xl border border-gray-200 p-2">
+          {/* <div className="flex items-center gap-2 bg-white rounded-xl border border-gray-200 p-2"> */}
             {/* Previous Button */}
-            <button
+            {/* <button
               onClick={() => handlePageChange(currentPage - 1)}
               disabled={currentPage === 1}
               className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
@@ -3415,12 +3415,12 @@ export default function RateApproved() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
               Previous
-            </button>
+            </button> */}
 
             {/* Page Numbers */}
-            <div className="flex items-center gap-1">
+            {/* <div className="flex items-center gap-1"> */}
               {/* First Page */}
-              {currentPage > 3 && (
+              {/* {currentPage > 3 && (
                 <>
                   <button
                     onClick={() => handlePageChange(1)}
@@ -3432,10 +3432,10 @@ export default function RateApproved() {
                     <span className="px-2 text-gray-400">...</span>
                   )}
                 </>
-              )}
+              )} */}
 
               {/* Current Page Range */}
-              {Array.from({ length: totalPages }, (_, i) => i + 1)
+              {/* {Array.from({ length: totalPages }, (_, i) => i + 1)
                 .filter(page => {
                   if (totalPages <= 7) return true;
                   if (currentPage <= 4) return page <= 5;
@@ -3453,10 +3453,10 @@ export default function RateApproved() {
                   >
                     {page}
                   </button>
-                ))}
+                ))} */}
 
               {/* Last Page */}
-              {currentPage < totalPages - 2 && totalPages > 7 && (
+              {/* {currentPage < totalPages - 2 && totalPages > 7 && (
                 <>
                   {currentPage < totalPages - 3 && (
                     <span className="px-2 text-gray-400">...</span>
@@ -3469,10 +3469,10 @@ export default function RateApproved() {
                   </button>
                 </>
               )}
-            </div>
+            </div> */}
 
             {/* Next Button */}
-            <button
+            {/* <button
               onClick={() => handlePageChange(currentPage + 1)}
               disabled={currentPage === totalPages}
               className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
@@ -3484,7 +3484,7 @@ export default function RateApproved() {
             </button>
           </div>
         </div>
-      )}
+      )} */}
 
       {/* Add Rate Approved Modal */}
       {showAddRateForm && (
