@@ -14,9 +14,6 @@ const alphaNum = /^[A-Za-z0-9\s-]+$/;        // letters, numbers, space, dash
 const sanitizeAlphaNum = (v) => (v || '').replace(/[^a-zA-Z0-9]/g, ''); // A-Z a-z 0-9 only
 const sanitizeAlpha = (v) => (v || '').replace(/[^a-zA-Z\s]/g, '').replace(/\s{2,}/g, ' '); // alphabets + single spaces
 
-// One-time prefetch guard (avoids duplicate calls on React Strict Mode double-mount → prevents "cancelled" status)
-let rateApprovedInitialPrefetchRan = false;
-
 export default function RateApproved() {
   const [pendingRates, setPendingRates] = useState([]);
   const [completedRates, setCompletedRates] = useState([]);
@@ -790,18 +787,18 @@ export default function RateApproved() {
   });
 
   // Add after fetchApprovedRates function
-  const fetchPendingApprovals = async (signal = null) => {
+  const fetchPendingApprovals = async () => {
     try {
+
       const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/bid/pending-intermediate-approval`, {
-        timeout: 60000, // 60s – backend can be slow on heavy bid queries
-        headers: API_CONFIG.getAuthHeaders(),
-        ...(signal && { signal })
+        timeout: 10000,
+        headers: API_CONFIG.getAuthHeaders()
       });
 
 
       if (response.data && response.data.success) {
-        const currentUserEmpId = sessionStorage.getItem('empId') || localStorage.getItem('empId') || salesUserId;
-        if (!currentUserEmpId) return [];
+        const currentUserEmpId = salesUserId || sessionStorage.getItem('empId') || localStorage.getItem('empId');
+        
         // Filter bids to show only current user's data
         const userSpecificBids = response.data.bids.filter(bid => {
           // Check if bid belongs to current user
@@ -858,21 +855,19 @@ export default function RateApproved() {
       }
       return [];
     } catch (error) {
-      if (axios.isCancel(error)) return [];
-      console.error('Error fetching pending approvals:', error?.response?.status, error?.response?.data || error.message);
+      console.error('Error fetching pending approvals:', error);
       return [];
     }
   };
 
   // Add after fetchPendingApprovals function
-  const fetchPendingBidsBySalesUser = async (userId = null, signal = null) => {
+  const fetchPendingBidsBySalesUser = async (userId = null) => {
     try {
       const userEmpId = userId || salesUserId || sessionStorage.getItem('empId') || localStorage.getItem('empId');
 
       const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/bid/pending-by-sales-user/${userEmpId}`, {
-        timeout: 60000, // 60s – backend can be slow on heavy bid queries
-        headers: API_CONFIG.getAuthHeaders(),
-        ...(signal && { signal })
+        timeout: 10000,
+        headers: API_CONFIG.getAuthHeaders()
       });
 
 
@@ -949,30 +944,21 @@ export default function RateApproved() {
       }
       return [];
     } catch (error) {
-      if (axios.isCancel(error)) return [];
-      console.error('Error fetching pending bids by sales user:', error?.response?.status, error?.response?.data || error.message);
+      console.error('Error fetching pending bids by sales user:', error);
       return [];
     }
   };
 
   // Define fetchAllData at the component level
-  const fetchAllData = async ({ withLoading = true, signal = null } = {}) => {
+  const fetchAllData = async ({ withLoading = true } = {}) => {
     if (withLoading) {
       setLoading(true);
-    }
-    const empIdForFetch = sessionStorage.getItem('empId') || localStorage.getItem('empId') || salesUserId;
-    if (!empIdForFetch) {
-      if (withLoading) setLoading(false);
-      setPendingRates([]);
-      setTabCounts(prev => ({ ...prev, pending: 0 }));
-      setPendingLoaded(true);
-      return;
     }
     try {
       const [approvedData, pendingData, salesUserBids] = await Promise.all([
         fetchApprovedRates(),
-        fetchPendingApprovals(signal),
-        fetchPendingBidsBySalesUser(empIdForFetch, signal)
+        fetchPendingApprovals(),
+        fetchPendingBidsBySalesUser(salesUserId) // Use state variable
       ]);
 
       // Combine all datasets
@@ -992,11 +978,7 @@ export default function RateApproved() {
       const pendingTotal = uniqueRates.filter(rate => rate.status === 'pending').length;
       setTabCounts(prev => ({ ...prev, pending: pendingTotal }));
     } catch (error) {
-      if (axios.isCancel(error)) {
-        // Request was aborted (e.g. component unmount / Strict Mode) - don't show error
-        return;
-      }
-      console.error('Error fetching data:', error?.response?.status, error?.response?.data || error.message);
+      console.error('Error fetching data:', error);
       alertify.error('Error refreshing data');
       setTabCounts(prev => ({ ...prev, pending: 0 }));
     } finally {
@@ -1215,11 +1197,8 @@ export default function RateApproved() {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [showCustomerDropdown]);
-  // Prefetch once on mount (guard prevents duplicate run on Strict Mode remount → no "cancelled" requests)
+  // Replace the existing useEffect
   useEffect(() => {
-    if (rateApprovedInitialPrefetchRan) return;
-    rateApprovedInitialPrefetchRan = true;
-
     const prefetchAllTabs = async () => {
       await Promise.allSettled([
         fetchAllData({ withLoading: true }),
@@ -3418,16 +3397,16 @@ export default function RateApproved() {
       )}
 
       {/* Enhanced Pagination */}
-      {totalPages > 1 && filteredRates.length > 0 && (
+      {/* {totalPages > 1 && filteredRates.length > 0 && (
         <div className="flex justify-between items-center mt-6 bg-white rounded-2xl p-4 border border-gray-100">
           <div className="text-sm text-gray-600">
             Showing {startIndex + 1} to {Math.min(endIndex, filteredRates.length)} of {filteredRates.length} bids/rates
             {searchTerm && ` (filtered from ${activeTabRates.length} total)`}
-          </div>
+          </div> */}
 
-          <div className="flex items-center gap-2 bg-white rounded-xl border border-gray-200 p-2">
+          {/* <div className="flex items-center gap-2 bg-white rounded-xl border border-gray-200 p-2"> */}
             {/* Previous Button */}
-            <button
+            {/* <button
               onClick={() => handlePageChange(currentPage - 1)}
               disabled={currentPage === 1}
               className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
@@ -3436,12 +3415,12 @@ export default function RateApproved() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
               Previous
-            </button>
+            </button> */}
 
             {/* Page Numbers */}
-            <div className="flex items-center gap-1">
+            {/* <div className="flex items-center gap-1"> */}
               {/* First Page */}
-              {currentPage > 3 && (
+              {/* {currentPage > 3 && (
                 <>
                   <button
                     onClick={() => handlePageChange(1)}
@@ -3453,10 +3432,10 @@ export default function RateApproved() {
                     <span className="px-2 text-gray-400">...</span>
                   )}
                 </>
-              )}
+              )} */}
 
               {/* Current Page Range */}
-              {Array.from({ length: totalPages }, (_, i) => i + 1)
+              {/* {Array.from({ length: totalPages }, (_, i) => i + 1)
                 .filter(page => {
                   if (totalPages <= 7) return true;
                   if (currentPage <= 4) return page <= 5;
@@ -3474,10 +3453,10 @@ export default function RateApproved() {
                   >
                     {page}
                   </button>
-                ))}
+                ))} */}
 
               {/* Last Page */}
-              {currentPage < totalPages - 2 && totalPages > 7 && (
+              {/* {currentPage < totalPages - 2 && totalPages > 7 && (
                 <>
                   {currentPage < totalPages - 3 && (
                     <span className="px-2 text-gray-400">...</span>
@@ -3490,10 +3469,10 @@ export default function RateApproved() {
                   </button>
                 </>
               )}
-            </div>
+            </div> */}
 
             {/* Next Button */}
-            <button
+            {/* <button
               onClick={() => handlePageChange(currentPage + 1)}
               disabled={currentPage === totalPages}
               className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
@@ -3505,7 +3484,7 @@ export default function RateApproved() {
             </button>
           </div>
         </div>
-      )}
+      )} */}
 
       {/* Add Rate Approved Modal */}
       {showAddRateForm && (
