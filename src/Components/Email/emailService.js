@@ -139,7 +139,8 @@ export const testEmailConnection = async (accountId) => {
 };
 
 // Fetch inbox emails
-export const fetchInboxEmails = async (accountId, limit = 25, page = 1) => {
+// refresh: when true, backend syncs from IMAP and returns latest (slower). Omit/false = DB-first (fast).
+export const fetchInboxEmails = async (accountId, limit = 25, page = 1, refresh = false) => {
   const token = getAuthToken();
   
   if (!token) {
@@ -157,6 +158,9 @@ export const fetchInboxEmails = async (accountId, limit = 25, page = 1) => {
   
   if (accountId) {
     params.append('emailAccountId', accountId);
+  }
+  if (refresh) {
+    params.append('refresh', 'true');
   }
 
   const inboxUrl = `${API_BASE_URL}/email-inbox/inbox?${params.toString()}`;
@@ -198,16 +202,18 @@ export const fetchInboxEmails = async (accountId, limit = 25, page = 1) => {
 };
 
 // Fetch sent emails
-export const fetchSentEmails = async (accountId, limit = 30, page = 1) => {
+// refresh: when true, backend syncs from IMAP and returns latest (slower). Omit/false = DB-first (fast).
+export const fetchSentEmails = async (accountId, limit = 30, page = 1, refresh = false) => {
   const token = getAuthToken();
   
   if (!token) {
     throw new Error('Please login to access emails');
   }
 
-  // Build query parameters according to API documentation
+  // Build query parameters - page for pagination (25 per page)
   const params = new URLSearchParams({
     limit: limit.toString(),
+    page: page.toString(),
     includePreview: 'true',
     includeContent: 'false', // Don't fetch full content for list view (faster)
     includeAttachmentContent: 'true' // Include attachment content for instant downloads
@@ -216,11 +222,9 @@ export const fetchSentEmails = async (accountId, limit = 30, page = 1) => {
   if (accountId) {
     params.append('emailAccountId', accountId);
   }
-  
-  // Note: API doesn't support pagination with page parameter, but we can use limit
-  // For pagination, we'll need to calculate skip = (page - 1) * limit
-  // But since API doesn't support skip, we'll fetch all and paginate client-side
-  // Or use limit to get more emails per request
+  if (refresh) {
+    params.append('refresh', 'true');
+  }
 
   const sentUrl = `${API_BASE_URL}/email-inbox/sent?${params.toString()}`;
 
@@ -250,7 +254,8 @@ export const fetchSentEmails = async (accountId, limit = 30, page = 1) => {
 };
 
 // Fetch single email by UID
-export const fetchEmailByUid = async (uid, accountId, folder = 'INBOX', includeThread = true, markAsRead = true) => {
+// refresh: when true, backend syncs from IMAP for this email/thread (slower). Omit/false = DB-first (fast).
+export const fetchEmailByUid = async (uid, accountId, folder = 'INBOX', includeThread = true, markAsRead = true, refresh = false) => {
   const token = getAuthToken();
 
   if (!token) {
@@ -270,6 +275,9 @@ export const fetchEmailByUid = async (uid, accountId, folder = 'INBOX', includeT
   
   if (accountId) {
     params.append('emailAccountId', accountId);
+  }
+  if (refresh) {
+    params.append('refresh', 'true');
   }
   
   const emailUrl = `${API_BASE_URL}/email-inbox/${uidString}?${params.toString()}`;

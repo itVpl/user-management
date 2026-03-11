@@ -192,6 +192,10 @@ const EmailList = ({
   onToggleStar,
   formatTimestamp,
   userEmail = '', // User's email address to show "me" instead
+  // Pagination: 25 per page (replaces infinite scroll when true)
+  usePagination = false,
+  currentPage = 1,
+  onPageChange = null,
   // ⭐ NEW PROPS for label filtering
   selectedLabelId = null,
   folder = 'INBOX', // 'INBOX' or 'SENT'
@@ -402,9 +406,9 @@ const EmailList = ({
     }
   }, [selectedLabelId, emailAccountId, folder, fetchEmailsByLabel]);
 
-  // Infinite scroll handler
+  // Infinite scroll handler (disabled when using pagination)
   useEffect(() => {
-    if (!onLoadMore || loadingMore || !hasMore) {
+    if (usePagination || !onLoadMore || loadingMore || !hasMore) {
       isLoadingRef.current = false;
       return;
     }
@@ -481,7 +485,7 @@ const EmailList = ({
       }
       isLoadingRef.current = false;
     };
-  }, [onLoadMore, loadingMore, hasMore]); // Removed emails.length to prevent re-attaching listeners on every email load
+  }, [usePagination, onLoadMore, loadingMore, hasMore]); // Removed emails.length to prevent re-attaching listeners on every email load
 
   // Reset loading flag when loadingMore changes to false
   useEffect(() => {
@@ -1221,8 +1225,35 @@ const EmailList = ({
         </Box>
       )}
       
-      {/* Load More button (fallback if scroll doesn't trigger) */}
-      {hasMore && !loadingMore && emails.length > 0 && (
+      {/* Pagination: 25 per page (when not filtering by label) */}
+      {usePagination && emails.length > 0 && onPageChange && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 2, p: 2, flexWrap: 'wrap' }}>
+          <Button
+            variant="outlined"
+            size="small"
+            disabled={currentPage <= 1 || loadingMore}
+            onClick={() => onPageChange(currentPage - 1)}
+            sx={{ textTransform: 'none' }}
+          >
+            Previous
+          </Button>
+          <Typography variant="body2" sx={{ color: '#5f6368', minWidth: 80, textAlign: 'center' }}>
+            Page {currentPage}
+          </Typography>
+          <Button
+            variant="outlined"
+            size="small"
+            disabled={!hasMore || loadingMore}
+            onClick={() => onPageChange(currentPage + 1)}
+            sx={{ textTransform: 'none' }}
+          >
+            Next
+          </Button>
+        </Box>
+      )}
+      
+      {/* Load More button (only when not using pagination, e.g. label filter) */}
+      {!usePagination && hasMore && !loadingMore && emails.length > 0 && (
         <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
           <Button
             variant="outlined"
@@ -1243,8 +1274,8 @@ const EmailList = ({
         </Box>
       )}
       
-      {/* End of list indicator */}
-      {!hasMore && emails.length > 0 && (
+      {/* End of list indicator (when not using pagination) */}
+      {!usePagination && !hasMore && emails.length > 0 && (
         <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
           <Typography variant="caption" sx={{ color: '#5f6368' }}>
             No more emails to load ({emails.length} {emails.length === 1 ? 'email' : 'emails'} loaded)

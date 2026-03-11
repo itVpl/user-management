@@ -8,20 +8,27 @@ import {
   Tooltip,
   Chip,
   Button,
+  CircularProgress,
 } from '@mui/material';
 import {
   Reply as ReplyIcon,
+  Refresh as RefreshIcon,
   AttachFile as AttachFileIcon,
   Close as CloseIcon,
   OpenInNew as OpenInNewIcon,
   Download as DownloadIcon,
   MoreVert as MoreVertIcon,
   Send as SendIcon,
+  ArrowBack as ArrowBackIcon,
+  Archive as ArchiveIcon,
+  Delete as DeleteIcon,
+  MarkEmailUnread as MarkEmailUnreadIcon,
+  Forward as ForwardIcon,
 } from '@mui/icons-material';
 import API_CONFIG from '../../config/api';
 import LabelActions from './LabelActions';
 
-const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose, onReply, emailAccountId, folder, emailAccounts = [] }) => {
+const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose, onReply, onRefresh, refreshingEmail, emailAccountId, folder, emailAccounts = [] }) => {
   const [refreshKey, setRefreshKey] = useState(0);
   
   if (!selectedEmail) return null;
@@ -268,11 +275,11 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose, onReply, 
     }
   };
 
-  // Check if we have thread messages
+  // Check if we have thread messages (from inbox thread or Sent folder API response email.messages)
   const threadMessages = selectedEmail.threadMessages || (selectedEmail.messages ? selectedEmail.messages : null);
   const hasThread = threadMessages && Array.isArray(threadMessages) && threadMessages.length > 0;
   
-  // If thread exists, use all messages; otherwise use single email
+  // If thread exists, use all messages; otherwise use single email. For Sent, backend returns full thread in email.messages.
   const messagesToDisplay = hasThread ? threadMessages : [selectedEmail];
   
   // Get current user email for comparison
@@ -350,21 +357,31 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose, onReply, 
         boxSizing: 'border-box',
         overflow: 'hidden'
       }}>
-        {/* Top Row - Close Button */}
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', mb: 2 }}>
-          <Tooltip title="Close">
-            <IconButton 
-              size="small" 
-              onClick={onClose}
-              sx={{ 
-                color: '#5f6368',
-                '&:hover': { 
-                  backgroundColor: '#f1f3f4',
-                  color: '#202124'
-                }
-              }}
-            >
-              <CloseIcon sx={{ fontSize: 20 }} />
+        {/* Top toolbar - Gmail style (Back, Archive, Delete, Mark unread, More) */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1.5, flexWrap: 'wrap' }}>
+          <Tooltip title="Back">
+            <IconButton size="small" onClick={onClose} sx={{ color: '#5f6368', '&:hover': { backgroundColor: '#f1f3f4', color: '#202124' } }}>
+              <ArrowBackIcon sx={{ fontSize: 22 }} />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Archive">
+            <IconButton size="small" sx={{ color: '#5f6368', '&:hover': { backgroundColor: '#f1f3f4', color: '#202124' } }}>
+              <ArchiveIcon sx={{ fontSize: 20 }} />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Delete">
+            <IconButton size="small" onClick={() => onDelete && onDelete(selectedEmail?.id)} sx={{ color: '#5f6368', '&:hover': { backgroundColor: '#fce8e6', color: '#d93025' } }}>
+              <DeleteIcon sx={{ fontSize: 20 }} />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Mark as unread">
+            <IconButton size="small" sx={{ color: '#5f6368', '&:hover': { backgroundColor: '#f1f3f4', color: '#202124' } }}>
+              <MarkEmailUnreadIcon sx={{ fontSize: 20 }} />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="More">
+            <IconButton size="small" sx={{ color: '#5f6368', '&:hover': { backgroundColor: '#f1f3f4', color: '#202124' } }}>
+              <MoreVertIcon sx={{ fontSize: 20 }} />
             </IconButton>
           </Tooltip>
         </Box>
@@ -579,32 +596,25 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose, onReply, 
           const displaySenderEmail = cleanEmail(senderEmail);
           const displayRecipientEmail = cleanEmail(recipientEmail);
           
-          // Extract actual message content (remove quoted content)
-          const extractMessageContent = (body) => {
-            if (!body) return '';
-            
-            // Common patterns for quoted content
-            const quotedPatterns = [
-              /^On .+ wrote:[\s\S]*$/m,  // "On [date] [person] wrote:"
-              /^From: .+[\s\S]*$/m,       // "From: [email]"
-              /^> .+$/m,                  // "> quoted text"
-              /^-----Original Message-----[\s\S]*$/m,  // "-----Original Message-----"
-            ];
-            
-            let cleanBody = body;
-            for (const pattern of quotedPatterns) {
-              const match = cleanBody.match(pattern);
-              if (match) {
-                cleanBody = cleanBody.substring(0, match.index).trim();
-                break;
-              }
+          // Split body into new content and quoted section (Gmail-style: show both, quoted indented)
+          const splitNewAndQuoted = (body) => {
+            if (!body || typeof body !== 'string') return { newContent: '', quotedHeader: '', quotedBody: '' };
+            const full = body.trim();
+            // Match "On ... wrote:" (e.g. "On Wed, 11 Mar 2026 at 7:28 PM, <it@vp.com> wrote:") then rest is quoted
+            const onWroteMatch = full.match(/(On\s+.+?wrote:)\s*\n+([\s\S]*)/im);
+            if (onWroteMatch) {
+              const quotedHeader = onWroteMatch[1].trim();
+              const quotedBody = (onWroteMatch[2] || '').trim();
+              const idx = full.indexOf(onWroteMatch[1]);
+              const newContent = (idx > 0 ? full.substring(0, idx).trim() : '').trim();
+              return { newContent, quotedHeader, quotedBody };
             }
-            
-            return cleanBody || body;
+            return { newContent: full, quotedHeader: '', quotedBody: '' };
           };
           
-          const messageContent = extractMessageContent(message.body || message.content || '');
-          const hasQuotedContent = (message.body || message.content || '').length > messageContent.length;
+          const rawBody = message.body || message.content || '';
+          const { newContent: messageContent, quotedHeader, quotedBody } = splitNewAndQuoted(rawBody);
+          const hasQuotedContent = !!(quotedHeader && quotedBody);
           
           return (
             <Box 
@@ -620,7 +630,7 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose, onReply, 
             >
               {/* Message Header - Gmail Style */}
               <Box sx={{ 
-                display: 'flex', 
+                display: 'flex',  
                 alignItems: 'flex-start', 
                 gap: 1.5,
                 mb: 1.5
@@ -655,10 +665,10 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose, onReply, 
                     </Typography>
                   </Box>
                   
-                  {/* To/From Row - Gmail Style (only show if different from sender) */}
-                  {displayRecipientEmail && displayRecipientEmail !== displaySenderEmail && (
+                  {/* To/From Row - Gmail style: "to me" when recipient is current user, else "to email" */}
+                  {displayRecipientEmail && (
                     <Typography variant="body2" sx={{ color: '#5f6368', fontSize: '0.8125rem', mb: 0.5 }}>
-                      to {displayRecipientEmail}
+                      to {currentUserEmail && displayRecipientEmail.toLowerCase() === currentUserEmail.toLowerCase() ? 'me' : displayRecipientEmail}
                     </Typography>
                   )}
                 </Box>
@@ -784,6 +794,42 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose, onReply, 
                   );
                 })()}
               </Box>
+              
+              {/* Quoted message block - Gmail style: "On [date], <sender> wrote:" then indented quote */}
+              {!(message.html || message.htmlBody || message.htmlContent) && hasQuotedContent && quotedHeader && (
+                <Box
+                  sx={{
+                    mt: 1.5,
+                    ml: 5.5,
+                    borderLeft: '3px solid #dadce0',
+                    pl: 2,
+                    backgroundColor: '#f8f9fa',
+                    py: 1.5,
+                    pr: 2,
+                    borderRadius: '0 8px 8px 0',
+                    maxWidth: '100%',
+                    boxSizing: 'border-box'
+                  }}
+                >
+                  <Typography variant="body2" sx={{ color: '#5f6368', fontSize: '0.8125rem', mb: 1 }}>
+                    {quotedHeader}
+                  </Typography>
+                  <Typography
+                    component="div"
+                    sx={{
+                      whiteSpace: 'pre-wrap',
+                      fontSize: '0.875rem',
+                      color: '#202124',
+                      lineHeight: 1.5,
+                      fontFamily: 'Roboto, Arial, sans-serif',
+                      wordBreak: 'break-word',
+                      overflowWrap: 'break-word'
+                    }}
+                  >
+                    {formatEmailBody(quotedBody)}
+                  </Typography>
+                </Box>
+              )}
               
               {/* Message Attachments - Gmail Style */}
               {(() => {
@@ -1009,13 +1055,49 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose, onReply, 
             fontSize: '0.875rem',
             minWidth: 'auto',
             px: 1.5,
-            '&:hover': { 
-              backgroundColor: '#f1f3f4'
-            }
+            '&:hover': { backgroundColor: '#f1f3f4' }
           }}
         >
           Reply
         </Button>
+        <Button
+          variant="text"
+          startIcon={<ForwardIcon />}
+          sx={{ 
+            textTransform: 'none',
+            color: '#5f6368',
+            fontWeight: 500,
+            fontSize: '0.875rem',
+            minWidth: 'auto',
+            px: 1.5,
+            '&:hover': { backgroundColor: '#f1f3f4' }
+          }}
+        >
+          Forward
+        </Button>
+        {onRefresh && (
+          <Tooltip title="Sync from server">
+            <Button
+              variant="text"
+              startIcon={refreshingEmail ? <CircularProgress size={16} /> : <RefreshIcon />}
+              onClick={() => onRefresh(selectedEmail)}
+              disabled={refreshingEmail}
+              sx={{ 
+                textTransform: 'none',
+                color: '#5f6368',
+                fontWeight: 500,
+                fontSize: '0.875rem',
+                minWidth: 'auto',
+                px: 1.5,
+                '&:hover': { 
+                  backgroundColor: '#f1f3f4'
+                }
+              }}
+            >
+              {refreshingEmail ? 'Syncing…' : 'Refresh'}
+            </Button>
+          </Tooltip>
+        )}
       </Box>
     </Box>
   );
