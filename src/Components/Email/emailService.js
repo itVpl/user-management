@@ -341,6 +341,46 @@ export const fetchEmailByUid = async (uid, accountId, folder = 'INBOX', includeT
   }
 };
 
+// Search emails (Gmail-style: keyword, from:, to:, subject:, etc.)
+// folder: 'INBOX' | 'SENT' | 'ALL'. Pagination: Gmail API uses pageToken, DB uses page.
+export const searchEmails = async ({ q = '', folder = 'ALL', limit = 25, page = 1, pageToken = null, emailAccountId = null } = {}) => {
+  const token = getAuthToken();
+  if (!token) {
+    throw new Error('Please login to search emails');
+  }
+
+  const params = new URLSearchParams({
+    q: String(q).trim(),
+    folder: String(folder).toUpperCase(),
+    limit: Math.min(Math.max(1, limit), 50)
+  });
+  if (pageToken) {
+    params.set('pageToken', pageToken);
+  } else {
+    params.set('page', String(page));
+  }
+  if (emailAccountId) {
+    params.set('emailAccountId', emailAccountId);
+  }
+
+  const url = `${API_BASE_URL}/email-inbox/search?${params.toString()}`;
+  try {
+    const response = await axios.get(url, {
+      headers: getAuthHeaders(),
+      timeout: 35000
+    });
+    return response.data;
+  } catch (error) {
+    if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+      throw new Error('Search timed out. Please try again.');
+    }
+    if (error.response?.data?.message) {
+      throw new Error(error.response.data.message);
+    }
+    throw error;
+  }
+};
+
 // Mark email as read (manual)
 export const markEmailAsRead = async (uid, accountId, folder = 'INBOX') => {
   const token = getAuthToken();

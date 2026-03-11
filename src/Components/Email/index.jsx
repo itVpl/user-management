@@ -10,6 +10,12 @@ import {
   useTheme,
   useMediaQuery,
   Dialog,
+  InputAdornment,
+  TextField,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
 } from '@mui/material';
 import {
   FilterList as FilterListIcon,
@@ -19,6 +25,8 @@ import {
   Send as SendIcon,
   Inbox as InboxIcon,
   Send as SentIcon,
+  Search as SearchIcon,
+  Close as CloseSearchIcon,
 } from '@mui/icons-material';
 
 import CreateAccountDialog from './CreateAccountDialog';
@@ -40,6 +48,7 @@ import {
   fetchSentEmails, 
   fetchEmailByUid, 
   fetchEmailsByLabel,
+  searchEmails,
   transformEmail, 
   sendEmail, 
   sendEmailWithAttachments, 
@@ -113,6 +122,17 @@ const Email = () => {
   // When user clicks "Refresh" on the open email, show loading in viewer
   const [refreshingEmail, setRefreshingEmail] = useState(false);
 
+  // Search state (GET /api/v1/email-inbox/search)
+  const [searchActive, setSearchActive] = useState(false);
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState(null);
+  const [searchFolder, setSearchFolder] = useState('ALL'); // INBOX | SENT | ALL
+  const [searchPagination, setSearchPagination] = useState(null); // { nextPageToken, hasNextPage, currentPage, source }
+  const [searchPage, setSearchPage] = useState(1);
+  const [searchPageToken, setSearchPageToken] = useState(null);
+  const [searchSource, setSearchSource] = useState(null); // 'gmail-api' | 'db'
+
   // Tab configuration
   const tabs = [
     { label: 'Inbox', icon: <InboxIcon />, count: emails.filter(e => !e.isRead && e.folder === 'inbox').length },
@@ -164,13 +184,13 @@ const Email = () => {
 
   // Poll inbox API every 8s while Inbox tab is open (backend syncs INBOX to DB every 5s; no refresh=true needed)
   useEffect(() => {
-    if (selectedTab !== 0 || !selectedAccountId || selectedLabelId) return;
+    if (selectedTab !== 0 || !selectedAccountId || selectedLabelId || searchActive) return;
     const POLL_INTERVAL_MS = 8000; // 8 seconds
     const intervalId = setInterval(() => {
       loadEmails(1, true, false, true); // page 1, reset list, no IMAP refresh, silent (no loading spinner)
     }, POLL_INTERVAL_MS);
     return () => clearInterval(intervalId);
-  }, [selectedTab, selectedAccountId, selectedLabelId]);
+  }, [selectedTab, selectedAccountId, selectedLabelId, searchActive]);
 
   // Load email accounts
   const loadEmailAccounts = async () => {
@@ -790,6 +810,85 @@ const Email = () => {
       loadSentEmails(page, true);
     }
   }, [selectedAccountId, selectedTab, loading]);
+
+  // Search emails (GET /api/v1/email-inbox/search)
+  const runSearch = useCallback(async (pageNum = 1, nextToken = null) => {
+    const q = (typeof searchQuery === 'string' ? searchQuery : '').trim();
+    if (!selectedAccountId) {
+      setSearchError('Select an email account to search.');
+      return;
+    }
+    if (!q) {
+      setSearchError('Enter a search term.');
+      return;
+    }
+    setSearchLoading(true);
+    setSearchError(null);
+    try {
+      const res = await searchEmails({
+        q,
+        folder: searchFolder,
+        limit: 25,
+        page: pageNum,
+        pageToken: nextToken || undefined,
+        emailAccountId: selectedAccountId
+      });
+      if (!res.success) {
+        setSearchError(res.message || 'Search failed.');
+        setSearchResults([]);
+        setSearchPagination(null);
+        return;
+      }
+      const rawEmails = res.emails || [];
+      const transformed = rawEmails.map((email, index) => {
+        const t = transformEmail(email, index);
+        return {
+          ...t,
+          folder: (email.folder || t.folder || 'inbox').toLowerCase()
+        };
+      });
+      if (pageNum === 1 && !nextToken) {
+        setSearchResults(transformed);
+        setSearchPage(1);
+        setSearchPageToken(null);
+      } else {
+        setSearchResults(prev => [...prev, ...transformed]);
+      }
+      const pag = res.pagination || {};
+      setSearchPagination(pag);
+      setSearchPage(pageNum);
+      setSearchPageToken(pag.nextPageToken || null);
+      setSearchSource(res.source || null);
+      setSearchActive(true);
+    } catch (err) {
+      setSearchError(err.message || 'Search failed.');
+      setSearchResults([]);
+      setSearchPagination(null);
+    } finally {
+      setSearchLoading(false);
+    }
+  }, [searchQuery, searchFolder, selectedAccountId]);
+
+  const clearSearch = useCallback(() => {
+    setSearchActive(false);
+    setSearchResults([]);
+    setSearchError(null);
+    setSearchPagination(null);
+    setSearchPage(1);
+    setSearchPageToken(null);
+    setSearchSource(null);
+    setSearchQuery('');
+  }, []);
+
+  const loadMoreSearchResults = useCallback(async () => {
+    if (searchLoading || !searchPagination) return;
+    const isGmail = searchSource === 'gmail-api';
+    if (isGmail && searchPagination.nextPageToken) {
+      await runSearch(1, searchPagination.nextPageToken);
+    } else if (!isGmail && searchPagination.hasNextPage) {
+      await runSearch(searchPage + 1, null);
+    }
+  }, [searchLoading, searchPagination, searchSource, searchPage, runSearch]);
 
   // Load emails filtered by label
   const loadEmailsByLabel = async () => {
@@ -1668,7 +1767,7 @@ const Email = () => {
   const handleRefreshEmail = async () => {
     if (!selectedEmail?.uid || !selectedAccountId) return;
     setRefreshingEmail(true);
-    const folder = selectedTab === 0 ? 'INBOX' : 'SENT';
+    const folder = selectedEmail?.folder ? String(selectedEmail.folder).toUpperCase() : (selectedTab === 0 ? 'INBOX' : 'SENT');
     try {
       const response = await fetchEmailByUid(
         selectedEmail.uid,
@@ -1971,6 +2070,70 @@ const Email = () => {
         >
           <FilterListIcon />
         </IconButton>
+
+        {/* Search bar - Gmail style */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1, maxWidth: 560, mr: 2 }}>
+          <TextField
+            size="small"
+            placeholder="Search mail (e.g. from:user@example.com subject:invoice)"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') runSearch(1, null);
+            }}
+            sx={{
+              flex: 1,
+              '& .MuiOutlinedInput-root': {
+                backgroundColor: '#f1f3f4',
+                borderRadius: '24px',
+                fontSize: '0.875rem',
+                '& fieldset': { border: 'none' },
+                '&:hover': { backgroundColor: '#e8eaed' }
+              }
+            }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon sx={{ color: '#5f6368', fontSize: 20 }} />
+                </InputAdornment>
+              ),
+              endAdornment: searchQuery ? (
+                <InputAdornment position="end">
+                  <IconButton size="small" onClick={() => setSearchQuery('')} sx={{ p: 0.5 }}>
+                    <CloseSearchIcon sx={{ fontSize: 18, color: '#5f6368' }} />
+                  </IconButton>
+                </InputAdornment>
+              ) : null
+            }}
+          />
+          <FormControl size="small" sx={{ minWidth: 100 }}>
+            <InputLabel>Scope</InputLabel>
+            <Select
+              value={searchFolder}
+              label="Scope"
+              onChange={(e) => setSearchFolder(e.target.value)}
+              sx={{ borderRadius: '8px', backgroundColor: '#fff' }}
+            >
+              <MenuItem value="ALL">All</MenuItem>
+              <MenuItem value="INBOX">Inbox</MenuItem>
+              <MenuItem value="SENT">Sent</MenuItem>
+            </Select>
+          </FormControl>
+          <Button
+            variant="contained"
+            size="small"
+            onClick={() => runSearch(1, null)}
+            disabled={!selectedAccountId || searchLoading || !searchQuery.trim()}
+            sx={{ textTransform: 'none', borderRadius: '8px', px: 2 }}
+          >
+            {searchLoading ? 'Searching…' : 'Search'}
+          </Button>
+          {searchActive && (
+            <Button size="small" onClick={clearSearch} sx={{ textTransform: 'none', color: '#5f6368' }}>
+              Clear
+            </Button>
+          )}
+        </Box>
         
         {/* Right side actions - Gmail style */}
         <Box sx={{ 
@@ -2239,30 +2402,51 @@ const Email = () => {
           boxSizing: 'border-box'
         }}>
           <Box sx={{ flexGrow: 1, overflow: 'auto', width: '100%' }}>
+            {searchActive && (searchResults.length > 0 || searchLoading) && (
+              <Alert
+                severity="info"
+                sx={{ m: 2, mb: 1 }}
+                action={
+                  <Button color="inherit" size="small" onClick={clearSearch}>
+                    Clear search
+                  </Button>
+                }
+              >
+                Search results for &quot;{searchQuery}&quot; in {searchFolder === 'ALL' ? 'All mail' : searchFolder === 'INBOX' ? 'Inbox' : 'Sent'}
+                {!searchLoading && searchResults.length > 0 && ` (${searchResults.length} ${searchResults.length === 1 ? 'email' : 'emails'})`}
+              </Alert>
+            )}
+            {searchActive && searchError && (
+              <Alert severity="error" sx={{ m: 2 }} onClose={() => setSearchError(null)}>
+                {searchError}
+              </Alert>
+            )}
+            {searchActive && !searchError && searchResults.length === 0 && !searchLoading && (
+              <Alert severity="info" sx={{ m: 2 }}>
+                No emails match your search. Try different keywords or scope (e.g. from:email subject:word).
+              </Alert>
+            )}
             <EmailList
               userEmail={emailAccounts.find(acc => acc._id === selectedAccountId)?.email || ''}
-              emails={selectedLabelId ? [] : getFilteredEmails()} // Only pass emails when not filtering by label
-              loading={selectedLabelId ? false : loading} // EmailList handles its own loading when filtering
-              loadingMore={loadingMore}
-              hasMore={hasMore}
-              onLoadMore={selectedTab === 0 ? loadMoreEmails : loadMoreSentEmails}
+              emails={searchActive ? searchResults : (selectedLabelId ? [] : getFilteredEmails())}
+              loading={searchActive ? searchLoading : (selectedLabelId ? false : loading)}
+              loadingMore={searchActive ? false : loadingMore}
+              hasMore={searchActive ? !!(searchPagination?.nextPageToken || searchPagination?.hasNextPage) : hasMore}
+              onLoadMore={searchActive ? loadMoreSearchResults : (selectedTab === 0 ? loadMoreEmails : loadMoreSentEmails)}
               selectedEmail={selectedEmail}
               onEmailSelect={handleEmailSelect}
               onToggleStar={toggleStar}
               formatTimestamp={formatTimestamp}
-              // Pagination: 25 per page (replaces infinite scroll when not filtering by label)
-              usePagination={!selectedLabelId}
-              currentPage={currentPage}
-              onPageChange={handlePageChange}
-              // ⭐ NEW PROPS for label filtering
-              selectedLabelId={selectedLabelId}
-              folder={selectedTab === 0 ? 'INBOX' : 'SENT'}
+              usePagination={!selectedLabelId && !searchActive}
+              currentPage={searchActive ? searchPage : currentPage}
+              onPageChange={searchActive ? undefined : handlePageChange}
+              selectedLabelId={searchActive ? null : selectedLabelId}
+              folder={searchActive ? 'ALL' : (selectedTab === 0 ? 'INBOX' : 'SENT')}
               emailAccountId={selectedAccountId}
               onClearLabelFilter={handleClearLabelFilter}
-              // ⭐ NEW PROP for bulk actions
               onEmailsUpdate={(updateFn) => {
-                // Update emails in parent component
-                setEmails(prev => updateFn(prev));
+                if (searchActive) setSearchResults(prev => updateFn(prev));
+                else setEmails(prev => updateFn(prev));
               }}
             />
           </Box>
@@ -2350,7 +2534,7 @@ const Email = () => {
           onRefresh={handleRefreshEmail}
           refreshingEmail={refreshingEmail}
           emailAccountId={selectedAccountId}
-          folder={selectedTab === 0 ? 'INBOX' : 'SENT'}
+          folder={selectedEmail?.folder ? String(selectedEmail.folder).toUpperCase() : (selectedTab === 0 ? 'INBOX' : 'SENT')}
           emailAccounts={emailAccounts}
         />
       </Dialog>
