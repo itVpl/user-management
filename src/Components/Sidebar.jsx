@@ -117,7 +117,10 @@ const DEPARTMENT_MODULE_CATEGORIES = {
     ],
     "Follow-ups": [
       "Daily Follow-Up",
-      "Follow Up Report"
+      "Follow Up Report",
+      "Meeting Schedule",
+      "All Meeting Schedules",
+      "My Email Logs"
     ],
     "Invoices": [
       "Check Invoice"
@@ -484,6 +487,9 @@ const menuItems = [
   { name: "Team Rating", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/team-rating" },
   { name: "Daily Follow-Up", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/daily-follow-up" },
   { name: "Follow Up Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/followUpReport" },
+  { name: "Meeting Schedule", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/meeting-schedule" },
+  { name: "All Meeting Schedules", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/all-meeting-schedules" },
+  { name: "My Email Logs", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/my-email-logs" },
   { name: "Add Customer", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/AddCustomer" },
   { name: "All Customers", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/allcustomer" },
   { name: "Assign Agent", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/AssignAgent" },

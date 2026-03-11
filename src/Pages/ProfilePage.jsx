@@ -90,6 +90,10 @@ const ProfilePage = () => {
   const userStr = localStorage.getItem("user") || sessionStorage.getItem("user");
   const empId = userStr ? JSON.parse(userStr).empId : null;
 
+  // Hybrid eligibility (weekly target) – from GET /api/v1/weekly-target/hybrid-eligibility
+  const [hybridEligibility, setHybridEligibility] = useState(null);
+  const [hybridEligibilityLoading, setHybridEligibilityLoading] = useState(false);
+
   // Refs for clickable inputs
   const attDateRef = useRef(null);
   const fromRef = useRef(null);
@@ -151,6 +155,26 @@ const ProfilePage = () => {
     } catch {}
   };
 
+  const fetchHybridEligibility = async () => {
+    if (!empId) return;
+    setHybridEligibilityLoading(true);
+    try {
+      const res = await axios.get(
+        `${API_CONFIG.BASE_URL}/api/v1/weekly-target/hybrid-eligibility?empId=${encodeURIComponent(empId)}`,
+        authHeader()
+      );
+      if (res.data?.success && res.data?.data) {
+        setHybridEligibility(res.data.data);
+      } else {
+        setHybridEligibility(null);
+      }
+    } catch {
+      setHybridEligibility(null);
+    } finally {
+      setHybridEligibilityLoading(false);
+    }
+  };
+
 
   /* ========= Bootstrap ========= */
   useEffect(() => {
@@ -171,6 +195,10 @@ const ProfilePage = () => {
       .then(fetchLeaveBalance)
       .then(() => fetchAttendanceData(todayISO()))
       .catch(() => {});
+  }, [empId]);
+
+  useEffect(() => {
+    if (empId) fetchHybridEligibility();
   }, [empId]);
 
   useEffect(() => {
@@ -515,6 +543,76 @@ const ProfilePage = () => {
             <li><span className="font-semibold text-gray-900">Alternative Contact:</span> {employee.alternateNo || "--"}</li>
             <li><span className="font-semibold text-gray-900">Email:</span> {employee.email || "--"}</li>
           </ul>
+        </div>
+      </div>
+
+      {/* Hybrid Eligibility (Weekly Target API) */}
+      <div className="px-4 mt-4">
+        <div className="bg-white p-5 rounded-2xl shadow-lg border border-indigo-100 hover:shadow-indigo-200 transition duration-300 ease-in-out">
+          <h2 className="text-xl font-semibold mb-4 text-indigo-700 flex items-center gap-2">
+            <svg className="w-5 h-5 text-indigo-500" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
+            </svg>
+            Hybrid Eligibility (Next Week)
+          </h2>
+          {hybridEligibilityLoading ? (
+            <div className="flex items-center gap-2 text-gray-500">
+              <span className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+              Loading…
+            </div>
+          ) : hybridEligibility ? (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <span
+                  className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold ${
+                    hybridEligibility.eligibleForHybridNextWeek
+                      ? "bg-green-100 text-green-800 border border-green-200"
+                      : "bg-amber-100 text-amber-800 border border-amber-200"
+                  }`}
+                >
+                  {hybridEligibility.eligibleForHybridNextWeek ? "✓ Eligible" : "Not eligible"}
+                </span>
+              </div>
+              {hybridEligibility.message && (
+                <p className="text-sm text-gray-700 bg-gray-50 px-4 py-3 rounded-xl border border-gray-100">
+                  {hybridEligibility.message}
+                </p>
+              )}
+              {hybridEligibility.lastWeekTarget && (
+                <div className="bg-gradient-to-r from-indigo-50 to-purple-50 p-4 rounded-xl border border-indigo-100">
+                  <div className="text-xs font-semibold text-indigo-600 uppercase tracking-wide mb-2">Last week&apos;s target</div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                    <div>
+                      <div className="text-gray-500">Week start</div>
+                      <div className="font-medium text-gray-800">
+                        {hybridEligibility.lastWeekTarget.weekStartDate
+                          ? new Date(hybridEligibility.lastWeekTarget.weekStartDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+                          : "—"}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-gray-500">Week end</div>
+                      <div className="font-medium text-gray-800">
+                        {hybridEligibility.lastWeekTarget.weekEndDate
+                          ? new Date(hybridEligibility.lastWeekTarget.weekEndDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+                          : "—"}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-gray-500">Progress</div>
+                      <div className="font-bold text-indigo-600">
+                        {hybridEligibility.lastWeekTarget.progressPercentage != null
+                          ? `${hybridEligibility.lastWeekTarget.progressPercentage}%`
+                          : "—"}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500">Eligibility information could not be loaded.</p>
+          )}
         </div>
       </div>
 

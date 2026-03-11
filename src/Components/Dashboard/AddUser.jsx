@@ -23,6 +23,9 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
     { key: 'aadharcard', label: 'Aadhaar Card', required: false, icon: '🆔' },
     { key: 'educationalDocs', label: 'Educational Documents', required: false, multiple: true, icon: '📚' },
   ];
+  const DEPARTMENT_OPTIONS = ['IT', 'HR', 'CMT', 'Sales', 'Finance', 'QA'];
+  const SALES_TIER_OPTIONS = ['1', '2', '3'];
+
   const existingMobilesSet = useMemo(
     () => new Set(existingMobiles.filter(Boolean).map(m => String(m).replace(/\D/g, ''))),
     [existingMobiles]
@@ -60,7 +63,7 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
 
 
   const [formData, setFormData] = useState(
-    initialFields.reduce((acc, field) => ({ ...acc, [field.name]: '' }), { role: 'superadmin' })
+    initialFields.reduce((acc, field) => ({ ...acc, [field.name]: '' }), { role: 'superadmin', salesExecutiveTier: '' })
   );
 
 
@@ -149,15 +152,13 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
     }
     if (name === 'department') {
       const v = value.trim();
-      if (!v) setErr('department', 'Please enter the department name.');
-      else if (v.length < 2 || v.length > 50 || !NAME_ALPHA.test(v))
-        setErr('department', 'Please enter the valid department name.');
+      if (!v) setErr('department', 'Please select the department.');
       else clearErr('department');
     }
     if (name === 'designation') {
       const v = value.trim();
       if (!v) {
-        setErr('designation', 'Pleas enter the designation  name.');
+        setErr('designation', 'Please enter the designation name.');
       } else if (v.length < 2 || v.length > 50 || !NAME_ALPHA.test(v)) {
         setErr('designation', 'Please enter the valid designation name.');
       } else {
@@ -171,6 +172,17 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
       } else if (errors.mobileNo === 'Mobile number already registered with us.') {
         clearErr('mobileNo');
       }
+    }
+    // When department changes: auto-set designation for CMT/Sales; clear salesExecutiveTier if not Sales
+    if (name === 'department') {
+      setFormData(prev => {
+        const next = { ...prev, department: value };
+        if (value === 'CMT') next.designation = 'CMT Operation';
+        else if (value === 'Sales') next.designation = 'Sales Executive';
+        if (value !== 'Sales') next.salesExecutiveTier = '';
+        return next;
+      });
+      return;
     }
     setFormData(prev => ({ ...prev, [name]: value }));
 
@@ -283,19 +295,11 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
   const validateDept = () => {
     const v = formData.department.trim();
     if (!v) {
-      setErr('department', 'Please enter the department name.');
+      setErr('department', 'Please select the department.');
       return false;
     }
-    if (v.length < 2) {
-      setErr('department', 'Please enter the valid department name.');
-      return false;
-    }
-    if (v.length > 50) {
-      setErr('department', 'Please enter the valid department name.');
-      return false;
-    }
-    if (!NAME_ALPHA.test(v)) {
-      setErr('department', 'Please enter the valid department name.');
+    if (!DEPARTMENT_OPTIONS.includes(v)) {
+      setErr('department', 'Please select a valid department.');
       return false;
     }
     clearErr('department');
@@ -305,7 +309,7 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
 
   const validateDesignation = () => {
     const v = formData.designation.trim();
-    if (!v) return setErr('designation', 'Pleas enter the designation  name.'), false;
+    if (!v) return setErr('designation', 'Please enter the designation name.'), false;
     if (v.length < 2 || v.length > 50 || !NAME_ALPHA.test(v)) return setErr('designation', 'Please enter the valid designation name.'), false;
     clearErr('designation'); return true;
   };
@@ -343,6 +347,7 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
       emergencyNo: validateEmergency,
       department: validateDept,
       designation: validateDesignation,
+      salesExecutiveTier: validateSalesExecutiveTier,
       dateOfBirth: validateDob,
       dateOfJoining: validateDoj,
       accountHolderName: validateAccountHolderName,
@@ -380,11 +385,18 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
   const fieldRefs = useRef({});
   const fieldOrder = useMemo(() => [
     'empId', 'password', 'confirmPassword', 'employeeName', 'sex', 'email', 'mobileNo',
-    'alternateNo', 'emergencyNo', 'department', 'designation', 'dateOfBirth', 'dateOfJoining',
+    'alternateNo', 'emergencyNo', 'department', 'designation', 'salesExecutiveTier', 'dateOfBirth', 'dateOfJoining',
     // banking
     'accountHolderName', 'accountNumber', 'ifscCode', 'basicSalary'
   ], []);
 
+
+  const validateSalesExecutiveTier = () => {
+    if (formData.department !== 'Sales') return true;
+    if (!formData.salesExecutiveTier) return setErr('salesExecutiveTier', 'Please select Sales Executive Tier.'), false;
+    clearErr('salesExecutiveTier');
+    return true;
+  };
 
   const validatorsMap = {
     empId: validateEmpId,
@@ -398,6 +410,7 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
     emergencyNo: validateEmergency,
     department: validateDept,
     designation: validateDesignation,
+    salesExecutiveTier: validateSalesExecutiveTier,
     dateOfBirth: validateDob,
     dateOfJoining: validateDoj,
     accountHolderName: validateAccountHolderName,
@@ -690,10 +703,12 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
                 {initialFields.slice(0, 13).map((field) => {
                   const isPwd = field.name === 'password' || field.name === 'confirmPassword';
                   const isGender = field.name === 'sex';
+                  const isDepartment = field.name === 'department';
+                  const isDesignation = field.name === 'designation';
                   const isDate = field.type === 'date';
                   const isEmail = field.name === 'email';
                   const isMobileish = ['mobileNo', 'alternateNo', 'emergencyNo'].includes(field.name);
-
+                  const designationAuto = formData.department === 'CMT' ? 'CMT Operation' : formData.department === 'Sales' ? 'Sales Executive' : null;
 
                   return (
                     <div key={field.name} className="space-y-3">
@@ -703,8 +718,42 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
                       </label>
 
 
-                      {/* GENDER DROPDOWN */}
-                      {isGender ? (
+                      {/* DEPARTMENT DROPDOWN */}
+                      {isDepartment ? (
+                        <>
+                          <select
+                            ref={(el) => (fieldRefs.current['department'] = el)}
+                            name="department"
+                            value={formData.department}
+                            onChange={handleInputChange}
+                            onBlur={() => handleBlur('department')}
+                            className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl bg-white focus:ring-4 focus:ring-blue-200 focus:border-blue-500"
+                          >
+                            <option value="">Select Department</option>
+                            {DEPARTMENT_OPTIONS.map((opt) => (
+                              <option key={opt} value={opt}>{opt}</option>
+                            ))}
+                          </select>
+                          {errors.department && <p className="text-red-600 text-xs">{errors.department}</p>}
+                        </>
+                      ) : isDesignation ? (
+                        <>
+                          <input
+                            ref={(el) => (fieldRefs.current['designation'] = el)}
+                            name="designation"
+                            type="text"
+                            placeholder={field.placeholder}
+                            value={designationAuto ?? formData.designation}
+                            onChange={handleInputChange}
+                            onBlur={() => handleBlur('designation')}
+                            readOnly={!!designationAuto}
+                            className={`w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-200 focus:border-blue-500 transition-all duration-300 bg-white shadow-sm hover:shadow-md ${designationAuto ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                            maxLength={50}
+                          />
+                          {errors.designation && <p className="text-red-600 text-xs">{errors.designation}</p>}
+                        </>
+                      ) : /* GENDER DROPDOWN */
+                      isGender ? (
                         <>
                           <select
                             ref={(el) => (fieldRefs.current['sex'] = el)}
@@ -813,6 +862,29 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
                     </div>
                   );
                 })}
+                {/* Sales Executive Tier - only when Department is Sales */}
+                {formData.department === 'Sales' && (
+                  <div className="space-y-3">
+                    <label className="block text-sm font-bold text-gray-700 flex items-center">
+                      <span className="mr-2 text-lg">📊</span>
+                      Sales Executive Tier <span className="text-red-500 ml-1">*</span>
+                    </label>
+                    <select
+                      ref={(el) => (fieldRefs.current['salesExecutiveTier'] = el)}
+                      name="salesExecutiveTier"
+                      value={formData.salesExecutiveTier}
+                      onChange={handleInputChange}
+                      onBlur={() => handleBlur('salesExecutiveTier')}
+                      className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl bg-white focus:ring-4 focus:ring-blue-200 focus:border-blue-500"
+                    >
+                      <option value="">Select Tier</option>
+                      {SALES_TIER_OPTIONS.map((t) => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                    {errors.salesExecutiveTier && <p className="text-red-600 text-xs">{errors.salesExecutiveTier}</p>}
+                  </div>
+                )}
               </div>
             </div>
 

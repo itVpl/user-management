@@ -13,7 +13,8 @@ import {
   X,
   AlertTriangle,
   Play,
-  Calendar
+  Calendar,
+  RefreshCw
 } from "lucide-react";
 import CallIcon from '@mui/icons-material/Call';
 import API_CONFIG from '../../config/api.js';
@@ -184,6 +185,13 @@ const DailyTarget = () => {
   const [salesDept, setSalesDept] = useState(null);
   const [cmtDept, setCmtDept] = useState(null);
 
+  // My Targets (Sales only)
+  const [myTargets, setMyTargets] = useState([]);
+  const [myTargetsLoading, setMyTargetsLoading] = useState(false);
+  const [myTargetsError, setMyTargetsError] = useState(null);
+  // Daily breakdown modal (metric key, title, breakdown array)
+  const [dailyBreakdownModal, setDailyBreakdownModal] = useState(null);
+
 
   // HR/Admin: fetch both departments
   useEffect(() => {
@@ -314,6 +322,60 @@ const DailyTarget = () => {
     };
     fetchReport();
   }, [endpoint, empId, date, canRequest, department]);
+
+
+  // Fetch My Targets (Sales only) - can be called on mount and from refresh button
+  const fetchMyTargetsList = async () => {
+    setMyTargetsLoading(true);
+    setMyTargetsError(null);
+    try {
+      const res = await api.get("/api/v1/sales-executive-target/my");
+      const list = res?.data?.data ?? [];
+      setMyTargets(Array.isArray(list) ? list : []);
+    } catch (e) {
+      const msg = e?.response?.data?.message || e?.response?.data?.error || e?.message || "Failed to load targets";
+      setMyTargetsError(msg);
+      setMyTargets([]);
+    } finally {
+      setMyTargetsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (department !== "Sales") {
+      setMyTargets([]);
+      return;
+    }
+    fetchMyTargetsList();
+  }, [department]);
+
+  // Refresh My Targets: call GET /api/v1/sales-executive-target/:targetId for each target, then update section
+  const handleRefreshMyTargets = async () => {
+    if (department !== "Sales") return;
+    setMyTargetsLoading(true);
+    setMyTargetsError(null);
+    try {
+      const list = myTargets.length > 0 ? myTargets : [];
+      if (list.length === 0) {
+        const res = await api.get("/api/v1/sales-executive-target/my");
+        const data = res?.data?.data ?? [];
+        setMyTargets(Array.isArray(data) ? data : []);
+      } else {
+        const results = await Promise.all(
+          list.map((t) => api.get(`/api/v1/sales-executive-target/${t._id}`))
+        );
+        const refreshed = results
+          .map((r) => r?.data?.data)
+          .filter(Boolean);
+        setMyTargets(refreshed);
+      }
+    } catch (e) {
+      const msg = e?.response?.data?.message || e?.response?.data?.error || e?.message || "Failed to refresh targets";
+      setMyTargetsError(msg);
+    } finally {
+      setMyTargetsLoading(false);
+    }
+  };
 
 
   /* ===== Save Reason with 404 fallback & validation ===== */
@@ -641,6 +703,237 @@ const DailyTarget = () => {
 
   return (
     <div className="min-h-screen bg-white p-6 font-sans">
+      {/* My Targets (Sales only) - same design as Daily Target - Sales */}
+      {department === "Sales" && (
+        <div className="bg-white rounded-3xl border border-gray-200 p-8 shadow-sm mb-6 relative">
+          <div className="flex flex-col xl:flex-row justify-between xl:items-stretch gap-12">
+            {/* Left: Header + Metric Cards */}
+            <div className="flex-1 min-w-0">
+              {/* Header - same as Daily Target */}
+              <div className="flex justify-between items-start mb-8">
+                <div>
+                  <h1 className="text-2xl font-semibold text-gray-900 mb-1">My Targets</h1>
+                  <p className="text-gray-900 text-base font-medium">
+                    {myTargets.length > 0 && myTargets[0]?.weekStartDate
+                      ? `${formatDDMMYYYY(myTargets[0].weekStartDate)} – ${formatDDMMYYYY(myTargets[0].weekEndDate)}`
+                      : "—"}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="text-right">
+                    <p className="text-sm text-gray-500 mb-1 font-medium">Last updated</p>
+                    <p className="text-xl font-semibold text-gray-800">
+                      Today | {new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false })}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleRefreshMyTargets}
+                    disabled={myTargetsLoading}
+                    className="p-2.5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 hover:border-blue-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Refresh"
+                    aria-label="Refresh targets"
+                  >
+                    <RefreshCw className={`w-5 h-5 text-gray-600 ${myTargetsLoading ? "animate-spin" : ""}`} />
+                  </button>
+                </div>
+              </div>
+
+              {myTargetsLoading && (
+                <div className="flex items-center justify-center py-12">
+                  <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
+                </div>
+              )}
+              {!myTargetsLoading && myTargetsError && (
+                <p className="text-red-600 text-sm py-4">{myTargetsError}</p>
+              )}
+              {!myTargetsLoading && !myTargetsError && myTargets.length === 0 && (
+                <p className="text-gray-500 text-sm py-4">No targets assigned yet.</p>
+              )}
+              {!myTargetsLoading && !myTargetsError && myTargets.length > 0 && (() => {
+                const t = myTargets[0];
+                const tier1 = t?.tier1Targets ?? {};
+                const daily = t?.tier1DailyProgress ?? {};
+                const followUpDaily = daily?.followUp ?? {};
+                const callsDaily = daily?.calls ?? {};
+                const meetingsDaily = daily?.meetings ?? {};
+                return (
+                <>
+                  {/* Metric Cards - click to see daily breakdown */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setDailyBreakdownModal({ title: "Follow-up / day", breakdown: followUpDaily.dailyBreakdown ?? [], targetPerDay: tier1.followUpPerDay })}
+                      onKeyDown={(e) => e.key === "Enter" && setDailyBreakdownModal({ title: "Follow-up / day", breakdown: followUpDaily.dailyBreakdown ?? [], targetPerDay: tier1.followUpPerDay })}
+                      className="border border-red-200 bg-white rounded-xl p-5 relative shadow-sm cursor-pointer hover:shadow-md hover:border-red-300 transition-all"
+                    >
+                      <div className="flex justify-between items-start mb-6">
+                        <span className="text-sm font-medium text-gray-800">Follow-up / day</span>
+                        <span className="px-3 py-1 bg-red-50 text-red-700 text-xs font-bold rounded-full flex items-center gap-1.5">
+                          <div className="w-2 h-2 rounded-full bg-red-600" /> Target
+                        </span>
+                      </div>
+                      <div className="text-4xl font-normal text-gray-800">
+                        {tier1.followUpCompleted ?? 0}<span className="text-2xl text-gray-500 font-normal">/{tier1.followUpPerDay ?? 0}</span>
+                      </div>
+                      {followUpDaily.today !== undefined && (
+                        <p className="text-xs text-gray-500 mt-2">
+                          Today: <span className="font-semibold text-gray-700">{followUpDaily.today}</span>
+                          {followUpDaily.weekly !== undefined && (
+                            <span className="ml-2">· Weekly: <span className="font-semibold text-gray-700">{followUpDaily.weekly}</span></span>
+                          )}
+                        </p>
+                      )}
+                      <p className="text-xs text-red-600 mt-2 font-medium">Click to view daily breakdown</p>
+                    </div>
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setDailyBreakdownModal({ title: "Calls / day", breakdown: callsDaily.dailyBreakdown ?? [], targetPerDay: tier1.callsPerDay })}
+                      onKeyDown={(e) => e.key === "Enter" && setDailyBreakdownModal({ title: "Calls / day", breakdown: callsDaily.dailyBreakdown ?? [], targetPerDay: tier1.callsPerDay })}
+                      className="border border-amber-200 bg-white rounded-xl p-5 relative shadow-sm cursor-pointer hover:shadow-md hover:border-amber-300 transition-all"
+                    >
+                      <div className="flex justify-between items-start mb-6">
+                        <span className="text-sm font-medium text-gray-800">Calls / day</span>
+                        <span className="px-3 py-1 bg-amber-50 text-amber-700 text-xs font-bold rounded-full flex items-center gap-1.5">
+                          <div className="w-2 h-2 rounded-full bg-amber-600" /> Target
+                        </span>
+                      </div>
+                      <div className="text-4xl font-normal text-gray-800">
+                        {tier1.callsCompleted ?? 0}<span className="text-2xl text-gray-500 font-normal">/{tier1.callsPerDay ?? 0}</span>
+                      </div>
+                      {callsDaily.today !== undefined && (
+                        <p className="text-xs text-gray-500 mt-2">
+                          Today: <span className="font-semibold text-gray-700">{callsDaily.today}</span>
+                          {callsDaily.weekly !== undefined && (
+                            <span className="ml-2">· Weekly: <span className="font-semibold text-gray-700">{callsDaily.weekly}</span></span>
+                          )}
+                        </p>
+                      )}
+                      <p className="text-xs text-amber-600 mt-2 font-medium">Click to view daily breakdown</p>
+                    </div>
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setDailyBreakdownModal({ title: "Meetings / week", breakdown: meetingsDaily.dailyBreakdown ?? [], targetPerDay: tier1.meetingsPerWeek })}
+                      onKeyDown={(e) => e.key === "Enter" && setDailyBreakdownModal({ title: "Meetings / week", breakdown: meetingsDaily.dailyBreakdown ?? [], targetPerDay: tier1.meetingsPerWeek })}
+                      className="border border-green-200 bg-white rounded-xl p-5 relative shadow-sm cursor-pointer hover:shadow-md hover:border-green-300 transition-all"
+                    >
+                      <div className="flex justify-between items-start mb-6">
+                        <span className="text-sm font-medium text-gray-800">Meetings / week</span>
+                        <span className="px-3 py-1 bg-green-50 text-green-700 text-xs font-bold rounded-full flex items-center gap-1.5">
+                          <div className="w-2 h-2 rounded-full bg-green-600" /> Target
+                        </span>
+                      </div>
+                      <div className="text-4xl font-normal text-gray-800">
+                        {tier1.meetingsCompleted ?? 0}<span className="text-2xl text-gray-500 font-normal">/{tier1.meetingsPerWeek ?? 0}</span>
+                      </div>
+                      {meetingsDaily.today !== undefined && (
+                        <p className="text-xs text-gray-500 mt-2">
+                          Today: <span className="font-semibold text-gray-700">{meetingsDaily.today}</span>
+                          {meetingsDaily.weekly !== undefined && (
+                            <span className="ml-2">· Weekly: <span className="font-semibold text-gray-700">{meetingsDaily.weekly}</span></span>
+                          )}
+                        </p>
+                      )}
+                      <p className="text-xs text-green-600 mt-2 font-medium">Click to view daily breakdown</p>
+                    </div>
+                  </div>
+                  {/* Only first target in cards; if multiple, show rest in compact list */}
+                  {myTargets.length > 1 && (
+                    <div className="mt-6 pt-6 border-t border-gray-100">
+                      <p className="text-sm font-medium text-gray-600 mb-3">Other targets</p>
+                      <div className="space-y-3">
+                        {myTargets.slice(1).map((t) => {
+                          const tier1 = t?.tier1Targets ?? {};
+                          const weekStart = t?.weekStartDate ? formatDDMMYYYY(t.weekStartDate) : "—";
+                          const weekEnd = t?.weekEndDate ? formatDDMMYYYY(t.weekEndDate) : "—";
+                          return (
+                            <div key={t._id} className="flex flex-wrap items-center justify-between gap-2 py-2 border-b border-gray-100 last:border-0">
+                              <span className="text-sm text-gray-700">{weekStart} – {weekEnd}</span>
+                              <span className="text-xs text-gray-500">F: {tier1.followUpCompleted ?? 0}/{tier1.followUpPerDay ?? 0} · C: {tier1.callsCompleted ?? 0}/{tier1.callsPerDay ?? 0} · M: {tier1.meetingsCompleted ?? 0}/{tier1.meetingsPerWeek ?? 0}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  {myTargets.length === 1 && myTargets[0]?.setBy && (
+                    <p className="text-xs text-gray-500 mt-4">Set by: {myTargets[0].setBy.employeeName ?? myTargets[0].setBy.empId ?? "—"}</p>
+                  )}
+                </>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Daily Breakdown Modal (My Targets - Sales) */}
+      {department === "Sales" && dailyBreakdownModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+          onClick={() => setDailyBreakdownModal(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Daily breakdown"
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[85vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">{dailyBreakdownModal.title} — Daily breakdown</h3>
+              <button
+                type="button"
+                onClick={() => setDailyBreakdownModal(null)}
+                className="p-2 rounded-lg hover:bg-gray-100 text-gray-600"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="px-6 py-4 overflow-y-auto flex-1">
+              {dailyBreakdownModal.targetPerDay != null && (
+                <p className="text-sm text-gray-500 mb-4">Target: {dailyBreakdownModal.targetPerDay} per day</p>
+              )}
+              {!dailyBreakdownModal.breakdown?.length ? (
+                <p className="text-gray-500 text-sm">No daily data yet.</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-200 text-left">
+                      <th className="pb-3 pr-4 font-semibold text-gray-700">Date</th>
+                      <th className="pb-3 font-semibold text-gray-700">Count</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dailyBreakdownModal.breakdown.map((row, i) => (
+                      <tr key={i} className="border-b border-gray-100">
+                        <td className="py-3 pr-4 text-gray-800">
+                          {row.date ? formatDDMMYYYY(row.date) : row.date}
+                        </td>
+                        <td className="py-3 font-medium text-gray-800">{row.count ?? 0}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+            <div className="px-6 py-3 border-t border-gray-200 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setDailyBreakdownModal(null)}
+                className="px-4 py-2 rounded-xl bg-gray-100 text-gray-700 font-medium hover:bg-gray-200"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main Card */}
       <div className="bg-white rounded-3xl border border-gray-200 p-8 shadow-sm mb-6 relative">
 

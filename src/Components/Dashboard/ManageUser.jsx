@@ -936,6 +936,12 @@ const ManageUser = () => {
                       <p className="text-gray-600 text-xs mb-1">Designation</p>
                       <p className="font-semibold text-gray-800">{viewingUser.designation}</p>
                     </div>
+                    {viewingUser.department === 'Sales' && viewingUser.salesExecutiveTier && (
+                      <div className="bg-gray-50 p-3 rounded-lg">
+                        <p className="text-gray-600 text-xs mb-1">Sales Executive Tier</p>
+                        <p className="font-semibold text-gray-800">{viewingUser.salesExecutiveTier}</p>
+                      </div>
+                    )}
                     <div className="bg-gray-50 p-3 rounded-lg">
                       <p className="text-gray-600 text-xs mb-1">Date of Joining</p>
                       <p className="font-semibold text-gray-800">{formatDateDisplay(viewingUser.dateOfJoining)}</p>
@@ -1121,8 +1127,9 @@ const ManageUser = () => {
 };
 
 // Edit User Modal Component
-// ==== REPLACE your existing EditUserModal with this ====
-// ==== REPLACE your existing EditUserModal with this ====
+const DEPARTMENT_OPTIONS = ['IT', 'HR', 'CMT', 'Sales', 'Finance', 'QA'];
+const SALES_TIER_OPTIONS = ['1', '2', '3'];
+
 const EditUserModal = ({ user, onClose, onUpdate }) => {
   // ---- key filters (prevent invalid keystrokes) ----
   const allowKey = (e, type) => {
@@ -1134,6 +1141,12 @@ const EditUserModal = ({ user, onClose, onUpdate }) => {
 
   // IFSC regex (SBIN0XXXXXX style)
   const IFSC_PATTERN = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+  const getDesignationForDepartment = (dept, currentDesignation) => {
+    if (dept === 'CMT') return 'CMT Operation';
+    if (dept === 'Sales') return 'Sales Executive';
+    return currentDesignation || '';
+  };
+
   const [formData, setFormData] = React.useState({
     employeeName: user.employeeName || '',
     email: user.email || '',
@@ -1141,7 +1154,8 @@ const EditUserModal = ({ user, onClose, onUpdate }) => {
     alternateNo: user.alternateNo || '',
     emergencyNo: user.emergencyNo || '',
     department: user.department || '',
-    designation: user.designation || '',
+    designation: getDesignationForDepartment(user.department, user.designation),
+    salesExecutiveTier: user.salesExecutiveTier || '',
     basicSalary: user.basicSalary || '',
     sex: user.sex || '',
     dateOfBirth: user.dateOfBirth ? new Date(user.dateOfBirth).toISOString().split('T')[0] : '',
@@ -1187,6 +1201,7 @@ const EditUserModal = ({ user, onClose, onUpdate }) => {
   const emergencyNoRef = React.useRef(null);
   const departmentRef = React.useRef(null);
   const designationRef = React.useRef(null);
+  const salesExecutiveTierRef = React.useRef(null);
   const dobRef = React.useRef(null);
   const dojRef = React.useRef(null);
 
@@ -1197,9 +1212,24 @@ const EditUserModal = ({ user, onClose, onUpdate }) => {
     const { name, value } = e.target;
     let v = value;
 
-     if (['employeeName', 'department', 'designation', 'accountHolderName'].includes(name)) {
-    v = v.replace(/[^A-Za-z ]/g, '').slice(0, 50); // alphabets + space; max 50
-  }
+    if (['employeeName', 'accountHolderName'].includes(name)) {
+      v = v.replace(/[^A-Za-z ]/g, '').slice(0, 50); // alphabets + space; max 50
+    }
+    // Department dropdown: no extra sanitization; auto-set designation for CMT/Sales
+    if (name === 'department') {
+      setFormData((prev) => {
+        const next = { ...prev, department: v };
+        if (v === 'CMT') next.designation = 'CMT Operation';
+        else if (v === 'Sales') next.designation = 'Sales Executive';
+        if (v !== 'Sales') next.salesExecutiveTier = '';
+        return next;
+      });
+      setErrors((prev) => ({ ...prev, department: '' }));
+      return;
+    }
+    if (name === 'designation') {
+      v = v.replace(/[^A-Za-z ]/g, '').slice(0, 50);
+    }
     if (name === 'email') {
       v = v.replace(/\s/g, ''); // no spaces
     }
@@ -1374,9 +1404,9 @@ const EditUserModal = ({ user, onClose, onUpdate }) => {
 
     // 9) Department
     if (!formData.department?.trim()) {
-      v.department = 'Please enter the department name.';
-    } else if (formData.department.trim().length < 2 || !onlyAlpha(formData.department)) {
-      v.department = 'Please enter the valid department name.';
+      v.department = 'Please select the department.';
+    } else if (!DEPARTMENT_OPTIONS.includes(formData.department.trim())) {
+      v.department = 'Please select a valid department.';
     }
 
     // 10) Designation
@@ -1419,6 +1449,10 @@ const EditUserModal = ({ user, onClose, onUpdate }) => {
         v.ifscCode = 'Please enter the valid IFSC Code.';
       }
     }
+    // 16) Sales Executive Tier (required when Department is Sales)
+    if (formData.department === 'Sales' && !formData.salesExecutiveTier) {
+      v.salesExecutiveTier = 'Please select Sales Executive Tier.';
+    }
     setErrors(v);
     const hasErrors = Object.keys(v).length > 0;
     if (hasErrors) {
@@ -1427,7 +1461,7 @@ const EditUserModal = ({ user, onClose, onUpdate }) => {
       // error priority + scroll/focus
       const order = [
         'employeeName', 'sex', 'email', 'mobileNo', 'alternateNo',
-        'emergencyNo', 'department', 'designation', 'dateOfBirth', 'dateOfJoining',
+        'emergencyNo', 'department', 'designation', 'salesExecutiveTier', 'dateOfBirth', 'dateOfJoining',
       ];
       const refMap = {
         employeeName: employeeNameRef,
@@ -1438,6 +1472,7 @@ const EditUserModal = ({ user, onClose, onUpdate }) => {
         emergencyNo: emergencyNoRef,
         department: departmentRef,
         designation: designationRef,
+        salesExecutiveTier: salesExecutiveTierRef,
         dateOfBirth: dobRef,
         dateOfJoining: dojRef,
       };
@@ -1460,9 +1495,16 @@ const EditUserModal = ({ user, onClose, onUpdate }) => {
     try {
       const submitData = new FormData();
 
+      // Designation: use auto value for CMT/Sales, else form value
+      const designationValue = formData.department === 'CMT'
+        ? 'CMT Operation'
+        : formData.department === 'Sales'
+          ? 'Sales Executive'
+          : (formData.designation ?? '');
+
       // append normal fields (dates in DD-MM-YYYY)
       Object.entries(formData).forEach(([key, val]) => {
-        if (['accountHolderName', 'accountNumber', 'ifscCode'].includes(key)) return;
+        if (['accountHolderName', 'accountNumber', 'ifscCode', 'designation'].includes(key)) return;
         if (key === 'dateOfBirth' || key === 'dateOfJoining') {
           const d = new Date(val);
           const dd = String(d.getDate()).padStart(2, '0');
@@ -1473,6 +1515,8 @@ const EditUserModal = ({ user, onClose, onUpdate }) => {
           submitData.append(key, val ?? '');
         }
       });
+
+      submitData.append('designation', designationValue);
 
       // bank fields
       submitData.append('accountHolderName', formData.accountHolderName || '');
@@ -1639,16 +1683,18 @@ const EditUserModal = ({ user, onClose, onUpdate }) => {
                 {/* Department */}
                 <div className="space-y-3">
                   <label className="block text-sm font-bold text-gray-700">Department *</label>
-                  <input
+                  <select
                     ref={departmentRef}
                     name="department"
-                    type="text"
                     value={formData.department}
                     onChange={handleInputChange}
-                    minLength={2}
-                    maxLength={50}
                     className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-green-200 focus:border-green-500 transition-all duration-300"
-                  />
+                  >
+                    <option value="">Select Department</option>
+                    {DEPARTMENT_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
                   {errors.department && <p className="text-red-600 text-xs mt-1">{errors.department}</p>}
                 </div>
 
@@ -1659,14 +1705,35 @@ const EditUserModal = ({ user, onClose, onUpdate }) => {
                     ref={designationRef}
                     name="designation"
                     type="text"
-                    value={formData.designation}
+                    value={formData.department === 'CMT' ? 'CMT Operation' : formData.department === 'Sales' ? 'Sales Executive' : formData.designation}
                     onChange={handleInputChange}
+                    readOnly={formData.department === 'CMT' || formData.department === 'Sales'}
                     minLength={2}
                     maxLength={50}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-green-200 focus:border-green-500 transition-all duration-300"
+                    className={`w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-green-200 focus:border-green-500 transition-all duration-300 ${(formData.department === 'CMT' || formData.department === 'Sales') ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                   />
                   {errors.designation && <p className="text-red-600 text-xs mt-1">{errors.designation}</p>}
                 </div>
+
+                {/* Sales Executive Tier - only when Department is Sales */}
+                {formData.department === 'Sales' && (
+                  <div className="space-y-3">
+                    <label className="block text-sm font-bold text-gray-700">Sales Executive Tier *</label>
+                    <select
+                      ref={salesExecutiveTierRef}
+                      name="salesExecutiveTier"
+                      value={formData.salesExecutiveTier}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-green-200 focus:border-green-500 transition-all duration-300"
+                    >
+                      <option value="">Select Tier</option>
+                      {SALES_TIER_OPTIONS.map((t) => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                    {errors.salesExecutiveTier && <p className="text-red-600 text-xs mt-1">{errors.salesExecutiveTier}</p>}
+                  </div>
+                )}
 
                 {/* Basic Salary (unchanged spec) */}
                 <div className="space-y-3">

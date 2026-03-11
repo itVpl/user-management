@@ -54,6 +54,9 @@ const Loads = lazy(() => import("./Components/CMT/Loads.jsx"));
 const SubCompanies = lazy(() => import("./Components/CMT/SubCompanies.jsx"));
 const CarrierApproval = lazy(() => import("./Components/CMT/CarrierApproval.jsx"));
 const DeliveryOrder = lazy(() => import("./Components/Sales/DeliveryOrder.jsx"));
+const MeetingSchedule = lazy(() => import("./Components/Sales/MeetingSchedule.jsx"));
+const AllMeetingSchedules = lazy(() => import("./Components/Sales/AllMeetingSchedules.jsx"));
+const MyEmailLogs = lazy(() => import("./Components/Sales/MyEmailLogs.jsx"));
 const DOReport = lazy(() => import("./Components/Sales/DOReport.jsx"));
 const AllDOAssignedCMT = lazy(() => import("./Components/Sales/AllDOAssignedCMT.jsx"));
 const TeamRating = lazy(() => import("./Components/Sales/TeamRating.jsx"));
@@ -667,6 +670,9 @@ function App() {
           <Route path="HrCreateTask" element={<HrCreateTask />} />
           <Route path="LeaveApproval" element={<LeaveApproval />} />
           <Route path="delivery-order" element={<DeliveryOrder />} />
+          <Route path="meeting-schedule" element={<MeetingSchedule />} />
+          <Route path="all-meeting-schedules" element={<AllMeetingSchedules />} />
+          <Route path="my-email-logs" element={<MyEmailLogs />} />
           <Route path="do-report" element={<DOReport />} />
           <Route path="all-do-assigned-cmt" element={<AllDOAssignedCMT />} />
           <Route path="team-rating" element={<TeamRating />} />
