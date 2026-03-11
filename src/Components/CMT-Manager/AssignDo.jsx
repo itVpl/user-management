@@ -47,16 +47,17 @@ export default function AssignDo() {
   const [cmtUserSearch, setCmtUserSearch] = useState('');
   const [isCmtDropdownOpen, setIsCmtDropdownOpen] = useState(false);
 
-  // Pagination states
+  // Pagination states (server-side: API page & limit)
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 5;
+  const [paginationInfo, setPaginationInfo] = useState({ total: 0, pages: 1, limit: 50 });
+  const API_PAGE_LIMIT = 50;
+  const SEARCH_FETCH_LIMIT = 1200; // when user searches, fetch more records to search in
 
-  // Fetch assignments from API
-  const fetchAssignments = async () => {
+  // Fetch assignments from API with page and limit
+  const fetchAssignments = async (page = 1, limit = API_PAGE_LIMIT) => {
     try {
       setLoading(true);
       
-      // Get authentication token
       const token = getAuthToken();
       
       if (!token) {
@@ -64,48 +65,47 @@ export default function AssignDo() {
         return;
       }
 
-      // Fetch data from the API endpoint for CMT assigned DOs
       const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/do/do/assignment-mapping`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
-        }
+        },
+        params: { page, limit }
       });
 
-
-      // Check if response has data property
       if (response.data && response.data.success) {
-        const assignmentsData = response.data.data?.assignments || [];
+        const resData = response.data.data || response.data;
+        const assignmentsData = resData.assignments || [];
 
         if (Array.isArray(assignmentsData)) {
-          const transformedData = assignmentsData.map((assignment, index) => {
-
-            return {
-              id: assignment.doId || index,
-              sNo: index + 1,
-              doId: assignment.doId,
-              date: assignment.date,
-              loadType: assignment.loadType || 'N/A',
-              customerName: assignment.customerName || 'N/A',
-              loadNumbers: assignment.loadNumbers || [],
-              shipper: assignment.shipper || null,
-              carrier: assignment.carrier || null,
-              loadReference: assignment.loadReference || null,
-              assignedToCMT: assignment.assignedToCMT || null,
-              assignmentStatus: assignment.assignmentStatus || 'N/A',
-              doStatus: assignment.doStatus || 'N/A',
-              loadReferenceStatus: assignment.loadReference?.status || assignment.doStatus || 'N/A',
-              createdAt: assignment.createdAt || new Date().toISOString()
-            };
-          });
+          const transformedData = assignmentsData.map((assignment, index) => ({
+            id: assignment.doId || index,
+            sNo: (page - 1) * limit + index + 1,
+            doId: assignment.doId,
+            date: assignment.date,
+            loadType: assignment.loadType || 'N/A',
+            customerName: assignment.customerName || 'N/A',
+            loadNumbers: assignment.loadNumbers || [],
+            shipper: assignment.shipper || null,
+            carrier: assignment.carrier || null,
+            loadReference: assignment.loadReference || null,
+            assignedToCMT: assignment.assignedToCMT || null,
+            assignmentStatus: assignment.assignmentStatus || 'N/A',
+            doStatus: assignment.doStatus || 'N/A',
+            loadReferenceStatus: assignment.loadReference?.status || assignment.doStatus || 'N/A',
+            createdAt: assignment.createdAt || new Date().toISOString()
+          }));
 
           setAssignments(transformedData);
-        } else {
-
-          toast.error('API returned data is not in expected format');
         }
-      } else {
 
+        const pagination = resData.pagination || {};
+        setPaginationInfo({
+          total: pagination.total ?? assignmentsData.length,
+          pages: Math.max(1, pagination.pages ?? 1),
+          limit: pagination.limit ?? limit
+        });
+      } else {
         toast.error('Unexpected response structure from API');
       }
     } catch (error) {
@@ -151,9 +151,23 @@ export default function AssignDo() {
   };
 
   useEffect(() => {
-    fetchAssignments();
     fetchCmtUsers();
   }, []);
+
+  // When user searches, fetch more records (1200) so search can find load no / etc. across many rows
+  useEffect(() => {
+    if ((searchTerm || '').trim()) {
+      setCurrentPage(1);
+      fetchAssignments(1, SEARCH_FETCH_LIMIT);
+    }
+  }, [searchTerm]);
+
+  // Normal pagination when not searching
+  useEffect(() => {
+    if (!(searchTerm || '').trim()) {
+      fetchAssignments(currentPage, API_PAGE_LIMIT);
+    }
+  }, [currentPage, searchTerm]);
 
   // Close CMT dropdown when clicking outside
   useEffect(() => {
@@ -296,29 +310,39 @@ export default function AssignDo() {
 
   // Filter assignments based on search term and sort by creation date (latest first - LIFO)
   const filteredAssignments = assignments
-    .filter(assignment =>
-      assignment.doId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      assignment.customerName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      assignment.loadNumbers?.some(loadNo => 
-        loadNo.toLowerCase().includes(searchTerm.toLowerCase())
-      ) ||
-      (assignment.shipper?.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (assignment.shipper?.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (assignment.carrier?.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (assignment.assignedToCMT?.employeeName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (assignment.assignedToCMT?.empId || '').toLowerCase().includes(searchTerm.toLowerCase())
-    )
+    .filter(assignment => {
+      const q = (searchTerm || '').trim().toLowerCase();
+      if (!q) return true;
+      return (
+        assignment.doId?.toLowerCase().includes(q) ||
+        assignment.customerName?.toLowerCase().includes(q) ||
+        assignment.loadNumbers?.some(ln => String(ln || '').toLowerCase().includes(q)) ||
+        (assignment.loadReference?.loadNumber && String(assignment.loadReference.loadNumber).toLowerCase().includes(q)) ||
+        (assignment.shipper?.name || '').toLowerCase().includes(q) ||
+        (assignment.shipper?.email || '').toLowerCase().includes(q) ||
+        (assignment.carrier?.name || '').toLowerCase().includes(q) ||
+        (assignment.assignedToCMT?.employeeName || '').toLowerCase().includes(q) ||
+        (assignment.assignedToCMT?.empId || '').toLowerCase().includes(q)
+      );
+    })
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-  // Pagination calculations
-  const totalPages = Math.ceil(filteredAssignments.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentAssignments = filteredAssignments.slice(startIndex, endIndex);
+  const isSearchMode = (searchTerm || '').trim().length > 0;
+  const searchPageSize = API_PAGE_LIMIT;
+  const totalFiltered = filteredAssignments.length;
+  const totalPages = isSearchMode
+    ? Math.max(1, Math.ceil(totalFiltered / searchPageSize))
+    : paginationInfo.pages;
+  const totalRecords = isSearchMode ? totalFiltered : paginationInfo.total;
+  const currentAssignments = isSearchMode
+    ? filteredAssignments.slice((currentPage - 1) * searchPageSize, currentPage * searchPageSize)
+    : filteredAssignments;
+  const startIndex = totalRecords === 0 ? 0 : (currentPage - 1) * (isSearchMode ? searchPageSize : paginationInfo.limit) + 1;
+  const endIndex = totalRecords === 0 ? 0 : startIndex + currentAssignments.length - 1;
 
-  // Handle page change
+  // Handle page change (fetches new page from API via useEffect)
   const handlePageChange = (page) => {
-    setCurrentPage(page);
+    if (page >= 1 && page <= totalPages) setCurrentPage(page);
   };
 
   const getPaginationRange = () => {
@@ -603,11 +627,11 @@ export default function AssignDo() {
       </div>
 
       {/* Pagination */}
-      {totalPages > 1 && filteredAssignments.length > 0 && (
+      {(totalPages > 1 || totalRecords > 0) && (
         <div className="flex flex-wrap items-center justify-between gap-3 mt-6 bg-white rounded-2xl px-5 py-4 border border-gray-200">
           <div className="text-[13px] text-gray-600">
-            Showing {startIndex + 1} to {Math.min(endIndex, filteredAssignments.length)} of {filteredAssignments.length} assignments
-            {searchTerm && ` (filtered from ${assignments.length} total)`}
+            Showing {totalRecords === 0 ? 0 : currentAssignments.length === 0 ? 0 : startIndex} to {currentAssignments.length === 0 ? 0 : endIndex} of {totalRecords} assignments
+            {searchTerm && currentAssignments.length < assignments.length && ` (filtered on this page)`}
           </div>
           <div className="flex items-center gap-1 text-[13px] text-gray-700">
             <button
