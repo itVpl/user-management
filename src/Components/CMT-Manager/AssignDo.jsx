@@ -86,6 +86,8 @@ export default function AssignDo() {
             loadType: assignment.loadType || 'N/A',
             customerName: assignment.customerName || 'N/A',
             loadNumbers: assignment.loadNumbers || [],
+            containerNo: assignment.containerNo ?? assignment.shipper?.containerNo ?? null,
+            containerType: assignment.shipper?.containerType ?? null,
             shipper: assignment.shipper || null,
             carrier: assignment.carrier || null,
             loadReference: assignment.loadReference || null,
@@ -317,6 +319,8 @@ export default function AssignDo() {
         assignment.doId?.toLowerCase().includes(q) ||
         assignment.customerName?.toLowerCase().includes(q) ||
         assignment.loadNumbers?.some(ln => String(ln || '').toLowerCase().includes(q)) ||
+        (assignment.containerNo && String(assignment.containerNo).toLowerCase().includes(q)) ||
+        (assignment.shipper?.containerNo && String(assignment.shipper.containerNo).toLowerCase().includes(q)) ||
         (assignment.loadReference?.loadNumber && String(assignment.loadReference.loadNumber).toLowerCase().includes(q)) ||
         (assignment.shipper?.name || '').toLowerCase().includes(q) ||
         (assignment.shipper?.email || '').toLowerCase().includes(q) ||
@@ -502,6 +506,7 @@ export default function AssignDo() {
                     <th className="text-left py-3 px-4 text-sm font-semibold text-gray-500 uppercase tracking-wide w-16 bg-gray-50 border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">S.No</th>
                     <th className="text-left py-3 px-4 text-sm font-semibold text-gray-500 uppercase tracking-wide w-24 bg-gray-50 border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">DO ID</th>
                     <th className="text-left py-3 px-4 text-sm font-semibold text-gray-500 uppercase tracking-wide w-40 bg-gray-50 border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">Load Numbers</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-500 uppercase tracking-wide w-36 bg-gray-50 border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">Container No</th>
                     <th className="text-left py-3 px-4 text-sm font-semibold text-gray-500 uppercase tracking-wide w-40 bg-gray-50 border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">Carrier</th>
                     <th className="text-left py-3 px-4 text-sm font-semibold text-gray-500 uppercase tracking-wide w-24 bg-gray-50 border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">Load Type</th>
                     <th className="text-left py-3 px-4 text-sm font-semibold text-gray-500 uppercase tracking-wide w-24 bg-gray-50 border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">Assignment Status</th>
@@ -526,6 +531,14 @@ export default function AssignDo() {
                         </td>
                         <td className="py-3 px-4 bg-white border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">
                           <span className="font-medium text-gray-700">{getLoadNumbersString(assignment.loadNumbers)}</span>
+                        </td>
+                        <td className="py-3 px-4 bg-white border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">
+                          <div className="space-y-0.5">
+                            <span className="font-medium text-gray-700">{assignment.containerNo || '—'}</span>
+                            {assignment.containerType && (
+                              <p className="text-xs text-gray-500">{assignment.containerType}</p>
+                            )}
+                          </div>
                         </td>
                         <td className="py-3 px-4 bg-white border-y border-gray-200 first:rounded-l-xl first:border-l last:rounded-r-xl last:border-r">
                         <div className="space-y-1">
@@ -706,6 +719,8 @@ export default function AssignDo() {
                   <div className="space-y-2 text-sm">
                     <div><span className="font-medium">DO ID:</span> {selectedAssignment.doId ? `DO-${selectedAssignment.doId.slice(-5)}` : 'N/A'}</div>
                     <div><span className="font-medium">Load Numbers:</span> {getLoadNumbersString(selectedAssignment.loadNumbers)}</div>
+                    <div><span className="font-medium">Container No:</span> {selectedAssignment.containerNo || selectedAssignment.shipper?.containerNo || 'N/A'}</div>
+                    {selectedAssignment.containerType && <div><span className="font-medium">Container Type:</span> {selectedAssignment.containerType}</div>}
                     <div><span className="font-medium">Load Type:</span> {selectedAssignment.loadType}</div>
                     <div><span className="font-medium">Customer:</span> {selectedAssignment.customerName}</div>
                     <div><span className="font-medium">Assignment Status:</span> 
@@ -825,6 +840,11 @@ export default function AssignDo() {
                 <strong>Load Numbers:</strong>
                 <br />
                 {getLoadNumbersString(reassignModal.assignment?.loadNumbers)}
+              </div>
+              <div>
+                <strong>Container No:</strong>
+                <br />
+                {reassignModal.assignment?.containerNo || reassignModal.assignment?.shipper?.containerNo || 'N/A'}
               </div>
               <div>
                 <strong>Load Type:</strong>
