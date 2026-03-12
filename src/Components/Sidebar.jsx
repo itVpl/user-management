@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import axios from "axios";
 import { NavLink, useLocation } from "react-router-dom";
 import {
@@ -658,6 +658,7 @@ const categorizeReportsByDepartment = (reportItems) => {
 
 const Sidebar = () => {
   const [isExpanded, setIsExpanded] = useState(true);
+  const sidebarRef = useRef(null);
   const [filteredMenuItems, setFilteredMenuItems] = useState([]);
   const [departmentMenuItems, setDepartmentMenuItems] = useState([]);
   const [departmentCategories, setDepartmentCategories] = useState({});
@@ -793,7 +794,18 @@ const Sidebar = () => {
     }
   });
 
-  const toggleSidebar = () => setIsExpanded(!isExpanded);
+  const toggleSidebar = () => {
+    try {
+      const el = sidebarRef.current;
+      const rect = el ? el.getBoundingClientRect() : { left: 48 }; // left-12 ≈ 48px
+      const targetExpanded = !isExpanded;
+      const targetWidth = targetExpanded ? 256 : 64; // w-64 -> 256px, w-16 -> 64px
+      const targetOffset = Math.max(0, Math.round(rect.left + targetWidth));
+      document.documentElement.style.setProperty('--sidebar-offset', `${targetOffset}px`);
+      window.dispatchEvent(new CustomEvent('sidebar-offset-change', { detail: targetOffset }));
+    } catch {}
+    setIsExpanded((prev) => !prev);
+  };
 
   const handleLogoutClick = () => {
     setShowLogoutModal(true);
@@ -873,6 +885,31 @@ const Sidebar = () => {
     setFlyoutOpen(false);
     setFlyoutType('');
   };
+
+  useEffect(() => {
+    const update = () => {
+      const el = sidebarRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const offset = Math.max(0, Math.round(rect.left + rect.width));
+      document.documentElement.style.setProperty('--sidebar-offset', `${offset}px`);
+      window.dispatchEvent(new CustomEvent('sidebar-offset-change', { detail: offset }));
+    };
+    update();
+    const onResize = () => update();
+    const onTransitionEnd = () => update();
+    const el = sidebarRef.current;
+    if (el) {
+      el.addEventListener('transitionend', onTransitionEnd);
+    }
+    window.addEventListener('resize', onResize);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      if (el) el.removeEventListener('transitionend', onTransitionEnd);
+    };
+  }, []);
+
+  // Removed redundant immediate updates that caused desync; rely on toggle pre-update and transitionend
 
   // Close flyout when navigating to other pages
   useEffect(() => {
@@ -1467,7 +1504,7 @@ const Sidebar = () => {
   // Show loading state
   if (loading) {
     return (
-      <div className={`fixed top-4 left-20 h-[800px] bg-white border border-gray-300 rounded-xl shadow-lg z-50 flex flex-col justify-between transition-all duration-300 ${isExpanded ? "w-64" : "w-16"}`}>
+      <div ref={sidebarRef} className={`fixed top-4 left-20 h-[800px] bg-white border border-gray-300 rounded-xl shadow-lg z-50 flex flex-col justify-between transition-all duration-300 ${isExpanded ? "w-64" : "w-16"}`}>
         <div className="p-4">
           <img src={logo} alt="Logo" className={`${isExpanded ? "w-24 h-10" : "w-23 h-10 mx-auto"}`} />
         </div>
@@ -1480,7 +1517,10 @@ const Sidebar = () => {
 
   return (
     <>
-      <div className={`fixed top-4 left-12 h-[886px] bg-white border border-gray-300 rounded-xl shadow-lg z-50 flex flex-col transition-all duration-300 ${isExpanded ? "w-64" : "w-16"}`}>
+      <div
+        ref={sidebarRef}
+        className={`fixed top-4 left-12 h-[886px] bg-white border border-gray-300 rounded-xl shadow-lg z-50 flex flex-col transition-all duration-300 ${isExpanded ? "w-64" : "w-16"}`}
+      >
         <div className="flex-none">
           <div className="p-4 relative flex items-center justify-between">
             <img 
@@ -1490,7 +1530,7 @@ const Sidebar = () => {
             />
             <button 
               onClick={toggleSidebar} 
-              className="absolute -right-3 top-1/2 transform -translate-y-1/2 bg-white border border-gray-300 rounded-full p-2 shadow-md z-10 hover:bg-gray-50 transition-colors"
+              className="absolute -right-3 top-1/2 transform -translate-y-1/2 bg-white border border-gray-300 rounded-full p-2 shadow-md z-10 hover:bg-gray-50 transition-colors cursor-pointer"
             >
               {isExpanded ? (
                 <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
