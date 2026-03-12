@@ -37,6 +37,7 @@ import EmailList from './EmailList';
 import EmailViewer from './EmailViewer';
 import AccountSwitcher from './AccountSwitcher';
 import AccountManagementDialog from './AccountManagementDialog';
+import SignatureManagerDialog from './SignatureManagerDialog';
 import LabelsSidebar from './LabelsSidebar';
 import { 
   createEmailAccount, 
@@ -81,6 +82,7 @@ const Email = () => {
   const [accountsLoading, setAccountsLoading] = useState(false);
   const [selectedAccountId, setSelectedAccountId] = useState(null);
   const [accountManagementOpen, setAccountManagementOpen] = useState(false);
+  const [signatureManagerAccount, setSignatureManagerAccount] = useState(null);
   
   // Account creation state
   const [createAccountOpen, setCreateAccountOpen] = useState(false);
@@ -2460,7 +2462,18 @@ const Email = () => {
         accounts={emailAccounts}
         onSetDefault={handleSetDefaultAccount}
         onDelete={handleDeleteAccount}
+        onManageSignatures={(account) => {
+          setSignatureManagerAccount(account);
+          setAccountManagementOpen(false);
+        }}
         loading={accountsLoading}
+      />
+
+      <SignatureManagerDialog
+        open={!!signatureManagerAccount}
+        onClose={() => setSignatureManagerAccount(null)}
+        emailAccountId={signatureManagerAccount?._id || null}
+        accountName={signatureManagerAccount?.displayName || signatureManagerAccount?.email || ''}
       />
 
       <CreateAccountDialog

@@ -12,6 +12,8 @@ import {
   Chip,
   Avatar,
   Tooltip,
+  FormControlLabel,
+  Checkbox,
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -39,6 +41,7 @@ const ComposeDialog = ({ open, onClose, onSend, loading, error, success, emailAc
   const [recipientChips, setRecipientChips] = useState([]);
   const [ccChips, setCcChips] = useState([]);
   const [bccChips, setBccChips] = useState([]);
+  const [skipSignature, setSkipSignature] = useState(false);
   const fileInputRef = useRef(null);
 
   const handleChange = (field) => (e) => {
@@ -187,7 +190,8 @@ const ComposeDialog = ({ open, onClose, onSend, loading, error, success, emailAc
       text: emailData.text,
       html: `<p>${emailData.text.replace(/\n/g, '<br/>')}</p>`,
       emailAccountId,
-      attachments: attachments.map(att => att.file) // Send File objects directly
+      attachments: attachments.map(att => att.file), // Send File objects directly
+      skipSignature: skipSignature
     };
     
     // Add CC and BCC if provided
@@ -211,6 +215,7 @@ const ComposeDialog = ({ open, onClose, onSend, loading, error, success, emailAc
     }
     
     setEmailData({ to: '', cc: '', bcc: '', subject: '', text: '' });
+    setSkipSignature(false);
     setEmailValidation({ valid: true, invalidEmails: [] });
     setCcValidation({ valid: true, invalidEmails: [] });
     setBccValidation({ valid: true, invalidEmails: [] });
@@ -827,7 +832,17 @@ const ComposeDialog = ({ open, onClose, onSend, loading, error, success, emailAc
         boxShadow: '0 -4px 12px rgba(0,0,0,0.06)',
         gap: 2
       }}>
-        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flex: 1 }}>
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flex: 1, flexWrap: 'wrap' }}>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={skipSignature}
+                onChange={(e) => setSkipSignature(e.target.checked)}
+                size="small"
+              />
+            }
+            label={<Typography variant="body2" sx={{ color: '#5f6368' }}>Don&apos;t add signature for this email</Typography>}
+          />
           <Button
             variant="contained"
             startIcon={loading ? <CircularProgress size={18} sx={{ color: 'white' }} /> : <SendIcon />}

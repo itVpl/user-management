@@ -1060,6 +1060,7 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose, onReply, 
         >
           Reply
         </Button>
+        {/* Forward button - commented out
         <Button
           variant="text"
           startIcon={<ForwardIcon />}
@@ -1075,6 +1076,7 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose, onReply, 
         >
           Forward
         </Button>
+        */}
         {onRefresh && (
           <Tooltip title="Sync from server">
             <Button
