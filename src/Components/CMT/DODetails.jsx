@@ -2294,7 +2294,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Container No</p>
-                    <p className="font-semibold text-gray-800">{shipper?.containerNo || 'N/A'}</p>
+                    <p className="font-semibold text-gray-800">{shipper?.containerNo ?? order?.raw?.containerNo ?? 'N/A'}</p>
                   </div>
                 </div>
 
@@ -2304,7 +2304,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Container Type</p>
-                    <p className="font-semibold text-gray-800">{shipper?.containerType || 'N/A'}</p>
+                    <p className="font-semibold text-gray-800">{shipper?.containerType ?? order?.raw?.containerType ?? 'N/A'}</p>
                   </div>
                 </div>
               </div>
@@ -3716,6 +3716,7 @@ export default function DODetails({ overrideEmpId }) {
             carrierFees: car.totalCarrierFees || 0,
 
             shipperName: ship.name || 'N/A',
+            containerNo: ship.containerNo || item?.containerNo || '—',
             pickupDate: pu0.pickUpDate || ship.pickUpDate || item.pickupDate || 'N/A',
             dropDate: dr0.dropDate || ship.dropDate || item.dropDate || 'N/A',
 
@@ -3812,6 +3813,7 @@ export default function DODetails({ overrideEmpId }) {
             carrierFees: car.totalCarrierFees || 0,
 
             shipperName: ship.name || 'N/A',
+            containerNo: ship.containerNo || item?.containerNo || '—',
             pickupDate: pu0.pickUpDate || ship.pickUpDate || item.pickupDate || 'N/A',
             dropDate: dr0.dropDate || ship.dropDate || item.dropDate || 'N/A',
 
@@ -3868,6 +3870,7 @@ export default function DODetails({ overrideEmpId }) {
     o.workOrderNo?.toLowerCase().includes(term) ||
     o.carrierName?.toLowerCase().includes(term) ||
     o.shipperName?.toLowerCase().includes(term) ||
+    o.containerNo?.toLowerCase().includes(term) ||
     o.doId?.toLowerCase().includes(term)
   );
   return base.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
@@ -3882,6 +3885,7 @@ export default function DODetails({ overrideEmpId }) {
     o.workOrderNo?.toLowerCase().includes(term) ||
     o.carrierName?.toLowerCase().includes(term) ||
     o.shipperName?.toLowerCase().includes(term) ||
+    o.containerNo?.toLowerCase().includes(term) ||
     o.doId?.toLowerCase().includes(term)
   );
   return base.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -4101,7 +4105,7 @@ export default function DODetails({ overrideEmpId }) {
               <table className="w-full border-separate border-spacing-y-4">
                 <thead className="bg-gray-100">
                   <tr>
-                    {['S.No', 'DO ID', 'Load No', 'Dispatcher', 'Carrier', 'Total Amount', 'Carrier Fees', 'Status', 'Action'].map((h, i, arr) => (
+                    {['S.No', 'DO ID', 'Load No', 'Container No', 'Dispatcher', 'Carrier', 'Carrier Fees', 'Status', 'Action'].map((h, i, arr) => (
                       <th 
                         key={h} 
                         className={`text-left py-4 px-4 text-sm font-semibold text-gray-600 uppercase tracking-wider border-y border-gray-300 ${
@@ -4119,6 +4123,7 @@ export default function DODetails({ overrideEmpId }) {
                       <td className="py-4 px-4 font-medium text-gray-900 border-y border-l border-gray-200 rounded-l-2xl pl-6 bg-white group-hover:bg-gray-50">{startIndex + index + 1}</td>
                       <td className="py-4 px-4 font-medium text-gray-900 font-medium border-y border-gray-200 bg-white group-hover:bg-gray-50">{order.doId}</td>
                       <td className="py-4 px-4 font-medium text-gray-900 border-y border-gray-200 bg-white group-hover:bg-gray-50">{order.loadNo}</td>
+                      <td className="py-4 px-4 font-medium text-gray-900 border-y border-gray-200 bg-white group-hover:bg-gray-50">{order.containerNo ?? '—'}</td>
                       <td className="py-4 px-4 font-medium text-gray-900 border-y border-gray-200 bg-white group-hover:bg-gray-50">
                         <div className="flex items-center gap-2">
                            {/* <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold">
@@ -4128,7 +4133,6 @@ export default function DODetails({ overrideEmpId }) {
                         </div>
                       </td>
                       <td className="py-4 px-4 font-medium text-gray-900 border-y border-gray-200 bg-white group-hover:bg-gray-50">{order.carrierName}</td>
-                      <td className="py-4 px-4 font-medium text-gray-900 font-medium border-y border-gray-200 bg-white group-hover:bg-gray-50">{fmtCurrency(order.totalAmount)}</td>
                       <td className="py-4 px-4 font-medium text-gray-900 border-y border-gray-200 bg-white group-hover:bg-gray-50">{fmtCurrency(order.carrierFees)}</td>
                       <td className="py-4 px-4 border-y border-gray-200 bg-white group-hover:bg-gray-50">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full font-medium ${
