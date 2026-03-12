@@ -27,6 +27,7 @@ import {
   Delete as DeleteIcon,
   Edit as EditIcon,
   Star as StarIcon,
+  Draw as DrawIcon,
 } from '@mui/icons-material';
 
 const AccountManagementDialog = ({
@@ -36,6 +37,7 @@ const AccountManagementDialog = ({
   onSetDefault,
   onDelete,
   onUpdate,
+  onManageSignatures,
   loading = false,
 }) => {
   const [anchorEl, setAnchorEl] = useState(null);
@@ -86,6 +88,13 @@ const AccountManagementDialog = ({
     } finally {
       setActionLoading(false);
     }
+  };
+
+  const handleManageSignatures = () => {
+    if (selectedAccount && onManageSignatures) {
+      onManageSignatures(selectedAccount);
+    }
+    handleMenuClose();
   };
 
   return (
@@ -229,6 +238,12 @@ const AccountManagementDialog = ({
           <MenuItem onClick={handleSetDefault} disabled={actionLoading}>
             <CheckCircleIcon sx={{ mr: 1.5, fontSize: 20, color: '#1a73e8' }} />
             Set as Default
+          </MenuItem>
+        )}
+        {selectedAccount && onManageSignatures && (
+          <MenuItem onClick={handleManageSignatures}>
+            <DrawIcon sx={{ mr: 1.5, fontSize: 20, color: '#5f6368' }} />
+            Manage signatures
           </MenuItem>
         )}
         <MenuItem onClick={handleDelete} disabled={actionLoading}>

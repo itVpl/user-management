@@ -10,6 +10,12 @@ import {
   useTheme,
   useMediaQuery,
   Dialog,
+  InputAdornment,
+  TextField,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
 } from '@mui/material';
 import {
   FilterList as FilterListIcon,
@@ -19,6 +25,8 @@ import {
   Send as SendIcon,
   Inbox as InboxIcon,
   Send as SentIcon,
+  Search as SearchIcon,
+  Close as CloseSearchIcon,
 } from '@mui/icons-material';
 
 import CreateAccountDialog from './CreateAccountDialog';
@@ -29,6 +37,7 @@ import EmailList from './EmailList';
 import EmailViewer from './EmailViewer';
 import AccountSwitcher from './AccountSwitcher';
 import AccountManagementDialog from './AccountManagementDialog';
+import SignatureManagerDialog from './SignatureManagerDialog';
 import LabelsSidebar from './LabelsSidebar';
 import { 
   createEmailAccount, 
@@ -40,6 +49,7 @@ import {
   fetchSentEmails, 
   fetchEmailByUid, 
   fetchEmailsByLabel,
+  searchEmails,
   transformEmail, 
   sendEmail, 
   sendEmailWithAttachments, 
@@ -72,6 +82,7 @@ const Email = () => {
   const [accountsLoading, setAccountsLoading] = useState(false);
   const [selectedAccountId, setSelectedAccountId] = useState(null);
   const [accountManagementOpen, setAccountManagementOpen] = useState(false);
+  const [signatureManagerAccount, setSignatureManagerAccount] = useState(null);
   
   // Account creation state
   const [createAccountOpen, setCreateAccountOpen] = useState(false);
@@ -107,6 +118,22 @@ const Email = () => {
 
   // Label filtering state
   const [selectedLabelId, setSelectedLabelId] = useState(null);
+
+  // DB-first: source of list data ('db' | 'imap') for optional "From cache" / "Synced" UX
+  const [listSource, setListSource] = useState(null);
+  // When user clicks "Refresh" on the open email, show loading in viewer
+  const [refreshingEmail, setRefreshingEmail] = useState(false);
+
+  // Search state (GET /api/v1/email-inbox/search)
+  const [searchActive, setSearchActive] = useState(false);
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState(null);
+  const [searchFolder, setSearchFolder] = useState('ALL'); // INBOX | SENT | ALL
+  const [searchPagination, setSearchPagination] = useState(null); // { nextPageToken, hasNextPage, currentPage, source }
+  const [searchPage, setSearchPage] = useState(1);
+  const [searchPageToken, setSearchPageToken] = useState(null);
+  const [searchSource, setSearchSource] = useState(null); // 'gmail-api' | 'db'
 
   // Tab configuration
   const tabs = [
@@ -156,6 +183,16 @@ const Email = () => {
       }
     }
   }, [selectedLabelId, selectedAccountId]);
+
+  // Poll inbox API every 8s while Inbox tab is open (backend syncs INBOX to DB every 5s; no refresh=true needed)
+  useEffect(() => {
+    if (selectedTab !== 0 || !selectedAccountId || selectedLabelId || searchActive) return;
+    const POLL_INTERVAL_MS = 8000; // 8 seconds
+    const intervalId = setInterval(() => {
+      loadEmails(1, true, false, true); // page 1, reset list, no IMAP refresh, silent (no loading spinner)
+    }, POLL_INTERVAL_MS);
+    return () => clearInterval(intervalId);
+  }, [selectedTab, selectedAccountId, selectedLabelId, searchActive]);
 
   // Load email accounts
   const loadEmailAccounts = async () => {
@@ -281,25 +318,27 @@ const Email = () => {
     return result;
   };
 
-  const loadEmails = async (page = 1, reset = false) => {
+  const loadEmails = async (page = 1, reset = false, refresh = false, silent = false) => {
     if (!selectedAccountId) {
       setEmails([]);
-      setLoading(false);
+      if (!silent) setLoading(false);
       return;
     }
 
-    // Set loading state (full loading for first page, loadingMore for subsequent pages)
-    if (page === 1 || reset) {
-      setLoading(true);
-    } else {
-      setLoadingMore(true);
+    // Set loading state (full loading for first page, loadingMore for subsequent pages). Skip when silent (e.g. polling).
+    if (!silent) {
+      if (page === 1 || reset) {
+        setLoading(true);
+      } else {
+        setLoadingMore(true);
+      }
     }
     setError(null);
     
     try {
-      // Load 25 emails per page for better performance and pagination
-      const limit = 25; // Load 25 emails per page
-      const response = await fetchInboxEmails(selectedAccountId, limit, page);
+      // Load 25 emails per page. refresh=true when user clicks "Sync from server" (IMAP); else DB-first (fast)
+      const limit = 25;
+      const response = await fetchInboxEmails(selectedAccountId, limit, page, refresh);
 
 
 
@@ -312,6 +351,7 @@ const Email = () => {
                            [];
 
       console.log(`📬 Loaded inbox page ${page}: ${fetchedEmails.length} emails (limit: ${limit})`);
+      setListSource(response?.source ?? null);
       
       // First, deduplicate fetched emails by UID before transformation
       const seenUids = new Set();
@@ -556,12 +596,14 @@ const Email = () => {
       }
       // Don't set hasMore to false on error - allow retry
     } finally {
-      setLoading(false);
-      setLoadingMore(false);
+      if (!silent) {
+        setLoading(false);
+        setLoadingMore(false);
+      }
     }
   };
 
-  const loadSentEmails = async (page = 1, reset = false) => {
+  const loadSentEmails = async (page = 1, reset = false, refresh = false) => {
     if (!selectedAccountId) {
       setEmails([]);
       return;
@@ -576,8 +618,8 @@ const Email = () => {
     setError(null);
     
     try {
-      // Load 30 emails per page
-      const response = await fetchSentEmails(selectedAccountId, 30, page);
+      // Load 25 emails per page. refresh=true when user clicks "Sync from server" (IMAP); else DB-first (fast)
+      const response = await fetchSentEmails(selectedAccountId, 25, page, refresh);
 
       // Try different response structures
       const fetchedEmails = response?.emails || 
@@ -591,6 +633,7 @@ const Email = () => {
       const displayName = emailAccount?.displayName || 'You';
 
       console.log(`Loaded sent page ${page}: ${fetchedEmails.length} emails`);
+      setListSource(response?.source ?? null);
       console.log('Sent emails API response:', {
         emailAccount: emailAccount,
         firstEmail: fetchedEmails[0],
@@ -691,7 +734,7 @@ const Email = () => {
         
         // Check if there are more emails to load
         // If we got fewer emails than requested, there are no more
-        const expectedCount = 30; // Sent emails use 30 per page
+        const expectedCount = 25; // Sent emails use 25 per page
         setHasMore(uniqueFetchedEmails.length >= expectedCount);
         
         console.log(`📊 Sent emails pagination:`, {
@@ -745,7 +788,7 @@ const Email = () => {
     await loadSentEmails(nextPage, false);
   }, [loadingMore, hasMore, selectedAccountId, currentPage, loading]);
   
-  // Load more emails (next page)
+  // Load more emails (next page) - used as fallback when pagination is not shown
   const loadMoreEmails = useCallback(async () => {
     // Prevent duplicate calls - check multiple conditions
     if (loadingMore || !hasMore || !selectedAccountId || loading) {
@@ -758,6 +801,96 @@ const Email = () => {
     setCurrentPage(nextPage);
     await loadEmails(nextPage, false);
   }, [loadingMore, hasMore, selectedAccountId, currentPage, loading]);
+
+  // Pagination: go to a specific page (25 emails per page)
+  const handlePageChange = useCallback((page) => {
+    if (!selectedAccountId || loading || page < 1) return;
+    setCurrentPage(page);
+    if (selectedTab === 0) {
+      loadEmails(page, true);
+    } else {
+      loadSentEmails(page, true);
+    }
+  }, [selectedAccountId, selectedTab, loading]);
+
+  // Search emails (GET /api/v1/email-inbox/search)
+  const runSearch = useCallback(async (pageNum = 1, nextToken = null) => {
+    const q = (typeof searchQuery === 'string' ? searchQuery : '').trim();
+    if (!selectedAccountId) {
+      setSearchError('Select an email account to search.');
+      return;
+    }
+    if (!q) {
+      setSearchError('Enter a search term.');
+      return;
+    }
+    setSearchLoading(true);
+    setSearchError(null);
+    try {
+      const res = await searchEmails({
+        q,
+        folder: searchFolder,
+        limit: 25,
+        page: pageNum,
+        pageToken: nextToken || undefined,
+        emailAccountId: selectedAccountId
+      });
+      if (!res.success) {
+        setSearchError(res.message || 'Search failed.');
+        setSearchResults([]);
+        setSearchPagination(null);
+        return;
+      }
+      const rawEmails = res.emails || [];
+      const transformed = rawEmails.map((email, index) => {
+        const t = transformEmail(email, index);
+        return {
+          ...t,
+          folder: (email.folder || t.folder || 'inbox').toLowerCase()
+        };
+      });
+      if (pageNum === 1 && !nextToken) {
+        setSearchResults(transformed);
+        setSearchPage(1);
+        setSearchPageToken(null);
+      } else {
+        setSearchResults(prev => [...prev, ...transformed]);
+      }
+      const pag = res.pagination || {};
+      setSearchPagination(pag);
+      setSearchPage(pageNum);
+      setSearchPageToken(pag.nextPageToken || null);
+      setSearchSource(res.source || null);
+      setSearchActive(true);
+    } catch (err) {
+      setSearchError(err.message || 'Search failed.');
+      setSearchResults([]);
+      setSearchPagination(null);
+    } finally {
+      setSearchLoading(false);
+    }
+  }, [searchQuery, searchFolder, selectedAccountId]);
+
+  const clearSearch = useCallback(() => {
+    setSearchActive(false);
+    setSearchResults([]);
+    setSearchError(null);
+    setSearchPagination(null);
+    setSearchPage(1);
+    setSearchPageToken(null);
+    setSearchSource(null);
+    setSearchQuery('');
+  }, []);
+
+  const loadMoreSearchResults = useCallback(async () => {
+    if (searchLoading || !searchPagination) return;
+    const isGmail = searchSource === 'gmail-api';
+    if (isGmail && searchPagination.nextPageToken) {
+      await runSearch(1, searchPagination.nextPageToken);
+    } else if (!isGmail && searchPagination.hasNextPage) {
+      await runSearch(searchPage + 1, null);
+    }
+  }, [searchLoading, searchPagination, searchSource, searchPage, runSearch]);
 
   // Load emails filtered by label
   const loadEmailsByLabel = async () => {
@@ -1007,7 +1140,7 @@ const Email = () => {
           const folder = latestMessage.folder === 'sent' ? 'SENT' : 'INBOX';
           // Auto-mark as read for INBOX emails (default behavior)
           const shouldMarkAsRead = folder === 'INBOX';
-          const response = await fetchEmailByUid(latestMessage.uid, selectedAccountId, folder, true, shouldMarkAsRead);
+          const response = await fetchEmailByUid(latestMessage.uid, selectedAccountId, folder, true, shouldMarkAsRead, true);
           
           if (response.success && response.email && response.email.messages) {
             // Update with full thread data from backend
@@ -1106,21 +1239,28 @@ const Email = () => {
           });
           setSelectedEmail(selectedEmailData);
           
-          // If we don't have full content, fetch it in background
-          if (!email.content && hasValidUid && selectedAccountId) {
-            // Fetch full content in background using folder=SENT (don't mark as read for SENT)
-            fetchEmailByUid(originalUid, selectedAccountId, 'SENT', false, false) // Don't fetch thread, don't mark as read
+          // Always fetch in background with folder=SENT so we get the full thread (backend returns email.messages for SENT)
+          if (hasValidUid && selectedAccountId) {
+            fetchEmailByUid(originalUid, selectedAccountId, 'SENT', true, false) // Include thread; don't mark as read for SENT
               .then(response => {
                 if (response.success && response.email) {
+                  const res = response.email;
+                  const threadMessages = res.messages && Array.isArray(res.messages) && res.messages.length > 0 ? res.messages : null;
+                  const lastMsg = threadMessages ? threadMessages[threadMessages.length - 1] : res;
                   setSelectedEmail(prev => ({
                     ...prev,
-                    content: response.email.content || prev.content,
-                    body: response.email.content || prev.body,
-                    html: response.email.html || prev.html,
-                    cc: response.email.cc || prev.cc,
-                    bcc: response.email.bcc || prev.bcc,
-                    seen: response.email.seen !== undefined ? response.email.seen : prev.seen,
-                    isRead: response.email.seen !== undefined ? response.email.seen : prev.isRead
+                    content: (lastMsg?.content || lastMsg?.body || res.content) || prev.content,
+                    body: (lastMsg?.content || lastMsg?.body || res.content) || prev.body,
+                    html: lastMsg?.html || res.html || prev.html,
+                    cc: res.cc || prev.cc,
+                    bcc: res.bcc || prev.bcc,
+                    seen: res.seen !== undefined ? res.seen : prev.seen,
+                    isRead: res.seen !== undefined ? res.seen : prev.isRead,
+                    // Full conversation thread (backend always returns for folder=SENT)
+                    threadMessages: threadMessages || prev.threadMessages,
+                    messages: threadMessages || prev.messages,
+                    messageCount: res.messageCount ?? (threadMessages?.length ?? prev.messageCount),
+                    participants: res.participants || prev.participants
                   }));
                 }
               })
@@ -1129,33 +1269,39 @@ const Email = () => {
           return;
         }
         
-        // If no content/preview, fetch full details
+        // If no content/preview, fetch full details with folder=SENT (backend returns full thread)
         if (hasValidUid && selectedAccountId) {
           try {
-            // Don't mark SENT emails as read
-            const response = await fetchEmailByUid(originalUid, selectedAccountId, 'SENT', false, false); // Don't fetch thread, don't mark as read
+            const response = await fetchEmailByUid(originalUid, selectedAccountId, 'SENT', true, false); // Include thread; don't mark as read for SENT
             if (response.success && response.email) {
-              const fullEmail = response.email;
+              const res = response.email;
+              const threadMessages = res.messages && Array.isArray(res.messages) && res.messages.length > 0 ? res.messages : null;
+              const fullEmail = threadMessages ? threadMessages[threadMessages.length - 1] : res;
               setSelectedEmail({
                 ...email,
                 id: originalId,
                 uid: originalUid,
-                subject: originalSubject,
+                subject: res.subject ?? originalSubject,
                 from: originalFrom,
                 fromName: email.fromName || email.from || 'You',
-                to: fullEmail.to || email.to || '',
+                to: fullEmail.to || res.to || email.to || '',
                 timestamp: originalTimestamp,
                 folder: 'sent',
                 body: fullEmail.content || fullEmail.body || '',
                 content: fullEmail.content || fullEmail.body || '',
-                html: fullEmail.html || '',
-                cc: fullEmail.cc || '',
-                bcc: fullEmail.bcc || '',
-                attachments: fullEmail.attachments || email.attachments || [],
-                hasAttachments: fullEmail.hasAttachments !== undefined ? fullEmail.hasAttachments : (fullEmail.attachments?.length > 0),
-                attachmentCount: fullEmail.attachmentCount !== undefined ? fullEmail.attachmentCount : (fullEmail.attachments?.length || 0),
-                seen: fullEmail.seen !== undefined ? fullEmail.seen : email.seen,
-                isRead: fullEmail.seen !== undefined ? fullEmail.seen : email.isRead
+                html: fullEmail.html || res.html || '',
+                cc: fullEmail.cc || res.cc || '',
+                bcc: fullEmail.bcc || res.bcc || '',
+                attachments: fullEmail.attachments || res.attachments || email.attachments || [],
+                hasAttachments: fullEmail.hasAttachments ?? (fullEmail.attachments?.length > 0) ?? email.hasAttachments,
+                attachmentCount: fullEmail.attachmentCount ?? (fullEmail.attachments?.length || 0) ?? email.attachmentCount,
+                seen: res.seen !== undefined ? res.seen : email.seen,
+                isRead: res.seen !== undefined ? res.seen : email.isRead,
+                // Full conversation thread (backend always returns for folder=SENT)
+                threadMessages: threadMessages,
+                messages: threadMessages,
+                messageCount: res.messageCount ?? (threadMessages?.length ?? 1),
+                participants: res.participants
               });
               return;
             }
@@ -1230,12 +1376,12 @@ const Email = () => {
         const shouldMarkAsRead = folder === 'INBOX';
         let response;
         try {
-          response = await fetchEmailByUid(originalUid, selectedAccountId, folder, true, shouldMarkAsRead);
+          response = await fetchEmailByUid(originalUid, selectedAccountId, folder, true, shouldMarkAsRead, true);
         } catch (threadError) {
           // If thread request times out, try without thread (faster, 35s timeout)
           if (threadError.message?.includes('timeout') || threadError.message?.includes('timed out')) {
             console.warn('⚠️ Thread request timed out, fetching single email instead...');
-            response = await fetchEmailByUid(originalUid, selectedAccountId, folder, false, shouldMarkAsRead);
+            response = await fetchEmailByUid(originalUid, selectedAccountId, folder, false, shouldMarkAsRead, true);
           } else {
             throw threadError; // Re-throw if it's not a timeout error
           }
@@ -1619,6 +1765,46 @@ const Email = () => {
     }
   };
 
+  // Refresh the currently open email/thread from server (sync from IMAP). Uses refresh=true. For SENT, API returns full thread in email.messages.
+  const handleRefreshEmail = async () => {
+    if (!selectedEmail?.uid || !selectedAccountId) return;
+    setRefreshingEmail(true);
+    const folder = selectedEmail?.folder ? String(selectedEmail.folder).toUpperCase() : (selectedTab === 0 ? 'INBOX' : 'SENT');
+    try {
+      const response = await fetchEmailByUid(
+        selectedEmail.uid,
+        selectedAccountId,
+        folder,
+        true,
+        false,
+        true
+      );
+      if (response?.success && response?.email) {
+        const res = response.email;
+        const threadMessages = res.messages && Array.isArray(res.messages) && res.messages.length > 0 ? res.messages : null;
+        const fullEmail = threadMessages ? threadMessages[threadMessages.length - 1] : res;
+        setSelectedEmail(prev => ({
+          ...prev,
+          body: fullEmail.content || fullEmail.body || prev?.body,
+          content: fullEmail.content || fullEmail.body || prev?.content,
+          html: fullEmail.html || prev?.html,
+          threadMessages: threadMessages || prev?.threadMessages,
+          messages: threadMessages || prev?.messages,
+          messageCount: res.messageCount ?? threadMessages?.length ?? prev?.messageCount,
+          participants: res.participants || prev?.participants,
+          attachments: fullEmail.attachments ?? prev?.attachments,
+          hasAttachments: fullEmail.hasAttachments ?? prev?.hasAttachments,
+          attachmentCount: fullEmail.attachmentCount ?? prev?.attachmentCount,
+          source: res.source ?? prev?.source
+        }));
+      }
+    } catch (err) {
+      console.error('Error refreshing email:', err);
+    } finally {
+      setRefreshingEmail(false);
+    }
+  };
+
   // Helper function to update email in list after opening
   const updateEmailInList = (emailUid, updates) => {
     console.log('🔄 Updating email in list:', { emailUid, updates });
@@ -1886,6 +2072,70 @@ const Email = () => {
         >
           <FilterListIcon />
         </IconButton>
+
+        {/* Search bar - Gmail style */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1, maxWidth: 560, mr: 2 }}>
+          <TextField
+            size="small"
+            placeholder="Search mail (e.g. from:user@example.com subject:invoice)"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') runSearch(1, null);
+            }}
+            sx={{
+              flex: 1,
+              '& .MuiOutlinedInput-root': {
+                backgroundColor: '#f1f3f4',
+                borderRadius: '24px',
+                fontSize: '0.875rem',
+                '& fieldset': { border: 'none' },
+                '&:hover': { backgroundColor: '#e8eaed' }
+              }
+            }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon sx={{ color: '#5f6368', fontSize: 20 }} />
+                </InputAdornment>
+              ),
+              endAdornment: searchQuery ? (
+                <InputAdornment position="end">
+                  <IconButton size="small" onClick={() => setSearchQuery('')} sx={{ p: 0.5 }}>
+                    <CloseSearchIcon sx={{ fontSize: 18, color: '#5f6368' }} />
+                  </IconButton>
+                </InputAdornment>
+              ) : null
+            }}
+          />
+          <FormControl size="small" sx={{ minWidth: 100 }}>
+            <InputLabel>Scope</InputLabel>
+            <Select
+              value={searchFolder}
+              label="Scope"
+              onChange={(e) => setSearchFolder(e.target.value)}
+              sx={{ borderRadius: '8px', backgroundColor: '#fff' }}
+            >
+              <MenuItem value="ALL">All</MenuItem>
+              <MenuItem value="INBOX">Inbox</MenuItem>
+              <MenuItem value="SENT">Sent</MenuItem>
+            </Select>
+          </FormControl>
+          <Button
+            variant="contained"
+            size="small"
+            onClick={() => runSearch(1, null)}
+            disabled={!selectedAccountId || searchLoading || !searchQuery.trim()}
+            sx={{ textTransform: 'none', borderRadius: '8px', px: 2 }}
+          >
+            {searchLoading ? 'Searching…' : 'Search'}
+          </Button>
+          {searchActive && (
+            <Button size="small" onClick={clearSearch} sx={{ textTransform: 'none', color: '#5f6368' }}>
+              Clear
+            </Button>
+          )}
+        </Box>
         
         {/* Right side actions - Gmail style */}
         <Box sx={{ 
@@ -1905,16 +2155,16 @@ const Email = () => {
               />
             </Box>
           )}
-          <Tooltip title="Refresh">
+          <Tooltip title="Sync from server">
             <IconButton 
               size="small" 
               onClick={() => {
                 setCurrentPage(1);
                 setHasMore(true);
                 if (selectedTab === 0) {
-                  loadEmails(1, true);
+                  loadEmails(1, true, true);
                 } else {
-                  loadSentEmails(1, true);
+                  loadSentEmails(1, true, true);
                 }
               }} 
               disabled={!selectedAccountId}
@@ -1926,6 +2176,11 @@ const Email = () => {
               <RefreshIcon fontSize="small" />
             </IconButton>
           </Tooltip>
+          {listSource && (
+            <Typography variant="caption" sx={{ color: '#5f6368', ml: 0.5 }}>
+              {listSource === 'db' ? 'From cache' : 'Synced'}
+            </Typography>
+          )}
           <Tooltip title="Settings">
             <IconButton 
               size="small"
@@ -2149,26 +2404,51 @@ const Email = () => {
           boxSizing: 'border-box'
         }}>
           <Box sx={{ flexGrow: 1, overflow: 'auto', width: '100%' }}>
+            {searchActive && (searchResults.length > 0 || searchLoading) && (
+              <Alert
+                severity="info"
+                sx={{ m: 2, mb: 1 }}
+                action={
+                  <Button color="inherit" size="small" onClick={clearSearch}>
+                    Clear search
+                  </Button>
+                }
+              >
+                Search results for &quot;{searchQuery}&quot; in {searchFolder === 'ALL' ? 'All mail' : searchFolder === 'INBOX' ? 'Inbox' : 'Sent'}
+                {!searchLoading && searchResults.length > 0 && ` (${searchResults.length} ${searchResults.length === 1 ? 'email' : 'emails'})`}
+              </Alert>
+            )}
+            {searchActive && searchError && (
+              <Alert severity="error" sx={{ m: 2 }} onClose={() => setSearchError(null)}>
+                {searchError}
+              </Alert>
+            )}
+            {searchActive && !searchError && searchResults.length === 0 && !searchLoading && (
+              <Alert severity="info" sx={{ m: 2 }}>
+                No emails match your search. Try different keywords or scope (e.g. from:email subject:word).
+              </Alert>
+            )}
             <EmailList
               userEmail={emailAccounts.find(acc => acc._id === selectedAccountId)?.email || ''}
-              emails={selectedLabelId ? [] : getFilteredEmails()} // Only pass emails when not filtering by label
-              loading={selectedLabelId ? false : loading} // EmailList handles its own loading when filtering
-              loadingMore={loadingMore}
-              hasMore={hasMore}
-              onLoadMore={selectedTab === 0 ? loadMoreEmails : loadMoreSentEmails}
+              emails={searchActive ? searchResults : (selectedLabelId ? [] : getFilteredEmails())}
+              loading={searchActive ? searchLoading : (selectedLabelId ? false : loading)}
+              loadingMore={searchActive ? false : loadingMore}
+              hasMore={searchActive ? !!(searchPagination?.nextPageToken || searchPagination?.hasNextPage) : hasMore}
+              onLoadMore={searchActive ? loadMoreSearchResults : (selectedTab === 0 ? loadMoreEmails : loadMoreSentEmails)}
               selectedEmail={selectedEmail}
               onEmailSelect={handleEmailSelect}
               onToggleStar={toggleStar}
               formatTimestamp={formatTimestamp}
-              // ⭐ NEW PROPS for label filtering
-              selectedLabelId={selectedLabelId}
-              folder={selectedTab === 0 ? 'INBOX' : 'SENT'}
+              usePagination={!selectedLabelId && !searchActive}
+              currentPage={searchActive ? searchPage : currentPage}
+              onPageChange={searchActive ? undefined : handlePageChange}
+              selectedLabelId={searchActive ? null : selectedLabelId}
+              folder={searchActive ? 'ALL' : (selectedTab === 0 ? 'INBOX' : 'SENT')}
               emailAccountId={selectedAccountId}
               onClearLabelFilter={handleClearLabelFilter}
-              // ⭐ NEW PROP for bulk actions
               onEmailsUpdate={(updateFn) => {
-                // Update emails in parent component
-                setEmails(prev => updateFn(prev));
+                if (searchActive) setSearchResults(prev => updateFn(prev));
+                else setEmails(prev => updateFn(prev));
               }}
             />
           </Box>
@@ -2182,7 +2462,18 @@ const Email = () => {
         accounts={emailAccounts}
         onSetDefault={handleSetDefaultAccount}
         onDelete={handleDeleteAccount}
+        onManageSignatures={(account) => {
+          setSignatureManagerAccount(account);
+          setAccountManagementOpen(false);
+        }}
         loading={accountsLoading}
+      />
+
+      <SignatureManagerDialog
+        open={!!signatureManagerAccount}
+        onClose={() => setSignatureManagerAccount(null)}
+        emailAccountId={signatureManagerAccount?._id || null}
+        accountName={signatureManagerAccount?.displayName || signatureManagerAccount?.email || ''}
       />
 
       <CreateAccountDialog
@@ -2253,8 +2544,10 @@ const Email = () => {
           onDelete={deleteEmail}
           onClose={() => setSelectedEmail(null)}
           onReply={handleReply}
+          onRefresh={handleRefreshEmail}
+          refreshingEmail={refreshingEmail}
           emailAccountId={selectedAccountId}
-          folder={selectedTab === 0 ? 'INBOX' : 'SENT'}
+          folder={selectedEmail?.folder ? String(selectedEmail.folder).toUpperCase() : (selectedTab === 0 ? 'INBOX' : 'SENT')}
           emailAccounts={emailAccounts}
         />
       </Dialog>

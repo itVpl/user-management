@@ -119,6 +119,90 @@ export const deleteEmailAccount = async (accountId) => {
   return response.data;
 };
 
+// --- Email Signatures (per account) ---
+
+export const getSignatures = async (accountId) => {
+  const token = getAuthToken();
+  if (!token) throw new Error('Please login to access this resource');
+  const response = await axios.get(
+    `${API_BASE_URL}/email-accounts/${accountId}/signatures`,
+    { headers: getAuthHeaders() }
+  );
+  return response.data;
+};
+
+export const createSignature = async (accountId, data) => {
+  const token = getAuthToken();
+  if (!token) throw new Error('Please login to access this resource');
+  const response = await axios.post(
+    `${API_BASE_URL}/email-accounts/${accountId}/signatures`,
+    {
+      name: data.name || 'Default',
+      contentHtml: data.contentHtml ?? '',
+      contentText: data.contentText ?? '',
+      isDefault: !!data.isDefault
+    },
+    { headers: getAuthHeaders() }
+  );
+  return response.data;
+};
+
+export const updateSignature = async (accountId, signatureId, data) => {
+  const token = getAuthToken();
+  if (!token) throw new Error('Please login to access this resource');
+  const payload = {};
+  if (data.name !== undefined) payload.name = data.name;
+  if (data.contentHtml !== undefined) payload.contentHtml = data.contentHtml;
+  if (data.contentText !== undefined) payload.contentText = data.contentText;
+  if (data.isDefault !== undefined) payload.isDefault = data.isDefault;
+  const response = await axios.put(
+    `${API_BASE_URL}/email-accounts/${accountId}/signatures/${signatureId}`,
+    payload,
+    { headers: getAuthHeaders() }
+  );
+  return response.data;
+};
+
+export const deleteSignature = async (accountId, signatureId) => {
+  const token = getAuthToken();
+  if (!token) throw new Error('Please login to access this resource');
+  const response = await axios.delete(
+    `${API_BASE_URL}/email-accounts/${accountId}/signatures/${signatureId}`,
+    { headers: getAuthHeaders() }
+  );
+  return response.data;
+};
+
+export const setDefaultSignature = async (accountId, signatureId) => {
+  const token = getAuthToken();
+  if (!token) throw new Error('Please login to access this resource');
+  const response = await axios.patch(
+    `${API_BASE_URL}/email-accounts/${accountId}/signatures/${signatureId}/set-default`,
+    {},
+    { headers: getAuthHeaders() }
+  );
+  return response.data;
+};
+
+export const uploadSignatureImage = async (accountId, file) => {
+  const token = getAuthToken();
+  if (!token) throw new Error('Please login to access this resource');
+  const formData = new FormData();
+  formData.append('image', file);
+  const response = await axios.post(
+    `${API_BASE_URL}/email-accounts/${accountId}/signatures/upload-image`,
+    formData,
+    {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      },
+      maxContentLength: 6 * 1024 * 1024,
+      maxBodyLength: 6 * 1024 * 1024
+    }
+  );
+  return response.data;
+};
+
 // Test email connection
 export const testEmailConnection = async (accountId) => {
   const token = getAuthToken();
@@ -139,7 +223,8 @@ export const testEmailConnection = async (accountId) => {
 };
 
 // Fetch inbox emails
-export const fetchInboxEmails = async (accountId, limit = 25, page = 1) => {
+// refresh: when true, backend syncs from IMAP and returns latest (slower). Omit/false = DB-first (fast).
+export const fetchInboxEmails = async (accountId, limit = 25, page = 1, refresh = false) => {
   const token = getAuthToken();
   
   if (!token) {
@@ -157,6 +242,9 @@ export const fetchInboxEmails = async (accountId, limit = 25, page = 1) => {
   
   if (accountId) {
     params.append('emailAccountId', accountId);
+  }
+  if (refresh) {
+    params.append('refresh', 'true');
   }
 
   const inboxUrl = `${API_BASE_URL}/email-inbox/inbox?${params.toString()}`;
@@ -198,16 +286,18 @@ export const fetchInboxEmails = async (accountId, limit = 25, page = 1) => {
 };
 
 // Fetch sent emails
-export const fetchSentEmails = async (accountId, limit = 30, page = 1) => {
+// refresh: when true, backend syncs from IMAP and returns latest (slower). Omit/false = DB-first (fast).
+export const fetchSentEmails = async (accountId, limit = 30, page = 1, refresh = false) => {
   const token = getAuthToken();
   
   if (!token) {
     throw new Error('Please login to access emails');
   }
 
-  // Build query parameters according to API documentation
+  // Build query parameters - page for pagination (25 per page)
   const params = new URLSearchParams({
     limit: limit.toString(),
+    page: page.toString(),
     includePreview: 'true',
     includeContent: 'false', // Don't fetch full content for list view (faster)
     includeAttachmentContent: 'true' // Include attachment content for instant downloads
@@ -216,11 +306,9 @@ export const fetchSentEmails = async (accountId, limit = 30, page = 1) => {
   if (accountId) {
     params.append('emailAccountId', accountId);
   }
-  
-  // Note: API doesn't support pagination with page parameter, but we can use limit
-  // For pagination, we'll need to calculate skip = (page - 1) * limit
-  // But since API doesn't support skip, we'll fetch all and paginate client-side
-  // Or use limit to get more emails per request
+  if (refresh) {
+    params.append('refresh', 'true');
+  }
 
   const sentUrl = `${API_BASE_URL}/email-inbox/sent?${params.toString()}`;
 
@@ -250,7 +338,8 @@ export const fetchSentEmails = async (accountId, limit = 30, page = 1) => {
 };
 
 // Fetch single email by UID
-export const fetchEmailByUid = async (uid, accountId, folder = 'INBOX', includeThread = true, markAsRead = true) => {
+// refresh: when true, backend syncs from IMAP for this email/thread (slower). Omit/false = DB-first (fast).
+export const fetchEmailByUid = async (uid, accountId, folder = 'INBOX', includeThread = true, markAsRead = true, refresh = false) => {
   const token = getAuthToken();
 
   if (!token) {
@@ -270,6 +359,9 @@ export const fetchEmailByUid = async (uid, accountId, folder = 'INBOX', includeT
   
   if (accountId) {
     params.append('emailAccountId', accountId);
+  }
+  if (refresh) {
+    params.append('refresh', 'true');
   }
   
   const emailUrl = `${API_BASE_URL}/email-inbox/${uidString}?${params.toString()}`;
@@ -328,6 +420,46 @@ export const fetchEmailByUid = async (uid, accountId, folder = 'INBOX', includeT
     // Handle backend timeout errors
     if (error.response?.data?.message?.includes('timeout') || error.response?.data?.message?.includes('timed out')) {
       throw new Error(error.response.data.message || 'IMAP request timed out. Please try again.');
+    }
+    throw error;
+  }
+};
+
+// Search emails (Gmail-style: keyword, from:, to:, subject:, etc.)
+// folder: 'INBOX' | 'SENT' | 'ALL'. Pagination: Gmail API uses pageToken, DB uses page.
+export const searchEmails = async ({ q = '', folder = 'ALL', limit = 25, page = 1, pageToken = null, emailAccountId = null } = {}) => {
+  const token = getAuthToken();
+  if (!token) {
+    throw new Error('Please login to search emails');
+  }
+
+  const params = new URLSearchParams({
+    q: String(q).trim(),
+    folder: String(folder).toUpperCase(),
+    limit: Math.min(Math.max(1, limit), 50)
+  });
+  if (pageToken) {
+    params.set('pageToken', pageToken);
+  } else {
+    params.set('page', String(page));
+  }
+  if (emailAccountId) {
+    params.set('emailAccountId', emailAccountId);
+  }
+
+  const url = `${API_BASE_URL}/email-inbox/search?${params.toString()}`;
+  try {
+    const response = await axios.get(url, {
+      headers: getAuthHeaders(),
+      timeout: 35000
+    });
+    return response.data;
+  } catch (error) {
+    if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+      throw new Error('Search timed out. Please try again.');
+    }
+    if (error.response?.data?.message) {
+      throw new Error(error.response.data.message);
     }
     throw error;
   }
@@ -807,6 +939,9 @@ export const sendEmailWithAttachments = async (emailData) => {
   if (emailData.emailAccountId) {
     formData.append('emailAccountId', emailData.emailAccountId);
   }
+  if (emailData.skipSignature === true) {
+    formData.append('skipSignature', 'true');
+  }
 
   // Add file attachments (up to 10 files, 25MB each)
   if (emailData.attachments && emailData.attachments.length > 0) {
@@ -884,6 +1019,9 @@ export const replyToEmailWithFiles = async (replyData) => {
   }
   if (replyData.emailAccountId) {
     formData.append('emailAccountId', replyData.emailAccountId);
+  }
+  if (replyData.skipSignature === true) {
+    formData.append('skipSignature', 'true');
   }
 
   // Add file attachments (up to 10 files, 25MB each)

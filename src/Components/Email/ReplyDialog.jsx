@@ -12,6 +12,8 @@ import {
   Chip,
   Avatar,
   Tooltip,
+  FormControlLabel,
+  Checkbox,
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -48,6 +50,7 @@ const ReplyDialog = ({
   const [recipientChips, setRecipientChips] = useState([]);
   const [ccChips, setCcChips] = useState([]);
   const [bccChips, setBccChips] = useState([]);
+  const [skipSignature, setSkipSignature] = useState(false);
   const fileInputRef = useRef(null);
 
   // Initialize reply data when dialog opens or originalEmail changes
@@ -246,6 +249,7 @@ const ReplyDialog = ({
       html: `<p>${replyData.text.replace(/\n/g, '<br/>')}</p>`,
       emailAccountId,
       attachments: attachments.map(att => att.file), // Send File objects directly
+      skipSignature: skipSignature,
     };
 
     // Add CC and BCC if provided
@@ -283,6 +287,7 @@ const ReplyDialog = ({
     }
     
     setReplyData({ to: '', cc: '', bcc: '', subject: '', text: '' });
+    setSkipSignature(false);
     setEmailValidation({ valid: true, invalidEmails: [] });
     setCcValidation({ valid: true, invalidEmails: [] });
     setBccValidation({ valid: true, invalidEmails: [] });
@@ -722,7 +727,17 @@ const ReplyDialog = ({
         alignItems: 'center',
         boxShadow: '0 -2px 8px rgba(0,0,0,0.04)'
       }}>
-        <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
+        <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={skipSignature}
+                onChange={(e) => setSkipSignature(e.target.checked)}
+                size="small"
+              />
+            }
+            label={<Typography variant="body2" sx={{ color: '#5f6368' }}>Don&apos;t add signature for this reply</Typography>}
+          />
           <Button
             variant="contained"
             startIcon={loading ? <CircularProgress size={18} sx={{ color: 'white' }} /> : <SendIcon />}
