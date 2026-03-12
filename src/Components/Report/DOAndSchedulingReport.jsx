@@ -37,6 +37,7 @@ export default function DOAndSchedulingReport() {
   const [totalCount, setTotalCount] = useState(0);
   const [todayCount, setTodayCount] = useState(0);
   const itemsPerPage = 10;
+  const prevFiltersRef = useRef({ start: null, end: null, search: '', cmt: '' });
 
   const presets = {
     'Today': [new Date(), new Date()],
@@ -78,11 +79,11 @@ export default function DOAndSchedulingReport() {
         params,
         headers: { Authorization: `Bearer ${token}` }
       });
-      const data = res.data?.data;
+      const data = res.data?.data || res.data;
       if (res.data?.success && Array.isArray(data?.assignedDOs)) {
         setAssignedDOs(data.assignedDOs);
-        const pagination = data.pagination || {};
-        const total = pagination.totalItems ?? data.totalCount ?? data.total ?? data.assignedDOs?.length ?? 0;
+        const pagination = data?.pagination || res.data?.pagination || {};
+        const total = pagination.totalItems ?? data.totalCount ?? data.total ?? res.data?.pagination?.totalItems ?? data.assignedDOs?.length ?? 0;
         setTotalCount(typeof total === 'number' ? total : data.assignedDOs.length);
         setTodayCount(data.todayCount ?? 0);
       } else {
@@ -102,19 +103,26 @@ export default function DOAndSchedulingReport() {
   };
 
   useEffect(() => {
-    setCurrentPage(1);
-  }, [range.startDate, range.endDate, searchTerm, selectedCmtEmpId]);
-
-  useEffect(() => {
     const startDate = ymd(range.startDate);
     const endDate = ymd(range.endDate);
-    if (startDate && endDate) {
-      fetchData(currentPage, itemsPerPage, startDate, endDate);
-    } else {
+    if (!startDate || !endDate) {
       setAssignedDOs([]);
       setTotalCount(0);
       setTodayCount(0);
       setLoading(false);
+      return;
+    }
+    const search = (searchTerm || '').trim();
+    const cmt = selectedCmtEmpId || '';
+    const prev = prevFiltersRef.current;
+    const filtersChanged =
+      prev.start !== startDate || prev.end !== endDate || prev.search !== search || prev.cmt !== cmt;
+    if (filtersChanged) {
+      prevFiltersRef.current = { start: startDate, end: endDate, search, cmt };
+      setCurrentPage(1);
+      fetchData(1, itemsPerPage, startDate, endDate);
+    } else {
+      fetchData(currentPage, itemsPerPage, startDate, endDate);
     }
   }, [range.startDate, range.endDate, currentPage, searchTerm, selectedCmtEmpId]);
 
@@ -162,10 +170,39 @@ export default function DOAndSchedulingReport() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showPresetMenu]);
 
-  const totalPages = Math.max(1, Math.ceil(totalCount / itemsPerPage));
+  const filteredAssignedDOs = useMemo(() => {
+    const q = (searchTerm || '').trim().toLowerCase();
+    if (!q) return assignedDOs;
+    return assignedDOs.filter((order) => {
+      const cust0 = order.customers?.[0] || {};
+      const loadNo = (cust0.loadNo || '').toLowerCase();
+      const dispatcherName = (cust0.dispatcherName || '').toLowerCase();
+      const carrierName = (order.carrier?.carrierName || '').toLowerCase();
+      const loadType = (order.loadType || '').toLowerCase();
+      const createdBy = (order.createdBySalesUser?.employeeName || '').toLowerCase();
+      const assignedTo = (order.assignedToCMT?.employeeName || order.assignedToCMT?.empId || '').toLowerCase();
+      const status = (order.loadReference?.status || '').toLowerCase();
+      const doId = (order._id || order.doId || '').toString().toLowerCase();
+      return (
+        loadNo.includes(q) ||
+        dispatcherName.includes(q) ||
+        carrierName.includes(q) ||
+        loadType.includes(q) ||
+        createdBy.includes(q) ||
+        assignedTo.includes(q) ||
+        status.includes(q) ||
+        doId.includes(q)
+      );
+    });
+  }, [assignedDOs, searchTerm]);
+
+  const hasSearch = (searchTerm || '').trim().length > 0;
+  const totalItems = hasSearch ? filteredAssignedDOs.length : totalCount;
+  const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const currentOrders = assignedDOs;
-  const totalItems = totalCount;
+  const currentOrders = hasSearch
+    ? filteredAssignedDOs.slice(startIndex, startIndex + itemsPerPage)
+    : assignedDOs;
 
   const filteredCmtUsers = useMemo(() => {
     const q = (cmtFilterSearch || '').trim().toLowerCase();
@@ -532,7 +569,7 @@ export default function DOAndSchedulingReport() {
 
       <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
-          {totalCount === 0 && !loading ? (
+          {totalItems === 0 && !loading ? (
             <div className="text-center py-12">
               <Truck className="w-16 h-16 text-gray-300 mx-auto mb-4" />
               <p className="text-gray-500 text-lg">
@@ -613,7 +650,7 @@ export default function DOAndSchedulingReport() {
         </div>
       </div>
 
-      {totalCount > 0 && (
+      {totalItems > 0 && (
         <div className="flex flex-wrap justify-between items-center gap-4 mt-6 bg-white rounded-2xl border border-gray-200 p-4">
           <div className="text-sm text-gray-600">
             Showing {startIndex + 1} to {startIndex + currentOrders.length} of {totalItems} orders
