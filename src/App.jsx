@@ -58,6 +58,7 @@ const MeetingSchedule = lazy(() => import("./Components/Sales/MeetingSchedule.js
 const AllMeetingSchedules = lazy(() => import("./Components/Sales/AllMeetingSchedules.jsx"));
 const MyEmailLogs = lazy(() => import("./Components/Sales/MyEmailLogs.jsx"));
 const SoftwareSellRecord = lazy(() => import("./Components/Sales/SoftwareSellRecord.jsx"));
+const Tier1Leads = lazy(() => import("./Components/Sales/Tier1Leads.jsx"));
 const DOReport = lazy(() => import("./Components/Sales/DOReport.jsx"));
 const AllDOAssignedCMT = lazy(() => import("./Components/Sales/AllDOAssignedCMT.jsx"));
 const TeamRating = lazy(() => import("./Components/Sales/TeamRating.jsx"));
@@ -675,6 +676,7 @@ function App() {
           <Route path="all-meeting-schedules" element={<AllMeetingSchedules />} />
           <Route path="my-email-logs" element={<MyEmailLogs />} />
           <Route path="software-sell-record" element={<SoftwareSellRecord />} />
+          <Route path="tier1-leads" element={<Tier1Leads />} />
           <Route path="do-report" element={<DOReport />} />
           <Route path="all-do-assigned-cmt" element={<AllDOAssignedCMT />} />
           <Route path="team-rating" element={<TeamRating />} />
