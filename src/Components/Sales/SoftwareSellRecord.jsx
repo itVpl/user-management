@@ -183,7 +183,7 @@ export default function SoftwareSellRecord() {
               <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-gray-700 font-bold text-2xl">
                 {totalLogs}
               </div>
-              <div className="absolute inset-0 flex items-center justify-center text-gray-700 font-semibold">
+              <div className="absolute inset-0 flex items-center justify-center text-gray-700 font-semibold text-lg">
                 Total Records
               </div>
             </div>
@@ -191,7 +191,7 @@ export default function SoftwareSellRecord() {
               <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-gray-700 font-bold text-2xl">
                 {todayLogs}
               </div>
-              <div className="absolute inset-0 flex items-center justify-center text-gray-700 font-semibold">
+              <div className="absolute inset-0 flex items-center justify-center text-gray-700 font-semibold text-lg">
                 Today
               </div>
             </div>
@@ -204,7 +204,7 @@ export default function SoftwareSellRecord() {
                 setAddErrors({});
                 setShowAddModal(true);
               }}
-              className="flex items-center justify-between gap-4 px-6 h-[40px] bg-blue-600 rounded-lg text-white font-semibold hover:bg-blue-700 transition w-full"
+              className=" cursor-pointer flex items-center justify-between gap-4 px-6 h-[40px] bg-blue-600 rounded-lg text-white font-semibold hover:bg-blue-700 transition w-full"
             >
               <span>Log Sale</span>
               <PlusCircle size={20} />
@@ -213,7 +213,7 @@ export default function SoftwareSellRecord() {
               <button
                 type="button"
                 onClick={() => setShowPresetMenu((v) => !v)}
-                className="w-full text-left px-4 h-[45px] border border-gray-200 rounded-lg bg-white flex items-center justify-between text-gray-700 font-medium hover:border-gray-300 transition-colors"
+                className="cursor-pointer w-full text-left px-4 h-[45px] border border-gray-200 rounded-lg bg-white flex items-center justify-between text-gray-700 font-medium hover:border-gray-300 transition-colors"
               >
                 <span>
                   {range.startDate && range.endDate
@@ -240,14 +240,14 @@ export default function SoftwareSellRecord() {
           <button
             type="button"
             onClick={() => setActiveTab('my')}
-            className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${activeTab === 'my' ? 'bg-blue-50 text-blue-700 border border-b-0 border-gray-200 -mb-px' : 'text-gray-600 hover:bg-gray-50'}`}
+            className={`cursor-pointer px-4 py-2 text-base font-medium rounded-t-lg transition-colors ${activeTab === 'my' ? 'bg-blue-50 text-blue-700 border border-b-0 border-gray-200 -mb-px' : 'text-gray-600 hover:bg-gray-50'}`}
           >
             My Records
           </button>
           <button
             type="button"
             onClick={() => setActiveTab('all')}
-            className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${activeTab === 'all' ? 'bg-blue-50 text-blue-700 border border-b-0 border-gray-200 -mb-px' : 'text-gray-600 hover:bg-gray-50'}`}
+            className={`cursor-pointer px-4 py-2 text-base font-medium rounded-t-lg transition-colors ${activeTab === 'all' ? 'bg-blue-50 text-blue-700 border border-b-0 border-gray-200 -mb-px' : 'text-gray-600 hover:bg-gray-50'}`}
           >
             All Records
           </button>
@@ -272,9 +272,9 @@ export default function SoftwareSellRecord() {
             placeholder="Search records"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-6 pr-12 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-colors text-gray-600 placeholder-gray-400"
+            className="w-full pl-8 pr-12 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-colors text-gray-600 placeholder-gray-400"
           />
-          <Search className="absolute right-6 top-1/2 transform -translate-y-1/2 text-gray-400" size={24} />
+          <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
         </div>
       </div>
 
@@ -290,25 +290,25 @@ export default function SoftwareSellRecord() {
                 <thead className="bg-white border-b border-gray-200">
                   <tr>
                     {activeTab === 'all' && (
-                      <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Employee</th>
+                      <th className="text-left py-4 px-4 text-gray-600 font-medium text-base">Employee</th>
                     )}
-                    <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Sold At</th>
-                    <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Customer Name</th>
-                    <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Notes</th>
-                    <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Action</th>
+                    <th className="text-left py-4 px-4 text-gray-600 font-medium text-base">Sold At</th>
+                    <th className="text-left py-4 px-4 text-gray-600 font-medium text-base">Customer Name</th>
+                    <th className="text-left py-4 px-4 text-gray-600 font-medium text-base">Notes</th>
+                    <th className="text-left py-4 px-4 text-gray-600 font-medium text-base">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {currentLogs.map((item) => (
                     <tr key={item._id || item.soldAt + item.customerName} className="border-b border-gray-100 hover:bg-gray-50">
                       {activeTab === 'all' && (
-                        <td className="py-4 px-4 text-sm text-gray-800">{getEmployeeName(item)}</td>
+                        <td className="py-4 px-4 font-medium text-gray-800">{getEmployeeName(item)}</td>
                       )}
-                      <td className="py-4 px-4 text-sm text-gray-700">{getSoldAt(item)}</td>
-                      <td className="py-4 px-4 text-sm font-medium text-gray-800">{item.customerName || '—'}</td>
-                      <td className="py-4 px-4 text-sm text-gray-600 max-w-xs truncate">{item.notes || '—'}</td>
+                      <td className="py-4 px-4 font-medium text-gray-800">{getSoldAt(item)}</td>
+                      <td className="py-4 px-4 font-medium text-gray-800">{item.customerName || '—'}</td>
+                      <td className="py-4 px-4 font-medium text-gray-800 max-w-xs truncate">{item.notes || '—'}</td>
                       <td className="py-4 px-4">
-                        <button type="button" onClick={() => { setSelectedLog(item); setShowViewModal(true); }} className="px-3 py-1 rounded border border-blue-500 text-blue-600 text-sm font-medium hover:bg-blue-50">View</button>
+                        <button type="button" onClick={() => { setSelectedLog(item); setShowViewModal(true); }} className="px-3 py-1 rounded-xl border border-blue-500 text-blue-600 text-base cursor-pointer font-medium hover:bg-blue-600 hover:text-white">View</button>
                       </td>
                     </tr>
                   ))}
@@ -332,15 +332,15 @@ export default function SoftwareSellRecord() {
             Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, filteredLogs.length)} of {filteredLogs.length} records
           </div>
           <div className="flex gap-1 items-center">
-            <button type="button" disabled={currentPage === 1} onClick={() => setCurrentPage((p) => p - 1)} className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium">
+            <button type="button" disabled={currentPage === 1} onClick={() => setCurrentPage((p) => p - 1)} className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed text-base cursor-pointer font-medium">
               <ChevronLeft size={18} /> Previous
             </button>
             <div className="flex items-center gap-1 mx-4">
               {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                <button key={p} type="button" onClick={() => setCurrentPage(p)} className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium ${currentPage === p ? 'bg-white border border-gray-800 text-gray-900' : 'text-gray-600 hover:bg-gray-50'}`}>{p}</button>
+                <button key={p} type="button" onClick={() => setCurrentPage(p)} className={`w-8 h-8 flex items-center justify-center rounded-lg text-base cursor-pointer font-medium ${currentPage === p ? 'bg-white border border-gray-800 text-gray-900' : 'text-gray-600 hover:bg-gray-50'}`}>{p}</button>
               ))}
             </div>
-            <button type="button" disabled={currentPage === totalPages} onClick={() => setCurrentPage((p) => p + 1)} className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium">
+            <button type="button" disabled={currentPage === totalPages} onClick={() => setCurrentPage((p) => p + 1)} className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed text-base cursor-pointer font-medium">
               Next <ChevronRight size={18} />
             </button>
           </div>
@@ -351,9 +351,9 @@ export default function SoftwareSellRecord() {
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => setShowAddModal(false)}>
           <div className="bg-white rounded-2xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 py-4 border-b">
+            <div className="flex items-center justify-between px-6 py-4 border-b bg-blue-600 text-white border-blue-700">
               <h3 className="text-lg font-semibold">Log Software Sale</h3>
-              <button type="button" onClick={() => setShowAddModal(false)} className="p-2 rounded-lg hover:bg-gray-100"><X className="w-5 h-5" /></button>
+              <button type="button" onClick={() => setShowAddModal(false)} className="cursor-pointer p-2 rounded-lg hover:bg-blue-700 text-white"><X className="w-5 h-5" /></button>
             </div>
             <form onSubmit={handleAddSubmit} className="p-6 space-y-4">
               <div>
@@ -386,26 +386,28 @@ export default function SoftwareSellRecord() {
                 />
               </div>
               {addErrors.submit && <p className="text-red-600 text-sm">{addErrors.submit}</p>}
-              <div className="flex gap-2 pt-2">
-                <button type="button" onClick={() => setShowAddModal(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
-                <button type="submit" disabled={addSubmitting} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
-                  {addSubmitting ? 'Saving...' : 'Log Sale'}
-                </button>
-              </div>
+             <div className="flex gap-2 pt-2 justify-end">
+  <button type="button" onClick={() => setShowAddModal(false)} className="cursor-pointer px-4 py-2 border border-red-300 text-red-600 hover:bg-red-600 hover:text-white rounded-lg">Cancel</button>
+  <button type="submit" disabled={addSubmitting} className="cursor-pointer px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
+    {addSubmitting ? 'Saving...' : 'Log Sale'}
+  </button>
+</div>
             </form>
           </div>
         </div>
       )}
 
-      {/* View Modal */}
+      {/* View Modal (centered, original placement) */}
       {showViewModal && selectedLog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => { setShowViewModal(false); setSelectedLog(null); }}>
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b bg-blue-600 text-white border-blue-700 rounded-t-2xl">
               <h3 className="text-lg font-semibold">Sale Details</h3>
-              <button type="button" onClick={() => { setShowViewModal(false); setSelectedLog(null); }} className="p-2 rounded-lg hover:bg-gray-100"><X className="w-5 h-5" /></button>
+              <button type="button" onClick={() => { setShowViewModal(false); setSelectedLog(null); }} className="cursor-pointer p-2 rounded-lg hover:bg-blue-700 text-white">
+                <X className="w-5 h-5" />
+              </button>
             </div>
-            <div className="space-y-3 text-sm">
+            <div className="p-6 space-y-3 text-sm">
               {activeTab === 'all' && (
                 <p><span className="font-medium text-gray-600">Employee:</span> {getEmployeeName(selectedLog)}</p>
               )}
@@ -413,9 +415,9 @@ export default function SoftwareSellRecord() {
               <p><span className="font-medium text-gray-600">Customer:</span> {selectedLog.customerName || '—'}</p>
               <p><span className="font-medium text-gray-600">Notes:</span> {selectedLog.notes || '—'}</p>
             </div>
-            <div className="mt-6">
-              <button type="button" onClick={() => { setShowViewModal(false); setSelectedLog(null); }} className="w-full px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200">Close</button>
-            </div>
+            {/* <div className="px-6 pb-6 ">
+              <button type="button" onClick={() => { setShowViewModal(false); setSelectedLog(null); }} className="w-full px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Close</button>
+            </div> */}
           </div>
         </div>
       )}
