@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -22,10 +22,25 @@ import {
   Delete as DeleteIcon,
   Image as ImageIcon,
   InsertDriveFile as FileIcon,
+  Save as SaveIcon,
 } from '@mui/icons-material';
 import { validateEmailRecipients, getRecipientCount, parseEmailRecipients } from '../../utils/emailUtils';
 
-const ComposeDialog = ({ open, onClose, onSend, loading, error, success, emailAccountId }) => {
+const ComposeDialog = ({
+  open,
+  onClose,
+  onSend,
+  onSaveDraft,
+  onDiscardDraft,
+  loading,
+  saveDraftLoading,
+  error,
+  success,
+  emailAccountId,
+  draftId,
+  initialDraft,
+  autoSaveIntervalMs,
+}) => {
   const [emailData, setEmailData] = useState({
     to: '',
     cc: '',
@@ -43,6 +58,61 @@ const ComposeDialog = ({ open, onClose, onSend, loading, error, success, emailAc
   const [bccChips, setBccChips] = useState([]);
   const [skipSignature, setSkipSignature] = useState(false);
   const fileInputRef = useRef(null);
+  const saveDraftFnRef = useRef(null);
+  const formContentRef = useRef({ draftId: null, to: '', subject: '', text: '' });
+
+  // Pre-fill form when opening an existing draft
+  useEffect(() => {
+    if (open && initialDraft) {
+      setEmailData({
+        to: initialDraft.to || '',
+        cc: initialDraft.cc || '',
+        bcc: initialDraft.bcc || '',
+        subject: initialDraft.subject || '',
+        text: initialDraft.text || (initialDraft.html ? initialDraft.html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ') : ''),
+      });
+      const toEmails = (initialDraft.to || '').split(/[,;]/).map((e) => e.trim()).filter(Boolean);
+      setRecipientChips(toEmails);
+      const ccEmails = (initialDraft.cc || '').split(/[,;]/).map((e) => e.trim()).filter(Boolean);
+      setCcChips(ccEmails);
+      const bccEmails = (initialDraft.bcc || '').split(/[,;]/).map((e) => e.trim()).filter(Boolean);
+      setBccChips(bccEmails);
+      if ((initialDraft.cc || initialDraft.bcc)) setShowCcBcc(true);
+      const draftAttachments = (initialDraft.attachments || []).map((att) => ({
+        filename: att.filename,
+        size: att.size || 0,
+        type: att.contentType || 'application/octet-stream',
+        fromDraft: true,
+        content: att.content,
+        contentType: att.contentType,
+        encoding: att.encoding || 'base64',
+      }));
+      setAttachments(draftAttachments);
+    } else if (open && !initialDraft) {
+      setEmailData({ to: '', cc: '', bcc: '', subject: '', text: '' });
+      setRecipientChips([]);
+      setCcChips([]);
+      setBccChips([]);
+      setShowCcBcc(false);
+      setAttachments([]);
+    }
+  }, [open, initialDraft]);
+
+  // Keep refs updated for auto-save and discard
+  formContentRef.current = { draftId, to: emailData.to, subject: emailData.subject, text: emailData.text };
+
+  // Auto-save (Gmail-style): save draft periodically while compose is open
+  useEffect(() => {
+    if (!open || !onSaveDraft || !autoSaveIntervalMs) return;
+    const id = setInterval(() => {
+      const { draftId: did, to, subject, text } = formContentRef.current;
+      const hasContent = did || (to && to.trim()) || (subject && subject.trim()) || (text && text.trim());
+      if (!hasContent || !saveDraftFnRef.current) return;
+      if (saveDraftLoading) return;
+      saveDraftFnRef.current();
+    }, autoSaveIntervalMs);
+    return () => clearInterval(id);
+  }, [open, onSaveDraft, autoSaveIntervalMs, saveDraftLoading]);
 
   const handleChange = (field) => (e) => {
     const value = e.target.value;
@@ -140,9 +210,8 @@ const ComposeDialog = ({ open, onClose, onSend, loading, error, success, emailAc
   const removeAttachment = (index) => {
     setAttachments(prev => {
       const newAttachments = [...prev];
-      if (newAttachments[index].preview) {
-        URL.revokeObjectURL(newAttachments[index].preview);
-      }
+      const att = newAttachments[index];
+      if (att?.preview) URL.revokeObjectURL(att.preview);
       newAttachments.splice(index, 1);
       return newAttachments;
     });
@@ -153,6 +222,46 @@ const ComposeDialog = ({ open, onClose, onSend, loading, error, success, emailAc
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   };
+
+  const fileToBase64 = (file) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => {
+        const dataUrl = reader.result;
+        const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+        resolve(base64);
+      };
+      reader.onerror = reject;
+    });
+
+  const handleSaveDraft = async () => {
+    if (!onSaveDraft) return;
+    const attachmentPayloads = await Promise.all(
+      attachments.map(async (att) => {
+        if (att.fromDraft && att.content) {
+          return { filename: att.filename, contentType: att.contentType || 'application/octet-stream', content: att.content, encoding: att.encoding || 'base64' };
+        }
+        if (att.file instanceof File) {
+          const content = await fileToBase64(att.file);
+          return { filename: att.filename, contentType: att.type || att.file.type || 'application/octet-stream', content, encoding: 'base64' };
+        }
+        return null;
+      })
+    );
+    const validAttachments = attachmentPayloads.filter(Boolean);
+    onSaveDraft({
+      to: emailData.to.trim(),
+      subject: emailData.subject || '',
+      text: emailData.text || '',
+      html: emailData.html || `<p>${(emailData.text || '').replace(/\n/g, '<br/>')}</p>`,
+      cc: emailData.cc?.trim() || undefined,
+      bcc: emailData.bcc?.trim() || undefined,
+      draftId: draftId || undefined,
+      attachments: validAttachments,
+    });
+  };
+  saveDraftFnRef.current = handleSaveDraft;
 
   const handleSend = () => {
     if (!emailData.to || !emailData.subject || !emailData.text) {
@@ -190,7 +299,8 @@ const ComposeDialog = ({ open, onClose, onSend, loading, error, success, emailAc
       text: emailData.text,
       html: `<p>${emailData.text.replace(/\n/g, '<br/>')}</p>`,
       emailAccountId,
-      attachments: attachments.map(att => att.file), // Send File objects directly
+      draftId,
+      attachments: attachments.map(att => att.file).filter(Boolean),
       skipSignature: skipSignature
     };
     
@@ -213,7 +323,6 @@ const ComposeDialog = ({ open, onClose, onSend, loading, error, success, emailAc
     if (reason && reason === 'escapeKeyDown') {
       return;
     }
-    
     setEmailData({ to: '', cc: '', bcc: '', subject: '', text: '' });
     setSkipSignature(false);
     setEmailValidation({ valid: true, invalidEmails: [] });
@@ -228,6 +337,15 @@ const ComposeDialog = ({ open, onClose, onSend, loading, error, success, emailAc
     });
     setAttachments([]);
     onClose();
+  };
+
+  /** Discard: if existing draft and onDiscardDraft provided, delete draft then close; otherwise just close. */
+  const handleDiscard = () => {
+    if (draftId && onDiscardDraft) {
+      onDiscardDraft(draftId);
+    } else {
+      handleClose();
+    }
   };
 
   return (
@@ -288,7 +406,7 @@ const ComposeDialog = ({ open, onClose, onSend, loading, error, success, emailAc
             fontSize: '1.25rem',
             letterSpacing: '-0.02em'
           }}>
-            New Message
+            {draftId ? 'Edit draft' : 'New Message'}
           </Typography>
         </Box>
         <IconButton 
@@ -773,7 +891,7 @@ const ComposeDialog = ({ open, onClose, onSend, loading, error, success, emailAc
                       backgroundColor: '#e8f0fe',
                       borderRadius: 1
                     }}>
-                      {att.type.startsWith('image/') ? (
+                      {(att.type || att.contentType || '').startsWith('image/') ? (
                         <ImageIcon sx={{ color: '#1a73e8', fontSize: 24 }} />
                       ) : (
                         <FileIcon sx={{ color: '#1a73e8', fontSize: 24 }} />
@@ -791,7 +909,7 @@ const ComposeDialog = ({ open, onClose, onSend, loading, error, success, emailAc
                       {att.filename}
                     </Typography>
                     <Typography variant="caption" sx={{ color: '#5f6368' }}>
-                      {formatFileSize(att.size)}
+                      {formatFileSize(att.size || 0)}
                     </Typography>
                   </Box>
                   <IconButton 
@@ -843,6 +961,27 @@ const ComposeDialog = ({ open, onClose, onSend, loading, error, success, emailAc
             }
             label={<Typography variant="body2" sx={{ color: '#5f6368' }}>Don&apos;t add signature for this email</Typography>}
           />
+          {onSaveDraft && (
+            <Button
+              variant="outlined"
+              startIcon={saveDraftLoading ? <CircularProgress size={18} /> : <SaveIcon />}
+              onClick={handleSaveDraft}
+              disabled={saveDraftLoading || loading}
+              sx={{
+                textTransform: 'none',
+                fontWeight: 600,
+                px: 3,
+                py: 1.25,
+                borderRadius: 3,
+                borderColor: '#1a73e8',
+                color: '#1a73e8',
+                '&:hover': { borderColor: '#1557b0', backgroundColor: 'rgba(26, 115, 232, 0.08)' },
+                '&.Mui-disabled': { borderColor: '#e0e0e0', color: '#9e9e9e' }
+              }}
+            >
+              {saveDraftLoading ? 'Saving…' : 'Save draft'}
+            </Button>
+          )}
           <Button
             variant="contained"
             startIcon={loading ? <CircularProgress size={18} sx={{ color: 'white' }} /> : <SendIcon />}
@@ -925,7 +1064,7 @@ const ComposeDialog = ({ open, onClose, onSend, loading, error, success, emailAc
         <Tooltip title="Discard draft" arrow>
           <IconButton 
             size="medium" 
-            onClick={handleClose}
+            onClick={handleDiscard}
             sx={{
               width: 44,
               height: 44,
