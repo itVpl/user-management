@@ -714,9 +714,13 @@ const DailyTarget = () => {
                 <div>
                   <h1 className="text-2xl font-semibold text-gray-900 mb-1">My Targets</h1>
                   <p className="text-gray-900 text-base font-medium">
-                    {myTargets.length > 0 && myTargets[0]?.weekStartDate
-                      ? `${formatDDMMYYYY(myTargets[0].weekStartDate)} – ${formatDDMMYYYY(myTargets[0].weekEndDate)}`
-                      : "—"}
+                    {myTargets.length > 0 && (() => {
+                      const t = myTargets[0];
+                      const isTier2 = t?.tier === 2 || (t?.tier2Targets != null && Object.keys(t.tier2Targets || {}).length > 0);
+                      if (isTier2 && t?.monthStartDate) return `${formatDDMMYYYY(t.monthStartDate)} – ${formatDDMMYYYY(t.monthEndDate)}`;
+                      if (t?.weekStartDate) return `${formatDDMMYYYY(t.weekStartDate)} – ${formatDDMMYYYY(t.weekEndDate)}`;
+                      return "—";
+                    })()}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -752,6 +756,90 @@ const DailyTarget = () => {
               )}
               {!myTargetsLoading && !myTargetsError && myTargets.length > 0 && (() => {
                 const t = myTargets[0];
+                const isTier2 = t?.tier === 2 || (t?.tier2Targets != null && Object.keys(t.tier2Targets || {}).length > 0);
+                const tier2 = t?.tier2Targets ?? {};
+
+                if (isTier2) {
+                  return (
+                    <>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+                        <div className="border border-blue-200 bg-white rounded-xl p-5 relative shadow-sm">
+                          <div className="flex justify-between items-start mb-6">
+                            <span className="text-sm font-medium text-gray-800">Active Customers</span>
+                            <span className="px-3 py-1 bg-blue-50 text-blue-700 text-xs font-bold rounded-full flex items-center gap-1.5">
+                              <div className="w-2 h-2 rounded-full bg-blue-600" /> Target
+                            </span>
+                          </div>
+                          <div className="text-4xl font-normal text-gray-800">
+                            {tier2.activeCustomersCompleted ?? 0}
+                            <span className="text-2xl text-gray-500 font-normal">/{tier2.activeCustomersMin ?? 0}-{tier2.activeCustomersMax ?? 0}</span>
+                          </div>
+                        </div>
+                        <div className="border border-indigo-200 bg-white rounded-xl p-5 relative shadow-sm">
+                          <div className="flex justify-between items-start mb-6">
+                            <span className="text-sm font-medium text-gray-800">DO Added</span>
+                            <span className="px-3 py-1 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-full flex items-center gap-1.5">
+                              <div className="w-2 h-2 rounded-full bg-indigo-600" /> Target
+                            </span>
+                          </div>
+                          <div className="text-4xl font-normal text-gray-800">
+                            {tier2.doAddedCompleted ?? 0}
+                            <span className="text-2xl text-gray-500 font-normal">/{tier2.doAddedMin ?? 0}-{tier2.doAddedMax ?? 0}</span>
+                          </div>
+                        </div>
+                        <div className="border border-amber-200 bg-white rounded-xl p-5 relative shadow-sm">
+                          <div className="flex justify-between items-start mb-6">
+                            <span className="text-sm font-medium text-gray-800">Lead Generation</span>
+                            <span className="px-3 py-1 bg-amber-50 text-amber-700 text-xs font-bold rounded-full flex items-center gap-1.5">
+                              <div className="w-2 h-2 rounded-full bg-amber-600" /> Target
+                            </span>
+                          </div>
+                          <div className="text-4xl font-normal text-gray-800">{tier2.followUpCompleted ?? 0}</div>
+                        </div>
+                        <div className="border border-green-200 bg-white rounded-xl p-5 relative shadow-sm">
+                          <div className="flex justify-between items-start mb-6">
+                            <span className="text-sm font-medium text-gray-800">Rate Request Created</span>
+                            <span className="px-3 py-1 bg-green-50 text-green-700 text-xs font-bold rounded-full flex items-center gap-1.5">
+                              <div className="w-2 h-2 rounded-full bg-green-600" /> Count
+                            </span>
+                          </div>
+                          <div className="text-4xl font-normal text-gray-800">{tier2.loadCreatedCount ?? 0}</div>
+                        </div>
+                        <div className="border border-teal-200 bg-white rounded-xl p-5 relative shadow-sm">
+                          <div className="flex justify-between items-start mb-6">
+                            <span className="text-sm font-medium text-gray-800">Sell Software</span>
+                            <span className="px-3 py-1 bg-teal-50 text-teal-700 text-xs font-bold rounded-full flex items-center gap-1.5">
+                              <div className="w-2 h-2 rounded-full bg-teal-600" /> Count
+                            </span>
+                          </div>
+                          <div className="text-4xl font-normal text-gray-800">{tier2.shipperSoftwareSellCompleted ?? tier2.sellSoftware ?? tier2.sellSoftwareCount ?? 0}</div>
+                        </div>
+                      </div>
+                      {myTargets.length > 1 && (
+                        <div className="mt-6 pt-6 border-t border-gray-100">
+                          <p className="text-sm font-medium text-gray-600 mb-3">Other targets</p>
+                          <div className="space-y-3">
+                            {myTargets.slice(1).map((ot) => {
+                              const t2 = ot?.tier2Targets ?? {};
+                              const monthStart = ot?.monthStartDate ? formatDDMMYYYY(ot.monthStartDate) : (ot?.weekStartDate ? formatDDMMYYYY(ot.weekStartDate) : "—");
+                              const monthEnd = ot?.monthEndDate ? formatDDMMYYYY(ot.monthEndDate) : (ot?.weekEndDate ? formatDDMMYYYY(ot.weekEndDate) : "—");
+                              return (
+                                <div key={ot._id} className="flex flex-wrap items-center justify-between gap-2 py-2 border-b border-gray-100 last:border-0">
+                                  <span className="text-sm text-gray-700">{monthStart} – {monthEnd}</span>
+                                  <span className="text-xs text-gray-500">Active: {t2.activeCustomersCompleted ?? 0}/{t2.activeCustomersMin ?? 0}-{t2.activeCustomersMax ?? 0} · DO: {t2.doAddedCompleted ?? 0}/{t2.doAddedMin ?? 0}-{t2.doAddedMax ?? 0} · Lead Gen: {t2.followUpCompleted ?? 0} · Rate Req: {t2.loadCreatedCount ?? 0} · Sell Software: {t2.shipperSoftwareSellCompleted ?? t2.sellSoftware ?? t2.sellSoftwareCount ?? 0}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      {myTargets.length === 1 && myTargets[0]?.setBy && (
+                        <p className="text-xs text-gray-500 mt-4">Set by: {myTargets[0].setBy.employeeName ?? myTargets[0].setBy.empId ?? "—"}</p>
+                      )}
+                    </>
+                  );
+                }
+
                 const tier1 = t?.tier1Targets ?? {};
                 const daily = t?.tier1DailyProgress ?? {};
                 const followUpDaily = daily?.followUp ?? {};
@@ -759,17 +847,16 @@ const DailyTarget = () => {
                 const meetingsDaily = daily?.meetings ?? {};
                 return (
                 <>
-                  {/* Metric Cards - click to see daily breakdown */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                     <div
                       role="button"
                       tabIndex={0}
-                      onClick={() => setDailyBreakdownModal({ title: "Follow-up / day", breakdown: followUpDaily.dailyBreakdown ?? [], targetPerDay: tier1.followUpPerDay })}
-                      onKeyDown={(e) => e.key === "Enter" && setDailyBreakdownModal({ title: "Follow-up / day", breakdown: followUpDaily.dailyBreakdown ?? [], targetPerDay: tier1.followUpPerDay })}
+                      onClick={() => setDailyBreakdownModal({ title: "Lead Generate / day", breakdown: followUpDaily.dailyBreakdown ?? [], targetPerDay: tier1.followUpPerDay })}
+                      onKeyDown={(e) => e.key === "Enter" && setDailyBreakdownModal({ title: "Lead Generate / day", breakdown: followUpDaily.dailyBreakdown ?? [], targetPerDay: tier1.followUpPerDay })}
                       className="border border-red-200 bg-white rounded-xl p-5 relative shadow-sm cursor-pointer hover:shadow-md hover:border-red-300 transition-all"
                     >
                       <div className="flex justify-between items-start mb-6">
-                        <span className="text-sm font-medium text-gray-800">Follow-up / day</span>
+                        <span className="text-sm font-medium text-gray-800">Lead Generate / day</span>
                         <span className="px-3 py-1 bg-red-50 text-red-700 text-xs font-bold rounded-full flex items-center gap-1.5">
                           <div className="w-2 h-2 rounded-full bg-red-600" /> Target
                         </span>
@@ -840,7 +927,6 @@ const DailyTarget = () => {
                       <p className="text-xs text-green-600 mt-2 font-medium">Click to view daily breakdown</p>
                     </div>
                   </div>
-                  {/* Only first target in cards; if multiple, show rest in compact list */}
                   {myTargets.length > 1 && (
                     <div className="mt-6 pt-6 border-t border-gray-100">
                       <p className="text-sm font-medium text-gray-600 mb-3">Other targets</p>
@@ -852,7 +938,7 @@ const DailyTarget = () => {
                           return (
                             <div key={t._id} className="flex flex-wrap items-center justify-between gap-2 py-2 border-b border-gray-100 last:border-0">
                               <span className="text-sm text-gray-700">{weekStart} – {weekEnd}</span>
-                              <span className="text-xs text-gray-500">F: {tier1.followUpCompleted ?? 0}/{tier1.followUpPerDay ?? 0} · C: {tier1.callsCompleted ?? 0}/{tier1.callsPerDay ?? 0} · M: {tier1.meetingsCompleted ?? 0}/{tier1.meetingsPerWeek ?? 0}</span>
+                              <span className="text-xs text-gray-500">Lead: {tier1.followUpCompleted ?? 0}/{tier1.followUpPerDay ?? 0} · C: {tier1.callsCompleted ?? 0}/{tier1.callsPerDay ?? 0} · M: {tier1.meetingsCompleted ?? 0}/{tier1.meetingsPerWeek ?? 0}</span>
                             </div>
                           );
                         })}

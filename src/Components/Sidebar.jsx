@@ -120,7 +120,8 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Follow Up Report",
       "Meeting Schedule",
       "All Meeting Schedules",
-      "My Email Logs"
+      "My Email Logs",
+      "Software Sell Record"
     ],
     "Invoices": [
       "Check Invoice"
@@ -490,6 +491,7 @@ const menuItems = [
   { name: "Meeting Schedule", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/meeting-schedule" },
   { name: "All Meeting Schedules", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/all-meeting-schedules" },
   { name: "My Email Logs", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/my-email-logs" },
+  { name: "Software Sell Record", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/software-sell-record" },
   { name: "Add Customer", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/AddCustomer" },
   { name: "All Customers", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/allcustomer" },
   { name: "Assign Agent", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/AssignAgent" },

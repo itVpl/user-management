@@ -128,6 +128,7 @@ const ManageUser = () => {
   const [bgVerificationLoading, setBgVerificationLoading] = useState(false);
   const [bgVerificationError, setBgVerificationError] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('');
+  const [tierFilter, setTierFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'active' | 'inactive'
   const [assignManagerLoading, setAssignManagerLoading] = useState(false);
   const [roleUpdateLoading, setRoleUpdateLoading] = useState(false);
@@ -217,11 +218,15 @@ const ManageUser = () => {
       user.employeeName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.email.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesDept = !departmentFilter || (user.department || '') === departmentFilter;
+    const matchesTier =
+      !tierFilter ||
+      departmentFilter !== 'Sales' ||
+      String(user.salesExecutiveTier ?? '') === String(tierFilter);
     const matchesStatus =
       statusFilter === 'all' ||
       (statusFilter === 'active' && user.isActive) ||
       (statusFilter === 'inactive' && !user.isActive);
-    return matchesSearch && matchesDept && matchesStatus;
+    return matchesSearch && matchesDept && matchesTier && matchesStatus;
   });
 
   const departmentOptions = [
@@ -584,11 +589,28 @@ const ManageUser = () => {
               </div>
               <SearchableSelect
                 value={departmentFilter}
-                onChange={setDepartmentFilter}
+                onChange={(val) => {
+                  setDepartmentFilter(val);
+                  if (val !== 'Sales') setTierFilter('');
+                }}
                 options={departmentOptions}
                 placeholder="All Departments"
                 className="flex-shrink-0"
               />
+              {departmentFilter === 'Sales' && (
+                <SearchableSelect
+                  value={tierFilter}
+                  onChange={setTierFilter}
+                  options={[
+                    { value: '', label: 'All Tiers' },
+                    { value: '1', label: '1' },
+                    { value: '2', label: '2' },
+                    { value: '3', label: '3' },
+                  ]}
+                  placeholder="Tier"
+                  className="flex-shrink-0"
+                />
+              )}
               <SearchableSelect
                 value={statusFilter}
                 onChange={setStatusFilter}
