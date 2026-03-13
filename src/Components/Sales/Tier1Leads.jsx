@@ -11,7 +11,10 @@ import {
   Phone,
   Mail,
   MessageSquare,
-  FileText
+  FileText,
+  Pencil,
+  PlusCircle,
+  Trash2
 } from 'lucide-react';
 import { format, addDays } from 'date-fns';
 import API_CONFIG from '../../config/api.js';
@@ -29,11 +32,12 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+const LEAD_STATUSES = ['New', 'In Progress', 'Qualified', 'Proposal Sent', 'Negotiation', 'Closed Won', 'Closed Lost', 'On Hold'];
+const FOLLOW_UP_TYPES = ['Call', 'Email', 'Meeting', 'WhatsApp', 'Visit', 'Other'];
+
 const STATUS_OPTIONS = [
   { value: '', label: 'All Status' },
-  { value: 'New', label: 'New' },
-  { value: 'In Progress', label: 'In Progress' },
-  { value: 'Closed Won', label: 'Closed Won' }
+  ...LEAD_STATUSES.map((s) => ({ value: s, label: s }))
 ];
 
 const toYMD = (d) => (d ? format(d, 'yyyy-MM-dd') : null);
@@ -54,6 +58,19 @@ export default function Tier1Leads() {
 
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedLead, setSelectedLead] = useState(null);
+
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editLead, setEditLead] = useState(null);
+  const [editForm, setEditForm] = useState({ status: '' });
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [addFollowUpForm, setAddFollowUpForm] = useState({ followUpType: 'Call', followUpNotes: '', nextFollowUpDate: '' });
+  const [addFollowUpFiles, setAddFollowUpFiles] = useState([]);
+  const [addFollowUpSubmitting, setAddFollowUpSubmitting] = useState(false);
+  const [editingFollowUpId, setEditingFollowUpId] = useState(null);
+  const [editFollowUpForm, setEditFollowUpForm] = useState({ followUpType: '', followUpNotes: '', nextFollowUpDate: '' });
+  const [editFollowUpSubmitting, setEditFollowUpSubmitting] = useState(false);
+  const [deleteLeadConfirm, setDeleteLeadConfirm] = useState(false);
+  const [deleteLeadSubmitting, setDeleteLeadSubmitting] = useState(false);
 
   const presets = {
     'Today': [new Date(), new Date()],
@@ -156,6 +173,118 @@ export default function Tier1Leads() {
   const openView = (lead) => {
     setSelectedLead(lead);
     setShowViewModal(true);
+  };
+
+  const openEdit = (lead) => {
+    setEditLead(lead);
+    setEditForm({ status: lead?.status ?? 'New' });
+    setAddFollowUpForm({ followUpType: 'Call', followUpNotes: '', nextFollowUpDate: '' });
+    setAddFollowUpFiles([]);
+    setEditingFollowUpId(null);
+    setDeleteLeadConfirm(false);
+    setShowEditModal(true);
+  };
+
+  const refreshLeadInState = (updated) => {
+    if (!updated?._id) return;
+    setLeads((prev) => prev.map((l) => (l._id === updated._id ? { ...l, ...updated } : l)));
+    if (selectedLead?._id === updated._id) setSelectedLead((s) => (s?._id === updated._id ? { ...s, ...updated } : s));
+    if (editLead?._id === updated._id) setEditLead((e) => (e?._id === updated._id ? { ...e, ...updated } : e));
+  };
+
+  const handleEditLeadSubmit = async (e) => {
+    e.preventDefault();
+    if (!editLead?._id) return;
+    setEditSubmitting(true);
+    try {
+      const res = await api.put(`/api/v1/sales-followup/${editLead._id}`, { status: editForm.status });
+      const updated = res?.data?.data ?? res?.data ?? editLead;
+      refreshLeadInState(updated);
+      setEditForm((f) => ({ ...f, status: updated?.status ?? f.status }));
+      alertify.success('Lead updated');
+    } catch (err) {
+      alertify.error(err?.response?.data?.message || err?.message || 'Failed to update lead');
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
+
+  const handleAddFollowUpSubmit = async (e) => {
+    e.preventDefault();
+    if (!editLead?._id) return;
+    setAddFollowUpSubmitting(true);
+    try {
+      const formData = new FormData();
+      formData.append('followUpType', addFollowUpForm.followUpType);
+      formData.append('followUpNotes', addFollowUpForm.followUpNotes || '');
+      if (addFollowUpForm.nextFollowUpDate) formData.append('nextFollowUpDate', addFollowUpForm.nextFollowUpDate);
+      (addFollowUpFiles || []).forEach((file) => formData.append('attachments', file));
+      const res = await api.post(`/api/v1/sales-followup/${editLead._id}/followup`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      const updated = res?.data?.data ?? res?.data;
+      const newFollowUp = updated?.followUp ?? res?.data?.followUp ?? res?.data;
+      const newFollowUps = Array.isArray(updated?.followUps) ? updated.followUps : [...(editLead.followUps || []), newFollowUp].filter(Boolean);
+      const merged = updated && updated._id ? { ...updated, followUps: updated.followUps ?? newFollowUps } : { ...editLead, followUps: newFollowUps };
+      refreshLeadInState(merged);
+      setAddFollowUpForm({ followUpType: 'Call', followUpNotes: '', nextFollowUpDate: '' });
+      setAddFollowUpFiles([]);
+      alertify.success('Follow-up added');
+    } catch (err) {
+      alertify.error(err?.response?.data?.message || err?.message || 'Failed to add follow-up');
+    } finally {
+      setAddFollowUpSubmitting(false);
+    }
+  };
+
+  const openEditFollowUp = (fu) => {
+    setEditingFollowUpId(fu._id);
+    setEditFollowUpForm({
+      followUpType: fu.followUpType || 'Call',
+      followUpNotes: fu.followUpNotes || '',
+      nextFollowUpDate: fu.nextFollowUpDate ? (fu.nextFollowUpDate.slice ? fu.nextFollowUpDate.slice(0, 10) : fu.nextFollowUpDate) : ''
+    });
+  };
+
+  const handleEditFollowUpSubmit = async (e) => {
+    e.preventDefault();
+    if (!editLead?._id || !editingFollowUpId) return;
+    setEditFollowUpSubmitting(true);
+    try {
+      const res = await api.put(`/api/v1/sales-followup/${editLead._id}/followup/${editingFollowUpId}`, {
+        followUpType: editFollowUpForm.followUpType,
+        followUpNotes: editFollowUpForm.followUpNotes || undefined,
+        nextFollowUpDate: editFollowUpForm.nextFollowUpDate || undefined
+      });
+      const updated = res?.data?.data ?? res?.data ?? editLead;
+      refreshLeadInState(updated);
+      setEditingFollowUpId(null);
+      alertify.success('Follow-up updated');
+    } catch (err) {
+      alertify.error(err?.response?.data?.message || err?.message || 'Failed to update follow-up');
+    } finally {
+      setEditFollowUpSubmitting(false);
+    }
+  };
+
+  const handleDeleteLead = async () => {
+    if (!editLead?._id) return;
+    setDeleteLeadSubmitting(true);
+    try {
+      await api.delete(`/api/v1/sales-followup/${editLead._id}`);
+      setLeads((prev) => prev.filter((l) => l._id !== editLead._id));
+      setSelectedLead(null);
+      setEditLead(null);
+      setShowEditModal(false);
+      setShowViewModal(false);
+      setDeleteLeadConfirm(false);
+      setPagination((p) => ({ ...p, totalItems: Math.max(0, (p.totalItems || 0) - 1) }));
+      alertify.success('Lead deleted');
+    } catch (err) {
+      alertify.error(err?.response?.data?.message || err?.message || 'Failed to delete lead');
+    } finally {
+      setDeleteLeadSubmitting(false);
+    }
   };
 
   const fmtDate = (d) => {
@@ -287,24 +416,20 @@ export default function Tier1Leads() {
                       <td className="py-4 px-4 font-medium text-gray-700 max-w-[180px] truncate">{lead.email || '—'}</td>
                       <td className="py-4 px-4 font-medium text-gray-700">{getCallingDate(lead) || '—'}</td>
                       <td className="py-4 px-4">
-                        <span className={`px-2 py-1 rounded font-medium text-sm capitalize ${
-                          lead.status === 'New' ? 'bg-blue-100 text-blue-800' :
-                          lead.status === 'In Progress' ? 'bg-amber-100 text-amber-800' :
-                          lead.status === 'Converted' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                        }`}>
-                          {lead.status || '—'}
-                        </span>
+                        <span className={`px-2 py-1 rounded font-medium text-sm ${
+                          lead.status === 'Closed Won' ? 'bg-green-100 text-green-800' :
+                          lead.status === 'Closed Lost' ? 'bg-red-100 text-red-800' :
+                          lead.status === 'In Progress' || lead.status === 'Negotiation' ? 'bg-amber-100 text-amber-800' :
+                          lead.status === 'New' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
+                        }`}>{lead.status || '—'}</span>
                       </td>
                       <td className="py-4 px-4 font-medium text-gray-700">{lead.creditCheck || '—'}</td>
                       <td className="py-4 px-4 font-medium text-gray-700">{(lead.followUps || []).length}</td>
                       <td className="py-4 px-4">
-                        <button
-                          type="button"
-                          onClick={() => openView(lead)}
-                          className="px-3 py-1 rounded-lg border border-blue-500 text-blue-500 text-base font-medium hover:bg-blue-500 hover:text-white transition-all duration-200 cursor-pointer"
-                        >
-                          View
-                        </button>
+                        <div className="flex gap-2">
+                          <button type="button" onClick={() => openView(lead)} className="px-3 py-1 rounded-lg border border-blue-500 text-blue-500 text-base font-medium hover:bg-blue-500 hover:text-white transition-all duration-200 cursor-pointer">View</button>
+                          <button type="button" onClick={() => openEdit(lead)} className="px-3 py-1 rounded-lg border border-amber-500 text-amber-500 text-base font-medium hover:bg-amber-500 hover:text-white transition-all duration-200 cursor-pointer flex items-center gap-1"><Pencil size={14} /> Edit</button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -349,7 +474,10 @@ export default function Tier1Leads() {
           <div className="bg-white rounded-2xl border border-gray-200 max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-6 py-4 bg-blue-600 text-white rounded-t-2xl">
               <h3 className="text-lg font-semibold">Lead Details</h3>
-              <button type="button" onClick={() => { setShowViewModal(false); setSelectedLead(null); }} className="p-2 rounded-lg hover:bg-white/10 cursor-pointer text-white"><X className="w-5 h-5" /></button>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => { setShowViewModal(false); openEdit(selectedLead); }} className="px-3 py-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white text-sm font-medium flex items-center gap-1"><Pencil size={14} /> Edit</button>
+                <button type="button" onClick={() => { setShowViewModal(false); setSelectedLead(null); }} className="p-2 rounded-lg hover:bg-white/10 cursor-pointer text-white"><X className="w-5 h-5" /></button>
+              </div>
             </div>
             <div className="p-6 overflow-y-auto flex-1">
               <div className="grid grid-cols-1 gap-4">
@@ -406,10 +534,11 @@ export default function Tier1Leads() {
                   <div className="w-4 h-4 rounded-full bg-blue-200 shrink-0" />
                   <div>
                     <div className="text-xs text-gray-500">Status</div>
-                    <span className={`px-2 py-1 rounded text-xs font-medium capitalize ${
-                      selectedLead.status === 'New' ? 'bg-blue-100 text-blue-800' :
-                      selectedLead.status === 'In Progress' ? 'bg-amber-100 text-amber-800' :
-                      selectedLead.status === 'Converted' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                    <span className={`px-2 py-1 rounded text-xs font-medium ${
+                      selectedLead.status === 'Closed Won' ? 'bg-green-100 text-green-800' :
+                      selectedLead.status === 'Closed Lost' ? 'bg-red-100 text-red-800' :
+                      selectedLead.status === 'In Progress' || selectedLead.status === 'Negotiation' ? 'bg-amber-100 text-amber-800' :
+                      selectedLead.status === 'New' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
                     }`}>{selectedLead.status || '—'}</span>
                   </div>
                 </div>
@@ -447,20 +576,16 @@ export default function Tier1Leads() {
                   <div className="space-y-3">
                     {selectedLead.followUps.map((fu, idx) => (
                       <div key={fu._id || idx} className="p-4 border border-gray-200 rounded-xl bg-gray-50">
-                        <div className="flex flex-wrap gap-2 mb-2">
+                        <div className="flex flex-wrap gap-2 mb-2 items-center justify-between">
                           <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs font-medium">{fu.followUpType || '—'}</span>
                           <span className="text-xs text-gray-500">{fmtDateTime(fu.followUpDate)}</span>
                         </div>
                         <p className="text-sm text-gray-700 mb-1">{fu.followUpNotes || '—'}</p>
-                        {fu.nextFollowUpDate && (
-                          <p className="text-xs text-gray-500">Next: {fmtDate(fu.nextFollowUpDate)}</p>
-                        )}
+                        {fu.nextFollowUpDate && <p className="text-xs text-gray-500">Next: {fmtDate(fu.nextFollowUpDate)}</p>}
                         {(fu.attachments || []).length > 0 && (
                           <div className="mt-2 flex flex-wrap gap-2">
                             {fu.attachments.map((att, i) => (
-                              <a key={att._id || i} href={att.fileUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline flex items-center gap-1">
-                                <FileText size={12} /> {att.fileName || 'Attachment'}
-                              </a>
+                              <a key={att._id || i} href={att.fileUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline flex items-center gap-1"><FileText size={12} /> {att.fileName || 'Attachment'}</a>
                             ))}
                           </div>
                         )}
@@ -477,6 +602,120 @@ export default function Tier1Leads() {
                 >
                   Close
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Lead Modal (Tier 3 flow) */}
+      {showEditModal && editLead && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => { setShowEditModal(false); setEditLead(null); setEditingFollowUpId(null); setDeleteLeadConfirm(false); }}>
+          <div className="bg-white rounded-2xl border border-gray-200 max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 bg-amber-600 text-white rounded-t-2xl">
+              <h3 className="text-lg font-semibold">Edit Lead — {editLead.customerName || '—'}</h3>
+              <button type="button" onClick={() => { setShowEditModal(false); setEditLead(null); setEditingFollowUpId(null); setDeleteLeadConfirm(false); }} className="p-2 rounded-lg hover:bg-white/10 cursor-pointer text-white"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="p-6 overflow-y-auto flex-1 space-y-6">
+              {/* 1. Update lead status */}
+              <form onSubmit={handleEditLeadSubmit} className="p-4 border border-gray-200 rounded-xl bg-gray-50">
+                <h4 className="text-sm font-semibold text-gray-800 mb-3">Lead Status</h4>
+                <div className="flex flex-wrap gap-3 items-end">
+                  <div className="flex-1 min-w-[180px]">
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
+                    <select value={editForm.status} onChange={(e) => setEditForm((f) => ({ ...f, status: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-800">
+                      {LEAD_STATUSES.map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <button type="submit" disabled={editSubmitting} className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 text-sm font-medium">{editSubmitting ? 'Saving...' : 'Save Status'}</button>
+                </div>
+              </form>
+
+              {/* 2. Add new follow-up */}
+              <form onSubmit={handleAddFollowUpSubmit} className="p-4 border border-gray-200 rounded-xl bg-gray-50">
+                <h4 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-2"><PlusCircle size={18} /> Add Follow-up</h4>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Type</label>
+                    <select value={addFollowUpForm.followUpType} onChange={(e) => setAddFollowUpForm((f) => ({ ...f, followUpType: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-800">
+                      {FOLLOW_UP_TYPES.map((t) => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Notes</label>
+                    <textarea value={addFollowUpForm.followUpNotes} onChange={(e) => setAddFollowUpForm((f) => ({ ...f, followUpNotes: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-800" rows={2} placeholder="Follow-up notes" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Next Follow-up Date (optional)</label>
+                    <input type="date" value={addFollowUpForm.nextFollowUpDate} onChange={(e) => setAddFollowUpForm((f) => ({ ...f, nextFollowUpDate: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-800" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Attachments (optional)</label>
+                    <input type="file" multiple onChange={(e) => setAddFollowUpFiles(e.target.files ? Array.from(e.target.files) : [])} className="w-full text-sm text-gray-600" />
+                  </div>
+                  <button type="submit" disabled={addFollowUpSubmitting} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium">{addFollowUpSubmitting ? 'Adding...' : 'Add Follow-up'}</button>
+                </div>
+              </form>
+
+              {/* 3. List follow-ups with Edit */}
+              <div>
+                <h4 className="text-sm font-semibold text-gray-800 mb-3">Follow-ups</h4>
+                <div className="space-y-3">
+                  {(editLead.followUps || []).length === 0 && <p className="text-sm text-gray-500">No follow-ups yet.</p>}
+                  {(editLead.followUps || []).map((fu, idx) => (
+                    <div key={fu._id || idx} className="p-4 border border-gray-200 rounded-xl bg-white">
+                      {editingFollowUpId === fu._id ? (
+                        <form onSubmit={handleEditFollowUpSubmit} className="space-y-2">
+                          <select value={editFollowUpForm.followUpType} onChange={(e) => setEditFollowUpForm((f) => ({ ...f, followUpType: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                            {FOLLOW_UP_TYPES.map((t) => (
+                              <option key={t} value={t}>{t}</option>
+                            ))}
+                          </select>
+                          <textarea value={editFollowUpForm.followUpNotes} onChange={(e) => setEditFollowUpForm((f) => ({ ...f, followUpNotes: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" rows={2} placeholder="Notes" />
+                          <input type="date" value={editFollowUpForm.nextFollowUpDate} onChange={(e) => setEditFollowUpForm((f) => ({ ...f, nextFollowUpDate: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+                          <div className="flex gap-2">
+                            <button type="submit" disabled={editFollowUpSubmitting} className="px-3 py-1.5 bg-amber-600 text-white rounded-lg text-sm disabled:opacity-50">{editFollowUpSubmitting ? 'Saving...' : 'Save'}</button>
+                            <button type="button" onClick={() => setEditingFollowUpId(null)} className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-700">Cancel</button>
+                          </div>
+                        </form>
+                      ) : (
+                        <>
+                          <div className="flex flex-wrap gap-2 mb-1 items-center justify-between">
+                            <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs font-medium">{fu.followUpType || '—'}</span>
+                            <span className="text-xs text-gray-500">{fmtDateTime(fu.followUpDate)}</span>
+                            <button type="button" onClick={() => openEditFollowUp(fu)} className="text-amber-600 hover:underline text-xs font-medium flex items-center gap-1"><Pencil size={12} /> Edit</button>
+                          </div>
+                          <p className="text-sm text-gray-700">{fu.followUpNotes || '—'}</p>
+                          {fu.nextFollowUpDate && <p className="text-xs text-gray-500">Next: {fmtDate(fu.nextFollowUpDate)}</p>}
+                          {(fu.attachments || []).length > 0 && (
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {fu.attachments.map((att, i) => (
+                                <a key={att._id || i} href={att.fileUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline flex items-center gap-1"><FileText size={12} /> {att.fileName || 'Attachment'}</a>
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 4. Delete lead */}
+              <div className="pt-4 border-t border-gray-200">
+                {!deleteLeadConfirm ? (
+                  <button type="button" onClick={() => setDeleteLeadConfirm(true)} className="px-4 py-2 border border-red-400 text-red-600 rounded-lg hover:bg-red-50 text-sm font-medium flex items-center gap-1"><Trash2 size={16} /> Delete Lead</button>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-gray-600">Are you sure? This will delete the lead and all follow-ups.</span>
+                    <button type="button" onClick={handleDeleteLead} disabled={deleteLeadSubmitting} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 text-sm font-medium">{deleteLeadSubmitting ? 'Deleting...' : 'Yes, Delete'}</button>
+                    <button type="button" onClick={() => setDeleteLeadConfirm(false)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700">Cancel</button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
