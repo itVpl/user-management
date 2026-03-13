@@ -7,7 +7,8 @@ import {
   ChevronRight,
   X,
   Mail,
-  FileText
+  FileText,
+  Calendar
 } from 'lucide-react';
 import { format, addDays } from 'date-fns';
 import API_CONFIG from '../../config/api.js';
@@ -175,7 +176,7 @@ export default function MyEmailLogs() {
               <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-gray-700 font-bold text-2xl">
                 {totalEmails}
               </div>
-              <div className="absolute inset-0 flex items-center justify-center text-gray-700 font-semibold">
+              <div className="absolute inset-0 flex items-center justify-center text-gray-700 font-semibold text-lg">
                 Total Emails
               </div>
             </div>
@@ -183,7 +184,7 @@ export default function MyEmailLogs() {
               <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-gray-700 font-bold text-2xl">
                 {todayEmails}
               </div>
-              <div className="absolute inset-0 flex items-center justify-center text-gray-700 font-semibold">
+              <div className="absolute inset-0 flex items-center justify-center text-gray-700 font-semibold text-lg">
                 Today
               </div>
             </div>
@@ -197,7 +198,7 @@ export default function MyEmailLogs() {
                 setAddErrors({});
                 setShowAddModal(true);
               }}
-              className="flex items-center justify-between gap-4 px-6 h-[40px] bg-blue-600 rounded-lg text-white font-semibold hover:bg-blue-700 transition w-full"
+              className="cursor-pointer flex items-center justify-between gap-4 px-6 h-[40px] bg-blue-600 rounded-lg text-white font-semibold hover:bg-blue-700 transition w-full"
             >
               <span>Log Email</span>
               <PlusCircle size={20} />
@@ -206,7 +207,7 @@ export default function MyEmailLogs() {
               <button
                 type="button"
                 onClick={() => setShowPresetMenu((v) => !v)}
-                className="w-full text-left px-4 h-[45px] border border-gray-200 rounded-lg bg-white flex items-center justify-between text-gray-700 font-medium hover:border-gray-300 transition-colors"
+                className="cursor-pointer w-full text-left px-4 h-[45px] border border-gray-200 rounded-lg bg-white flex items-center justify-between text-gray-700 font-medium hover:border-gray-300 transition-colors"
               >
                 <span>
                   {range.startDate && range.endDate
@@ -233,9 +234,9 @@ export default function MyEmailLogs() {
             placeholder="Search Emails"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-6 pr-12 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-colors text-gray-600 placeholder-gray-400"
+            className="w-full pl-8 pr-12 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-colors text-gray-600 placeholder-gray-400"
           />
-          <Search className="absolute right-6 top-1/2 transform -translate-y-1/2 text-gray-400" size={24} />
+          <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
         </div>
       </div>
 
@@ -250,28 +251,28 @@ export default function MyEmailLogs() {
               <table className="w-full">
                 <thead className="bg-white border-b border-gray-200">
                   <tr>
-                    <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Email</th>
-                    <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Purpose</th>
-                    <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Date</th>
-                    <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Screenshot</th>
-                    <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Action</th>
+                    <th className="text-left py-4 px-4 text-gray-600 font-medium text-base">Email</th>
+                    <th className="text-left py-4 px-4 text-gray-600 font-medium text-base">Purpose</th>
+                    <th className="text-left py-4 px-4 text-gray-600 font-medium text-base">Date</th>
+                    <th className="text-left py-4 px-4 text-gray-600 font-medium text-base">Screenshot</th>
+                    <th className="text-left py-4 px-4 text-gray-600 font-medium text-base">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {currentEmails.map((item) => (
                     <tr key={item._id || item.email + item.date} className="border-b border-gray-100 hover:bg-gray-50">
-                      <td className="py-4 px-4 text-sm text-gray-800">{item.email || '—'}</td>
-                      <td className="py-4 px-4 text-sm font-medium text-gray-800">{item.purpose || '—'}</td>
-                      <td className="py-4 px-4 text-sm text-gray-700">{getEmailDate(item) || '—'}</td>
+                      <td className="py-4 px-4 font-medium text-gray-700">{item.email || '—'}</td>
+                      <td className="py-4 px-4 font-medium text-gray-700">{item.purpose || '—'}</td>
+                      <td className="py-4 px-4 font-medium text-gray-700">{getEmailDate(item) || '—'}</td>
                       <td className="py-4 px-4">
                         {item.screenshot || item.screenshotUrl ? (
-                          <a href={item.screenshotUrl || item.screenshot} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline flex items-center gap-1">
+                          <a href={item.screenshotUrl || item.screenshot} target="_blank" rel="noreferrer" className="text-blue-700 font-medium hover:underline flex items-center gap-1">
                             <FileText size={14} /> View
                           </a>
                         ) : '—'}
                       </td>
                       <td className="py-4 px-4">
-                        <button type="button" onClick={() => openView(item)} className="px-3 py-1 rounded border border-blue-500 text-blue-600 text-sm font-medium hover:bg-blue-50">View</button>
+                        <button type="button" onClick={() => openView(item)} className="cursor-pointer px-3 py-1 rounded-lg border border-blue-500 text-blue-600 text-base font-medium hover:bg-blue-500 hover:text-white">View</button>
                       </td>
                     </tr>
                   ))}
@@ -295,15 +296,15 @@ export default function MyEmailLogs() {
             Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, filteredEmails.length)} of {filteredEmails.length} emails
           </div>
           <div className="flex gap-1 items-center">
-            <button type="button" disabled={currentPage === 1} onClick={() => setCurrentPage((p) => p - 1)} className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium">
+            <button type="button" disabled={currentPage === 1} onClick={() => setCurrentPage((p) => p - 1)} className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed text-base font-medium cursor-pointer">
               <ChevronLeft size={18} /> Previous
             </button>
             <div className="flex items-center gap-1 mx-4">
               {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                <button key={p} type="button" onClick={() => setCurrentPage(p)} className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium ${currentPage === p ? 'bg-white border border-gray-800 text-gray-900' : 'text-gray-600 hover:bg-gray-50'}`}>{p}</button>
+                <button key={p} type="button" onClick={() => setCurrentPage(p)} className={`cursor-pointer w-8 h-8 flex items-center justify-center rounded-lg text-base font-medium ${currentPage === p ? 'bg-white border border-gray-800 text-gray-900' : 'text-gray-600 hover:bg-gray-50'}`}>{p}</button>
               ))}
             </div>
-            <button type="button" disabled={currentPage === totalPages} onClick={() => setCurrentPage((p) => p + 1)} className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium">
+            <button type="button" disabled={currentPage === totalPages} onClick={() => setCurrentPage((p) => p + 1)} className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed text-base font-medium cursor-pointer">
               Next <ChevronRight size={18} />
             </button>
           </div>
@@ -313,59 +314,71 @@ export default function MyEmailLogs() {
       {/* Log Email Modal */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => setShowAddModal(false)}>
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 py-4 border-b">
+          <div className="bg-white rounded-2xl border border-gray-200 max-w-xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 bg-blue-600 text-white rounded-t-2xl">
               <h3 className="text-lg font-semibold">Log Email</h3>
-              <button type="button" onClick={() => setShowAddModal(false)} className="p-2 rounded-lg hover:bg-gray-100"><X className="w-5 h-5" /></button>
+              <button type="button" onClick={() => setShowAddModal(false)} className="p-2 rounded-lg hover:bg-white/10 cursor-pointer text-white"><X className="w-5 h-5" /></button>
             </div>
-            <form onSubmit={handleAddSubmit} className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Recipient Email *</label>
-                <input
-                  type="email"
-                  value={addForm.email}
-                  onChange={(e) => setAddForm((f) => ({ ...f, email: e.target.value }))}
-                  className={`w-full px-4 py-2 border rounded-lg ${addErrors.email ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
-                  placeholder="e.g. client@example.com"
-                />
-                {addErrors.email && <p className="text-red-600 text-xs mt-1">{addErrors.email}</p>}
-                <p className="text-gray-500 text-xs mt-1">info@, support@, help@, contact@ are not allowed.</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Purpose *</label>
-                <input
-                  type="text"
-                  value={addForm.purpose}
-                  onChange={(e) => setAddForm((f) => ({ ...f, purpose: e.target.value }))}
-                  className={`w-full px-4 py-2 border rounded-lg ${addErrors.purpose ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
-                  placeholder="Brief purpose of the email"
-                />
-                {addErrors.purpose && <p className="text-red-600 text-xs mt-1">{addErrors.purpose}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
-                <input
-                  type="date"
-                  value={addForm.date}
-                  onChange={(e) => setAddForm((f) => ({ ...f, date: e.target.value }))}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Screenshot (Image/PDF)</label>
-                <input
-                  type="file"
-                  accept="image/*,.pdf"
-                  onChange={(e) => setScreenshotFile(e.target.files?.[0] || null)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-600"
-                />
+            <form onSubmit={handleAddSubmit} className="p-6 space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Recipient Email <span className="text-red-500">*</span></label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <input
+                      type="email"
+                      value={addForm.email}
+                      onChange={(e) => setAddForm((f) => ({ ...f, email: e.target.value }))}
+                      className={`w-full pl-10 pr-4 py-3 rounded-xl border-1 focus:outline-none focus:ring-1 transition-all ${addErrors.email ? 'border-red-500 ring-red-200 bg-red-50' : 'border-gray-200 focus:ring-blue-500 focus:border-blue-500'}`}
+                      placeholder="e.g. client@example.com"
+                    />
+                  </div>
+                  {addErrors.email && <p className="text-red-600 text-xs mt-1">{addErrors.email}</p>}
+                  <p className="text-gray-500 text-xs mt-1">info@, support@, help@, contact@ are not allowed.</p>
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Purpose <span className="text-red-500">*</span></label>
+                  <div className="relative">
+                    <FileText className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <input
+                      type="text"
+                      value={addForm.purpose}
+                      onChange={(e) => setAddForm((f) => ({ ...f, purpose: e.target.value }))}
+                      className={`w-full pl-10 pr-4 py-3 rounded-xl border-1 focus:outline-none focus:ring-1 transition-all ${addErrors.purpose ? 'border-red-500 ring-red-200 bg-red-50' : 'border-gray-200 focus:ring-blue-500 focus:border-blue-500'}`}
+                      placeholder="Brief purpose of the email"
+                    />
+                  </div>
+                  {addErrors.purpose && <p className="text-red-600 text-xs mt-1">{addErrors.purpose}</p>}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <input
+                      type="date"
+                      value={addForm.date}
+                      onChange={(e) => setAddForm((f) => ({ ...f, date: e.target.value }))}
+                      className="w-full pl-10 pr-4 py-3 border-1 border-gray-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Screenshot (Image/PDF)</label>
+                  <div className="relative">
+                    <FileText className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <input
+                      type="file"
+                      accept="image/*,.pdf"
+                      onChange={(e) => setScreenshotFile(e.target.files?.[0] || null)}
+                      className="w-full pl-10 pr-4 py-3 border-1 border-gray-200 rounded-xl text-sm text-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                    />
+                  </div>
+                </div>
               </div>
               {addErrors.submit && <p className="text-red-600 text-sm">{addErrors.submit}</p>}
-              <div className="flex gap-2 pt-2">
-                <button type="button" onClick={() => setShowAddModal(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
-                <button type="submit" disabled={addSubmitting} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
-                  {addSubmitting ? 'Saving...' : 'Log Email'}
-                </button>
+              <div className="flex gap-2 pt-2 justify-end">
+                <button type="button" onClick={() => setShowAddModal(false)} className="px-6 py-2.5 rounded-xl border border-red-400 text-red-500 hover:bg-red-500 hover:text-white transition-all duration-200 cursor-pointer">Cancel</button>
+                <button type="submit" disabled={addSubmitting} className="px-6 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50">{addSubmitting ? 'Saving...' : 'Log Email'}</button>
               </div>
             </form>
           </div>
@@ -375,39 +388,59 @@ export default function MyEmailLogs() {
       {/* View Email Modal */}
       {showViewModal && selectedEmail && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => { setShowViewModal(false); setSelectedEmail(null); }}>
-          <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4">
+          <div className="bg-white rounded-2xl border border-gray-200 max-w-lg w-full overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 bg-blue-600 text-white rounded-t-2xl">
               <h3 className="text-lg font-semibold">Email Log Details</h3>
-              <button type="button" onClick={() => { setShowViewModal(false); setSelectedEmail(null); }} className="p-2 rounded-lg hover:bg-gray-100"><X className="w-5 h-5" /></button>
+              <button type="button" onClick={() => { setShowViewModal(false); setSelectedEmail(null); }} className="p-2 rounded-lg hover:bg-white/10 cursor-pointer text-white"><X className="w-5 h-5" /></button>
             </div>
-            <div className="space-y-3 text-sm">
-              <p><span className="font-medium text-gray-600">Email:</span> {selectedEmail.email || '—'}</p>
-              <p><span className="font-medium text-gray-600">Purpose:</span> {selectedEmail.purpose || '—'}</p>
-              <p><span className="font-medium text-gray-600">Date:</span> {getEmailDate(selectedEmail) || '—'}</p>
-              {(selectedEmail.screenshot || selectedEmail.screenshotUrl) && (
-                <div>
-                  <span className="font-medium text-gray-600 block mb-2">Screenshot</span>
-                  <div className="rounded-lg border border-gray-200 overflow-hidden bg-gray-50">
-                    {/\.(pdf|PDF)$/.test(selectedEmail.screenshotUrl || selectedEmail.screenshot || '') ? (
-                      <a href={selectedEmail.screenshotUrl || selectedEmail.screenshot} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 p-4 text-blue-600 hover:underline">
-                        <FileText size={20} /> Open PDF
-                      </a>
-                    ) : (
-                      <>
-                        <img
-                          src={selectedEmail.screenshotUrl || selectedEmail.screenshot}
-                          alt="Screenshot"
-                          className="w-full max-h-[280px] object-contain"
-                        />
-                        <a href={selectedEmail.screenshotUrl || selectedEmail.screenshot} target="_blank" rel="noreferrer" className="block text-center py-2 text-blue-600 hover:underline text-xs">Open in new tab</a>
-                      </>
-                    )}
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="md:col-span-2 flex items-center gap-3 p-3 border border-gray-100 rounded-xl">
+                  <Mail className="text-gray-400" size={18} />
+                  <div>
+                    <div className="text-xs text-gray-500">Email</div>
+                    <div className="text-sm font-medium text-gray-800 break-all">{selectedEmail.email || '—'}</div>
                   </div>
                 </div>
-              )}
-            </div>
-            <div className="mt-6">
-              <button type="button" onClick={() => { setShowViewModal(false); setSelectedEmail(null); }} className="w-full px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200">Close</button>
+                <div className="md:col-span-2 flex items-center gap-3 p-3 border border-gray-100 rounded-xl">
+                  <FileText className="text-gray-400" size={18} />
+                  <div>
+                    <div className="text-xs text-gray-500">Purpose</div>
+                    <div className="text-sm font-medium text-gray-800">{selectedEmail.purpose || '—'}</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-3 border border-gray-100 rounded-xl">
+                  <Calendar className="text-gray-400" size={18} />
+                  <div>
+                    <div className="text-xs text-gray-500">Date</div>
+                    <div className="text-sm font-medium text-gray-800">{getEmailDate(selectedEmail) || '—'}</div>
+                  </div>
+                </div>
+                {(selectedEmail.screenshot || selectedEmail.screenshotUrl) && (
+                  <div className="p-3 border border-gray-100 rounded-xl md:col-span-2">
+                    <div className="text-xs text-gray-500 mb-2 flex items-center gap-2"><FileText size={16} className="text-gray-400" /> Screenshot</div>
+                    <div className="rounded-lg border border-gray-200 overflow-hidden bg-gray-50">
+                      {/\.(pdf|PDF)$/.test(selectedEmail.screenshotUrl || selectedEmail.screenshot || '') ? (
+                        <a href={selectedEmail.screenshotUrl || selectedEmail.screenshot} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 p-4 text-blue-600 hover:underline">
+                          <FileText size={20} /> Open PDF
+                        </a>
+                      ) : (
+                        <>
+                          <img
+                            src={selectedEmail.screenshotUrl || selectedEmail.screenshot}
+                            alt="Screenshot"
+                            className="w-full max-h-[280px] object-contain"
+                          />
+                          <a href={selectedEmail.screenshotUrl || selectedEmail.screenshot} target="_blank" rel="noreferrer" className="block text-center py-2 text-blue-600 hover:underline text-xs">Open in new tab</a>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="mt-6 flex gap-2 justify-end">
+                <button type="button" onClick={() => { setShowViewModal(false); setSelectedEmail(null); }} className="px-6 py-2.5 rounded-xl border border-red-400 text-red-500 hover:bg-red-500 hover:text-white transition-all duration-200 cursor-pointer">Close</button>
+              </div>
             </div>
           </div>
         </div>

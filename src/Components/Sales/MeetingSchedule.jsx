@@ -4,9 +4,13 @@ import {
   Search,
   PlusCircle,
   Calendar,
+  Clock,
   ChevronLeft,
   ChevronRight,
   X,
+  User as UserIcon,
+  MapPin,
+  MessageSquare,
   Link as LinkIcon
 } from 'lucide-react';
 import { format, addDays } from 'date-fns';
@@ -252,7 +256,7 @@ export default function MeetingSchedule() {
               <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-gray-700 font-bold text-2xl">
                 {totalMeetings}
               </div>
-              <div className="absolute inset-0 flex items-center justify-center text-gray-700 font-semibold">
+              <div className="absolute inset-0 flex items-center justify-center text-gray-700 font-semibold text-lg">
                 Total Meetings
               </div>
             </div>
@@ -260,7 +264,7 @@ export default function MeetingSchedule() {
               <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-gray-700 font-bold text-2xl">
                 {todayMeetings}
               </div>
-              <div className="absolute inset-0 flex items-center justify-center text-gray-700 font-semibold">
+              <div className="absolute inset-0 flex items-center justify-center text-gray-700 font-semibold text-lg">
                 Today
               </div>
             </div>
@@ -273,7 +277,7 @@ export default function MeetingSchedule() {
                 setAddErrors({});
                 setShowAddModal(true);
               }}
-              className="flex items-center justify-between gap-4 px-6 h-[40px] bg-blue-600 rounded-lg text-white font-semibold hover:bg-blue-700 transition w-full"
+              className="flex items-center justify-between gap-4 px-6 h-[40px] bg-blue-600 rounded-lg text-white font-semibold hover:bg-blue-700 transition w-full cursor-pointer"
             >
               <span>Add Meeting</span>
               <PlusCircle size={20} />
@@ -282,7 +286,7 @@ export default function MeetingSchedule() {
               <button
                 type="button"
                 onClick={() => setShowPresetMenu((v) => !v)}
-                className="w-full text-left px-4 h-[45px] border border-gray-200 rounded-lg bg-white flex items-center justify-between text-gray-700 font-medium hover:border-gray-300 transition-colors"
+                className="w-full text-left px-4 h-[45px] border border-gray-200 rounded-lg bg-white flex items-center justify-between text-gray-700 font-medium hover:border-gray-300 transition-colors cursor-pointer"
               >
                 <span>
                   {range.startDate && range.endDate
@@ -310,9 +314,9 @@ export default function MeetingSchedule() {
             placeholder="Search Meetings"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-6 pr-12 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-colors text-gray-600 placeholder-gray-400"
+            className="w-full pl-8 pr-12 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-colors text-gray-600 placeholder-gray-400"
           />
-          <Search className="absolute right-6 top-1/2 transform -translate-y-1/2 text-gray-400" size={24} />
+          <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
         </div>
       </div>
 
@@ -327,30 +331,30 @@ export default function MeetingSchedule() {
               <table className="w-full">
                 <thead className="bg-white border-b border-gray-200">
                   <tr>
-                    <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">With</th>
-                    <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Subject</th>
-                    <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Date & Time</th>
-                    <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Link</th>
-                    <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Status</th>
-                    <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Rescheduled</th>
-                    <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Action</th>
+                   <th className="text-left py-4 px-4 text-gray-600 font-semibold">With</th>
+                    <th className="text-left py-4 px-4 text-gray-600 font-semibold">Subject</th>
+                    <th className="text-left py-4 px-4 text-gray-600 font-semibold">Date & Time</th>
+                    <th className="text-left py-4 px-4 text-gray-600 font-semibold">Link</th>
+                    <th className="text-left py-4 px-4 text-gray-600 font-semibold">Status</th>
+                    <th className="text-left py-4 px-4 text-gray-600 font-semibold">Rescheduled</th>
+                    <th className="text-left py-4 px-4 text-gray-600 font-semibold">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {currentMeetings.map((m) => (
                     <tr key={m._id} className="border-b border-gray-100 hover:bg-gray-50">
-                      <td className="py-4 px-4 text-sm font-medium text-gray-800">{m.meetingWith || '—'}</td>
-                      <td className="py-4 px-4 text-sm font-medium text-gray-800">{m.subject || '—'}</td>
-                      <td className="py-4 px-4 text-sm text-gray-700">{getMeetingDate(m) || '—'} {m.meetingTime ? m.meetingTime : ''}</td>
+                      <td className="py-4 px-4 font-medium text-gray-700">{m.meetingWith || '—'}</td>
+                      <td className="py-4 px-4 font-medium text-gray-700">{m.subject || '—'}</td>
+                      <td className="py-4 px-4 font-medium text-gray-700">{getMeetingDate(m) || '—'} {m.meetingTime ? m.meetingTime : ''}</td>
                       <td className="py-4 px-4">
                         {m.meetingLink ? (
-                          <a href={m.meetingLink} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline flex items-center gap-1">
+                          <a href={m.meetingLink} target="_blank" rel="noreferrer" className="text-blue-700 font-medium hover:underline flex items-center gap-1">
                             <LinkIcon size={14} /> Link
                           </a>
                         ) : '—'}
                       </td>
                       <td className="py-4 px-4">
-                        <span className={`px-2 py-1 rounded text-xs font-medium capitalize ${
+                        <span className={`px-2 py-1 rounded font-medium text-sm capitalize ${
                           m.status === 'completed' ? 'bg-green-100 text-green-800' :
                           m.status === 'cancelled' ? 'bg-red-100 text-red-800' :
                           m.status === 'rescheduled' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
@@ -358,15 +362,28 @@ export default function MeetingSchedule() {
                           {m.status || 'scheduled'}
                         </span>
                       </td>
-                      <td className="py-4 px-4 text-sm text-gray-600">
+                      <td className="py-4 px-4 font-medium text-gray-700">
                         {m.status === 'rescheduled' && (m.rescheduledDate || m.rescheduledTime)
                           ? `${getRescheduledDate(m) || ''} ${m.rescheduledTime || ''}`.trim() || '—'
                           : '—'}
                       </td>
                       <td className="py-4 px-4">
                         <div className="flex gap-2">
-                          <button type="button" onClick={() => openView(m)} className="px-3 py-1 rounded border border-blue-500 text-blue-600 text-sm font-medium hover:bg-blue-50">View</button>
-                          <button type="button" onClick={() => openEdit(m)} className="px-3 py-1 rounded border border-amber-500 text-amber-600 text-sm font-medium hover:bg-amber-50">Edit</button>
+                          <button
+  type="button"
+  onClick={() => openView(m)}
+  className="px-3 py-1 rounded-lg border border-blue-500 text-blue-500 text-base font-medium hover:bg-blue-500 hover:text-white transition-all duration-200 cursor-pointer"
+>
+  View
+</button>
+
+<button
+  type="button"
+  onClick={() => openEdit(m)}
+  className="px-3 py-1 rounded-lg border border-amber-500 text-amber-500 text-base font-medium hover:bg-amber-500 hover:text-white transition-all duration-200 cursor-pointer"
+>
+  Edit
+</button>
                         </div>
                       </td>
                     </tr>
@@ -391,15 +408,15 @@ export default function MeetingSchedule() {
             Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, filteredMeetings.length)} of {filteredMeetings.length} meetings
           </div>
           <div className="flex gap-1 items-center">
-            <button type="button" disabled={currentPage === 1} onClick={() => setCurrentPage((p) => p - 1)} className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium">
+            <button type="button" disabled={currentPage === 1} onClick={() => setCurrentPage((p) => p - 1)} className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed text-base font-medium cursor-pointer">
               <ChevronLeft size={18} /> Previous
             </button>
             <div className="flex items-center gap-1 mx-4">
               {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                <button key={p} type="button" onClick={() => setCurrentPage(p)} className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium ${currentPage === p ? 'bg-white border border-gray-800 text-gray-900' : 'text-gray-600 hover:bg-gray-50'}`}>{p}</button>
+                <button key={p} type="button" onClick={() => setCurrentPage(p)} className={`w-8 h-8 flex items-center justify-center rounded-lg text-base cursor-pointer font-medium ${currentPage === p ? 'bg-white border border-gray-800 text-gray-900' : 'text-gray-600 hover:bg-gray-50'}`}>{p}</button>
               ))}
             </div>
-            <button type="button" disabled={currentPage === totalPages} onClick={() => setCurrentPage((p) => p + 1)} className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium">
+            <button type="button" disabled={currentPage === totalPages} onClick={() => setCurrentPage((p) => p + 1)} className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed text-base font-medium cursor-pointer">
               Next <ChevronRight size={18} />
             </button>
           </div>
@@ -409,43 +426,102 @@ export default function MeetingSchedule() {
       {/* Add Meeting Modal */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => setShowAddModal(false)}>
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 py-4 border-b">
-              <h3 className="text-lg font-semibold">Create Meeting</h3>
-              <button type="button" onClick={() => setShowAddModal(false)} className="p-2 rounded-lg hover:bg-gray-100"><X className="w-5 h-5" /></button>
+          <div className="bg-white rounded-2xl border border-gray-200 max-w-xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 bg-blue-600 text-white rounded-t-2xl">
+              <h3 className="text-xl font-semibold">Create Meeting</h3>
+              <button type="button" onClick={() => setShowAddModal(false)} className="p-2 rounded-lg hover:bg-white/10 cursor-pointer text-white"><X className="w-6 h-6" /></button>
             </div>
-            <form onSubmit={handleAddSubmit} className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Subject *</label>
-                <input type="text" value={addForm.subject} onChange={(e) => setAddForm((f) => ({ ...f, subject: e.target.value }))} className="w-full px-4 py-2 border border-gray-300 rounded-lg" placeholder="Meeting subject" />
-                {addErrors.subject && <p className="text-red-600 text-xs mt-1">{addErrors.subject}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Meeting Date *</label>
-                <input type="date" value={addForm.meetingDate} onChange={(e) => setAddForm((f) => ({ ...f, meetingDate: e.target.value }))} className="w-full px-4 py-2 border border-gray-300 rounded-lg" />
-                {addErrors.meetingDate && <p className="text-red-600 text-xs mt-1">{addErrors.meetingDate}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Meeting Time *</label>
-                <input type="time" value={addForm.meetingTime} onChange={(e) => setAddForm((f) => ({ ...f, meetingTime: e.target.value }))} className="w-full px-4 py-2 border border-gray-300 rounded-lg" />
-                {addErrors.meetingTime && <p className="text-red-600 text-xs mt-1">{addErrors.meetingTime}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Meeting With</label>
-                <input type="text" value={addForm.meetingWith} onChange={(e) => setAddForm((f) => ({ ...f, meetingWith: e.target.value }))} className="w-full px-4 py-2 border border-gray-300 rounded-lg" placeholder="Name or email" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-                <input type="text" value={addForm.location} onChange={(e) => setAddForm((f) => ({ ...f, location: e.target.value }))} className="w-full px-4 py-2 border border-gray-300 rounded-lg" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Meeting Link</label>
-                <input type="url" value={addForm.meetingLink} onChange={(e) => setAddForm((f) => ({ ...f, meetingLink: e.target.value }))} className="w-full px-4 py-2 border border-gray-300 rounded-lg" placeholder="https://..." />
+            <form onSubmit={handleAddSubmit} className="p-6 space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Subject <span className="text-red-500">*</span></label>
+                  <div className="relative">
+                    <MessageSquare className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <input
+                      type="text"
+                      value={addForm.subject}
+                      onChange={(e) => setAddForm((f) => ({ ...f, subject: e.target.value }))}
+                      className="w-full pl-10 pr-4 py-3 border-1 border-gray-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                      placeholder="Meeting subject"
+                    />
+                  </div>
+                  {addErrors.subject && <p className="text-red-600 text-xs mt-1">{addErrors.subject}</p>}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Meeting Date <span className="text-red-500">*</span></label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <input
+                      type="date"
+                      value={addForm.meetingDate}
+                      onChange={(e) => setAddForm((f) => ({ ...f, meetingDate: e.target.value }))}
+                      className="w-full pl-10 pr-4 py-3 border-1 border-gray-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                    />
+                  </div>
+                  {addErrors.meetingDate && <p className="text-red-600 text-xs mt-1">{addErrors.meetingDate}</p>}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Meeting Time <span className="text-red-500">*</span></label>
+                  <div className="relative">
+                    <Clock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <input
+                      type="time"
+                      value={addForm.meetingTime}
+                      onChange={(e) => setAddForm((f) => ({ ...f, meetingTime: e.target.value }))}
+                      className="w-full pl-10 pr-4 py-3 border-1 border-gray-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                    />
+                  </div>
+                  {addErrors.meetingTime && <p className="text-red-600 text-xs mt-1">{addErrors.meetingTime}</p>}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Meeting With</label>
+                  <div className="relative">
+                    <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <input
+                      type="text"
+                      value={addForm.meetingWith}
+                      onChange={(e) => setAddForm((f) => ({ ...f, meetingWith: e.target.value }))}
+                      className="w-full pl-10 pr-4 py-3 border-1 border-gray-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                      placeholder="Name or email"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                  <div className="relative">
+                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <input
+                      type="text"
+                      value={addForm.location}
+                      onChange={(e) => setAddForm((f) => ({ ...f, location: e.target.value }))}
+                      className="w-full pl-10 pr-4 py-3 border-1 border-gray-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                    />
+                  </div>
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Meeting Link</label>
+                  <div className="relative">
+                    <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <input
+                      type="url"
+                      value={addForm.meetingLink}
+                      onChange={(e) => setAddForm((f) => ({ ...f, meetingLink: e.target.value }))}
+                      className="w-full pl-10 pr-4 py-3 border-1 border-gray-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                      placeholder="https://..."
+                    />
+                  </div>
+                </div>
               </div>
               {addErrors.submit && <p className="text-red-600 text-sm">{addErrors.submit}</p>}
-              <div className="flex gap-2 pt-2">
-                <button type="button" onClick={() => setShowAddModal(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
-                <button type="submit" disabled={addSubmitting} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">{addSubmitting ? 'Creating...' : 'Create'}</button>
+              <div className="flex gap-3 pt-2 justify-end">
+           <button
+  type="button"
+  onClick={() => setShowAddModal(false)}
+  className="px-6 py-2.5 rounded-xl border border-red-400 text-red-500 hover:bg-red-500 hover:text-white transition-all duration-200 cursor-pointer"
+>
+  Cancel
+</button>
+                <button type="submit" disabled={addSubmitting} className="px-6 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 cursor-pointer">{addSubmitting ? 'Creating...' : 'Create'}</button>
               </div>
             </form>
           </div>
@@ -455,31 +531,97 @@ export default function MeetingSchedule() {
       {/* View Meeting Modal */}
       {showViewModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => { setShowViewModal(false); setViewMeetingDetail(null); setSelectedMeeting(null); }}>
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4">
+          <div className="bg-white rounded-2xl border border-gray-200 max-w-md w-full overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 bg-blue-600 text-white rounded-t-2xl">
               <h3 className="text-lg font-semibold">Meeting Details</h3>
-              <button type="button" onClick={() => { setShowViewModal(false); setViewMeetingDetail(null); setSelectedMeeting(null); }} className="p-2 rounded-lg hover:bg-gray-100"><X className="w-5 h-5" /></button>
+              <button type="button" onClick={() => { setShowViewModal(false); setViewMeetingDetail(null); setSelectedMeeting(null); }} className="p-2 rounded-lg hover:bg-white/10 cursor-pointer text-white"><X className="w-5 h-5" /></button>
             </div>
-            {(() => {
-              const m = viewMeetingDetail || selectedMeeting;
-              if (!m) return <p className="text-gray-500">No details</p>;
-              return (
-                <div className="space-y-3 text-sm">
-                  <p><span className="font-medium text-gray-600">With:</span> {m.meetingWith || '—'}</p>
-                  <p><span className="font-medium text-gray-600">Subject:</span> {m.subject || '—'}</p>
-                  <p><span className="font-medium text-gray-600">Date & Time:</span> {getMeetingDate(m)} {m.meetingTime || ''}</p>
-                  <p><span className="font-medium text-gray-600">Location:</span> {m.location || '—'}</p>
-                  {m.meetingLink && <p><span className="font-medium text-gray-600">Link:</span> <a href={m.meetingLink} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">{m.meetingLink}</a></p>}
-                  <p><span className="font-medium text-gray-600">Status:</span> <span className="capitalize">{m.status || 'scheduled'}</span></p>
-                  {m.status === 'rescheduled' && (m.rescheduledDate || m.rescheduledTime) && (
-                    <p><span className="font-medium text-gray-600">Rescheduled:</span> {getRescheduledDate(m)} {m.rescheduledTime || ''}</p>
-                  )}
-                </div>
-              );
-            })()}
-            <div className="mt-6 flex gap-2">
-              <button type="button" onClick={() => { setShowViewModal(false); openEdit(selectedMeeting); }} className="flex-1 px-4 py-2 border border-amber-500 text-amber-600 rounded-lg hover:bg-amber-50">Edit</button>
-              <button type="button" onClick={() => { setShowViewModal(false); setViewMeetingDetail(null); setSelectedMeeting(null); }} className="flex-1 px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200">Close</button>
+            <div className="p-6">
+              {(() => {
+                const m = viewMeetingDetail || selectedMeeting;
+                if (!m) return <p className="text-gray-500">No details</p>;
+                return (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="flex items-center gap-3 p-3 border border-gray-100 rounded-xl">
+                      <UserIcon className="text-gray-400" size={18} />
+                      <div>
+                        <div className="text-xs text-gray-500">With</div>
+                        <div className="text-sm font-medium text-gray-800">{m.meetingWith || '—'}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 p-3 border border-gray-100 rounded-xl md:col-span-1">
+                      <MessageSquare className="text-gray-400" size={18} />
+                      <div>
+                        <div className="text-xs text-gray-500">Subject</div>
+                        <div className="text-sm font-medium text-gray-800">{m.subject || '—'}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 p-3 border border-gray-100 rounded-xl md:col-span-1">
+                      <Calendar className="text-gray-400" size={18} />
+                      <div>
+                        <div className="text-xs text-gray-500">Date & Time</div>
+                        <div className="text-sm font-medium text-gray-800">{getMeetingDate(m)} {m.meetingTime || ''}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 p-3 border border-gray-100 rounded-xl md:col-span-1">
+                      <MapPin className="text-gray-400" size={18} />
+                      <div>
+                        <div className="text-xs text-gray-500">Location</div>
+                        <div className="text-sm font-medium text-gray-800">{m.location || '—'}</div>
+                      </div>
+                    </div>
+                    {m.meetingLink && (
+                      <div className="flex items-center gap-3 p-3 border border-gray-100 rounded-xl md:col-span-2">
+                        <LinkIcon className="text-gray-400" size={18} />
+                        <div>
+                          <div className="text-xs text-gray-500">Link</div>
+                          <a href={m.meetingLink} target="_blank" rel="noreferrer" className="text-sm font-medium text-blue-600 hover:underline break-all">
+                            {m.meetingLink}
+                          </a>
+                        </div>
+                      </div>
+                    )}
+                    <div className="flex items-start gap-3 p-3 border border-gray-100 rounded-xl md:col-span-1">
+  <div className="w-4 h-4 rounded-full bg-blue-200 shrink-0 mt-0.5" />
+  <div>
+    <div className="text-xs text-gray-500 mb-1.5">Status</div>
+    <span className={`px-3 py-1 rounded-full text-xs font-medium capitalize border ${
+      m.status === 'completed' ? 'bg-green-50 text-green-700 border-green-300' :
+      m.status === 'cancelled' ? 'bg-red-50 text-red-700 border-red-300' :
+      m.status === 'rescheduled' ? 'bg-amber-50 text-amber-700 border-amber-300' : 'bg-blue-50 text-blue-700 border-blue-300'
+    }`}>
+      {m.status || 'scheduled'}
+    </span>
+  </div>
+</div>
+                    {m.status === 'rescheduled' && (m.rescheduledDate || m.rescheduledTime) && (
+                      <div className="flex items-center gap-3 p-3 border border-gray-100 rounded-xl md:col-span-1">
+                        <Clock className="text-gray-400" size={18} />
+                        <div>
+                          <div className="text-xs text-gray-500">Rescheduled</div>
+                          <div className="text-sm font-medium text-gray-800">{getRescheduledDate(m)} {m.rescheduledTime || ''}</div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+              <div className="mt-6 flex gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={() => { setShowViewModal(false); setViewMeetingDetail(null); setSelectedMeeting(null); }}
+                  className="px-6 py-2.5 rounded-xl border border-red-400 text-red-500 hover:bg-red-500 hover:text-white transition-all duration-200 cursor-pointer"
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowViewModal(false); openEdit(selectedMeeting); }}
+                  className="px-6 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 cursor-pointer"
+                >
+                  Edit
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -488,63 +630,151 @@ export default function MeetingSchedule() {
       {/* Edit Meeting Modal */}
       {showEditModal && selectedMeeting && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => setShowEditModal(false)}>
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 py-4 border-b">
+          <div className="bg-white rounded-2xl border border-gray-200 max-w-xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 bg-blue-600 text-white rounded-t-2xl">
               <h3 className="text-lg font-semibold">Update Meeting</h3>
-              <button type="button" onClick={() => setShowEditModal(false)} className="p-2 rounded-lg hover:bg-gray-100"><X className="w-5 h-5" /></button>
+              <button type="button" onClick={() => setShowEditModal(false)} className="p-2 rounded-lg hover:bg-white/10 text-white cursor-pointer"><X className="w-5 h-5" /></button>
             </div>
-            <form onSubmit={handleEditSubmit} className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Subject *</label>
-                <input type="text" value={editForm.subject} onChange={(e) => setEditForm((f) => ({ ...f, subject: e.target.value }))} className="w-full px-4 py-2 border border-gray-300 rounded-lg" />
-                {editErrors.subject && <p className="text-red-600 text-xs mt-1">{editErrors.subject}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Meeting Date *</label>
-                <input type="date" value={editForm.meetingDate} onChange={(e) => setEditForm((f) => ({ ...f, meetingDate: e.target.value }))} className="w-full px-4 py-2 border border-gray-300 rounded-lg" />
-                {editErrors.meetingDate && <p className="text-red-600 text-xs mt-1">{editErrors.meetingDate}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Meeting Time *</label>
-                <input type="time" value={editForm.meetingTime} onChange={(e) => setEditForm((f) => ({ ...f, meetingTime: e.target.value }))} className="w-full px-4 py-2 border border-gray-300 rounded-lg" />
-                {editErrors.meetingTime && <p className="text-red-600 text-xs mt-1">{editErrors.meetingTime}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Meeting With</label>
-                <input type="text" value={editForm.meetingWith} onChange={(e) => setEditForm((f) => ({ ...f, meetingWith: e.target.value }))} className="w-full px-4 py-2 border border-gray-300 rounded-lg" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-                <input type="text" value={editForm.location} onChange={(e) => setEditForm((f) => ({ ...f, location: e.target.value }))} className="w-full px-4 py-2 border border-gray-300 rounded-lg" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Meeting Link</label>
-                <input type="url" value={editForm.meetingLink} onChange={(e) => setEditForm((f) => ({ ...f, meetingLink: e.target.value }))} className="w-full px-4 py-2 border border-gray-300 rounded-lg" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                <select value={editForm.status} onChange={(e) => setEditForm((f) => ({ ...f, status: e.target.value }))} className="w-full px-4 py-2 border border-gray-300 rounded-lg">
-                  {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </div>
-              {editForm.status === 'rescheduled' && (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Rescheduled Date *</label>
-                    <input type="date" value={editForm.rescheduledDate} onChange={(e) => setEditForm((f) => ({ ...f, rescheduledDate: e.target.value }))} className="w-full px-4 py-2 border border-gray-300 rounded-lg" />
-                    {editErrors.rescheduledDate && <p className="text-red-600 text-xs mt-1">{editErrors.rescheduledDate}</p>}
+            <form onSubmit={handleEditSubmit} className="p-6 space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Subject <span className="text-red-500">*</span></label>
+                  <div className="relative">
+                    <MessageSquare className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <input
+                      type="text"
+                      value={editForm.subject}
+                      onChange={(e) => setEditForm((f) => ({ ...f, subject: e.target.value }))}
+                      className="w-full pl-10 pr-4 py-3 border-1 border-gray-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                      placeholder="Meeting subject"
+                    />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Rescheduled Time *</label>
-                    <input type="time" value={editForm.rescheduledTime} onChange={(e) => setEditForm((f) => ({ ...f, rescheduledTime: e.target.value }))} className="w-full px-4 py-2 border border-gray-300 rounded-lg" />
-                    {editErrors.rescheduledTime && <p className="text-red-600 text-xs mt-1">{editErrors.rescheduledTime}</p>}
+                  {editErrors.subject && <p className="text-red-600 text-xs mt-1">{editErrors.subject}</p>}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Meeting Date <span className="text-red-500">*</span></label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <input
+                      type="date"
+                      value={editForm.meetingDate}
+                      onChange={(e) => setEditForm((f) => ({ ...f, meetingDate: e.target.value }))}
+                      className="w-full pl-10 pr-4 py-3 border-1 border-gray-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                    />
                   </div>
-                </>
-              )}
+                  {editErrors.meetingDate && <p className="text-red-600 text-xs mt-1">{editErrors.meetingDate}</p>}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Meeting Time <span className="text-red-500">*</span></label>
+                  <div className="relative">
+                    <Clock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <input
+                      type="time"
+                      value={editForm.meetingTime}
+                      onChange={(e) => setEditForm((f) => ({ ...f, meetingTime: e.target.value }))}
+                      className="w-full pl-10 pr-4 py-3 border-1 border-gray-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                    />
+                  </div>
+                  {editErrors.meetingTime && <p className="text-red-600 text-xs mt-1">{editErrors.meetingTime}</p>}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Meeting With</label>
+                  <div className="relative">
+                    <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <input
+                      type="text"
+                      value={editForm.meetingWith}
+                      onChange={(e) => setEditForm((f) => ({ ...f, meetingWith: e.target.value }))}
+                      className="w-full pl-10 pr-4 py-3 border-1 border-gray-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                      placeholder="Name or email"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                  <div className="relative">
+                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <input
+                      type="text"
+                      value={editForm.location}
+                      onChange={(e) => setEditForm((f) => ({ ...f, location: e.target.value }))}
+                      className="w-full pl-10 pr-4 py-3 border-1 border-gray-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                    />
+                  </div>
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Meeting Link</label>
+                  <div className="relative">
+                    <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <input
+                      type="url"
+                      value={editForm.meetingLink}
+                      onChange={(e) => setEditForm((f) => ({ ...f, meetingLink: e.target.value }))}
+                      className="w-full pl-10 pr-4 py-3 border-1 border-gray-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                      placeholder="https://..."
+                    />
+                  </div>
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                  <div className="relative">
+                    <ChevronLeft className="hidden" />
+                    <select
+                      value={editForm.status}
+                      onChange={(e) => setEditForm((f) => ({ ...f, status: e.target.value }))}
+                      className="w-full px-4 py-3 border-1 border-gray-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                    >
+                      {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                </div>
+                {editForm.status === 'rescheduled' && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Rescheduled Date <span className="text-red-500">*</span></label>
+                      <div className="relative">
+                        <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                        <input
+                          type="date"
+                          value={editForm.rescheduledDate}
+                          onChange={(e) => setEditForm((f) => ({ ...f, rescheduledDate: e.target.value }))}
+                          className="w-full pl-10 pr-4 py-3 border-1 border-gray-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                        />
+                      </div>
+                      {editErrors.rescheduledDate && <p className="text-red-600 text-xs mt-1">{editErrors.rescheduledDate}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Rescheduled Time <span className="text-red-500">*</span></label>
+                      <div className="relative">
+                        <Clock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                        <input
+                          type="time"
+                          value={editForm.rescheduledTime}
+                          onChange={(e) => setEditForm((f) => ({ ...f, rescheduledTime: e.target.value }))}
+                          className="w-full pl-10 pr-4 py-3 border-1 border-gray-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                        />
+                      </div>
+                      {editErrors.rescheduledTime && <p className="text-red-600 text-xs mt-1">{editErrors.rescheduledTime}</p>}
+                    </div>
+                  </>
+                )}
+              </div>
               {editErrors.submit && <p className="text-red-600 text-sm">{editErrors.submit}</p>}
-              <div className="flex gap-2 pt-2">
-                <button type="button" onClick={() => setShowEditModal(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
-                <button type="submit" disabled={editSubmitting} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">{editSubmitting ? 'Updating...' : 'Update'}</button>
+              <div className="flex gap-2 pt-2 justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="px-6 py-2.5 rounded-xl border border-red-400 text-red-500 hover:bg-red-500 hover:text-white transition-all duration-200 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={editSubmitting}
+                  className="px-6 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 cursor-pointer"
+                >
+                  {editSubmitting ? 'Updating...' : 'Update'}
+                </button>
               </div>
             </form>
           </div>

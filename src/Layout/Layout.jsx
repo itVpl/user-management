@@ -238,7 +238,10 @@ const Layout = () => {
     <div className="min-h-screen bg-gray-50">
       <Sidebar />
       {!isVPL100 && <Topbar />}
-      <main className={`${isVPL100 ? 'ml-20 md:ml-[296px] mr-5 pt-4 px-4 pb-4' : 'ml-20 md:ml-[296px] mr-5 pt-24 px-4 pb-4'}`}> {/* Increased pt-20 to pt-24 to account for TopBar at top-6 + h-16 */} 
+      <main
+        className={`${isVPL100 ? 'mr-5 pt-4 pr-4 pb-4' : 'mr-5 pt-24 pr-4 pb-4'}`}
+        style={{ marginLeft: 'var(--sidebar-offset, 296px)', paddingLeft: '8px', transition: 'margin-left 250ms ease' }}
+      > 
         <Outlet />
       </main>
 
