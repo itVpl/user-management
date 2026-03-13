@@ -5,6 +5,8 @@ import { AdminIcon } from '../../assets/image';
 import { ArrowDown } from '../../assets/image';
 import AddUserModal from './AddUser';
 import API_CONFIG from '../../config/api.js';
+import alertify from 'alertifyjs';
+import 'alertifyjs/build/css/alertify.css';
 
 // Searchable dropdown (select2-style) for filters
 const SearchableSelect = ({ value, onChange, options, placeholder = 'Select...', className = '' }) => {
@@ -119,9 +121,6 @@ const ManageUser = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [confirmAction, setConfirmAction] = useState('');
   const [showViewModal, setShowViewModal] = useState(false);
   const [viewingUser, setViewingUser] = useState(null);
   const [bgVerificationEmail, setBgVerificationEmail] = useState('');
@@ -170,46 +169,39 @@ const ManageUser = () => {
   };
 
   const openConfirmStatus = (user) => {
-    setSelectedUser(user);
-    setConfirmAction(user.isActive ? 'deactivate' : 'activate');
-    setShowConfirmModal(true);
+    const action = user.isActive ? 'deactivate' : 'activate';
+    const msg = `Are you sure you want to ${action} user ${user.employeeName}?`;
+    alertify.confirm('Confirm Status Change', msg, () => confirmStatusChange(user), () => {});
   };
 
-  const confirmStatusChange = async () => {
-    if (!selectedUser) return;
+  const confirmStatusChange = async (userToUpdate) => {
+    if (!userToUpdate) return;
 
     const updatedUsers = [...users];
-    const user = selectedUser;
+    const user = userToUpdate;
     const newStatus = user.isActive ? 'inactive' : 'active';
 
     try {
-      const response = await axios.patch(
+      await axios.patch(
         `${API_CONFIG.BASE_URL}/api/v1/inhouseUser/${user.empId}/status`,
         { status: newStatus },
         { withCredentials: true }
       );
 
-      // Update the specific user's status in local state immediately
-      const userToUpdate = updatedUsers.find(u => u.empId === user.empId);
-      if (userToUpdate) {
-        userToUpdate.isActive = !userToUpdate.isActive;
+      const userInList = updatedUsers.find(u => u.empId === user.empId);
+      if (userInList) {
+        userInList.isActive = !userInList.isActive;
         setUsers([...updatedUsers]);
         if (viewingUser?.empId === user.empId) {
-          setViewingUser((u) => (u ? { ...u, isActive: userToUpdate.isActive } : u));
+          setViewingUser((u) => (u ? { ...u, isActive: userInList.isActive } : u));
         }
       }
 
-      // Show success popup
       const statusText = newStatus === 'active' ? 'ACTIVE' : 'INACTIVE';
-      // alert(`✅ User ${user.employeeName} is now ${statusText}!`);
-
-      // Close confirmation modal
-      setShowConfirmModal(false);
-      setSelectedUser(null);
-
+      alertify.success(`User ${user.employeeName} is now ${statusText}`);
     } catch (err) {
       console.error('Failed to update status:', err);
-      alert('❌ Failed to update status. Please try again.');
+      alertify.error('Failed to update status. Please try again.');
     }
   };
 
@@ -368,8 +360,7 @@ const ManageUser = () => {
 
       // Optional: toast/message
       if (skipped > 0) {
-        // eslint-disable-next-line no-alert
-        alert(`Downloaded ${added} file(s). Skipped ${skipped} that looked invalid or blocked.`);
+        alertify.success(`Downloaded ${added} file(s). Skipped ${skipped} that looked invalid or blocked.`);
       }
     } catch (err) {
       console.error('ZIP build failed, fallback to individual:', err);
@@ -455,10 +446,10 @@ const ManageUser = () => {
       );
       fetchUsers();
       if (viewingUser?.empId === empId) setViewingUser((u) => (u ? { ...u, role: newRole } : u));
-      alert(`Role updated successfully`);
+      alertify.success('Role updated successfully');
     } catch (error) {
       console.error('Failed to update role:', error);
-      alert(error?.response?.data?.message || 'Failed to update role. Please try again.');
+      alertify.error(error?.response?.data?.message || 'Failed to update role. Please try again.');
     } finally {
       setRoleUpdateLoading(false);
     }
@@ -475,10 +466,10 @@ const ManageUser = () => {
       );
       fetchUsers();
       if (viewingUser?.empId === empId) setViewingUser((u) => (u ? { ...u, managerEmpId } : u));
-      alert('Manager assigned successfully');
+      alertify.success('Manager assigned successfully');
     } catch (error) {
       console.error('Failed to assign manager:', error);
-      alert(error?.response?.data?.message || 'Failed to assign manager. Please try again.');
+      alertify.error(error?.response?.data?.message || 'Failed to assign manager. Please try again.');
     } finally {
       setAssignManagerLoading(false);
     }
@@ -502,13 +493,13 @@ const ManageUser = () => {
         config
       );
 
-      alert('User updated successfully!');
+      alertify.success('User updated successfully!');
       setShowEditModal(false);
       setEditingUser(null);
       fetchUsers(); // Refresh the list
     } catch (error) {
       console.error('Failed to update user:', error);
-      alert(error?.response?.data?.message || 'Failed to update user. Please try again.');
+      alertify.error(error?.response?.data?.message || 'Failed to update user. Please try again.');
     }
   };
 
@@ -540,7 +531,7 @@ const ManageUser = () => {
       );
 
       if (response.data.success) {
-        alert(`✅ Background verification email sent to ${bgVerificationEmail}`);
+        alertify.success(`Background verification email sent to ${bgVerificationEmail}`);
         setBgVerificationEmail('');
       } else {
         setBgVerificationError(response.data.message || 'Failed to send verification email');
@@ -771,58 +762,6 @@ const ManageUser = () => {
             )}
          
 
-      {/* Confirmation Modal */}
-      {showConfirmModal && (
-        <div 
-          className="fixed inset-0 z-[60] flex items-center justify-center p-4 backdrop-blur-sm bg-black/40"
-          onClick={() => setShowConfirmModal(false)}
-        >
-          <div 
-            className="bg-white rounded-2xl border border-gray-200 p-8 max-w-md w-full mx-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="text-center">
-              {/* Icon */}
-              <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                </svg>
-              </div>
-
-              {/* Title */}
-              <h3 className="text-xl font-bold text-gray-800 mb-2">
-                Confirm Status Change
-              </h3>
-
-              {/* Message */}
-              <p className="text-gray-600 mb-6">
-                Are you sure you want to <span className="font-semibold text-blue-600">{confirmAction}</span> user{' '}
-                <span className="font-semibold text-gray-800">{selectedUser?.employeeName}</span>?
-              </p>
-
-              {/* Buttons */}
-              <div className="flex space-x-4">
-                <button
-                  onClick={() => {
-                    setShowConfirmModal(false);
-                    setSelectedUser(null);
-                  }}
-                  className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 hover:border-gray-400 transition-all duration-200"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={confirmStatusChange}
-                  className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold hover:from-blue-700 hover:to-purple-700 transform hover:scale-105 transition-all duration-200"
-                >
-                  Confirm
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* View Employee Modal - same style as DeliveryOrder view popup */}
       {showViewModal && viewingUser && (
         <div
@@ -914,11 +853,7 @@ const ManageUser = () => {
                 <div className="flex flex-wrap gap-3 pt-2 border-t border-indigo-200">
                   <span className="text-sm text-gray-600 self-center">Status:</span>
                   <button
-                    onClick={() => {
-                      setSelectedUser(viewingUser);
-                      setConfirmAction(viewingUser.isActive ? 'deactivate' : 'activate');
-                      setShowConfirmModal(true);
-                    }}
+                    onClick={() => openConfirmStatus(viewingUser)}
                     className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors border ${
                       viewingUser.isActive
                         ? 'border-red-500 text-red-600 bg-white hover:bg-red-500 hover:text-white'
@@ -1163,9 +1098,15 @@ const EditUserModal = ({ user, onClose, onUpdate }) => {
 
   // IFSC regex (SBIN0XXXXXX style)
   const IFSC_PATTERN = /^[A-Z]{4}0[A-Z0-9]{6}$/;
-  const getDesignationForDepartment = (dept, currentDesignation) => {
+  const getDesignationForSalesTier = (tier) => {
+    if (tier === '1' || tier === 1) return 'Sales Executive';
+    if (tier === '2' || tier === 2) return 'Account Manager';
+    if (tier === '3' || tier === 3) return 'Sales TL';
+    return '';
+  };
+  const getDesignationForDepartment = (dept, tier, currentDesignation) => {
     if (dept === 'CMT') return 'CMT Operation';
-    if (dept === 'Sales') return 'Sales Executive';
+    if (dept === 'Sales') return getDesignationForSalesTier(tier) || currentDesignation || '';
     return currentDesignation || '';
   };
 
@@ -1176,7 +1117,7 @@ const EditUserModal = ({ user, onClose, onUpdate }) => {
     alternateNo: user.alternateNo || '',
     emergencyNo: user.emergencyNo || '',
     department: user.department || '',
-    designation: getDesignationForDepartment(user.department, user.designation),
+    designation: getDesignationForDepartment(user.department, user.salesExecutiveTier, user.designation),
     salesExecutiveTier: user.salesExecutiveTier || '',
     basicSalary: user.basicSalary || '',
     sex: user.sex || '',
@@ -1237,16 +1178,28 @@ const EditUserModal = ({ user, onClose, onUpdate }) => {
     if (['employeeName', 'accountHolderName'].includes(name)) {
       v = v.replace(/[^A-Za-z ]/g, '').slice(0, 50); // alphabets + space; max 50
     }
-    // Department dropdown: no extra sanitization; auto-set designation for CMT/Sales
+    // Department dropdown: auto-set designation for CMT; for Sales, clear tier (designation from tier)
     if (name === 'department') {
       setFormData((prev) => {
         const next = { ...prev, department: v };
         if (v === 'CMT') next.designation = 'CMT Operation';
-        else if (v === 'Sales') next.designation = 'Sales Executive';
+        else if (v === 'Sales') {
+          next.salesExecutiveTier = '';
+          next.designation = getDesignationForSalesTier('');
+        }
         if (v !== 'Sales') next.salesExecutiveTier = '';
         return next;
       });
       setErrors((prev) => ({ ...prev, department: '' }));
+      return;
+    }
+    if (name === 'salesExecutiveTier' && formData.department === 'Sales') {
+      setFormData((prev) => ({
+        ...prev,
+        salesExecutiveTier: v,
+        designation: getDesignationForSalesTier(v) || prev.designation,
+      }));
+      setErrors((prev) => ({ ...prev, salesExecutiveTier: '' }));
       return;
     }
     if (name === 'designation') {
@@ -1517,11 +1470,11 @@ const EditUserModal = ({ user, onClose, onUpdate }) => {
     try {
       const submitData = new FormData();
 
-      // Designation: use auto value for CMT/Sales, else form value
+      // Designation: use auto value for CMT/Sales (Sales by tier), else form value
       const designationValue = formData.department === 'CMT'
         ? 'CMT Operation'
         : formData.department === 'Sales'
-          ? 'Sales Executive'
+          ? ((getDesignationForSalesTier(formData.salesExecutiveTier) || formData.designation) ?? '')
           : (formData.designation ?? '');
 
       // append normal fields (dates in DD-MM-YYYY)
@@ -1727,7 +1680,7 @@ const EditUserModal = ({ user, onClose, onUpdate }) => {
                     ref={designationRef}
                     name="designation"
                     type="text"
-                    value={formData.department === 'CMT' ? 'CMT Operation' : formData.department === 'Sales' ? 'Sales Executive' : formData.designation}
+                    value={formData.department === 'CMT' ? 'CMT Operation' : formData.department === 'Sales' ? (getDesignationForSalesTier(formData.salesExecutiveTier) || formData.designation) : formData.designation}
                     onChange={handleInputChange}
                     readOnly={formData.department === 'CMT' || formData.department === 'Sales'}
                     minLength={2}

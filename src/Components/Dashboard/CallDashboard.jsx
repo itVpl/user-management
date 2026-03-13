@@ -888,11 +888,11 @@ const DailyTarget = () => {
                         </span>
                       </div>
                       <div className="text-4xl font-normal text-gray-800">
-                        {tier1.callsCompleted ?? 0}<span className="text-2xl text-gray-500 font-normal">/{tier1.callsPerDay ?? 0}</span>
+                        {callsDaily.today ?? 0}<span className="text-2xl text-gray-500 font-normal">/{tier1.callsPerDay ?? 0}</span>
                       </div>
-                      {callsDaily.today !== undefined && (
+                      {(callsDaily.today !== undefined || callsDaily.weekly !== undefined) && (
                         <p className="text-xs text-gray-500 mt-2">
-                          Today: <span className="font-semibold text-gray-700">{callsDaily.today}</span>
+                          Today: <span className="font-semibold text-gray-700">{callsDaily.today ?? 0}</span>
                           {callsDaily.weekly !== undefined && (
                             <span className="ml-2">· Weekly: <span className="font-semibold text-gray-700">{callsDaily.weekly}</span></span>
                           )}

@@ -25,6 +25,12 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
   ];
   const DEPARTMENT_OPTIONS = ['IT', 'HR', 'CMT', 'Sales', 'Finance', 'QA'];
   const SALES_TIER_OPTIONS = ['1', '2', '3'];
+  const getDesignationForSalesTier = (tier) => {
+    if (tier === '1') return 'Sales Executive';
+    if (tier === '2') return 'Account Manager';
+    if (tier === '3') return 'Sales TL';
+    return '';
+  };
 
   const existingMobilesSet = useMemo(
     () => new Set(existingMobiles.filter(Boolean).map(m => String(m).replace(/\D/g, ''))),
@@ -173,15 +179,23 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
         clearErr('mobileNo');
       }
     }
-    // When department changes: auto-set designation for CMT/Sales; clear salesExecutiveTier if not Sales
+    // When department changes: auto-set designation for CMT; for Sales, clear tier (designation set when tier selected)
     if (name === 'department') {
       setFormData(prev => {
         const next = { ...prev, department: value };
         if (value === 'CMT') next.designation = 'CMT Operation';
-        else if (value === 'Sales') next.designation = 'Sales Executive';
+        else if (value === 'Sales') {
+          next.salesExecutiveTier = '';
+          next.designation = '';
+        }
         if (value !== 'Sales') next.salesExecutiveTier = '';
         return next;
       });
+      return;
+    }
+    // When Sales Executive Tier changes and department is Sales, auto-set designation
+    if (name === 'salesExecutiveTier' && formData.department === 'Sales') {
+      setFormData(prev => ({ ...prev, salesExecutiveTier: value, designation: getDesignationForSalesTier(value) }));
       return;
     }
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -708,7 +722,7 @@ const AddUserModal = ({ onClose, mode = 'create', existingMobiles = [] }) => {
                   const isDate = field.type === 'date';
                   const isEmail = field.name === 'email';
                   const isMobileish = ['mobileNo', 'alternateNo', 'emergencyNo'].includes(field.name);
-                  const designationAuto = formData.department === 'CMT' ? 'CMT Operation' : formData.department === 'Sales' ? 'Sales Executive' : null;
+                  const designationAuto = formData.department === 'CMT' ? 'CMT Operation' : formData.department === 'Sales' ? getDesignationForSalesTier(formData.salesExecutiveTier) || null : null;
 
                   return (
                     <div key={field.name} className="space-y-3">

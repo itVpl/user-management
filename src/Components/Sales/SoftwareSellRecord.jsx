@@ -8,7 +8,7 @@ import {
   X,
   Package
 } from 'lucide-react';
-import { format, addDays } from 'date-fns';
+import { format, addDays, differenceInCalendarDays } from 'date-fns';
 import API_CONFIG from '../../config/api.js';
 
 const api = axios.create({
@@ -59,7 +59,8 @@ export default function SoftwareSellRecord() {
   const [addForm, setAddForm] = useState({
     customerName: '',
     notes: '',
-    soldAt: toYMD(new Date())
+    soldAt: toYMD(new Date()),
+    packageType: 'Monthly'
   });
   const [addErrors, setAddErrors] = useState({});
   const [addSubmitting, setAddSubmitting] = useState(false);
@@ -121,16 +122,20 @@ export default function SoftwareSellRecord() {
     setAddErrors({});
     setAddSubmitting(true);
     try {
+      const packageType = (addForm.packageType === 'Yearly' || addForm.packageType === 'Monthly')
+        ? addForm.packageType
+        : 'Monthly';
       const payload = {
         customerName: (addForm.customerName || '').trim() || undefined,
-        notes: (addForm.notes || '').trim() || undefined
+        notes: (addForm.notes || '').trim() || undefined,
+        packageType
       };
       if (addForm.soldAt) {
         payload.soldAt = addForm.soldAt.includes('T') ? addForm.soldAt : `${addForm.soldAt}T00:00:00.000Z`;
       }
       await api.post('/api/v1/sales-executive-target/log-shipper-software-sell', payload);
       setShowAddModal(false);
-      setAddForm({ customerName: '', notes: '', soldAt: toYMD(new Date()) });
+      setAddForm({ customerName: '', notes: '', soldAt: toYMD(new Date()), packageType: 'Monthly' });
       if (activeTab === 'my') fetchMyLogs();
       else fetchAllLogs();
     } catch (err) {
@@ -147,6 +152,25 @@ export default function SoftwareSellRecord() {
     return d;
   };
 
+  const getExpiresAt = (item) => {
+    const d = item?.expiresAt;
+    if (!d) return '—';
+    if (typeof d === 'string' && d.length >= 10) return d.slice(0, 10);
+    return d;
+  };
+
+  const getDaysLeft = (item) => {
+    const d = item?.expiresAt;
+    if (!d) return '—';
+    const exp = new Date(d);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    exp.setHours(0, 0, 0, 0);
+    const days = differenceInCalendarDays(exp, today);
+    if (days < 0) return 'Expired';
+    return days;
+  };
+
   const getEmployeeName = (item) => item?.employeeName ?? item?.empId ?? item?.user?.employeeName ?? item?.user?.empId ?? '—';
 
   const filteredLogs = logs.filter((item) => {
@@ -155,7 +179,8 @@ export default function SoftwareSellRecord() {
     const customer = (item.customerName || '').toLowerCase();
     const notes = (item.notes || '').toLowerCase();
     const emp = getEmployeeName(item).toLowerCase();
-    return customer.includes(q) || notes.includes(q) || emp.includes(q);
+    const pkg = (item.packageType || '').toLowerCase();
+    return customer.includes(q) || notes.includes(q) || emp.includes(q) || pkg.includes(q);
   });
 
   const totalLogs = filteredLogs.length;
@@ -200,7 +225,7 @@ export default function SoftwareSellRecord() {
             <button
               type="button"
               onClick={() => {
-                setAddForm({ customerName: '', notes: '', soldAt: toYMD(new Date()) });
+                setAddForm({ customerName: '', notes: '', soldAt: toYMD(new Date()), packageType: 'Monthly' });
                 setAddErrors({});
                 setShowAddModal(true);
               }}
@@ -293,6 +318,9 @@ export default function SoftwareSellRecord() {
                       <th className="text-left py-4 px-4 text-gray-600 font-medium text-base">Employee</th>
                     )}
                     <th className="text-left py-4 px-4 text-gray-600 font-medium text-base">Sold At</th>
+                    <th className="text-left py-4 px-4 text-gray-600 font-medium text-base">Package Type</th>
+                    <th className="text-left py-4 px-4 text-gray-600 font-medium text-base">Expires At</th>
+                    <th className="text-left py-4 px-4 text-gray-600 font-medium text-base">Days left</th>
                     <th className="text-left py-4 px-4 text-gray-600 font-medium text-base">Customer Name</th>
                     <th className="text-left py-4 px-4 text-gray-600 font-medium text-base">Notes</th>
                     <th className="text-left py-4 px-4 text-gray-600 font-medium text-base">Action</th>
@@ -305,6 +333,17 @@ export default function SoftwareSellRecord() {
                         <td className="py-4 px-4 font-medium text-gray-800">{getEmployeeName(item)}</td>
                       )}
                       <td className="py-4 px-4 font-medium text-gray-800">{getSoldAt(item)}</td>
+                      <td className="py-4 px-4 font-medium text-gray-800">{item.packageType || '—'}</td>
+                      <td className="py-4 px-4 font-medium text-gray-800">{getExpiresAt(item)}</td>
+                      <td className="py-4 px-4 font-medium text-gray-800">
+                        {getDaysLeft(item) === 'Expired' ? (
+                          <span className="text-red-600 font-medium">Expired</span>
+                        ) : getDaysLeft(item) === '—' ? (
+                          '—'
+                        ) : (
+                          <span className={getDaysLeft(item) <= 10 ? 'text-red-600 font-medium' : 'text-green-600 font-medium'}>{getDaysLeft(item)}</span>
+                        )}
+                      </td>
                       <td className="py-4 px-4 font-medium text-gray-800">{item.customerName || '—'}</td>
                       <td className="py-4 px-4 font-medium text-gray-800 max-w-xs truncate">{item.notes || '—'}</td>
                       <td className="py-4 px-4">
@@ -377,6 +416,17 @@ export default function SoftwareSellRecord() {
                 />
               </div>
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Package Type</label>
+                <select
+                  value={addForm.packageType}
+                  onChange={(e) => setAddForm((f) => ({ ...f, packageType: e.target.value }))}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                >
+                  <option value="Monthly">Monthly</option>
+                  <option value="Yearly">Yearly</option>
+                </select>
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Sold At (optional)</label>
                 <input
                   type="date"
@@ -412,6 +462,13 @@ export default function SoftwareSellRecord() {
                 <p><span className="font-medium text-gray-600">Employee:</span> {getEmployeeName(selectedLog)}</p>
               )}
               <p><span className="font-medium text-gray-600">Sold At:</span> {getSoldAt(selectedLog)}</p>
+              {(selectedLog.packageType || selectedLog.expiresAt) && (
+                <>
+                  <p><span className="font-medium text-gray-600">Package Type:</span> {selectedLog.packageType || '—'}</p>
+                  <p><span className="font-medium text-gray-600">Expires At:</span> {getExpiresAt(selectedLog)}</p>
+                  <p><span className="font-medium text-gray-600">Days left:</span> {getDaysLeft(selectedLog) === 'Expired' ? <span className="text-red-600 font-medium">Expired</span> : getDaysLeft(selectedLog) === '—' ? '—' : <span className={getDaysLeft(selectedLog) <= 10 ? 'text-red-600 font-medium' : 'text-green-600 font-medium'}>{getDaysLeft(selectedLog)}</span>}</p>
+                </>
+              )}
               <p><span className="font-medium text-gray-600">Customer:</span> {selectedLog.customerName || '—'}</p>
               <p><span className="font-medium text-gray-600">Notes:</span> {selectedLog.notes || '—'}</p>
             </div>
