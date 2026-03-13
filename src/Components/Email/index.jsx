@@ -16,6 +16,10 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
+  List,
+  ListItem,
+  ListItemText,
+  CircularProgress,
 } from '@mui/material';
 import {
   FilterList as FilterListIcon,
@@ -25,8 +29,10 @@ import {
   Send as SendIcon,
   Inbox as InboxIcon,
   Send as SentIcon,
+  Drafts as DraftsIcon,
   Search as SearchIcon,
   Close as CloseSearchIcon,
+  Delete as DeleteIcon,
 } from '@mui/icons-material';
 
 import CreateAccountDialog from './CreateAccountDialog';
@@ -55,7 +61,13 @@ import {
   sendEmailWithAttachments, 
   replyToEmailWithFiles, 
   replyToEmail,
-  markEmailAsRead
+  markEmailAsRead,
+  listDrafts,
+  getDraft,
+  saveDraft,
+  updateDraft,
+  sendDraft,
+  deleteDraft as deleteDraftAPI
 } from './emailService';
 import { groupEmailsByThread } from './threadUtils';
 import API_CONFIG from '../../config/api';
@@ -105,9 +117,17 @@ const Email = () => {
 
   // Compose state
   const [composeOpen, setComposeOpen] = useState(false);
+  const [composeDraftId, setComposeDraftId] = useState(null);
+  const [initialDraftForCompose, setInitialDraftForCompose] = useState(null);
   const [sendLoading, setSendLoading] = useState(false);
   const [sendSuccess, setSendSuccess] = useState(false);
   const [sendError, setSendError] = useState(null);
+  const [saveDraftLoading, setSaveDraftLoading] = useState(false);
+
+  // Drafts tab state
+  const [drafts, setDrafts] = useState([]);
+  const [draftsLoading, setDraftsLoading] = useState(false);
+  const [draftsError, setDraftsError] = useState(null);
 
   // Reply state
   const [replyOpen, setReplyOpen] = useState(false);
@@ -139,6 +159,7 @@ const Email = () => {
   const tabs = [
     { label: 'Inbox', icon: <InboxIcon />, count: emails.filter(e => !e.isRead && e.folder === 'inbox').length },
     { label: 'Sent', icon: <SentIcon />, count: emails.filter(e => e.folder === 'sent').length },
+    { label: 'Drafts', icon: <DraftsIcon />, count: drafts.length },
   ];
 
   // Load all email accounts on mount
@@ -156,6 +177,9 @@ const Email = () => {
       loadEmails(1, true); // Load first page, reset emails
       if (selectedTab === 1) {
         loadSentEmails(1, true);
+      }
+      if (selectedTab === 2) {
+        loadDrafts();
       }
     }
   }, [selectedAccountId]);
@@ -1086,14 +1110,104 @@ const Email = () => {
       return;
     }
     
-    // Load emails based on selected tab
+    // Load content based on selected tab
     if (newValue === 0) {
-      // Inbox tab
       loadEmails(1, true);
     } else if (newValue === 1) {
-      // Sent tab
       loadSentEmails(1, true);
+    } else if (newValue === 2) {
+      loadDrafts();
     }
+  };
+
+  const loadDrafts = async () => {
+    if (!selectedAccountId) {
+      setDrafts([]);
+      return;
+    }
+    setDraftsLoading(true);
+    setDraftsError(null);
+    try {
+      const response = await listDrafts(selectedAccountId, 50);
+      const list = response?.drafts || response?.data?.drafts || [];
+      setDrafts(Array.isArray(list) ? list.map((d) => ({ ...d, id: d.id || d._id })) : []);
+    } catch (err) {
+      console.error('Error loading drafts:', err);
+      const msg = err.response?.data?.message || err.message || 'Failed to load drafts';
+      setDraftsError(msg);
+      setDrafts([]);
+    } finally {
+      setDraftsLoading(false);
+    }
+  };
+
+  const handleOpenDraft = async (draft) => {
+    if (!draft?.id || !selectedAccountId) return;
+    setSendError(null);
+    try {
+      const response = await getDraft(draft.id, selectedAccountId);
+      const raw = response?.draft || response?.data?.draft || response;
+      const draftData = raw ? { ...raw, id: raw.id || raw._id } : null;
+      setInitialDraftForCompose(draftData);
+      setComposeDraftId(draftData?.id || draft.id);
+      setComposeOpen(true);
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || 'Failed to open draft';
+      setSendError(msg);
+    }
+  };
+
+  const handleSaveDraft = async (payload) => {
+    setSaveDraftLoading(true);
+    setSendError(null);
+    try {
+      const body = {
+        ...payload,
+        emailAccountId: selectedAccountId,
+      };
+      if (payload.draftId) {
+        await updateDraft(payload.draftId, body, selectedAccountId);
+      } else {
+        const response = await saveDraft(body);
+        const newId = response?.draftId || response?.info?.id || response?.data?.draftId;
+        if (newId) setComposeDraftId(newId);
+      }
+      await loadDrafts();
+    } catch (err) {
+      setSendError(err.response?.data?.message || err.message || 'Failed to save draft');
+    } finally {
+      setSaveDraftLoading(false);
+    }
+  };
+
+  const handleDeleteDraft = async (draftIdToDelete) => {
+    if (!draftIdToDelete) return;
+    try {
+      await deleteDraftAPI(draftIdToDelete, selectedAccountId);
+      setDrafts((prev) => prev.filter((d) => d.id !== draftIdToDelete));
+      if (composeDraftId === draftIdToDelete) {
+        setComposeOpen(false);
+        setComposeDraftId(null);
+        setInitialDraftForCompose(null);
+      }
+    } catch (err) {
+      console.error('Error deleting draft:', err);
+      setSendError(err.response?.data?.message || err.message || 'Failed to delete draft');
+    }
+  };
+
+  /** Called when user clicks Discard in compose on an existing draft; optional server delete then dialog closes via onClose. */
+  const handleDiscardDraft = async (draftIdToDiscard) => {
+    if (!draftIdToDiscard) return;
+    try {
+      await deleteDraftAPI(draftIdToDiscard, selectedAccountId);
+      setDrafts((prev) => prev.filter((d) => d.id !== draftIdToDiscard));
+    } catch (err) {
+      setSendError(err.response?.data?.message || err.message || 'Failed to delete draft');
+    }
+    setComposeOpen(false);
+    setComposeDraftId(null);
+    setInitialDraftForCompose(null);
   };
 
   // Handle label click - filter emails by label
@@ -1919,16 +2033,22 @@ const Email = () => {
     setSendSuccess(false);
 
     try {
-      // Always use send-files endpoint (works with or without attachments)
-      await sendEmailWithAttachments({
-        ...emailData,
-        emailAccountId: selectedAccountId
-      });
+      if (composeDraftId) {
+        await sendDraft(composeDraftId, selectedAccountId);
+        setComposeDraftId(null);
+        setInitialDraftForCompose(null);
+        setDrafts((prev) => prev.filter((d) => d.id !== composeDraftId));
+      } else {
+        await sendEmailWithAttachments({
+          ...emailData,
+          emailAccountId: selectedAccountId
+        });
+      }
       setSendSuccess(true);
-      // Reload sent emails after sending
       if (selectedAccountId) {
         setTimeout(() => {
           loadSentEmails();
+          loadDrafts();
         }, 500);
       }
       setTimeout(() => {
@@ -1987,7 +2107,7 @@ const Email = () => {
   const getFilteredEmails = () => {
     let filtered = emails;
     const tabFolders = ['inbox', 'sent'];
-    
+    if (selectedTab === 2) return []; // Drafts tab uses its own list
     if (selectedTab < tabs.length) {
       filtered = filtered.filter(email => email.folder === tabFolders[selectedTab]);
     }
@@ -2303,7 +2423,11 @@ const Email = () => {
             <Button
               variant="contained"
               startIcon={<AddIcon />}
-              onClick={() => setComposeOpen(true)}
+              onClick={() => {
+                setComposeDraftId(null);
+                setInitialDraftForCompose(null);
+                setComposeOpen(true);
+              }}
               disabled={!selectedAccountId}
               sx={{
                 width: '100%',
@@ -2404,53 +2528,125 @@ const Email = () => {
           boxSizing: 'border-box'
         }}>
           <Box sx={{ flexGrow: 1, overflow: 'auto', width: '100%' }}>
-            {searchActive && (searchResults.length > 0 || searchLoading) && (
-              <Alert
-                severity="info"
-                sx={{ m: 2, mb: 1 }}
-                action={
-                  <Button color="inherit" size="small" onClick={clearSearch}>
-                    Clear search
-                  </Button>
-                }
-              >
-                Search results for &quot;{searchQuery}&quot; in {searchFolder === 'ALL' ? 'All mail' : searchFolder === 'INBOX' ? 'Inbox' : 'Sent'}
-                {!searchLoading && searchResults.length > 0 && ` (${searchResults.length} ${searchResults.length === 1 ? 'email' : 'emails'})`}
-              </Alert>
+            {selectedTab === 2 ? (
+              /* Drafts tab */
+              <>
+                {draftsError && (
+                  <Alert severity="error" sx={{ m: 2 }} onClose={() => setDraftsError(null)}>
+                    {draftsError}
+                  </Alert>
+                )}
+                {draftsLoading ? (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                    <CircularProgress />
+                  </Box>
+                ) : drafts.length === 0 ? (
+                  <Box sx={{ py: 6, px: 2, textAlign: 'center' }}>
+                    <DraftsIcon sx={{ fontSize: 48, color: '#dadce0', mb: 1 }} />
+                    <Typography variant="body1" color="text.secondary">
+                      No drafts
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                      Drafts you save will show up here.
+                    </Typography>
+                  </Box>
+                ) : (
+                  <List disablePadding>
+                    {drafts.map((draft) => (
+                      <ListItem
+                        key={draft.id}
+                        onClick={() => handleOpenDraft(draft)}
+                        sx={{
+                          borderBottom: '1px solid #e8eaed',
+                          cursor: 'pointer',
+                          '&:hover': { backgroundColor: '#f8f9fa' },
+                          py: 1.5,
+                          px: 2,
+                        }}
+                        secondaryAction={
+                          <IconButton
+                            edge="end"
+                            size="small"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteDraft(draft.id);
+                            }}
+                            sx={{ color: '#5f6368' }}
+                            aria-label="Delete draft"
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        }
+                      >
+                        <ListItemText
+                          primary={draft.subject || '(No subject)'}
+                          secondary={
+                            <Box component="span" sx={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {draft.snippet || draft.to || ''}
+                            </Box>
+                          }
+                          primaryTypographyProps={{ fontWeight: 500, fontSize: '0.9375rem' }}
+                          secondaryTypographyProps={{ color: 'text.secondary', fontSize: '0.8125rem' }}
+                        />
+                        <Typography variant="caption" color="text.secondary" sx={{ ml: 1, flexShrink: 0 }}>
+                          {draft.date ? formatTimestamp(draft.date) : ''}
+                        </Typography>
+                      </ListItem>
+                    ))}
+                  </List>
+                )}
+              </>
+            ) : (
+              <>
+                {searchActive && (searchResults.length > 0 || searchLoading) && (
+                  <Alert
+                    severity="info"
+                    sx={{ m: 2, mb: 1 }}
+                    action={
+                      <Button color="inherit" size="small" onClick={clearSearch}>
+                        Clear search
+                      </Button>
+                    }
+                  >
+                    Search results for &quot;{searchQuery}&quot; in {searchFolder === 'ALL' ? 'All mail' : searchFolder === 'INBOX' ? 'Inbox' : 'Sent'}
+                    {!searchLoading && searchResults.length > 0 && ` (${searchResults.length} ${searchResults.length === 1 ? 'email' : 'emails'})`}
+                  </Alert>
+                )}
+                {searchActive && searchError && (
+                  <Alert severity="error" sx={{ m: 2 }} onClose={() => setSearchError(null)}>
+                    {searchError}
+                  </Alert>
+                )}
+                {searchActive && !searchError && searchResults.length === 0 && !searchLoading && (
+                  <Alert severity="info" sx={{ m: 2 }}>
+                    No emails match your search. Try different keywords or scope (e.g. from:email subject:word).
+                  </Alert>
+                )}
+                <EmailList
+                  userEmail={emailAccounts.find(acc => acc._id === selectedAccountId)?.email || ''}
+                  emails={searchActive ? searchResults : (selectedLabelId ? [] : getFilteredEmails())}
+                  loading={searchActive ? searchLoading : (selectedLabelId ? false : loading)}
+                  loadingMore={searchActive ? false : loadingMore}
+                  hasMore={searchActive ? !!(searchPagination?.nextPageToken || searchPagination?.hasNextPage) : hasMore}
+                  onLoadMore={searchActive ? loadMoreSearchResults : (selectedTab === 0 ? loadMoreEmails : loadMoreSentEmails)}
+                  selectedEmail={selectedEmail}
+                  onEmailSelect={handleEmailSelect}
+                  onToggleStar={toggleStar}
+                  formatTimestamp={formatTimestamp}
+                  usePagination={!selectedLabelId && !searchActive}
+                  currentPage={searchActive ? searchPage : currentPage}
+                  onPageChange={searchActive ? undefined : handlePageChange}
+                  selectedLabelId={searchActive ? null : selectedLabelId}
+                  folder={searchActive ? 'ALL' : (selectedTab === 0 ? 'INBOX' : 'SENT')}
+                  emailAccountId={selectedAccountId}
+                  onClearLabelFilter={handleClearLabelFilter}
+                  onEmailsUpdate={(updateFn) => {
+                    if (searchActive) setSearchResults(prev => updateFn(prev));
+                    else setEmails(prev => updateFn(prev));
+                  }}
+                />
+              </>
             )}
-            {searchActive && searchError && (
-              <Alert severity="error" sx={{ m: 2 }} onClose={() => setSearchError(null)}>
-                {searchError}
-              </Alert>
-            )}
-            {searchActive && !searchError && searchResults.length === 0 && !searchLoading && (
-              <Alert severity="info" sx={{ m: 2 }}>
-                No emails match your search. Try different keywords or scope (e.g. from:email subject:word).
-              </Alert>
-            )}
-            <EmailList
-              userEmail={emailAccounts.find(acc => acc._id === selectedAccountId)?.email || ''}
-              emails={searchActive ? searchResults : (selectedLabelId ? [] : getFilteredEmails())}
-              loading={searchActive ? searchLoading : (selectedLabelId ? false : loading)}
-              loadingMore={searchActive ? false : loadingMore}
-              hasMore={searchActive ? !!(searchPagination?.nextPageToken || searchPagination?.hasNextPage) : hasMore}
-              onLoadMore={searchActive ? loadMoreSearchResults : (selectedTab === 0 ? loadMoreEmails : loadMoreSentEmails)}
-              selectedEmail={selectedEmail}
-              onEmailSelect={handleEmailSelect}
-              onToggleStar={toggleStar}
-              formatTimestamp={formatTimestamp}
-              usePagination={!selectedLabelId && !searchActive}
-              currentPage={searchActive ? searchPage : currentPage}
-              onPageChange={searchActive ? undefined : handlePageChange}
-              selectedLabelId={searchActive ? null : selectedLabelId}
-              folder={searchActive ? 'ALL' : (selectedTab === 0 ? 'INBOX' : 'SENT')}
-              emailAccountId={selectedAccountId}
-              onClearLabelFilter={handleClearLabelFilter}
-              onEmailsUpdate={(updateFn) => {
-                if (searchActive) setSearchResults(prev => updateFn(prev));
-                else setEmails(prev => updateFn(prev));
-              }}
-            />
           </Box>
         </Box>
       </Box>
@@ -2499,12 +2695,22 @@ const Email = () => {
 
       <ComposeDialog
         open={composeOpen}
-        onClose={() => setComposeOpen(false)}
+        onClose={() => {
+          setComposeOpen(false);
+          setComposeDraftId(null);
+          setInitialDraftForCompose(null);
+        }}
         onSend={handleSendEmail}
+        onSaveDraft={handleSaveDraft}
+        onDiscardDraft={handleDiscardDraft}
         loading={sendLoading}
+        saveDraftLoading={saveDraftLoading}
         success={sendSuccess}
         error={sendError}
         emailAccountId={selectedAccountId}
+        draftId={composeDraftId}
+        initialDraft={initialDraftForCompose}
+        autoSaveIntervalMs={30000}
       />
 
       <ReplyDialog

@@ -1097,3 +1097,92 @@ export const replyToEmail = async (replyData) => {
 
   return response.data;
 };
+
+// --- Drafts (Gmail-style) ---
+
+export const listDrafts = async (emailAccountId = null, limit = 50) => {
+  const token = getAuthToken();
+  if (!token) throw new Error('Please login to access drafts');
+  const params = new URLSearchParams();
+  if (emailAccountId) params.append('emailAccountId', emailAccountId);
+  if (limit) params.append('limit', Math.min(limit, 100));
+  const url = `${API_BASE_URL}/email-inbox/drafts${params.toString() ? `?${params.toString()}` : ''}`;
+  const response = await axios.get(url, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const getDraft = async (draftId, emailAccountId = null) => {
+  const token = getAuthToken();
+  if (!token) throw new Error('Please login to access drafts');
+  const params = emailAccountId ? `?emailAccountId=${encodeURIComponent(emailAccountId)}` : '';
+  const response = await axios.get(
+    `${API_BASE_URL}/email-inbox/drafts/${encodeURIComponent(draftId)}${params}`,
+    { headers: getAuthHeaders() }
+  );
+  return response.data;
+};
+
+export const saveDraft = async (body) => {
+  const token = getAuthToken();
+  if (!token) throw new Error('Please login to save drafts');
+  const payload = {
+    to: body.to,
+    subject: body.subject || '',
+    text: body.text || '',
+    html: body.html,
+    emailAccountId: body.emailAccountId,
+    attachments: body.attachments || []
+  };
+  if (body.draftId) payload.draftId = body.draftId;
+  if (body.cc) payload.cc = body.cc;
+  if (body.bcc) payload.bcc = body.bcc;
+  const response = await axios.post(
+    `${API_BASE_URL}/email-inbox/draft`,
+    payload,
+    { headers: getAuthHeaders() }
+  );
+  return response.data;
+};
+
+export const updateDraft = async (draftId, body, emailAccountId = null) => {
+  const token = getAuthToken();
+  if (!token) throw new Error('Please login to update drafts');
+  const payload = {
+    to: body.to,
+    subject: body.subject || '',
+    text: body.text || '',
+    html: body.html,
+    attachments: body.attachments || []
+  };
+  if (body.cc) payload.cc = body.cc;
+  if (body.bcc) payload.bcc = body.bcc;
+  if (emailAccountId) payload.emailAccountId = emailAccountId;
+  const response = await axios.put(
+    `${API_BASE_URL}/email-inbox/drafts/${encodeURIComponent(draftId)}`,
+    payload,
+    { headers: getAuthHeaders() }
+  );
+  return response.data;
+};
+
+export const sendDraft = async (draftId, emailAccountId = null) => {
+  const token = getAuthToken();
+  if (!token) throw new Error('Please login to send emails');
+  const response = await axios.post(
+    `${API_BASE_URL}/email-inbox/drafts/${encodeURIComponent(draftId)}/send`,
+    emailAccountId ? { emailAccountId } : {},
+    { headers: getAuthHeaders() }
+  );
+  return response.data;
+};
+
+export const deleteDraft = async (draftId, emailAccountId = null) => {
+  const token = getAuthToken();
+  if (!token) throw new Error('Please login to delete drafts');
+  const params = emailAccountId ? `?emailAccountId=${encodeURIComponent(emailAccountId)}` : '';
+  const response = await axios.delete(
+    `${API_BASE_URL}/email-inbox/drafts/${encodeURIComponent(draftId)}${params}`,
+    { headers: getAuthHeaders() }
+  );
+  return response.data;
+};
