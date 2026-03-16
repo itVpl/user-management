@@ -122,7 +122,8 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "All Meeting Schedules",
       "My Email Logs",
       "Software Sell Record",
-      "Tier 1 Leads"
+      "Tier 1 Leads",
+      "All Sales TL"
     ],
     "Invoices": [
       "Check Invoice"
@@ -494,6 +495,7 @@ const menuItems = [
   { name: "My Email Logs", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/my-email-logs" },
   { name: "Software Sell Record", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/software-sell-record" },
   { name: "Tier 1 Leads", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/tier1-leads" },
+  { name: "All Sales TL", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/all-sales-tl" },
   { name: "Add Customer", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/AddCustomer" },
   { name: "All Customers", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/allcustomer" },
   { name: "Assign Agent", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/AssignAgent" },

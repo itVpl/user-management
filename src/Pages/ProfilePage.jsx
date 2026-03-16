@@ -94,6 +94,10 @@ const ProfilePage = () => {
   const [hybridEligibility, setHybridEligibility] = useState(null);
   const [hybridEligibilityLoading, setHybridEligibilityLoading] = useState(false);
 
+  // Tier 3 (Sales TL) – Manager & Team from GET /api/v1/sales-executive-target/manager-team
+  const [managerTeam, setManagerTeam] = useState(null);
+  const [managerTeamLoading, setManagerTeamLoading] = useState(false);
+
   // Refs for clickable inputs
   const attDateRef = useRef(null);
   const fromRef = useRef(null);
@@ -198,8 +202,32 @@ const ProfilePage = () => {
   }, [empId]);
 
   useEffect(() => {
-    if (empId) fetchHybridEligibility();
-  }, [empId]);
+    if (empId && employee?.department === "CMT") fetchHybridEligibility();
+  }, [empId, employee?.department]);
+
+  const isSalesTL =
+    String(employee?.designation || "").toLowerCase().includes("sales tl");
+
+  const fetchManagerTeam = async () => {
+    if (!empId || !isSalesTL) return;
+    setManagerTeamLoading(true);
+    try {
+      const res = await axios.get(
+        `${API_CONFIG.BASE_URL}/api/v1/sales-executive-target/manager-team`,
+        authHeader()
+      );
+      if (res.data?.success && res.data?.data) setManagerTeam(res.data.data);
+      else setManagerTeam(null);
+    } catch (err) {
+      setManagerTeam(null);
+    } finally {
+      setManagerTeamLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (employee && isSalesTL) fetchManagerTeam();
+  }, [employee]);
 
   useEffect(() => {
     if (activeTab === "leave" && empId) {
@@ -546,75 +574,163 @@ const ProfilePage = () => {
         </div>
       </div>
 
-      {/* Hybrid Eligibility (Weekly Target API) */}
-      <div className="px-4 mt-4">
-        <div className="bg-white p-5 rounded-2xl shadow-lg border border-indigo-100 hover:shadow-indigo-200 transition duration-300 ease-in-out">
-          <h2 className="text-xl font-semibold mb-4 text-indigo-700 flex items-center gap-2">
-            <svg className="w-5 h-5 text-indigo-500" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
-            </svg>
-            Hybrid Eligibility (Next Week)
-          </h2>
-          {hybridEligibilityLoading ? (
-            <div className="flex items-center gap-2 text-gray-500">
-              <span className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-              Loading…
-            </div>
-          ) : hybridEligibility ? (
-            <div className="space-y-4">
-              <div className="flex flex-wrap items-center gap-3">
-                <span
-                  className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold ${
-                    hybridEligibility.eligibleForHybridNextWeek
-                      ? "bg-green-100 text-green-800 border border-green-200"
-                      : "bg-amber-100 text-amber-800 border border-amber-200"
-                  }`}
-                >
-                  {hybridEligibility.eligibleForHybridNextWeek ? "✓ Eligible" : "Not eligible"}
-                </span>
+      {/* Hybrid Eligibility (Weekly Target API) – CMT only */}
+      {employee?.department === "CMT" && (
+        <div className="px-4 mt-4">
+          <div className="bg-white p-5 rounded-2xl shadow-lg border border-indigo-100 hover:shadow-indigo-200 transition duration-300 ease-in-out">
+            <h2 className="text-xl font-semibold mb-4 text-indigo-700 flex items-center gap-2">
+              <svg className="w-5 h-5 text-indigo-500" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
+              </svg>
+              Hybrid Eligibility (Next Week)
+            </h2>
+            {hybridEligibilityLoading ? (
+              <div className="flex items-center gap-2 text-gray-500">
+                <span className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                Loading…
               </div>
-              {hybridEligibility.message && (
-                <p className="text-sm text-gray-700 bg-gray-50 px-4 py-3 rounded-xl border border-gray-100">
-                  {hybridEligibility.message}
-                </p>
-              )}
-              {hybridEligibility.lastWeekTarget && (
-                <div className="bg-gradient-to-r from-indigo-50 to-purple-50 p-4 rounded-xl border border-indigo-100">
-                  <div className="text-xs font-semibold text-indigo-600 uppercase tracking-wide mb-2">Last week&apos;s target</div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-                    <div>
-                      <div className="text-gray-500">Week start</div>
-                      <div className="font-medium text-gray-800">
-                        {hybridEligibility.lastWeekTarget.weekStartDate
-                          ? new Date(hybridEligibility.lastWeekTarget.weekStartDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
-                          : "—"}
+            ) : hybridEligibility ? (
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center gap-3">
+                  <span
+                    className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold ${
+                      hybridEligibility.eligibleForHybridNextWeek
+                        ? "bg-green-100 text-green-800 border border-green-200"
+                        : "bg-amber-100 text-amber-800 border border-amber-200"
+                    }`}
+                  >
+                    {hybridEligibility.eligibleForHybridNextWeek ? "✓ Eligible" : "Not eligible"}
+                  </span>
+                </div>
+                {hybridEligibility.message && (
+                  <p className="text-sm text-gray-700 bg-gray-50 px-4 py-3 rounded-xl border border-gray-100">
+                    {hybridEligibility.message}
+                  </p>
+                )}
+                {hybridEligibility.lastWeekTarget && (
+                  <div className="bg-gradient-to-r from-indigo-50 to-purple-50 p-4 rounded-xl border border-indigo-100">
+                    <div className="text-xs font-semibold text-indigo-600 uppercase tracking-wide mb-2">Last week&apos;s target</div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                      <div>
+                        <div className="text-gray-500">Week start</div>
+                        <div className="font-medium text-gray-800">
+                          {hybridEligibility.lastWeekTarget.weekStartDate
+                            ? new Date(hybridEligibility.lastWeekTarget.weekStartDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+                            : "—"}
+                        </div>
                       </div>
-                    </div>
-                    <div>
-                      <div className="text-gray-500">Week end</div>
-                      <div className="font-medium text-gray-800">
-                        {hybridEligibility.lastWeekTarget.weekEndDate
-                          ? new Date(hybridEligibility.lastWeekTarget.weekEndDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
-                          : "—"}
+                      <div>
+                        <div className="text-gray-500">Week end</div>
+                        <div className="font-medium text-gray-800">
+                          {hybridEligibility.lastWeekTarget.weekEndDate
+                            ? new Date(hybridEligibility.lastWeekTarget.weekEndDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+                            : "—"}
+                        </div>
                       </div>
-                    </div>
-                    <div>
-                      <div className="text-gray-500">Progress</div>
-                      <div className="font-bold text-indigo-600">
-                        {hybridEligibility.lastWeekTarget.progressPercentage != null
-                          ? `${hybridEligibility.lastWeekTarget.progressPercentage}%`
-                          : "—"}
+                      <div>
+                        <div className="text-gray-500">Progress</div>
+                        <div className="font-bold text-indigo-600">
+                          {hybridEligibility.lastWeekTarget.progressPercentage != null
+                            ? `${hybridEligibility.lastWeekTarget.progressPercentage}%`
+                            : "—"}
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              )}
-            </div>
-          ) : (
-            <p className="text-sm text-gray-500">Eligibility information could not be loaded.</p>
-          )}
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500">Eligibility information could not be loaded.</p>
+            )}
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Manager & Team – Sales TL only */}
+      {isSalesTL && (
+        <div className="px-4 mt-4">
+          <div className="bg-white p-5 rounded-2xl shadow-lg border border-indigo-100 hover:shadow-indigo-200 transition duration-300 ease-in-out">
+            <h2 className="text-xl font-semibold mb-4 text-indigo-700 flex items-center gap-2">
+              <svg className="w-5 h-5 text-indigo-500" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM16 18a2 2 0 01-2 2H6a2 2 0 01-2-2v-2h12v2zM8 18v-2H4v-2a4 4 0 014-4h4a4 4 0 014 4v2H8z" />
+              </svg>
+              Manager & Team
+            </h2>
+            {managerTeamLoading ? (
+              <div className="flex items-center gap-2 text-gray-500">
+                <span className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                Loading…
+              </div>
+            ) : managerTeam ? (
+              <div className="space-y-4">
+                {managerTeam.manager && (
+                  <div className="bg-gradient-to-r from-indigo-50 to-purple-50 p-4 rounded-xl border border-indigo-100">
+                    <div className="text-xs font-semibold text-indigo-600 uppercase tracking-wide mb-2">Your Manager</div>
+                    <div className="flex flex-wrap gap-4 text-sm">
+                      <span><span className="font-semibold text-gray-700">Name:</span> {managerTeam.manager.employeeName || "—"}</span>
+                      <span><span className="font-semibold text-gray-700">ID:</span> {managerTeam.manager.empId || "—"}</span>
+                      <span><span className="font-semibold text-gray-700">Department:</span> {managerTeam.manager.department || "—"}</span>
+                      <span><span className="font-semibold text-gray-700">Designation:</span> {managerTeam.manager.designation || "—"}</span>
+                    </div>
+                  </div>
+                )}
+                <div>
+                  <div className="text-xs font-semibold text-indigo-600 uppercase tracking-wide mb-2">
+                    Team ({managerTeam.totalEmployees ?? (managerTeam.employees?.length ?? 0)})
+                  </div>
+                  <div className="space-y-3">
+                    {(managerTeam.employees || []).map((emp) => (
+                      <div key={emp.empId || emp.employeeName} className="p-4 rounded-xl border border-gray-200 bg-white hover:border-indigo-200 transition-colors">
+                        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                          <div className="font-medium text-gray-800">{emp.employeeName || "—"}</div>
+                          <span className="text-xs text-gray-500">{emp.empId} • {emp.designation || "—"}</span>
+                        </div>
+                        {emp.target ? (
+                          <div className="mt-2 pt-2 border-t border-gray-100 text-xs text-gray-600 space-y-1">
+                            <div>Status: <span className="font-medium">{emp.target.status || "—"}</span> • Progress: <span className="font-medium">{emp.target.progress ?? "—"}%</span></div>
+                            {emp.target.tier === 2 && emp.target.tier2Targets && (
+                              <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
+                                <span>Active: {emp.target.tier2Targets.activeCustomersCompleted ?? 0}/{(emp.target.tier2Targets.activeCustomersMin ?? 0)}–{(emp.target.tier2Targets.activeCustomersMax ?? 0)}</span>
+                                <span>DO Added: {emp.target.tier2Targets.doAddedCompleted ?? 0}/{(emp.target.tier2Targets.doAddedMin ?? 0)}–{(emp.target.tier2Targets.doAddedMax ?? 0)}</span>
+                                <span>Lead Gen: {emp.target.tier2Targets.followUpCompleted ?? 0}</span>
+                                <span>Rate Req: {emp.target.tier2Targets.loadCreatedCount ?? 0}</span>
+                                <span>Sell Software: {emp.target.tier2Targets.shipperSoftwareSellCompleted ?? 0}</span>
+                              </div>
+                            )}
+                            {emp.target.tier === 1 && emp.target.tier1Targets && (
+                              <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
+                                <span>Lead Gen: {emp.target.tier1Targets.followUpCompleted ?? 0}/{emp.target.tier1Targets.followUpPerDay ?? 0}</span>
+                                <span>Calls: {emp.target.tier1Targets.callsCompleted ?? 0}</span>
+                                <span>Meetings: {emp.target.tier1Targets.meetingsCompleted ?? 0}/{emp.target.tier1Targets.meetingsPerWeek ?? 0}</span>
+                              </div>
+                            )}
+                            {(emp.target.monthStartDate || emp.target.weekStartDate) && (
+                              <div className="text-gray-500 mt-1">
+                                {emp.target.monthStartDate
+                                  ? `${formatDateDDMMYYYY(emp.target.monthStartDate?.slice?.(0, 10))} – ${formatDateDDMMYYYY(emp.target.monthEndDate?.slice?.(0, 10))}`
+                                  : emp.target.weekStartDate
+                                    ? `${formatDateDDMMYYYY(emp.target.weekStartDate?.slice?.(0, 10))} – ${formatDateDDMMYYYY(emp.target.weekEndDate?.slice?.(0, 10))}`
+                                    : null}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-gray-500 mt-2">No target set</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {(managerTeam.employees || []).length === 0 && (
+                  <p className="text-sm text-gray-500">No team members.</p>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500">Team information could not be loaded.</p>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="px-4 mt-6">
         <div className="flex gap-3 mb-4">

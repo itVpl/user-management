@@ -206,9 +206,12 @@ const ManageUser = () => {
   };
 
   const filteredUsers = users.filter((user) => {
+    const q = searchTerm.trim().toLowerCase();
     const matchesSearch =
-      user.employeeName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase());
+      !q ||
+      (user.employeeName || '').toLowerCase().includes(q) ||
+      (user.email || '').toLowerCase().includes(q) ||
+      (user.empId || '').toLowerCase().includes(q);
     const matchesDept = !departmentFilter || (user.department || '') === departmentFilter;
     const matchesTier =
       !tierFilter ||
@@ -1577,7 +1580,7 @@ const EditUserModal = ({ user, onClose, onUpdate }) => {
                   {errors.employeeName && <p className="text-red-600 text-xs mt-1">{errors.employeeName}</p>}
                 </div>
 
-                {/* Email (non editable) */}
+                {/* Email */}
                 <div className="space-y-3">
                   <label className="block text-sm font-bold text-gray-700">Email *</label>
                   <input
@@ -1585,8 +1588,8 @@ const EditUserModal = ({ user, onClose, onUpdate }) => {
                     name="email"
                     type="email"
                     value={formData.email}
-                    readOnly
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl bg-gray-100 text-gray-700 cursor-not-allowed"
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-green-200 focus:border-green-500 transition-all duration-300 bg-white"
                   />
                   {errors.email && <p className="text-red-600 text-xs mt-1">{errors.email}</p>}
                 </div>

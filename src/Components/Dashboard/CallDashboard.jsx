@@ -845,9 +845,11 @@ const DailyTarget = () => {
                 const followUpDaily = daily?.followUp ?? {};
                 const callsDaily = daily?.calls ?? {};
                 const meetingsDaily = daily?.meetings ?? {};
+                const shippersAddedDaily = daily?.shippersAdded ?? {};
                 return (
                 <>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {/* Lead Generate / day – commented out
                     <div
                       role="button"
                       tabIndex={0}
@@ -874,6 +876,7 @@ const DailyTarget = () => {
                       )}
                       <p className="text-xs text-red-600 mt-2 font-medium">Click to view daily breakdown</p>
                     </div>
+                    */}
                     <div
                       role="button"
                       tabIndex={0}
@@ -926,6 +929,25 @@ const DailyTarget = () => {
                       )}
                       <p className="text-xs text-green-600 mt-2 font-medium">Click to view daily breakdown</p>
                     </div>
+                    <div className="border border-indigo-200 bg-white rounded-xl p-5 relative shadow-sm">
+                      <div className="flex justify-between items-start mb-6">
+                        <span className="text-sm font-medium text-gray-800">Lead Generate</span>
+                        <span className="px-3 py-1 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-full flex items-center gap-1.5">
+                          <div className="w-2 h-2 rounded-full bg-indigo-600" /> Target
+                        </span>
+                      </div>
+                      <div className="text-4xl font-normal text-gray-800">
+                        {tier1.shippersAddedCompleted ?? 0}<span className="text-2xl text-gray-500 font-normal">/15</span>
+                      </div>
+                      {(shippersAddedDaily.today !== undefined || shippersAddedDaily.weekly !== undefined) && (
+                        <p className="text-xs text-gray-500 mt-2">
+                          Today: <span className="font-semibold text-gray-700">{shippersAddedDaily.today ?? 0}</span>
+                          {shippersAddedDaily.weekly !== undefined && (
+                            <span className="ml-2">· Weekly: <span className="font-semibold text-gray-700">{shippersAddedDaily.weekly}</span></span>
+                          )}
+                        </p>
+                      )}
+                    </div>
                   </div>
                   {myTargets.length > 1 && (
                     <div className="mt-6 pt-6 border-t border-gray-100">
@@ -938,7 +960,7 @@ const DailyTarget = () => {
                           return (
                             <div key={t._id} className="flex flex-wrap items-center justify-between gap-2 py-2 border-b border-gray-100 last:border-0">
                               <span className="text-sm text-gray-700">{weekStart} – {weekEnd}</span>
-                              <span className="text-xs text-gray-500">Lead: {tier1.followUpCompleted ?? 0}/{tier1.followUpPerDay ?? 0} · C: {tier1.callsCompleted ?? 0}/{tier1.callsPerDay ?? 0} · M: {tier1.meetingsCompleted ?? 0}/{tier1.meetingsPerWeek ?? 0}</span>
+                              <span className="text-xs text-gray-500">Lead Gen: {tier1.shippersAddedCompleted ?? 0}/15 · C: {tier1.callsCompleted ?? 0}/{tier1.callsPerDay ?? 0} · M: {tier1.meetingsCompleted ?? 0}/{tier1.meetingsPerWeek ?? 0}</span>
                             </div>
                           );
                         })}
