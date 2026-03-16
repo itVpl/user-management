@@ -10,6 +10,10 @@ import {
   useTheme,
   useMediaQuery,
   Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
   InputAdornment,
   TextField,
   Select,
@@ -30,6 +34,8 @@ import {
   Inbox as InboxIcon,
   Send as SentIcon,
   Drafts as DraftsIcon,
+  DeleteOutline as TrashIcon,
+  RestoreFromTrash as RestoreIcon,
   Search as SearchIcon,
   Close as CloseSearchIcon,
   Delete as DeleteIcon,
@@ -67,7 +73,11 @@ import {
   saveDraft,
   updateDraft,
   sendDraft,
-  deleteDraft as deleteDraftAPI
+  deleteDraft as deleteDraftAPI,
+  listTrash,
+  moveToTrash,
+  restoreFromTrash,
+  permanentDeleteFromTrash
 } from './emailService';
 import { groupEmailsByThread } from './threadUtils';
 import API_CONFIG from '../../config/api';
@@ -129,6 +139,12 @@ const Email = () => {
   const [draftsLoading, setDraftsLoading] = useState(false);
   const [draftsError, setDraftsError] = useState(null);
 
+  // Trash tab state
+  const [trash, setTrash] = useState([]);
+  const [trashLoading, setTrashLoading] = useState(false);
+  const [trashError, setTrashError] = useState(null);
+  const [permanentDeleteConfirmUid, setPermanentDeleteConfirmUid] = useState(null);
+
   // Reply state
   const [replyOpen, setReplyOpen] = useState(false);
   const [replyLoading, setReplyLoading] = useState(false);
@@ -160,6 +176,7 @@ const Email = () => {
     { label: 'Inbox', icon: <InboxIcon />, count: emails.filter(e => !e.isRead && e.folder === 'inbox').length },
     { label: 'Sent', icon: <SentIcon />, count: emails.filter(e => e.folder === 'sent').length },
     { label: 'Drafts', icon: <DraftsIcon />, count: drafts.length },
+    { label: 'Trash', icon: <TrashIcon />, count: trash.length },
   ];
 
   // Load all email accounts on mount
@@ -180,6 +197,9 @@ const Email = () => {
       }
       if (selectedTab === 2) {
         loadDrafts();
+      }
+      if (selectedTab === 3) {
+        loadTrash();
       }
     }
   }, [selectedAccountId]);
@@ -1115,8 +1135,10 @@ const Email = () => {
       loadEmails(1, true);
     } else if (newValue === 1) {
       loadSentEmails(1, true);
-    } else if (newValue === 2) {
+    } else     if (newValue === 2) {
       loadDrafts();
+    } else if (newValue === 3) {
+      loadTrash();
     }
   };
 
@@ -1138,6 +1160,35 @@ const Email = () => {
       setDrafts([]);
     } finally {
       setDraftsLoading(false);
+    }
+  };
+
+  const loadTrash = async () => {
+    if (!selectedAccountId) {
+      setTrash([]);
+      return;
+    }
+    setTrashLoading(true);
+    setTrashError(null);
+    try {
+      const response = await listTrash(selectedAccountId, 50);
+      const list = response?.emails || response?.data?.emails || [];
+      setTrash(Array.isArray(list) ? list.map((e, index) => {
+        // Backend may use uid, _id, id, messageId, messageUid, emailId - normalize so we always have id/uid
+        const raw = e.uid ?? e._id ?? e.id ?? e.UID ?? e.messageId ?? e.messageUid ?? e.emailId;
+        const uid = raw != null ? String(raw) : undefined;
+        if (uid == null && e && typeof e === 'object') {
+          console.warn('Trash email missing uid/id - backend may use a different key. Keys received:', Object.keys(e), e);
+        }
+        return { ...e, id: uid, uid, folder: 'trash' };
+      }) : []);
+    } catch (err) {
+      console.error('Error loading trash:', err);
+      const msg = err.response?.data?.message || err.message || 'Failed to load trash';
+      setTrashError(msg);
+      setTrash([]);
+    } finally {
+      setTrashLoading(false);
     }
   };
 
@@ -1254,7 +1305,7 @@ const Email = () => {
           const folder = latestMessage.folder === 'sent' ? 'SENT' : 'INBOX';
           // Auto-mark as read for INBOX emails (default behavior)
           const shouldMarkAsRead = folder === 'INBOX';
-          const response = await fetchEmailByUid(latestMessage.uid, selectedAccountId, folder, true, shouldMarkAsRead, true);
+          const response = await fetchEmailByUid(latestMessage.uid, selectedAccountId, folder, true, shouldMarkAsRead, false);
           
           if (response.success && response.email && response.email.messages) {
             // Update with full thread data from backend
@@ -1320,6 +1371,7 @@ const Email = () => {
     const hasValidUid = originalUid !== null && originalUid !== undefined && originalUid !== '';
     const hasContentFromList = email.content || email.body;
     const isSentEmail = emailFolder === 'sent';
+    const isTrashEmail = emailFolder === 'trash';
     
       // For sent emails, use contentPreview if available, or fetch full details
       if (isSentEmail) {
@@ -1437,19 +1489,16 @@ const Email = () => {
       attachments: email.attachments?.length || 0
     });
     
-    // If we already have content from the list response, use it directly
-    // The list response has the correct content for the correct email
-    // DO NOT fetch - the list already has all the information we need
-    if (hasContentFromList) {
-      console.log('✅ Using content from list response - this is the correct email content', {
+    // For INBOX: always use the detail API (folder=INBOX&includeContent=true&includeThread=true).
+    // First open is without refresh for speed; use "Load content" / "Refresh" with refresh=true when body is missing.
+    if (hasContentFromList && isSentEmail) {
+      console.log('✅ Using content from list response (Sent) - this is the correct email content', {
         uid: originalUid,
         subject: originalSubject,
         contentLength: (email.content || email.body || '').length,
         contentPreview: (email.content || email.body || '').substring(0, 50)
       });
       
-      // Use content from list directly (NO FETCH - prevents wrong email from being displayed)
-      // Explicitly preserve all original fields including content
       const selectedEmailData = {
         ...email,
         id: originalId,
@@ -1458,57 +1507,53 @@ const Email = () => {
         from: originalFrom,
         fromName: email.fromName || email.from,
         timestamp: originalTimestamp,
-        // Ensure content and body are from the original email (from list)
         body: email.content || email.body || email.text || '',
         content: email.content || email.body || email.text || '',
-        // Preserve attachments from list
         attachments: email.attachments || [],
         hasAttachments: email.hasAttachments !== undefined ? email.hasAttachments : (email.attachments?.length > 0),
         attachmentCount: email.attachmentCount !== undefined ? email.attachmentCount : (email.attachments?.length || 0)
       };
       
-      console.log('✅ Setting selected email with list content:', {
-        id: selectedEmailData.id,
-        uid: selectedEmailData.uid,
-        subject: selectedEmailData.subject,
-        contentPreview: selectedEmailData.content.substring(0, 50)
-      });
-      
       setSelectedEmail(selectedEmailData);
       return;
     }
     
-    // Only fetch if we don't have content from list
+    // Fetch full email: for INBOX always; for others when we don't have list content
     if (hasValidUid && selectedAccountId) {
       try {
         // fetchEmailByUid will convert UID to string if needed
-        // IMPORTANT: Use folder=SENT for sent emails, folder=INBOX for inbox emails
-        const folder = isSentEmail ? 'SENT' : 'INBOX';
+        // Use folder=TRASH for trash, SENT for sent, INBOX for inbox
+        const folder = isTrashEmail ? 'TRASH' : (isSentEmail ? 'SENT' : 'INBOX');
         
         // Try to fetch with thread first (60s timeout)
-        // Auto-mark as read for INBOX emails (default behavior)
+        // Auto-mark as read only for INBOX
         const shouldMarkAsRead = folder === 'INBOX';
+        const openEmailApiUrl = `${API_CONFIG.BASE_URL}/api/v1/email-inbox/${originalUid}?folder=${folder}&includeContent=true&includeThread=true&markAsRead=${shouldMarkAsRead}&emailAccountId=${selectedAccountId}`;
+        if (isTrashEmail) {
+          console.log('📧 Open email from Trash – API:', openEmailApiUrl);
+        }
         let response;
         try {
-          response = await fetchEmailByUid(originalUid, selectedAccountId, folder, true, shouldMarkAsRead, true);
+          response = await fetchEmailByUid(originalUid, selectedAccountId, folder, true, shouldMarkAsRead, false);
         } catch (threadError) {
           // If thread request times out, try without thread (faster, 35s timeout)
           if (threadError.message?.includes('timeout') || threadError.message?.includes('timed out')) {
             console.warn('⚠️ Thread request timed out, fetching single email instead...');
-            response = await fetchEmailByUid(originalUid, selectedAccountId, folder, false, shouldMarkAsRead, true);
+            response = await fetchEmailByUid(originalUid, selectedAccountId, folder, false, shouldMarkAsRead, false);
           } else {
             throw threadError; // Re-throw if it's not a timeout error
           }
         }
 
         if (response.success && response.email) {
-          // Log the API URL being called
+          // Log the API URL (first open: no refresh for speed; use Refresh/Load content for refresh=true)
           console.log('🌐 API Endpoint Called:', {
-            url: `${API_CONFIG.BASE_URL}/api/v1/email-inbox/${originalUid}?emailAccountId=${selectedAccountId}&folder=${folder}&includeContent=true&includeThread=true`,
+            url: `${API_CONFIG.BASE_URL}/api/v1/email-inbox/${originalUid}?folder=${folder}&includeContent=true&includeThread=true&markAsRead=${shouldMarkAsRead}&emailAccountId=${selectedAccountId}`,
             method: 'GET',
             uid: originalUid,
             folder: folder,
-            includeThread: true
+            includeThread: true,
+            refresh: false
           });
           
           // CRITICAL: Log seen status from API response
@@ -1805,7 +1850,8 @@ const Email = () => {
             messageCount: transformedThreadMessages ? transformedThreadMessages.length : 1,
             // Update seen/isRead status from fetched email (use apiSeenStatus we determined above)
             seen: apiSeenStatus !== undefined ? apiSeenStatus : email.seen,
-            isRead: apiSeenStatus !== undefined ? apiSeenStatus : email.isRead
+            isRead: apiSeenStatus !== undefined ? apiSeenStatus : email.isRead,
+            folder: folder.toLowerCase()
           };
           
           // Update email in list to reflect read status after opening
@@ -1870,8 +1916,12 @@ const Email = () => {
       // Check if UID is empty/invalid
       const hasValidUid = originalUid !== null && originalUid !== undefined && originalUid !== '';
       if (!hasValidUid) {
+        const emailFolder = email.folder || 'inbox';
+        const folderParam = emailFolder === 'trash' ? 'TRASH' : (emailFolder === 'sent' ? 'SENT' : 'INBOX');
         console.log('Email has no valid UID, displaying basic info only:', { subject: originalSubject });
-        // Email has no UID, so we can't fetch full details - just use what we have
+        if (emailFolder === 'trash') {
+          console.log('📧 Open email from Trash – API not called (uid missing). Endpoint: GET /api/v1/email-inbox/[uid] with folder=TRASH&includeContent=true&includeThread=true&emailAccountId=... Fix: ensure trash list API returns uid for each email.');
+        }
         setSelectedEmail(email);
       } else {
         console.warn('Cannot fetch full email - missing uid or accountId:', { uid: originalUid, accountId: selectedAccountId });
@@ -1902,6 +1952,7 @@ const Email = () => {
           body: fullEmail.content || fullEmail.body || prev?.body,
           content: fullEmail.content || fullEmail.body || prev?.content,
           html: fullEmail.html || prev?.html,
+          cc: fullEmail.cc ?? prev?.cc,
           threadMessages: threadMessages || prev?.threadMessages,
           messages: threadMessages || prev?.messages,
           messageCount: res.messageCount ?? threadMessages?.length ?? prev?.messageCount,
@@ -2018,12 +2069,50 @@ const Email = () => {
     ));
   };
 
-  const deleteEmail = (emailId) => {
-    setEmails(prev => prev.map(email => 
-      email.id === emailId ? { ...email, folder: 'trash' } : email
-    ));
-    if (selectedEmail?.id === emailId) {
-      setSelectedEmail(null);
+  /** Move email from Inbox or Sent to Trash (soft delete). Called from viewer when folder is INBOX/SENT. */
+  const handleMoveToTrash = async (email) => {
+    if (!email?.uid && email?.id) return;
+    const uid = email.uid ?? email.id;
+    const folder = email.folder ? String(email.folder).toUpperCase() : (selectedTab === 0 ? 'INBOX' : 'SENT');
+    if (folder === 'TRASH') return; // Use Restore / Delete forever for trash
+    try {
+      await moveToTrash(uid, folder, selectedAccountId);
+      setEmails(prev => prev.filter(e => String(e.uid || e.id) !== String(uid)));
+      if (selectedEmail && String(selectedEmail.uid || selectedEmail.id) === String(uid)) {
+        setSelectedEmail(null);
+      }
+    } catch (err) {
+      setSendError(err.response?.data?.message || err.message || 'Failed to move to trash');
+    }
+  };
+
+  /** Restore email from Trash to Inbox. */
+  const handleRestoreFromTrash = async (email) => {
+    const uid = email?.uid ?? email?.id;
+    if (!uid) return;
+    try {
+      await restoreFromTrash(uid, selectedAccountId);
+      setTrash(prev => prev.filter(e => String(e.uid || e.id) !== String(uid)));
+      if (selectedEmail && String(selectedEmail.uid || selectedEmail.id) === String(uid)) {
+        setSelectedEmail(null);
+      }
+    } catch (err) {
+      setSendError(err.response?.data?.message || err.message || 'Failed to restore');
+    }
+  };
+
+  /** Permanently delete from Trash (cannot be undone). Call after confirmation. */
+  const handlePermanentDeleteFromTrash = async (uid) => {
+    if (!uid) return;
+    try {
+      await permanentDeleteFromTrash(uid, selectedAccountId);
+      setTrash(prev => prev.filter(e => String(e.uid || e.id) !== String(uid)));
+      if (selectedEmail && String(selectedEmail.uid || selectedEmail.id) === String(uid)) {
+        setSelectedEmail(null);
+      }
+      setPermanentDeleteConfirmUid(null);
+    } catch (err) {
+      setSendError(err.response?.data?.message || err.message || 'Failed to delete permanently');
     }
   };
 
@@ -2108,6 +2197,7 @@ const Email = () => {
     let filtered = emails;
     const tabFolders = ['inbox', 'sent'];
     if (selectedTab === 2) return []; // Drafts tab uses its own list
+    if (selectedTab === 3) return []; // Trash tab uses its own list
     if (selectedTab < tabs.length) {
       filtered = filtered.filter(email => email.folder === tabFolders[selectedTab]);
     }
@@ -2596,6 +2686,90 @@ const Email = () => {
                   </List>
                 )}
               </>
+            ) : selectedTab === 3 ? (
+              /* Trash tab */
+              <>
+                {trashError && (
+                  <Alert severity="error" sx={{ m: 2 }} onClose={() => setTrashError(null)}>
+                    {trashError}
+                  </Alert>
+                )}
+                {trashLoading ? (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                    <CircularProgress />
+                  </Box>
+                ) : trash.length === 0 ? (
+                  <Box sx={{ py: 6, px: 2, textAlign: 'center' }}>
+                    <TrashIcon sx={{ fontSize: 48, color: '#dadce0', mb: 1 }} />
+                    <Typography variant="body1" color="text.secondary">
+                      No emails in trash
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                      Emails you delete will show up here.
+                    </Typography>
+                  </Box>
+                ) : (
+                  <List disablePadding>
+                    {trash.map((trashEmail, idx) => (
+                      <ListItem
+                        key={trashEmail.uid ?? `trash-${idx}`}
+                        onClick={() => handleEmailSelect(trashEmail)}
+                        sx={{
+                          borderBottom: '1px solid #e8eaed',
+                          cursor: 'pointer',
+                          '&:hover': { backgroundColor: '#f8f9fa' },
+                          py: 1.5,
+                          px: 2,
+                        }}
+                        secondaryAction={
+                          <Box component="span" sx={{ display: 'flex', gap: 0.5 }}>
+                            <Tooltip title="Restore to Inbox">
+                              <IconButton
+                                size="small"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRestoreFromTrash(trashEmail);
+                                }}
+                                sx={{ color: '#5f6368' }}
+                                aria-label="Restore"
+                              >
+                                <RestoreIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Delete forever">
+                              <IconButton
+                                size="small"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPermanentDeleteConfirmUid(trashEmail.uid);
+                                }}
+                                sx={{ color: '#5f6368', '&:hover': { color: '#d93025' } }}
+                                aria-label="Delete forever"
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
+                        }
+                      >
+                        <ListItemText
+                          primary={trashEmail.subject || '(No subject)'}
+                          secondary={
+                            <Box component="span" sx={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {trashEmail.contentPreview || trashEmail.from || ''}
+                            </Box>
+                          }
+                          primaryTypographyProps={{ fontWeight: 500, fontSize: '0.9375rem' }}
+                          secondaryTypographyProps={{ color: 'text.secondary', fontSize: '0.8125rem' }}
+                        />
+                        <Typography variant="caption" color="text.secondary" sx={{ ml: 1, flexShrink: 0 }}>
+                          {trashEmail.date ? formatTimestamp(trashEmail.date) : ''}
+                        </Typography>
+                      </ListItem>
+                    ))}
+                  </List>
+                )}
+              </>
             ) : (
               <>
                 {searchActive && (searchResults.length > 0 || searchLoading) && (
@@ -2693,6 +2867,24 @@ const Email = () => {
         createdAccountId={selectedAccountId}
       />
 
+      {/* Permanent delete from Trash confirmation */}
+      <Dialog open={!!permanentDeleteConfirmUid} onClose={() => setPermanentDeleteConfirmUid(null)}>
+        <DialogTitle>Delete forever?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            This will permanently delete this email. This cannot be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPermanentDeleteConfirmUid(null)} color="inherit">
+            Cancel
+          </Button>
+          <Button onClick={() => permanentDeleteConfirmUid && handlePermanentDeleteFromTrash(permanentDeleteConfirmUid)} color="error" variant="contained">
+            Delete forever
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <ComposeDialog
         open={composeOpen}
         onClose={() => {
@@ -2747,13 +2939,15 @@ const Email = () => {
         <EmailViewer 
           selectedEmail={selectedEmail}
           onToggleStar={toggleStar}
-          onDelete={deleteEmail}
+          onDelete={handleMoveToTrash}
+          onRestore={handleRestoreFromTrash}
+          onPermanentDelete={(email) => setPermanentDeleteConfirmUid(email?.uid ?? email?.id)}
           onClose={() => setSelectedEmail(null)}
           onReply={handleReply}
           onRefresh={handleRefreshEmail}
           refreshingEmail={refreshingEmail}
           emailAccountId={selectedAccountId}
-          folder={selectedEmail?.folder ? String(selectedEmail.folder).toUpperCase() : (selectedTab === 0 ? 'INBOX' : 'SENT')}
+          folder={selectedEmail?.folder ? String(selectedEmail.folder).toUpperCase() : (selectedTab === 0 ? 'INBOX' : selectedTab === 1 ? 'SENT' : 'INBOX')}
           emailAccounts={emailAccounts}
         />
       </Dialog>

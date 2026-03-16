@@ -24,11 +24,12 @@ import {
   Delete as DeleteIcon,
   MarkEmailUnread as MarkEmailUnreadIcon,
   Forward as ForwardIcon,
+  RestoreFromTrash as RestoreIcon,
 } from '@mui/icons-material';
 import API_CONFIG from '../../config/api';
 import LabelActions from './LabelActions';
 
-const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose, onReply, onRefresh, refreshingEmail, emailAccountId, folder, emailAccounts = [] }) => {
+const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onRestore, onPermanentDelete, onClose, onReply, onRefresh, refreshingEmail, emailAccountId, folder, emailAccounts = [] }) => {
   const [refreshKey, setRefreshKey] = useState(0);
   
   if (!selectedEmail) return null;
@@ -282,6 +283,13 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose, onReply, 
   // If thread exists, use all messages; otherwise use single email. For Sent, backend returns full thread in email.messages.
   const messagesToDisplay = hasThread ? threadMessages : [selectedEmail];
   
+  // Content not loaded yet: body/html empty (DB had headers only). User can click "Load content" to call API with refresh=true.
+  const hasNoContent = messagesToDisplay.some((m) => {
+    const body = m.body || m.content || m.text || '';
+    const html = m.html || m.htmlBody || m.htmlContent || '';
+    return !(body && body.trim()) && !(html && html.trim());
+  });
+  
   // Get current user email for comparison
   const currentUserEmail = emailAccountId 
     ? emailAccounts?.find(acc => acc._id === emailAccountId)?.email || ''
@@ -369,11 +377,26 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose, onReply, 
               <ArchiveIcon sx={{ fontSize: 20 }} />
             </IconButton>
           </Tooltip>
-          <Tooltip title="Delete">
-            <IconButton size="small" onClick={() => onDelete && onDelete(selectedEmail?.id)} sx={{ color: '#5f6368', '&:hover': { backgroundColor: '#fce8e6', color: '#d93025' } }}>
-              <DeleteIcon sx={{ fontSize: 20 }} />
-            </IconButton>
-          </Tooltip>
+          {folder === 'TRASH' ? (
+            <>
+              <Tooltip title="Restore to Inbox">
+                <IconButton size="small" onClick={() => onRestore && onRestore(selectedEmail)} sx={{ color: '#5f6368', '&:hover': { backgroundColor: '#e8f0fe', color: '#1a73e8' } }}>
+                  <RestoreIcon sx={{ fontSize: 20 }} />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Delete forever">
+                <IconButton size="small" onClick={() => onPermanentDelete && onPermanentDelete(selectedEmail)} sx={{ color: '#5f6368', '&:hover': { backgroundColor: '#fce8e6', color: '#d93025' } }}>
+                  <DeleteIcon sx={{ fontSize: 20 }} />
+                </IconButton>
+              </Tooltip>
+            </>
+          ) : (
+            <Tooltip title="Move to trash">
+              <IconButton size="small" onClick={() => onDelete && onDelete(selectedEmail)} sx={{ color: '#5f6368', '&:hover': { backgroundColor: '#fce8e6', color: '#d93025' } }}>
+                <DeleteIcon sx={{ fontSize: 20 }} />
+              </IconButton>
+            </Tooltip>
+          )}
           <Tooltip title="Mark as unread">
             <IconButton size="small" sx={{ color: '#5f6368', '&:hover': { backgroundColor: '#f1f3f4', color: '#202124' } }}>
               <MarkEmailUnreadIcon sx={{ fontSize: 20 }} />
@@ -461,6 +484,24 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose, onReply, 
         maxWidth: '100%',
         boxSizing: 'border-box'
       }}>
+        {/* When body/html are empty, show "Load content" to fetch from server (refresh=true) */}
+        {hasNoContent && onRefresh && (
+          <Box sx={{ mb: 2, p: 2, backgroundColor: '#f8f9fa', borderRadius: 2, border: '1px solid #e8eaed' }}>
+            <Typography variant="body2" sx={{ color: '#5f6368', mb: 1.5 }}>
+              Content not loaded yet.
+            </Typography>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={refreshingEmail ? <CircularProgress size={16} /> : <RefreshIcon />}
+              onClick={() => onRefresh(selectedEmail)}
+              disabled={refreshingEmail}
+              sx={{ textTransform: 'none', fontWeight: 500 }}
+            >
+              {refreshingEmail ? 'Loading…' : 'Load content'}
+            </Button>
+          </Box>
+        )}
         {/* Display all messages in thread (oldest first) */}
         {messagesToDisplay.map((message, index) => {
           // Use API-provided sequential metadata if available, otherwise calculate from index
@@ -618,7 +659,7 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose, onReply, 
           
           return (
             <Box 
-              key={message.uid || message.id || index}
+              key={String(message.uid)}
               sx={{ 
                 mb: !isLastMessage ? 3 : 0,
                 width: '100%',
@@ -665,16 +706,22 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose, onReply, 
                     </Typography>
                   </Box>
                   
-                  {/* To/From Row - Gmail style: "to me" when recipient is current user, else "to email" */}
+                  {/* To: recipient (per-message) */}
                   {displayRecipientEmail && (
                     <Typography variant="body2" sx={{ color: '#5f6368', fontSize: '0.8125rem', mb: 0.5 }}>
                       to {currentUserEmail && displayRecipientEmail.toLowerCase() === currentUserEmail.toLowerCase() ? 'me' : displayRecipientEmail}
                     </Typography>
                   )}
+                  {/* CC: per-message (Section 7 – show when present) */}
+                  {message.cc && String(message.cc).trim() && (
+                    <Typography variant="body2" sx={{ color: '#5f6368', fontSize: '0.8125rem', mb: 0.5 }}>
+                      CC: {message.cc}
+                    </Typography>
+                  )}
                 </Box>
               </Box>
               
-              {/* Message Content - Gmail Style */}
+              {/* Message Content - Gmail Style (one container per message; prefer html else body) */}
               <Box sx={{ 
                 maxWidth: '100%',
                 width: '100%',
@@ -1044,22 +1091,45 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose, onReply, 
         boxSizing: 'border-box',
         overflow: 'hidden'
       }}>
-        <Button
-          variant="text"
-          startIcon={<ReplyIcon />}
-          onClick={() => onReply && onReply(selectedEmail)}
-          sx={{ 
-            textTransform: 'none',
-            color: '#5f6368',
-            fontWeight: 500,
-            fontSize: '0.875rem',
-            minWidth: 'auto',
-            px: 1.5,
-            '&:hover': { backgroundColor: '#f1f3f4' }
-          }}
-        >
-          Reply
-        </Button>
+        {folder === 'TRASH' ? (
+          <>
+            <Button
+              variant="text"
+              startIcon={<RestoreIcon />}
+              onClick={() => onRestore && onRestore(selectedEmail)}
+              sx={{ textTransform: 'none', color: '#5f6368', fontWeight: 500, fontSize: '0.875rem', minWidth: 'auto', px: 1.5, '&:hover': { backgroundColor: '#f1f3f4' } }}
+            >
+              Restore
+            </Button>
+            <Button
+              variant="text"
+              startIcon={<DeleteIcon />}
+              onClick={() => onPermanentDelete && onPermanentDelete(selectedEmail)}
+              sx={{ textTransform: 'none', color: '#d93025', fontWeight: 500, fontSize: '0.875rem', minWidth: 'auto', px: 1.5, '&:hover': { backgroundColor: '#fce8e6' } }}
+            >
+              Delete forever
+            </Button>
+          </>
+        ) : (
+          <Button
+            variant="text"
+            startIcon={<ReplyIcon />}
+            onClick={() => onReply && onReply(selectedEmail)}
+            sx={{ 
+              textTransform: 'none',
+              color: '#5f6368',
+              fontWeight: 500,
+              fontSize: '0.875rem',
+              minWidth: 'auto',
+              px: 1.5,
+              '&:hover': { backgroundColor: '#f1f3f4' }
+            }}
+          >
+            Reply
+          </Button>
+        )}
+        {folder !== 'TRASH' && (
+          <>
         {/* Forward button - commented out
         <Button
           variant="text"
@@ -1099,6 +1169,8 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onClose, onReply, 
               {refreshingEmail ? 'Syncing…' : 'Refresh'}
             </Button>
           </Tooltip>
+        )}
+          </>
         )}
       </Box>
     </Box>
