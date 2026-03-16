@@ -78,15 +78,24 @@ const ComposeDialog = ({
       const bccEmails = (initialDraft.bcc || '').split(/[,;]/).map((e) => e.trim()).filter(Boolean);
       setBccChips(bccEmails);
       if ((initialDraft.cc || initialDraft.bcc)) setShowCcBcc(true);
-      const draftAttachments = (initialDraft.attachments || []).map((att) => ({
-        filename: att.filename,
-        size: att.size || 0,
-        type: att.contentType || 'application/octet-stream',
-        fromDraft: true,
-        content: att.content,
-        contentType: att.contentType,
-        encoding: att.encoding || 'base64',
-      }));
+      const draftAttachments = (initialDraft.attachments || []).map((att) => {
+        const contentType = att.contentType || att.type || 'application/octet-stream';
+        const content = att.content || att.data;
+        const isImage = (contentType || '').startsWith('image/');
+        const preview = isImage && content
+          ? `data:${contentType};base64,${content}`
+          : null;
+        return {
+          filename: att.filename || att.name || 'attachment',
+          size: att.size || 0,
+          type: contentType,
+          contentType,
+          fromDraft: true,
+          content,
+          encoding: att.encoding || 'base64',
+          preview,
+        };
+      });
       setAttachments(draftAttachments);
     } else if (open && !initialDraft) {
       setEmailData({ to: '', cc: '', bcc: '', subject: '', text: '' });
@@ -794,6 +803,103 @@ const ComposeDialog = ({
           />
         </Box>
 
+        {/* Attachments Preview - above body so list is always visible */}
+        {attachments.length > 0 && (
+          <Box sx={{ 
+            px: 3, 
+            py: 2, 
+            borderBottom: '1px solid #e8eaed', 
+            backgroundColor: '#f8f9fa',
+            flexShrink: 0
+          }}>
+            <Typography variant="subtitle2" sx={{ 
+              color: '#202124', 
+              mb: 1.5, 
+              fontWeight: 700, 
+              fontSize: '0.9rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1
+            }}>
+              <AttachFileIcon sx={{ fontSize: 18, color: '#5f6368' }} />
+              Attachments ({attachments.length}/10)
+            </Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'center' }}>
+              {attachments.map((att, index) => (
+                <Box
+                  key={`att-${index}-${att.filename || ''}`}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1.5,
+                    minWidth: 0,
+                    maxWidth: '100%',
+                    px: 2,
+                    py: 1.25,
+                    backgroundColor: '#ffffff',
+                    borderRadius: 2,
+                    border: '1px solid #e8eaed',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                    transition: 'all 0.2s',
+                    '&:hover': {
+                      boxShadow: '0 2px 8px rgba(26, 115, 232, 0.2)',
+                      borderColor: '#1a73e8'
+                    }
+                  }}
+                >
+                  {att.preview ? (
+                    <img 
+                      src={att.preview} 
+                      alt={att.filename || 'Attachment'}
+                      style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }}
+                    />
+                  ) : (
+                    <Box sx={{ 
+                      width: 44, 
+                      height: 44, 
+                      flexShrink: 0,
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center',
+                      backgroundColor: '#e8f0fe',
+                      borderRadius: 1
+                    }}>
+                      {(att.type || att.contentType || '').startsWith('image/') ? (
+                        <ImageIcon sx={{ color: '#1a73e8', fontSize: 22 }} />
+                      ) : (
+                        <FileIcon sx={{ color: '#1a73e8', fontSize: 22 }} />
+                      )}
+                    </Box>
+                  )}
+                  <Box sx={{ flex: 1, minWidth: 0, maxWidth: 180 }}>
+                    <Typography variant="body2" sx={{ 
+                      fontWeight: 500, 
+                      color: '#202124',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      fontSize: '0.875rem'
+                    }}>
+                      {att.filename || 'File'}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: '#5f6368', fontSize: '0.75rem' }}>
+                      {att.size ? formatFileSize(att.size) : (att.fromDraft ? 'From draft' : '—')}
+                    </Typography>
+                  </Box>
+                  <IconButton 
+                    size="small" 
+                    onClick={(e) => { e.stopPropagation(); removeAttachment(index); }}
+                    sx={{ flexShrink: 0, color: '#5f6368', '&:hover': { color: '#d93025', backgroundColor: '#fce8e6' } }}
+                    aria-label={`Remove ${att.filename || 'attachment'}`}
+                  >
+                    <DeleteIcon sx={{ fontSize: 18 }} />
+                  </IconButton>
+                </Box>
+              ))}
+            </Box>
+          </Box>
+        )}
+
         {/* Body Field */}
         <Box sx={{ 
           px: 3, 
@@ -801,7 +907,7 @@ const ComposeDialog = ({
           flexGrow: 1, 
           overflow: 'auto', 
           backgroundColor: '#ffffff',
-          minHeight: 300
+          minHeight: 280
         }}>
           <TextField
             fullWidth
@@ -830,103 +936,6 @@ const ComposeDialog = ({
             }}
           />
         </Box>
-
-        {/* Attachments Preview */}
-        {attachments.length > 0 && (
-          <Box sx={{ 
-            px: 3, 
-            py: 2.5, 
-            borderTop: '1px solid #e8eaed', 
-            backgroundColor: '#f8f9fa',
-            borderBottom: '1px solid #e8eaed'
-          }}>
-            <Typography variant="subtitle2" sx={{ 
-              color: '#202124', 
-              mb: 2, 
-              fontWeight: 700, 
-              fontSize: '0.9rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1
-            }}>
-              <AttachFileIcon sx={{ fontSize: 18, color: '#5f6368' }} />
-              Attachments ({attachments.length}/10)
-            </Typography>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
-              {attachments.map((att, index) => (
-                <Box
-                  key={index}
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1.5,
-                    px: 2.5,
-                    py: 1.75,
-                    backgroundColor: '#ffffff',
-                    borderRadius: 3,
-                    border: '1px solid #e8eaed',
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.06)',
-                    transition: 'all 0.2s',
-                    cursor: 'pointer',
-                    '&:hover': {
-                      boxShadow: '0 4px 12px rgba(26, 115, 232, 0.15)',
-                      borderColor: '#1a73e8',
-                      transform: 'translateY(-2px)'
-                    }
-                  }}
-                >
-                  {att.preview ? (
-                    <img 
-                      src={att.preview} 
-                      alt={att.filename}
-                      style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 4 }}
-                    />
-                  ) : (
-                    <Box sx={{ 
-                      width: 40, 
-                      height: 40, 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      justifyContent: 'center',
-                      backgroundColor: '#e8f0fe',
-                      borderRadius: 1
-                    }}>
-                      {(att.type || att.contentType || '').startsWith('image/') ? (
-                        <ImageIcon sx={{ color: '#1a73e8', fontSize: 24 }} />
-                      ) : (
-                        <FileIcon sx={{ color: '#1a73e8', fontSize: 24 }} />
-                      )}
-                    </Box>
-                  )}
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography variant="body2" sx={{ 
-                      fontWeight: 500, 
-                      color: '#202124',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap'
-                    }}>
-                      {att.filename}
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: '#5f6368' }}>
-                      {formatFileSize(att.size || 0)}
-                    </Typography>
-                  </Box>
-                  <IconButton 
-                    size="small" 
-                    onClick={() => removeAttachment(index)}
-                    sx={{ 
-                      color: '#5f6368',
-                      '&:hover': { color: '#d93025', backgroundColor: '#fce8e6' }
-                    }}
-                  >
-                    <DeleteIcon sx={{ fontSize: 18 }} />
-                  </IconButton>
-                </Box>
-              ))}
-            </Box>
-          </Box>
-        )}
       </DialogContent>
 
       {/* Hidden File Input */}

@@ -349,9 +349,9 @@ export const fetchEmailByUid = async (uid, accountId, folder = 'INBOX', includeT
   // Convert UID to string (handles both number and string UIDs)
   const uidString = String(uid);
   
-  // Build query parameters - IMPORTANT: Use folder=SENT for sent emails
+  // Build query parameters - folder: INBOX | SENT | TRASH (same open-email endpoint for all)
   const params = new URLSearchParams({
-    folder: folder.toUpperCase(), // INBOX or SENT
+    folder: folder.toUpperCase(), // INBOX, SENT, or TRASH
     includeContent: 'true', // Get full content for detail view
     includeThread: includeThread ? 'true' : 'false', // Request full conversation thread (can be slow)
     markAsRead: markAsRead ? 'true' : 'false' // Automatically mark as read when opened (default: true, only for INBOX)
@@ -1182,6 +1182,55 @@ export const deleteDraft = async (draftId, emailAccountId = null) => {
   const params = emailAccountId ? `?emailAccountId=${encodeURIComponent(emailAccountId)}` : '';
   const response = await axios.delete(
     `${API_BASE_URL}/email-inbox/drafts/${encodeURIComponent(draftId)}${params}`,
+    { headers: getAuthHeaders() }
+  );
+  return response.data;
+};
+
+// --- Trash (list, move to trash, restore, permanent delete) ---
+
+export const listTrash = async (emailAccountId = null, limit = 50) => {
+  const token = getAuthToken();
+  if (!token) throw new Error('Please login to access trash');
+  const params = new URLSearchParams();
+  if (emailAccountId) params.append('emailAccountId', emailAccountId);
+  if (limit) params.append('limit', Math.min(limit, 100));
+  const url = `${API_BASE_URL}/email-inbox/trash${params.toString() ? `?${params.toString()}` : ''}`;
+  const response = await axios.get(url, { headers: getAuthHeaders() });
+  return response.data;
+};
+
+export const moveToTrash = async (emailUid, folder, emailAccountId = null) => {
+  const token = getAuthToken();
+  if (!token) throw new Error('Please login to move emails to trash');
+  const uidString = String(emailUid);
+  const response = await axios.post(
+    `${API_BASE_URL}/email-inbox/${uidString}/trash`,
+    { emailAccountId, folder: folder.toUpperCase() },
+    { headers: getAuthHeaders() }
+  );
+  return response.data;
+};
+
+export const restoreFromTrash = async (emailUid, emailAccountId = null) => {
+  const token = getAuthToken();
+  if (!token) throw new Error('Please login to restore emails');
+  const uidString = String(emailUid);
+  const response = await axios.post(
+    `${API_BASE_URL}/email-inbox/${uidString}/restore`,
+    emailAccountId ? { emailAccountId } : {},
+    { headers: getAuthHeaders() }
+  );
+  return response.data;
+};
+
+export const permanentDeleteFromTrash = async (emailUid, emailAccountId = null) => {
+  const token = getAuthToken();
+  if (!token) throw new Error('Please login to delete emails');
+  const uidString = String(emailUid);
+  const params = emailAccountId ? `?emailAccountId=${encodeURIComponent(emailAccountId)}` : '';
+  const response = await axios.delete(
+    `${API_BASE_URL}/email-inbox/trash/${uidString}${params}`,
     { headers: getAuthHeaders() }
   );
   return response.data;
