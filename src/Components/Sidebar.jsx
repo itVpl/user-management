@@ -61,6 +61,7 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Rate Request Report",
       "Call Records (Id)",
       "Call Data",
+      "HR Call Reports",
       "Report Analysis",
       "Emp Login Report"
     ],
@@ -533,6 +534,7 @@ const menuItems = [
   { name: "QA Call Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/qa/call-report" },
   { name: "All DO Assigned CMT", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/all-do-assigned-cmt" },
   { name: "Emp Login Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/emp-login-report" },
+  { name: "HR Call Reports", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/hr-call-reports" },
   { name: "Assigned Rate Request", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/assigned-rate-request" },
   { name: "Sub Company", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/SubCompanies" },
   { name: "Docs Upload", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/docs-upload" },
@@ -565,7 +567,8 @@ const REPORT_NAMES = [
   "Employee Feedback Report",
   "Attendance Leave",
   "Leave Approval",
-  "Final Charges Report"
+  "Final Charges Report",
+  "HR Call Reports"
 ];
 
 // Department-wise report categorization
@@ -596,7 +599,8 @@ const DEPARTMENT_REPORTS = {
     "Target Reports",
     "Employee Target Report",
     "Emp Login Report",
-    "Employee Feedback Report"
+    "Employee Feedback Report",
+    "HR Call Reports"
   ],
   "QA": [
     "QA Call Report"

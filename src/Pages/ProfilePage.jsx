@@ -87,6 +87,13 @@ const ProfilePage = () => {
   const [activityDate, setActivityDate] = useState(() => todayISO());
   const [submitting, setSubmitting] = useState(false);
 
+  // HR Call Excel import
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importFile, setImportFile] = useState(null);
+  const [importLoading, setImportLoading] = useState(false);
+  const [templateDownloading, setTemplateDownloading] = useState(false);
+  const [importResult, setImportResult] = useState(null); // { success, message, data: { imported, failed, errors } }
+
   const userStr = localStorage.getItem("user") || sessionStorage.getItem("user");
   const empId = userStr ? JSON.parse(userStr).empId : null;
 
@@ -157,6 +164,74 @@ const ProfilePage = () => {
       if (res.data.success && Array.isArray(res.data.data)) setCallLogs(res.data.data);
       else setCallLogs([]);
     } catch {}
+  };
+
+  const downloadImportTemplate = async () => {
+    setTemplateDownloading(true);
+    setImportResult(null);
+    try {
+      const res = await axios.get(
+        `${API_CONFIG.BASE_URL}/api/v1/hr-activity/call/import/template`,
+        { ...authHeader(), responseType: "blob" }
+      );
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "hr-call-import-template.xlsx";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setImportResult({
+        success: false,
+        message: err.response?.data?.message || "Failed to download template",
+        data: { imported: 0, failed: 0, errors: [] },
+      });
+    } finally {
+      setTemplateDownloading(false);
+    }
+  };
+
+  const handleImportSubmit = async (e) => {
+    e.preventDefault();
+    if (!importFile || !activityDate) return;
+    setImportLoading(true);
+    setImportResult(null);
+    try {
+      const formData = new FormData();
+      formData.append("excelFile", importFile);
+      formData.append("date", activityDate);
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+      const res = await axios.post(
+        `${API_CONFIG.BASE_URL}/api/v1/hr-activity/call/import`,
+        formData,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            // Do not set Content-Type; axios sets multipart/form-data with boundary
+          },
+          withCredentials: true,
+        }
+      );
+      const data = res.data;
+      setImportResult({
+        success: data.success,
+        message: data.message || (data.success ? "Import completed." : "Import failed."),
+        data: data.data || { imported: 0, failed: 0, errors: [] },
+      });
+      if (data.success) {
+        setImportFile(null);
+        fetchCallLogs(activityDate);
+      }
+    } catch (err) {
+      const msg = err.response?.data?.message || err.response?.data?.error || "Import failed.";
+      setImportResult({
+        success: false,
+        message: msg,
+        data: err.response?.data?.data || { imported: 0, failed: 0, errors: [] },
+      });
+    } finally {
+      setImportLoading(false);
+    }
   };
 
   const fetchHybridEligibility = async () => {
@@ -1400,8 +1475,69 @@ const ProfilePage = () => {
                         </svg>
                         Export to CSV
                       </button>
+
+                      <button
+                        type="button"
+                        onClick={() => { setImportModalOpen(true); setImportResult(null); setImportFile(null); }}
+                        className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2 font-medium"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                        </svg>
+                        Import
+                      </button>
                     </div>
                   </div>
+
+                  {/* Import modal */}
+                  {importModalOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setImportModalOpen(false)}>
+                      <div className="bg-white rounded-2xl shadow-xl max-w-md w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex justify-between items-center mb-4">
+                          <h3 className="text-lg font-semibold text-indigo-700">Import candidates from Excel</h3>
+                          <button type="button" onClick={() => setImportModalOpen(false)} className="text-gray-400 hover:text-gray-600 p-1">
+                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+                          </button>
+                        </div>
+                        <form onSubmit={handleImportSubmit} className="space-y-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Call date (for all imported rows)</label>
+                            <input type="date" readOnly value={activityDate} className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600" />
+                          </div>
+                          <div>
+                            <button type="button" onClick={downloadImportTemplate} disabled={templateDownloading} className="w-full px-4 py-2 border border-indigo-600 text-indigo-600 rounded-lg hover:bg-indigo-50 disabled:opacity-50 flex items-center justify-center gap-2">
+                              {templateDownloading ? "Downloading..." : "Download template (.xlsx)"}
+                            </button>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Excel file</label>
+                            <input type="file" accept=".xlsx,.xls,.xlsm" onChange={(e) => setImportFile(e.target.files?.[0] || null)} className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-indigo-50 file:text-indigo-700 file:font-medium" />
+                          </div>
+                          {importResult && (
+                            <div className={`p-3 rounded-lg text-sm ${importResult.success ? "bg-green-50 text-green-800 border border-green-200" : "bg-red-50 text-red-800 border border-red-200"}`}>
+                              <p className="font-medium">{importResult.message}</p>
+                              {importResult.data && (importResult.data.imported > 0 || importResult.data.failed > 0) && (
+                                <p className="mt-1">Imported: {importResult.data.imported}, Failed: {importResult.data.failed}</p>
+                              )}
+                              {importResult.data?.errors?.length > 0 && (
+                                <ul className="mt-2 list-disc list-inside space-y-0.5">
+                                  {importResult.data.errors.map((err, i) => (
+                                    <li key={i}>Row {err.row}: {err.message}</li>
+                                  ))}
+                                </ul>
+                              )}
+                            </div>
+                          )}
+                          <div className="flex gap-2 pt-2">
+                            <button type="button" onClick={() => setImportModalOpen(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
+                            <button type="submit" disabled={!importFile || importLoading} className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">
+                              {importLoading ? "Importing..." : "Import"}
+                            </button>
+                          </div>
+                        </form>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="overflow-x-auto rounded-xl border border-gray-200">
                     <table className="w-full text-sm text-left">
