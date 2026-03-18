@@ -483,19 +483,19 @@ export default function DOAndSchedulingReport() {
       <div className="flex flex-col gap-6 mb-6 border border-gray-200 rounded-xl p-6 bg-white">
         <div className="flex flex-col xl:flex-row gap-6">
           <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white rounded-xl border border-gray-200 p-6 h-[90px] flex items-center relative">
-              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-gray-700 font-bold text-2xl">
+            <div className="bg-white rounded-xl border border-gray-200 p-6 h-[105px] flex items-center relative">
+              <div className="w-16 h-12 rounded-full bg-red-100 flex items-center justify-center text-gray-700 font-bold text-2xl">
                 {totalCount}
               </div>
-              <div className="absolute inset-0 flex items-center justify-center text-gray-700 font-semibold">
+              <div className="absolute inset-0 flex items-center justify-center text-gray-700 font-semibold text-lg">
                 Total Orders
               </div>
             </div>
-            <div className="bg-white rounded-xl border border-gray-200 p-6 h-[90px] flex items-center relative">
+            <div className="bg-white rounded-xl border border-gray-200 p-6 h-[105px] flex items-center relative">
               <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-gray-700 font-bold text-2xl">
                 {todayCount}
               </div>
-              <div className="absolute inset-0 flex items-center justify-center text-gray-700 font-semibold">
+              <div className="absolute inset-0 flex items-center justify-center text-gray-700 font-semibold text-lg">
                 Today
               </div>
             </div>
@@ -506,7 +506,7 @@ export default function DOAndSchedulingReport() {
               <button
                 type="button"
                 onClick={() => setShowPresetMenu((v) => !v)}
-                className="w-full text-left px-4 h-[45px] border border-gray-200 rounded-lg bg-white flex items-center justify-between text-gray-700 font-medium hover:border-gray-300 transition-colors"
+                className="cursor-pointer w-full text-left px-4 h-[45px] border border-gray-200 rounded-lg bg-white flex items-center justify-between text-gray-700 font-medium hover:border-gray-300 transition-colors"
               >
                 <span>
                   {range.startDate && range.endDate
@@ -550,7 +550,7 @@ export default function DOAndSchedulingReport() {
               type="button"
               onClick={handleExportCSVClick}
               disabled={totalCount === 0 || exportLoading}
-              className="mt-2 w-full flex items-center justify-center gap-2 px-4 h-[45px] bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              className="cursor-pointer mt-2 w-full flex items-center justify-center gap-2 px-4 h-[45px] bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               title="Export report to CSV (E-Sign required)"
             >
               {exportLoading ? 'Exporting...' : <><Download size={18} /> Export to CSV</>}
@@ -565,17 +565,17 @@ export default function DOAndSchedulingReport() {
               placeholder="Search Orders"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-6 pr-12 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-colors text-gray-600 placeholder-gray-400"
+              className="w-full pl-10 pr-12 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-colors text-gray-600 placeholder-gray-400"
             />
-            <Search className="absolute right-6 top-1/2 transform -translate-y-1/2 text-gray-400" size={24} />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={24} />
           </div>
           <div className="relative shrink-0 min-w-[320px]" ref={cmtFilterRef}>
             <button
               type="button"
               onClick={() => setShowCmtFilter((v) => !v)}
-              className="h-full min-h-[48px] w-full px-4 py-3 border border-gray-200 rounded-xl bg-white hover:border-gray-300 flex items-center gap-2 text-gray-700 font-medium whitespace-nowrap"
+              className="cursor-pointer h-full min-h-[48px] w-full px-4 py-3 border border-gray-200 rounded-xl bg-white hover:border-gray-300 flex items-center gap-2 text-gray-700 font-medium whitespace-nowrap"
             >
-              <User size={18} className="text-gray-500 shrink-0" />
+              {/* <User size={18} className="text-gray-500 shrink-0" /> */}
               <span className="min-w-0 flex-1 text-left truncate max-w-[280px]">
                 {selectedCmtUser ? (selectedCmtUser.employeeName || selectedCmtUser.empName || selectedCmtUser.empId || 'CMT User') : 'CMT User (All)'}
               </span>
@@ -589,14 +589,14 @@ export default function DOAndSchedulingReport() {
                     placeholder="Search CMT user..."
                     value={cmtFilterSearch}
                     onChange={(e) => setCmtFilterSearch(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 placeholder-gray-400"
+                    className="w-full px-3 py-2 text-base border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 placeholder-gray-400"
                   />
                 </div>
                 <div className="max-h-60 overflow-y-auto py-1">
                   <button
                     type="button"
                     onClick={() => { setSelectedCmtEmpId(''); setShowCmtFilter(false); setCmtFilterSearch(''); }}
-                    className={`w-full text-left px-4 py-2.5 text-sm font-medium ${!selectedCmtEmpId ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`}
+                    className={`w-full text-left px-4 py-2.5 text-base font-medium ${!selectedCmtEmpId ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`}
                   >
                     All CMT Users
                   </button>
@@ -613,10 +613,10 @@ export default function DOAndSchedulingReport() {
                           key={id}
                           type="button"
                           onClick={() => { setSelectedCmtEmpId(id); setShowCmtFilter(false); setCmtFilterSearch(''); }}
-                          className={`w-full text-left px-4 py-2.5 text-sm ${selectedCmtEmpId === id ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700 hover:bg-gray-50'}`}
+                          className={`cursor-pointer w-full text-left px-4 py-2.5 text-base ${selectedCmtEmpId === id ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700 hover:bg-gray-50'}`}
                         >
                           <span className="block truncate">{name}</span>
-                          {id && <span className="block text-xs text-gray-500 mt-0.5">ID: {id}</span>}
+                          {id && <span className="block text-sm text-gray-500 mt-0.5">ID: {id}</span>}
                         </button>
                       );
                     })
@@ -672,16 +672,16 @@ export default function DOAndSchedulingReport() {
           ) : (
             <table className="w-full">
               <thead className="bg-white border-b border-gray-200">
-                <tr>
-                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Load No</th>
-                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Dispatcher Name</th>
-                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Carrier Name</th>
-                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Load Type</th>
-                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Created By (Sales)</th>
-                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Assigned To (CMT)</th>
-                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Assigned At</th>
-                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Status</th>
-                  <th className="text-center py-4 px-4 text-gray-800 font-medium text-base">Action</th>
+                <tr className="bg-gray-100">
+                  <th className="text-left py-4 px-4 text-gray-500 font-medium text-base">Load No</th>
+                  <th className="text-left py-4 px-4 text-gray-500 font-medium text-base">Dispatcher Name</th>
+                  <th className="text-left py-4 px-4 text-gray-500 font-medium text-base">Carrier Name</th>
+                  <th className="text-left py-4 px-4 text-gray-500 font-medium text-base">Load Type</th>
+                  <th className="text-left py-4 px-4 text-gray-500 font-medium text-base">Created By (Sales)</th>
+                  <th className="text-left py-4 px-4 text-gray-500 font-medium text-base">Assigned To (CMT)</th>
+                  <th className="text-left py-4 px-4 text-gray-500 font-medium text-base">Assigned At</th>
+                  <th className="text-left py-4 px-4 text-gray-500 font-medium text-base">Status</th>
+                  <th className="text-center py-4 px-4 text-gray-500 font-medium text-base">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -707,28 +707,76 @@ export default function DOAndSchedulingReport() {
                   };
                   return (
                     <tr key={order._id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                      <td className="py-4 px-4"><span className="text-sm text-gray-600 font-medium">{loadNo}</span></td>
-                      <td className="py-4 px-4"><span className="text-sm font-medium text-gray-800">{dispatcherName}</span></td>
-                      <td className="py-4 px-4"><span className="text-sm font-medium text-gray-800">{carrierName}</span></td>
-                      <td className="py-4 px-4"><span className="text-sm font-medium text-gray-800">{order.loadType || 'N/A'}</span></td>
-                      <td className="py-4 px-4"><span className="text-sm font-medium text-gray-800">{createdBy}</span></td>
-                      <td className="py-4 px-4"><span className="text-sm font-medium text-gray-800">{assignedTo}</span></td>
-                      <td className="py-4 px-4"><span className="text-sm text-gray-700">{assignedAt}</span></td>
+                      <td className="py-4 px-4"><span className="text-gray-700 font-medium">{loadNo}</span></td>
+                      <td className="py-4 px-4"><span className="font-medium text-gray-700">{dispatcherName}</span></td>
+                    <td className="py-4 px-4">
+  <div className="relative group max-w-[140px]">
+
+    {/* Truncated Text */}
+    <span className="font-medium text-gray-700 block truncate">
+      {carrierName || "-"}
+    </span>
+
+    {/* Tooltip */}
+    {carrierName && (
+      <div className="absolute left-0 top-full mt-2 hidden group-hover:block
+                      bg-gray-900 text-white text-sm
+                      px-3 py-2.5
+                      rounded-lg shadow-xl
+                      max-w-[180px]
+                      break-words
+                      z-50">
+        {carrierName}
+      </div>
+    )}
+
+  </div>
+</td>
+                      <td className="py-4 px-4"><span className="font-medium text-gray-700">{order.loadType || 'N/A'}</span></td>
+                      <td className="py-4 px-4"><span className="font-medium text-gray-700">{createdBy}</span></td>
+                      <td className="py-4 px-4"><span className="font-medium text-gray-700">{assignedTo}</span></td>
+                      <td className="py-4 px-4"><span className="text-gray-700 font-medium">{assignedAt}</span></td>
                       <td className="py-4 px-4">
-                        <span className={`inline-flex px-2.5 py-1 rounded-md text-xs font-medium ${
-                          (loadStatus || '').toLowerCase() === 'delivered' ? 'bg-green-100 text-green-800' :
-                          (loadStatus || '').toLowerCase().includes('transit') ? 'bg-amber-100 text-amber-800' :
-                          'bg-gray-100 text-gray-700'
-                        }`}>
-                          {loadStatus}
-                        </span>
-                      </td>
+  <div className="relative group max-w-[100px]">
+    
+    {/* Status Badge */}
+    <span
+      className={`inline-flex px-2.5 py-1 rounded-md font-medium 
+                  max-w-full truncate
+                  ${
+                    (loadStatus || '').toLowerCase() === 'delivered'
+                      ? 'bg-green-100 text-green-700'
+                      : (loadStatus || '').toLowerCase().includes('transit')
+                      ? 'bg-amber-100 text-amber-700'
+                      : 'bg-gray-100 text-gray-700'
+                  }`}
+    >
+      <span className="truncate">
+        {loadStatus || "-"}
+      </span>
+    </span>
+
+    {/* Tooltip */}
+    {loadStatus && (
+      <div className="absolute left-0 top-full mt-2 hidden group-hover:block
+                      bg-gray-900 text-white text-sm
+                      px-3 py-2.5
+                      rounded-lg shadow-xl
+                      max-w-[160px]
+                      break-words
+                      z-50">
+        {loadStatus}
+      </div>
+    )}
+
+  </div>
+</td>
                       <td className="py-4 px-4">
                         <button
                           onClick={() => setViewingOrder(orderForModal)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-base cursor-pointer font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
                         >
-                          <Eye size={14} /> View
+                           View
                         </button>
                       </td>
                     </tr>
@@ -750,7 +798,7 @@ export default function DOAndSchedulingReport() {
             <button
               onClick={() => handlePageChange(currentPage - 1)}
               disabled={currentPage === 1}
-              className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+              className="cursor-pointer flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-base font-medium"
             >
               <ChevronLeft size={18} /><span>Previous</span>
             </button>
@@ -762,7 +810,7 @@ export default function DOAndSchedulingReport() {
                   <button
                     key={page}
                     onClick={() => handlePageChange(page)}
-                    className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-all ${
+                    className={`cursor-pointer w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-all ${
                       currentPage === page ? 'bg-white border border-black shadow-sm text-black' : 'text-gray-600 hover:bg-gray-50'
                     }`}
                   >
@@ -774,7 +822,7 @@ export default function DOAndSchedulingReport() {
             <button
               onClick={() => handlePageChange(currentPage + 1)}
               disabled={currentPage === totalPages}
-              className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+              className="cursor-pointer flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-base font-medium"
             >
               <span>Next</span><ChevronRight size={18} />
             </button>
