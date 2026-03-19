@@ -75,6 +75,7 @@ const ProfilePage = () => {
   const [hrShortlistLoadingId, setHrShortlistLoadingId] = useState(null); // id of row being shortlisted
   const [hrCallSearch, setHrCallSearch] = useState("");
   const [hrExpFilter, setHrExpFilter] = useState("all");
+  const [hrShortlistedFilter, setHrShortlistedFilter] = useState("all"); // "all" | "true" | "false"
   const [hrCallPage, setHrCallPage] = useState(1);
   const hrCallRowsPerPage = 5;
   const [activityName, setActivityName] = useState("");
@@ -188,11 +189,15 @@ const ProfilePage = () => {
     }
   };
 
-  const fetchCallLogs = async (date) => {
+  const fetchCallLogs = async (date, shortlistedFilter = hrShortlistedFilter) => {
     try {
       if (!date) return;
+      const params = new URLSearchParams({ date });
+      if (shortlistedFilter === "true" || shortlistedFilter === "false") {
+        params.set("shortlisted", shortlistedFilter);
+      }
       const res = await axios.get(
-        `${API_CONFIG.BASE_URL}/api/v1/hr-activity/call/date?date=${date}`,
+        `${API_CONFIG.BASE_URL}/api/v1/hr-activity/call/date?${params.toString()}`,
         authHeader(),
       );
       if (res.data.success && Array.isArray(res.data.data)) {
@@ -208,22 +213,43 @@ const ProfilePage = () => {
     }
   };
 
-  const handleHrShortlist = async (candidateId) => {
-    if (!candidateId) return;
-    setHrShortlistLoadingId(candidateId);
+  const handleHrShortlist = async (log) => {
+    const candidateId = log.candidateId ?? null;
+    const logId = log.id ?? log._id;
+    const rowKey = logId || candidateId;
+    if (!rowKey) return;
+    setHrShortlistLoadingId(rowKey);
+    const token = sessionStorage.getItem("token") || localStorage.getItem("token");
     try {
-      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-      const res = await axios.put(
-        `${API_CONFIG.BASE_URL}/api/v1/candidate/${candidateId}/shortlist`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` }, withCredentials: true },
-      );
-      if (res.data && res.data.success) {
-        // Re-fetch using the currently selected date.
-        await fetchCallLogs(activityDate);
+      if (candidateId) {
+        const res = await axios.put(
+          `${API_CONFIG.BASE_URL}/api/v1/candidate/${candidateId}/shortlist`,
+          {},
+          { headers: { Authorization: `Bearer ${token}` }, withCredentials: true },
+        );
+        if (res.data && res.data.success) {
+          await fetchCallLogs(activityDate);
+        }
+      } else if (logId) {
+        // Shortlist by HR activity log id when call was logged without a linked candidate
+        const res = await axios.put(
+          `${API_CONFIG.BASE_URL}/api/v1/hr-activity/call/${logId}/shortlist`,
+          {},
+          { headers: { Authorization: `Bearer ${token}` }, withCredentials: true },
+        );
+        if (res.data && res.data.success) {
+          await fetchCallLogs(activityDate);
+        }
       }
     } catch (err) {
-      console.error("Shortlist failed:", err);
+      if (!candidateId && (err.response?.status === 404 || err.response?.status === 501)) {
+        console.warn("HR activity shortlist by log not supported:", err.response?.data?.message);
+        alert("This call log is not linked to a candidate. Your backend may need to support shortlisting by activity log (e.g. PUT /api/v1/hr-activity/call/:id/shortlist).");
+      } else {
+        console.error("Shortlist failed:", err);
+        const msg = err.response?.data?.message || err.message || "Shortlist failed.";
+        alert(msg);
+      }
     } finally {
       setHrShortlistLoadingId(null);
     }
@@ -332,17 +358,19 @@ const ProfilePage = () => {
     const today = todayISO();
     setActivityDate(today);
     setAttendanceDate(today); // Attendance: default select today
-    fetchCallLogs(today);
+    // HR call logs: do not auto-fetch; data loads only when user changes date or filters
   }, []);
 
   useEffect(() => {
     if (activeTab !== "hrActivity") return;
     if (hrActivityInitRef.current) return;
     hrActivityInitRef.current = true;
-    const today = todayISO();
-    setActivityDate(today);
+    setActivityDate(""); // empty until user selects a date
+    setCallLogs([]);
+    setCallLogsHeaders(null);
     setHrExpFilter("all");
-    fetchCallLogs(today);
+    setHrShortlistedFilter("all");
+    // Do not auto-fetch: data loads only when user manually selects a date or changes filter
   }, [activeTab]);
 
   useEffect(() => {
@@ -802,7 +830,7 @@ const ProfilePage = () => {
       })
     : hrLogsAfterExp;
 
-  const hrHasAnyFilter = Boolean(hrCallSearchTerm) || hrExpFilter !== "all";
+  const hrHasAnyFilter = Boolean(hrCallSearchTerm) || hrExpFilter !== "all" || hrShortlistedFilter !== "all";
   const hrCallTotalEntries = hrCallLogsForTable.length;
   const hrCallTotalPages =
     hrCallTotalEntries > 0
@@ -850,18 +878,19 @@ const ProfilePage = () => {
   const resetHrFilters = () => {
     const today = todayISO();
     setHrExpFilter("all");
+    setHrShortlistedFilter("all");
     setHrCallSearch("");
     setHrCallPage(1);
     if (activityDate === today) {
       setActivityDate("");
       setTimeout(() => {
         setActivityDate(today);
-        fetchCallLogs(today);
+        fetchCallLogs(today, "all");
       }, 0);
       return;
     }
     setActivityDate(today);
-    fetchCallLogs(today);
+    fetchCallLogs(today, "all");
   };
 
   /* ============ Render ============ */
@@ -2221,9 +2250,24 @@ const ProfilePage = () => {
                         const d = e.target.value;
                         setActivityDate(d);
                         setHrCallPage(1);
-                        fetchCallLogs(d);
+                        fetchCallLogs(d, hrShortlistedFilter);
                       }}
                     />
+
+                    <select
+                      value={hrShortlistedFilter}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setHrShortlistedFilter(val);
+                        setHrCallPage(1);
+                        fetchCallLogs(activityDate, val);
+                      }}
+                      className="cursor-pointer h-11 px-3 rounded-xl border-1 border-gray-300 bg-white w-full sm:w-[200px]"
+                    >
+                      <option value="all">All (shortlisted &amp; not)</option>
+                      <option value="true">Shortlisted only</option>
+                      <option value="false">Not shortlisted</option>
+                    </select>
 
                     <select
                       value={hrExpFilter}
@@ -2328,8 +2372,10 @@ const ProfilePage = () => {
                           const date = log.activityDate ?? cd.activityDate ?? log.date;
                           const shortlisted = log.shortlisted === true;
                           const candidateId = log.candidateId ?? null;
-                          const canShortlist = Boolean(candidateId) && !shortlisted;
-                          const isShortlisting = hrShortlistLoadingId === candidateId;
+                          const logId = log.id ?? log._id;
+                          const rowKey = logId || candidateId;
+                          const canShortlist = !shortlisted && Boolean(rowKey);
+                          const isShortlisting = hrShortlistLoadingId === rowKey;
 
                           const statusLabel = (status) => {
                             if (!status) return null;
@@ -2354,12 +2400,27 @@ const ProfilePage = () => {
                               return val ?? "—";
                             }
                             if (key === "shortlisted") {
-                              return shortlisted ? (
-                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
-                                  <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-                                  Yes
-                                </span>
-                              ) : <span className="text-gray-400">—</span>;
+                              if (shortlisted) {
+                                return (
+                                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+                                    <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                                    Yes
+                                  </span>
+                                );
+                              }
+                              if (canShortlist) {
+                                return (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleHrShortlist(log)}
+                                    disabled={isShortlisting}
+                                    className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                                  >
+                                    {isShortlisting ? "Shortlisting…" : "Shortlist"}
+                                  </button>
+                                );
+                              }
+                              return <span className="text-gray-400">—</span>;
                             }
                             if (key === "candidateStatus") {
                               const status = log.candidateStatus ?? (shortlisted ? "Shortlisted" : null);
@@ -2370,7 +2431,7 @@ const ProfilePage = () => {
                                 return (
                                   <button
                                     type="button"
-                                    onClick={() => handleHrShortlist(candidateId)}
+                                    onClick={() => handleHrShortlist(log)}
                                     disabled={isShortlisting}
                                     className="px-3 py-1.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
                                   >
