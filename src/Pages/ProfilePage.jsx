@@ -70,7 +70,7 @@ const ProfilePage = () => {
 
   // HR Activity state (kept from your code)
   const [callLogs, setCallLogs] = useState([]);
-  const [callLogsHeaders, setCallLogsHeaders] = useState(null); // from API when response has headers (new format)
+  const [_callLogsHeaders, setCallLogsHeaders] = useState(null); // from API when response has headers (new format)
   const [hrCallModalOpen, setHrCallModalOpen] = useState(false);
   const [hrShortlistLoadingId, setHrShortlistLoadingId] = useState(null); // id of row being shortlisted
   const [hrCallSearch, setHrCallSearch] = useState("");
@@ -191,7 +191,53 @@ const ProfilePage = () => {
 
   const fetchCallLogs = async (date, shortlistedFilter = hrShortlistedFilter) => {
     try {
-      if (!date) return;
+      if (!date) {
+        const res = await axios.get(
+          `${API_CONFIG.BASE_URL}/api/v1/candidate/all`,
+          authHeader(),
+        );
+        const raw =
+          res.data?.candidates ??
+          res.data?.data?.candidates ??
+          res.data?.data ??
+          [];
+        const list = Array.isArray(raw) ? raw : [];
+        const mapped = list.map((c) => {
+          const statusRaw = c?.status != null ? String(c.status) : "";
+          const status = statusRaw.trim().toLowerCase();
+          const shortlisted =
+            c?.shortlisted === true ||
+            status === "shortlisted" ||
+            status === "short list" ||
+            status === "short-list" ||
+            status === "shortlisted ";
+
+          const createdAt = c?.createdAt ?? c?.updatedAt ?? null;
+          const experience =
+            c?.experience != null
+              ? `${c.experience} years`
+              : (c?.totalExp != null ? `${c.totalExp} years` : "");
+
+          return {
+            candidateId: c?._id ?? c?.id ?? null,
+            activityDate: createdAt,
+            shortlisted,
+            candidateStatus: statusRaw,
+            Name: c?.candidateName ?? c?.name ?? "",
+            "Phone number": c?.phone ?? c?.mobileNo ?? c?.phoneNumber ?? "",
+            Email: c?.email ?? "",
+            "Job role": c?.profile ?? (c?.department ? String(c.department) : ""),
+            "Experience/ last company name": experience,
+            Salary: c?.currentSalary ?? c?.salary ?? "",
+            Location: c?.currentLocation ?? c?.location ?? "",
+            Resume: c?.resume ?? c?.resumeUrl ?? "",
+          };
+        });
+
+        setCallLogs(mapped);
+        setCallLogsHeaders(null);
+        return;
+      }
       const params = new URLSearchParams({ date });
       if (shortlistedFilter === "true" || shortlistedFilter === "false") {
         params.set("shortlisted", shortlistedFilter);
@@ -370,7 +416,7 @@ const ProfilePage = () => {
     setCallLogsHeaders(null);
     setHrExpFilter("all");
     setHrShortlistedFilter("all");
-    // Do not auto-fetch: data loads only when user manually selects a date or changes filter
+    fetchCallLogs("", "all");
   }, [activeTab]);
 
   useEffect(() => {
@@ -778,16 +824,18 @@ const ProfilePage = () => {
 
   // Fixed 15 columns for HR Call table (14 data + Action for Shortlist)
   const HR_CALL_TABLE_COLUMNS = [
-    { key: "activityDate", label: "Date" },
-    { key: "durationFormatted", label: "Duration" },
-    { key: "shortlisted", label: "Shortlisted" },
-    { key: "candidateStatus", label: "Candidate Status" },
+   
+    // { key: "durationFormatted", label: "Duration" },
+   
     { key: "Name", label: "Name" },
     { key: "Age", label: "Age" },
     { key: "Gender", label: "Gender" },
     { key: "Phone number", label: "Phone number" },
     { key: "Email", label: "Email" },
     { key: "Job role", label: "Job role" },
+     { key: "shortlisted", label: "Shortlisted" },
+    { key: "candidateStatus", label: "Candidate Status" },
+     { key: "activityDate", label: "Date" },
     { key: "Salary", label: "Salary" },
     { key: "Experience/ last company name", label: "Experience/ last company name" },
     { key: "Location", label: "Location" },
@@ -808,8 +856,28 @@ const ProfilePage = () => {
           return years >= n && years < n + 1;
         });
 
+  const isHrShortlistedLog = (log) => {
+    if (!log) return false;
+    if (log.shortlisted === true) return true;
+    const s =
+      log.candidateStatus ??
+      log.status ??
+      log.callDetails?.candidateStatus ??
+      log.callDetails?.status ??
+      "";
+    return String(s).trim().toLowerCase() === "shortlisted";
+  };
+
+  const hrLogsAfterShortlisted =
+    hrShortlistedFilter === "all"
+      ? hrLogsAfterExp
+      : hrLogsAfterExp.filter((log) => {
+          const want = hrShortlistedFilter === "true";
+          return isHrShortlistedLog(log) === want;
+        });
+
   const hrCallLogsForTable = hrCallSearchTerm
-    ? hrLogsAfterExp.filter((log) => {
+    ? hrLogsAfterShortlisted.filter((log) => {
         const haystack = [
           getLogVal(log, "Name"),
           getLogVal(log, "name"),
@@ -828,7 +896,7 @@ const ProfilePage = () => {
           .toLowerCase();
         return haystack.includes(hrCallSearchTerm);
       })
-    : hrLogsAfterExp;
+    : hrLogsAfterShortlisted;
 
   const hrHasAnyFilter = Boolean(hrCallSearchTerm) || hrExpFilter !== "all" || hrShortlistedFilter !== "all";
   const hrCallTotalEntries = hrCallLogsForTable.length;
@@ -876,21 +944,12 @@ const ProfilePage = () => {
   })();
 
   const resetHrFilters = () => {
-    const today = todayISO();
     setHrExpFilter("all");
     setHrShortlistedFilter("all");
     setHrCallSearch("");
     setHrCallPage(1);
-    if (activityDate === today) {
-      setActivityDate("");
-      setTimeout(() => {
-        setActivityDate(today);
-        fetchCallLogs(today, "all");
-      }, 0);
-      return;
-    }
-    setActivityDate(today);
-    fetchCallLogs(today, "all");
+    setActivityDate("");
+    fetchCallLogs("", "all");
   };
 
   /* ============ Render ============ */
@@ -2176,7 +2235,7 @@ const ProfilePage = () => {
                     <div className="flex items-center gap-4 px-8 py-3 rounded-xl border-1 border-gray-300 min-w-[280px]">
                       <div className="w-11 h-11 rounded-full bg-blue-50 border-1 border-blue-200 flex items-center justify-center flex-shrink-0">
                         <span className="text-blue-600 font-bold text-2xl">
-                          {callLogs.length}
+                          {hrCallTotalEntries}
                         </span>
                       </div>
                       <div className="flex-1 text-center">
