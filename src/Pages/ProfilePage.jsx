@@ -70,7 +70,9 @@ const ProfilePage = () => {
 
   // HR Activity state (kept from your code)
   const [callLogs, setCallLogs] = useState([]);
+  const [callLogsHeaders, setCallLogsHeaders] = useState(null); // from API when response has headers (new format)
   const [hrCallModalOpen, setHrCallModalOpen] = useState(false);
+  const [hrShortlistLoadingId, setHrShortlistLoadingId] = useState(null); // id of row being shortlisted
   const [hrCallSearch, setHrCallSearch] = useState("");
   const [hrExpFilter, setHrExpFilter] = useState("all");
   const [hrCallPage, setHrCallPage] = useState(1);
@@ -193,11 +195,37 @@ const ProfilePage = () => {
         `${API_CONFIG.BASE_URL}/api/v1/hr-activity/call/date?date=${date}`,
         authHeader(),
       );
-      if (res.data.success && Array.isArray(res.data.data))
+      if (res.data.success && Array.isArray(res.data.data)) {
         setCallLogs(res.data.data);
-      else setCallLogs([]);
+        setCallLogsHeaders(res.data.headers || null);
+      } else {
+        setCallLogs([]);
+        setCallLogsHeaders(null);
+      }
     } catch {
-      return;
+      setCallLogs([]);
+      setCallLogsHeaders(null);
+    }
+  };
+
+  const handleHrShortlist = async (candidateId) => {
+    if (!candidateId) return;
+    setHrShortlistLoadingId(candidateId);
+    try {
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+      const res = await axios.put(
+        `${API_CONFIG.BASE_URL}/api/v1/candidate/${candidateId}/shortlist`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` }, withCredentials: true },
+      );
+      if (res.data && res.data.success) {
+        // Re-fetch using the currently selected date.
+        await fetchCallLogs(activityDate);
+      }
+    } catch (err) {
+      console.error("Shortlist failed:", err);
+    } finally {
+      setHrShortlistLoadingId(null);
     }
   };
 
@@ -603,31 +631,41 @@ const ProfilePage = () => {
       "Notice Period",
       "Email",
       "Comment",
+      "Shortlisted",
+      "Candidate Status",
       "Purpose",
       "Duration (mins)",
       "Date",
       "Notes",
     ];
 
-    // Convert data to CSV format
+    // Convert data to CSV format (supports both headers-based and callDetails format)
     const csvData = callLogs.map((log) => {
-      const cd = log.callDetails || {};
-      const get = (k) => cd[k] ?? log[k] ?? "";
-
+      const get = (k) => {
+        const v = getLogVal(log, k);
+        return v !== undefined && v !== null ? String(v) : "";
+      };
+      const shortlisted = log.shortlisted === true ? "Yes" : "No";
+      const candidateStatus = (log.candidateStatus ?? (log.shortlisted ? "Shortlisted" : "")) || "";
+      const dur = log.durationFormatted ?? log.callDetails?.duration ?? log.duration;
+      const date = log.activityDate ?? log.callDetails?.activityDate ?? log.date;
+      const notes = log.notes ?? log.callDetails?.notes ?? "";
       return [
-        get("name"),
-        get("mobileNo"),
-        get("totalExp"),
-        get("currentLocation"),
-        get("currentCompany"),
-        get("currentSalary"),
+        get("Name") || get("name"),
+        get("Phone number") || get("mobileNo"),
+        get("Experience/ last company name") || get("totalExp"),
+        get("Location") || get("currentLocation"),
+        get("CurrentCompany") || get("currentCompany"),
+        get("Salary") || get("currentSalary"),
         get("noticePeriod"),
-        get("email"),
+        get("Email") || get("email"),
         get("comment"),
+        shortlisted,
+        candidateStatus,
         get("purpose"),
-        cd.duration ?? log.duration ?? "",
-        cd.activityDate ?? log.activityDate ?? log.date ?? "",
-        cd.notes ?? log.notes ?? "",
+        typeof dur === "string" ? dur : (dur != null ? `${dur}` : ""),
+        date ? new Date(date).toISOString().slice(0, 10) : "",
+        notes,
       ];
     });
 
@@ -679,16 +717,64 @@ const ProfilePage = () => {
     return Number.isFinite(n) ? n : null;
   };
 
+  // Unified getter: supports new API format (flat keys from headers) and old format (callDetails)
+  const getLogVal = (log, key) => {
+    if (!log) return undefined;
+    const cd = log.callDetails || {};
+    const map = {
+      Name: () => log.Name ?? cd.name,
+      "Phone number": () => log["Phone number"] ?? cd.mobileNo,
+      Email: () => log.Email ?? cd.email,
+      "Job role": () => log["Job role"] ?? cd.profile,
+      Salary: () => log.Salary ?? cd.currentSalary,
+      "Experience/ last company name": () => log["Experience/ last company name"] ?? cd.totalExp,
+      Location: () => log.Location ?? cd.currentLocation,
+      Age: () => log.Age ?? cd.age,
+      Gender: () => log.Gender ?? cd.gender,
+      Resume: () => log.Resume ?? cd.resume,
+      name: () => log.Name ?? cd.name,
+      mobileNo: () => log["Phone number"] ?? cd.mobileNo,
+      totalExp: () => log["Experience/ last company name"] ?? cd.totalExp,
+      currentLocation: () => log.Location ?? cd.currentLocation,
+      currentCompany: () => log.CurrentCompany ?? cd.currentCompany,
+      currentSalary: () => log.Salary ?? cd.currentSalary,
+      noticePeriod: () => log.NoticePeriod ?? cd.noticePeriod,
+      email: () => log.Email ?? cd.email,
+      comment: () => log.Comment ?? cd.comment,
+      purpose: () => log.Purpose ?? cd.purpose,
+      notes: () => log.notes ?? cd.notes,
+    };
+    if (map[key]) return map[key]();
+    return log[key] ?? cd[key];
+  };
+
+  // Fixed 15 columns for HR Call table (14 data + Action for Shortlist)
+  const HR_CALL_TABLE_COLUMNS = [
+    { key: "activityDate", label: "Date" },
+    { key: "durationFormatted", label: "Duration" },
+    { key: "shortlisted", label: "Shortlisted" },
+    { key: "candidateStatus", label: "Candidate Status" },
+    { key: "Name", label: "Name" },
+    { key: "Age", label: "Age" },
+    { key: "Gender", label: "Gender" },
+    { key: "Phone number", label: "Phone number" },
+    { key: "Email", label: "Email" },
+    { key: "Job role", label: "Job role" },
+    { key: "Salary", label: "Salary" },
+    { key: "Experience/ last company name", label: "Experience/ last company name" },
+    { key: "Location", label: "Location" },
+    { key: "Resume", label: "Resume" },
+    { key: "_action", label: "Action" },
+  ];
+
   const hrLogsAfterExp =
     hrExpFilter === "all"
       ? callLogs
       : callLogs.filter((log) => {
-          const cd = log?.callDetails || {};
-          const years = expYearsFromText(cd.totalExp ?? log?.totalExp);
+          const expVal = getLogVal(log, "Experience/ last company name") ?? getLogVal(log, "totalExp");
+          const years = expYearsFromText(expVal);
           if (years == null) return false;
-
           if (hrExpFilter === "10+") return years >= 10;
-
           const n = Number(hrExpFilter);
           if (!Number.isFinite(n) || n < 1) return true;
           return years >= n && years < n + 1;
@@ -696,19 +782,18 @@ const ProfilePage = () => {
 
   const hrCallLogsForTable = hrCallSearchTerm
     ? hrLogsAfterExp.filter((log) => {
-        const cd = log?.callDetails || {};
         const haystack = [
-          cd.name ?? log?.name,
-          cd.mobileNo ?? log?.mobileNo,
-          cd.totalExp ?? log?.totalExp,
-          cd.currentLocation ?? log?.currentLocation,
-          cd.currentCompany ?? log?.currentCompany,
-          cd.currentSalary ?? log?.currentSalary,
-          cd.noticePeriod ?? log?.noticePeriod,
-          cd.email ?? log?.email,
-          cd.comment ?? log?.comment,
-          cd.purpose ?? log?.purpose,
-          cd.notes ?? log?.notes,
+          getLogVal(log, "Name"),
+          getLogVal(log, "name"),
+          getLogVal(log, "Phone number"),
+          getLogVal(log, "mobileNo"),
+          getLogVal(log, "Email"),
+          getLogVal(log, "email"),
+          getLogVal(log, "Job role"),
+          getLogVal(log, "currentCompany"),
+          getLogVal(log, "purpose"),
+          getLogVal(log, "Location"),
+          getLogVal(log, "currentLocation"),
         ]
           .filter(Boolean)
           .join(" ")
@@ -2224,45 +2309,14 @@ const ProfilePage = () => {
                   <table className="w-full text-left min-w-max border-separate border-spacing-y-3">
                     <thead>
                       <tr>
-                        <th className="text-left py-4 px-6 text-gray-600 font-medium text-base bg-gray-100 border-y border-gray-200 border-l rounded-l-xl">
-                          Name
-                        </th>
-                        <th className="text-left py-4 px-6 text-gray-600 font-medium text-base bg-gray-100 border-y border-gray-200">
-                          Mobile No
-                        </th>
-                        <th className="text-left py-4 px-6 text-gray-600 font-medium text-base bg-gray-100 border-y border-gray-200">
-                          Total Exp
-                        </th>
-                        <th className="text-left py-4 px-6 text-gray-600 font-medium text-base bg-gray-100 border-y border-gray-200">
-                          Current Location
-                        </th>
-                        <th className="text-left py-4 px-6 text-gray-600 font-medium text-base bg-gray-100 border-y border-gray-200">
-                          Current Company
-                        </th>
-                        <th className="text-left py-4 px-6 text-gray-600 font-medium text-base bg-gray-100 border-y border-gray-200">
-                          Current Salary
-                        </th>
-                        <th className="text-left py-4 px-6 text-gray-600 font-medium text-base bg-gray-100 border-y border-gray-200">
-                          Notice Period
-                        </th>
-                        <th className="text-left py-4 px-6 text-gray-600 font-medium text-base bg-gray-100 border-y border-gray-200">
-                          Email
-                        </th>
-                        <th className="text-left py-4 px-6 text-gray-600 font-medium text-base bg-gray-100 border-y border-gray-200">
-                          Comment
-                        </th>
-                        <th className="text-left py-4 px-6 text-gray-600 font-medium text-base bg-gray-100 border-y border-gray-200">
-                          Purpose
-                        </th>
-                        <th className="text-left py-4 px-6 text-gray-600 font-medium text-base bg-gray-100 border-y border-gray-200">
-                          Duration
-                        </th>
-                        <th className="text-left py-4 px-6 text-gray-600 font-medium text-base bg-gray-100 border-y border-gray-200">
-                          Date
-                        </th>
-                        <th className="text-left py-4 px-6 text-gray-600 font-medium text-base bg-gray-100 border-y border-gray-200 border-r rounded-r-xl">
-                          Notes
-                        </th>
+                        {HR_CALL_TABLE_COLUMNS.map((col, i) => (
+                          <th
+                            key={col.key}
+                            className={`text-left py-4 px-6 text-gray-600 font-medium text-base bg-gray-100 border-y border-gray-200 ${i === 0 ? "border-l rounded-l-xl" : ""} ${i === HR_CALL_TABLE_COLUMNS.length - 1 ? "border-r rounded-r-xl" : ""}`}
+                          >
+                            {col.label}
+                          </th>
+                        ))}
                       </tr>
                     </thead>
 
@@ -2270,79 +2324,83 @@ const ProfilePage = () => {
                       {hrCallTotalEntries ? (
                         hrCallLogsPage.map((log, idx) => {
                           const cd = log.callDetails || {};
-                          const get = (k) => cd[k] ?? log[k] ?? "-";
-                          const dur = cd.duration ?? log.duration;
-                          const date =
-                            cd.activityDate ?? log.activityDate ?? log.date;
-                          const colorEnum = cd.color ?? log.color ?? "red";
-                          const commentText = get("comment");
+                          const dur = log.durationFormatted ?? cd.duration ?? log.duration;
+                          const date = log.activityDate ?? cd.activityDate ?? log.date;
+                          const shortlisted = log.shortlisted === true;
+                          const candidateId = log.candidateId ?? null;
+                          const canShortlist = Boolean(candidateId) && !shortlisted;
+                          const isShortlisting = hrShortlistLoadingId === candidateId;
+
+                          const statusLabel = (status) => {
+                            if (!status) return null;
+                            const s = String(status).toLowerCase();
+                            const statusClass =
+                              s === "shortlisted" ? "bg-blue-100 text-blue-700" :
+                              s === "interviewed" ? "bg-yellow-100 text-yellow-700" :
+                              s === "selected" ? "bg-green-100 text-green-700" :
+                              s === "rejected" ? "bg-red-100 text-red-700" :
+                              "bg-gray-100 text-gray-700";
+                            const label = status.charAt(0).toUpperCase() + status.slice(1);
+                            return <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${statusClass}`}>{label}</span>;
+                          };
+
+                          const renderCell = (col) => {
+                            const { key } = col;
+                            if (key === "activityDate") {
+                              return date ? new Date(date).toISOString().slice(0, 10) : "—";
+                            }
+                            if (key === "durationFormatted") {
+                              const val = log.durationFormatted ?? (dur !== undefined && dur !== null ? `${dur} min` : null);
+                              return val ?? "—";
+                            }
+                            if (key === "shortlisted") {
+                              return shortlisted ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+                                  <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                                  Yes
+                                </span>
+                              ) : <span className="text-gray-400">—</span>;
+                            }
+                            if (key === "candidateStatus") {
+                              const status = log.candidateStatus ?? (shortlisted ? "Shortlisted" : null);
+                              return statusLabel(status) ?? <span className="text-gray-400">—</span>;
+                            }
+                            if (key === "_action") {
+                              if (canShortlist) {
+                                return (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleHrShortlist(candidateId)}
+                                    disabled={isShortlisting}
+                                    className="px-3 py-1.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                                  >
+                                    {isShortlisting ? "Shortlisting…" : "Shortlist"}
+                                  </button>
+                                );
+                              }
+                              return <span className="text-gray-400">—</span>;
+                            }
+                            const val = getLogVal(log, key);
+                            return val !== undefined && val !== null && val !== "" ? String(val) : "—";
+                          };
 
                           return (
-                            <tr
-                              key={log?._id || `${hrCallStartIndex + idx}`}
-                              className="group"
-                            >
-                              <td className="py-4 px-6 bg-white border-y border-gray-200 border-l rounded-l-xl text-gray-700 font-medium group-hover:bg-gray-50">
-                                {get("name")}
-                              </td>
-                              <td className="py-4 px-6 bg-white border-y border-gray-200 text-gray-700 font-medium group-hover:bg-gray-50">
-                                {get("mobileNo")}
-                              </td>
-                              <td className="py-4 px-6 bg-white border-y border-gray-200 text-gray-700 font-medium group-hover:bg-gray-50">
-                                {get("totalExp")}
-                              </td>
-                              <td className="py-4 px-6 bg-white border-y border-gray-200 text-gray-700 font-medium group-hover:bg-gray-50">
-                                {get("currentLocation")}
-                              </td>
-                              <td className="py-4 px-6 bg-white border-y border-gray-200 text-gray-700 font-medium group-hover:bg-gray-50">
-                                {get("currentCompany")}
-                              </td>
-                              <td className="py-4 px-6 bg-white border-y border-gray-200 text-gray-700 font-medium group-hover:bg-gray-50">
-                                {get("currentSalary")}
-                              </td>
-                              <td className="py-4 px-6 bg-white border-y border-gray-200 text-gray-700 font-medium group-hover:bg-gray-50">
-                                {get("noticePeriod")}
-                              </td>
-                              <td className="py-4 px-6 bg-white border-y border-gray-200 text-gray-700 font-medium group-hover:bg-gray-50">
-                                {get("email")}
-                              </td>
-                              <td className="py-4 px-6 bg-white border-y border-gray-200 text-gray-700 font-medium group-hover:bg-gray-50 whitespace-nowrap">
-                                {commentText && commentText !== "-" ? (
-                                  <span
-                                    className="inline-flex items-center gap-2"
-                                    style={{ color: colorEnum }}
-                                  >
-                                    <span
-                                      className="inline-block w-2.5 h-2.5 rounded-full"
-                                      style={{ backgroundColor: colorEnum }}
-                                    />
-                                    {commentText}
-                                  </span>
-                                ) : (
-                                  "-"
-                                )}
-                              </td>
-                              <td className="py-4 px-6 bg-white border-y border-gray-200 text-gray-700 font-medium group-hover:bg-gray-50">
-                                {get("purpose")}
-                              </td>
-                              <td className="py-4 px-6 bg-white border-y border-gray-200 text-gray-700 font-medium group-hover:bg-gray-50">
-                                {dur === 0 || dur ? `${dur} min` : "-"}
-                              </td>
-                              <td className="py-4 px-6 bg-white border-y border-gray-200 text-gray-700 font-medium group-hover:bg-gray-50 whitespace-nowrap">
-                                {date
-                                  ? new Date(date).toISOString().slice(0, 10)
-                                  : "-"}
-                              </td>
-                              <td className="py-4 px-6 bg-white border-y border-gray-200 border-r rounded-r-xl text-gray-700 font-medium group-hover:bg-gray-50">
-                                {cd.notes ?? log.notes ?? "-"}
-                              </td>
+                            <tr key={log?.id || log?._id || `${hrCallStartIndex + idx}`} className="group">
+                              {HR_CALL_TABLE_COLUMNS.map((col, i) => (
+                                <td
+                                  key={col.key}
+                                  className={`py-4 px-6 bg-white border-y border-gray-200 text-gray-700 font-medium group-hover:bg-gray-50 ${i === 0 ? "border-l rounded-l-xl" : ""} ${i === HR_CALL_TABLE_COLUMNS.length - 1 ? "border-r rounded-r-xl" : ""}`}
+                                >
+                                  {renderCell(col)}
+                                </td>
+                              ))}
                             </tr>
                           );
                         })
                       ) : (
                         <tr>
                           <td
-                            colSpan={13}
+                            colSpan={HR_CALL_TABLE_COLUMNS.length}
                             className="py-10 px-6 text-center text-gray-500 bg-white border border-gray-200 rounded-xl text-sm font-medium"
                           >
                             {hrHasAnyFilter
