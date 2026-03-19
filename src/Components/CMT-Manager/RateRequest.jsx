@@ -14,6 +14,7 @@ import {
   FileText,
   PlusCircle,
   MessageCircle,
+  MapPin,
 } from "lucide-react";
 import { DateRange } from "react-date-range";
 import { format, addDays } from "date-fns";
@@ -138,6 +139,19 @@ const RateRequest = () => {
   ]);
   const [chargesPopupError, setChargesPopupError] = useState("");
   const [ratesArray, setRatesArray] = useState([]); // Store charges array for API
+
+  // Load by Pickup & Destination (With Trucker) section
+  const [pickupDestPickupZip, setPickupDestPickupZip] = useState("");
+  const [pickupDestPickupCity, setPickupDestPickupCity] = useState("");
+  const [pickupDestDestZip, setPickupDestDestZip] = useState("");
+  const [pickupDestDestCity, setPickupDestDestCity] = useState("");
+  const [pickupDestLoads, setPickupDestLoads] = useState([]);
+  const [pickupDestPagination, setPickupDestPagination] = useState(null);
+  const [pickupDestPage, setPickupDestPage] = useState(1);
+  const [pickupDestLimit, setPickupDestLimit] = useState(20);
+  const [pickupDestLoading, setPickupDestLoading] = useState(false);
+  const [pickupDestError, setPickupDestError] = useState("");
+  const [pickupDestViewLoad, setPickupDestViewLoad] = useState(null);
 
   // timers
   const [timerStartMap, setTimerStartMap] = useState(() =>
@@ -958,6 +972,70 @@ const RateRequest = () => {
     );
     fetchTruckers();
   }, []);
+
+  // Load by Pickup & Destination (With Trucker) API
+  const fetchLoadsByPickupDestinationWithTrucker = async (
+    page = pickupDestPage,
+    limit = pickupDestLimit,
+  ) => {
+    const hasPickup = (pickupDestPickupZip || "").trim() || (pickupDestPickupCity || "").trim();
+    const hasDestination = (pickupDestDestZip || "").trim() || (pickupDestDestCity || "").trim();
+    if (!hasPickup || !hasDestination) {
+      setPickupDestError(
+        "Pickup (zip or city) and destination (zip or city) are required",
+      );
+      return;
+    }
+    setPickupDestError("");
+    setPickupDestLoading(true);
+    try {
+      const token = getAuthToken();
+      if (!token) {
+        toast.error("Please login to access this resource");
+        setPickupDestLoading(false);
+        return;
+      }
+      const params = new URLSearchParams();
+      if ((pickupDestPickupZip || "").trim())
+        params.set("pickupZip", pickupDestPickupZip.trim());
+      if ((pickupDestPickupCity || "").trim())
+        params.set("pickupCity", pickupDestPickupCity.trim());
+      if ((pickupDestDestZip || "").trim())
+        params.set("destinationZip", pickupDestDestZip.trim());
+      if ((pickupDestDestCity || "").trim())
+        params.set("destinationCity", pickupDestDestCity.trim());
+      params.set("page", String(page));
+      params.set("limit", String(limit));
+
+      const res = await axios.get(
+        `${API_CONFIG.BASE_URL}/api/v1/load/by-pickup-destination-with-trucker?${params}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+      const data = res.data;
+      if (data && data.success !== false) {
+        setPickupDestLoads(Array.isArray(data.data) ? data.data : []);
+        setPickupDestPagination(data.pagination || null);
+        setPickupDestPage(page);
+      } else {
+        setPickupDestLoads([]);
+        setPickupDestPagination(null);
+        setPickupDestError(data?.message || "Failed to fetch loads");
+      }
+    } catch (err) {
+      const msg =
+        err.response?.data?.message || err.message || "Failed to fetch loads";
+      setPickupDestError(msg);
+      setPickupDestLoads([]);
+      setPickupDestPagination(null);
+    } finally {
+      setPickupDestLoading(false);
+    }
+  };
 
   // Fetch data when tab changes
   useEffect(() => {
@@ -2176,31 +2254,46 @@ const RateRequest = () => {
               <span>All Rate Request</span>
             </div>
           </button>
+          <button
+            onClick={() => setActiveTab("pickupDest")}
+            className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${
+              activeTab === "pickupDest"
+                ? "bg-gradient-to-r from-amber-500 to-orange-600 text-white border border-transparent"
+                : "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <MapPin size={18} />
+              <span>Load by Pickup & Destination</span>
+            </div>
+          </button>
         </div>
 
         {/* Stats row - Consignment style: border only, no shadow */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-          <div className="p-4 border border-gray-200 rounded-xl flex items-center justify-between">
-            <div>
-              <p className="text-xl font-medium mb-3">
-                {activeTab === "rate" ? "Today Rate Request" : "Total Assigned"}
-              </p>
-              <p className="text-2xl font-bold text-gray-800">
-                {rateRequestPagination?.totalItems ??
-                  (activeTab === "rate"
-                    ? completedRequests.length > 0
-                      ? completedRequests.length
-                      : rateRequests.length
-                    : completedRequests.length > 0
-                      ? completedRequests.length
-                      : rateRequests.length)}
-              </p>
-            </div>
-            <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-              <CheckCircle className="text-green-600" size={18} />
+        {activeTab !== "pickupDest" && (
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+            <div className="p-4 border border-gray-200 rounded-xl flex items-center justify-between">
+              <div>
+                <p className="text-xl font-medium mb-3">
+                  {activeTab === "rate" ? "Today Rate Request" : "Total Assigned"}
+                </p>
+                <p className="text-2xl font-bold text-gray-800">
+                  {rateRequestPagination?.totalItems ??
+                    (activeTab === "rate"
+                      ? completedRequests.length > 0
+                        ? completedRequests.length
+                        : rateRequests.length
+                      : completedRequests.length > 0
+                        ? completedRequests.length
+                        : rateRequests.length)}
+                </p>
+              </div>
+              <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                <CheckCircle className="text-green-600" size={18} />
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Pending Tab */}
@@ -5256,6 +5349,354 @@ const RateRequest = () => {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Load by Pickup & Destination (With Trucker) Tab */}
+      {activeTab === "pickupDest" && (
+        <div className="space-y-6">
+          {/* Search form */}
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+              <MapPin className="text-amber-500" size={20} />
+              Find loads by pickup and destination
+            </h3>
+            <p className="text-sm text-gray-500 mb-4">
+              Enter at least one of zip or city for pickup, and one for destination. Rate and bid information are not shown.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+              <div className="space-y-3">
+                <label className="block text-sm font-medium text-gray-700">Pickup</label>
+                <div className="flex flex-wrap gap-3">
+                  <input
+                    type="text"
+                    placeholder="Zip (e.g. 77001)"
+                    value={pickupDestPickupZip}
+                    onChange={(e) => setPickupDestPickupZip(e.target.value)}
+                    className="flex-1 min-w-[120px] px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                  />
+                  <input
+                    type="text"
+                    placeholder="City (e.g. Houston)"
+                    value={pickupDestPickupCity}
+                    onChange={(e) => setPickupDestPickupCity(e.target.value)}
+                    className="flex-1 min-w-[140px] px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+              <div className="space-y-3">
+                <label className="block text-sm font-medium text-gray-700">Destination</label>
+                <div className="flex flex-wrap gap-3">
+                  <input
+                    type="text"
+                    placeholder="Zip (e.g. 75201)"
+                    value={pickupDestDestZip}
+                    onChange={(e) => setPickupDestDestZip(e.target.value)}
+                    className="flex-1 min-w-[120px] px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                  />
+                  <input
+                    type="text"
+                    placeholder="City (e.g. Dallas)"
+                    value={pickupDestDestCity}
+                    onChange={(e) => setPickupDestDestCity(e.target.value)}
+                    className="flex-1 min-w-[140px] px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+            </div>
+            {pickupDestError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                {pickupDestError}
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => fetchLoadsByPickupDestinationWithTrucker(1)}
+              disabled={pickupDestLoading}
+              className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 text-white font-semibold rounded-lg hover:from-amber-600 hover:to-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+            >
+              {pickupDestLoading ? (
+                <>
+                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              Search
+                </>
+              ) : (
+                <>
+                  <Search size={18} />
+              Find loads
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Results */}
+          {(pickupDestLoads.length > 0 || (pickupDestPagination && pickupDestPagination.total === 0)) && (
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              {pickupDestLoads.length === 0 ? (
+                <div className="p-12 text-center text-gray-500">
+                  {pickupDestPagination?.total === 0
+                    ? "No loads found for this pickup and destination combination"
+                    : pickupDestError || "No results"}
+                </div>
+              ) : (
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-left border-separate border-spacing-y-0">
+                      <thead>
+                        <tr className="bg-gray-100">
+                          <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y first:border-l border-gray-200 rounded-l-lg whitespace-nowrap">
+                            Load ID
+                          </th>
+                          <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200 whitespace-nowrap">
+                            Weight (lbs)
+                          </th>
+                          <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                            Pick-Up
+                          </th>
+                          <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                            Drop
+                          </th>
+                          <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                            Vehicle
+                          </th>
+                          <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                            Shipment Type
+                          </th>
+                          <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                            Date & Time
+                          </th>
+                          <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                            Trucker / Carrier
+                          </th>
+                          <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y last:border-r border-gray-200 rounded-r-lg">
+                            Details
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pickupDestLoads.map((load) => {
+                          const origin = load.origins?.[0] || load.origin || {};
+                          const dest = load.destinations?.[0] || load.destination || {};
+                          const pickupCity = origin.city || "—";
+                          const pickupState = origin.state || "";
+                          const pickupZip = origin.zip || origin.zipcode || "";
+                          const destCity = dest.city || "—";
+                          const destState = dest.state || "";
+                          const destZip = dest.zip || dest.zipcode || "";
+                          const trucker = load.trucker;
+                          const truckerName = trucker?.compName ?? "No trucker assigned";
+                          const truckerMcDot = trucker?.mc_dot_no ? `MC/DOT: ${trucker.mc_dot_no}` : "";
+                          return (
+                            <tr
+                              key={load._id}
+                              className="bg-white hover:bg-gray-50 transition-colors border-b border-gray-100"
+                            >
+                              <td className="px-4 py-4 border-y first:border-l border-gray-200 first:rounded-l-lg">
+                                <span className="font-medium text-gray-700">
+                                  {loadShort(load._id)}
+                                </span>
+                              </td>
+                              <td className="px-4 py-4 border-y border-gray-200">
+                                <span className="font-medium text-gray-700">
+                                  {(load.weight ?? 0).toLocaleString()} lbs
+                                </span>
+                              </td>
+                              <td className="px-4 py-4 border-y border-gray-200">
+                                <div>
+                                  <span className="font-medium text-gray-700">{pickupCity}</span>
+                                  {(pickupState || pickupZip) && (
+                                    <p className="text-sm text-gray-500">
+                                      {[pickupState, pickupZip].filter(Boolean).join(" ")}
+                                    </p>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-4 py-4 border-y border-gray-200">
+                                <div>
+                                  <span className="font-medium text-gray-700">{destCity}</span>
+                                  {(destState || destZip) && (
+                                    <p className="text-sm text-gray-500">
+                                      {[destState, destZip].filter(Boolean).join(" ")}
+                                    </p>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-4 py-4 border-y border-gray-200">
+                                <span className="font-medium text-gray-700">
+                                  {load.vehicleType || "—"}
+                                </span>
+                              </td>
+                              <td className="px-4 py-4 border-y border-gray-200">
+                                {load.loadType ? (
+                                  <span className="font-medium text-gray-700">{load.loadType}</span>
+                                ) : "—"}
+                              </td>
+                              <td className="px-4 py-4 border-y border-gray-200">
+                                {load.pickupDate || load.createdAt ? (
+                                  <div>
+                                    <div className="font-medium text-gray-700">
+                                      {new Date(load.pickupDate || load.createdAt).toLocaleDateString("en-US", {
+                                        month: "2-digit",
+                                        day: "2-digit",
+                                        year: "numeric",
+                                      })}
+                                    </div>
+                                    <div className="text-sm text-gray-500">
+                                      {new Date(load.pickupDate || load.createdAt).toLocaleTimeString("en-US", {
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                        hour12: true,
+                                      })}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <span className="font-medium text-gray-400">—</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-4 border-y border-gray-200">
+                                <div>
+                                  <span className="font-medium text-gray-700">{truckerName}</span>
+                                  {truckerMcDot && (
+                                    <p className="text-xs text-gray-500">{truckerMcDot}</p>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-4 py-4 border-y last:border-r border-gray-200 last:rounded-r-lg">
+                                <button
+                                  type="button"
+                                  onClick={() => setPickupDestViewLoad(load)}
+                                  className="px-3 py-1.5 text-sm font-medium text-amber-600 hover:text-amber-700 hover:bg-amber-50 rounded-lg transition-colors"
+                                >
+                                  View
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  {/* Pagination */}
+                  {pickupDestPagination && pickupDestPagination.totalPages > 1 && (
+                    <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-3 border-t border-gray-200 bg-gray-50">
+                      <div className="text-sm text-gray-600">
+                        Page {pickupDestPagination.page} of {pickupDestPagination.totalPages} ({pickupDestPagination.total} total)
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => fetchLoadsByPickupDestinationWithTrucker(pickupDestPage - 1)}
+                          disabled={pickupDestPage <= 1 || pickupDestLoading}
+                          className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Previous
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => fetchLoadsByPickupDestinationWithTrucker(pickupDestPage + 1)}
+                          disabled={
+                            pickupDestPage >= pickupDestPagination.totalPages || pickupDestLoading
+                          }
+                          className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Load by Pickup & Destination - View load modal */}
+      {pickupDestViewLoad && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40"
+          onClick={() => setPickupDestViewLoad(null)}
+        >
+          <div
+            className="bg-white rounded-xl border border-gray-200 shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6 border-b border-gray-200 flex justify-between items-center bg-gradient-to-r from-amber-50 to-orange-50">
+              <h3 className="text-lg font-semibold text-gray-800">
+                Load & trucker details — {loadShort(pickupDestViewLoad._id)}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setPickupDestViewLoad(null)}
+                className="p-2 rounded-lg hover:bg-gray-200 text-gray-600"
+              >
+                <span className="sr-only">Close</span>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs font-medium text-gray-500 uppercase">Shipment #</p>
+                  <p className="font-medium text-gray-800">{pickupDestViewLoad.shipmentNumber || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-gray-500 uppercase">Status</p>
+                  <p className="font-medium text-gray-800">{pickupDestViewLoad.status || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-gray-500 uppercase">Weight</p>
+                  <p className="font-medium text-gray-800">{(pickupDestViewLoad.weight ?? 0).toLocaleString()} lbs</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-gray-500 uppercase">Vehicle type</p>
+                  <p className="font-medium text-gray-800">{pickupDestViewLoad.vehicleType || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-gray-500 uppercase">Load type</p>
+                  <p className="font-medium text-gray-800">{pickupDestViewLoad.loadType || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-gray-500 uppercase">Commodity</p>
+                  <p className="font-medium text-gray-800">{pickupDestViewLoad.commodity || "—"}</p>
+                </div>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-500 uppercase mb-2">Pickup</p>
+                <p className="text-gray-800">
+                  {(() => {
+                    const o = pickupDestViewLoad.origins?.[0] || pickupDestViewLoad.origin || {};
+                    return [o.addressLine1, o.city, o.state, o.zip || o.zipcode].filter(Boolean).join(", ") || "—";
+                  })()}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-500 uppercase mb-2">Destination</p>
+                <p className="text-gray-800">
+                  {(() => {
+                    const d = pickupDestViewLoad.destinations?.[0] || pickupDestViewLoad.destination || {};
+                    return [d.addressLine1, d.city, d.state, d.zip || d.zipcode].filter(Boolean).join(", ") || "—";
+                  })()}
+                </p>
+              </div>
+              <div className="pt-4 border-t border-gray-200">
+                <p className="text-sm font-semibold text-gray-700 mb-2">Trucker / Carrier</p>
+                {pickupDestViewLoad.trucker ? (
+                  <div className="bg-gray-50 rounded-lg p-4 space-y-1 text-sm">
+                    <p><span className="text-gray-500">Company:</span> {pickupDestViewLoad.trucker.compName || "—"}</p>
+                    <p><span className="text-gray-500">MC/DOT:</span> {pickupDestViewLoad.trucker.mc_dot_no || "—"}</p>
+                    <p><span className="text-gray-500">City, State:</span> {[pickupDestViewLoad.trucker.city, pickupDestViewLoad.trucker.state].filter(Boolean).join(", ") || "—"}</p>
+                    {pickupDestViewLoad.trucker.email && <p><span className="text-gray-500">Email:</span> {pickupDestViewLoad.trucker.email}</p>}
+                    {pickupDestViewLoad.trucker.phoneNo && <p><span className="text-gray-500">Phone:</span> {pickupDestViewLoad.trucker.phoneNo}</p>}
+                  </div>
+                ) : (
+                  <p className="text-gray-500">No trucker assigned</p>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}

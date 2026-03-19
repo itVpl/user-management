@@ -52,10 +52,20 @@ export default function CandidateShortlist() {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
+  const [searchInput, setSearchInput] = useState(''); // for debounced search
   const [dateFilter, setDateFilter] = useState('');
+  const [profileFilter, setProfileFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [experienceFilter, setExperienceFilter] = useState('All');
+  const [sortBy, setSortBy] = useState('createdAt');
+  const [sortOrder, setSortOrder] = useState('desc');
   const [loading, setLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 5; // Temporarily reduced for testing
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [shortlistModal, setShortlistModal] = useState({ open: false, candidateId: null, candidateName: '', interviewDate: '', interviewNotes: '' });
+  const [shortlistLoading, setShortlistLoading] = useState(false);
+  const [bulkShortlistLoading, setBulkShortlistLoading] = useState(false);
+  const itemsPerPage = 10;
 
   // Form state
   const [formData, setFormData] = useState({
@@ -101,9 +111,15 @@ export default function CandidateShortlist() {
     rejected: 0
   });
 
+  // Debounce search -> update searchTerm and refetch
+  useEffect(() => {
+    const t = setTimeout(() => setSearchTerm(searchInput), 400);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
   useEffect(() => {
     fetchCandidates();
-  }, []);
+  }, [profileFilter, statusFilter, experienceFilter, searchTerm, sortBy, sortOrder]);
 
   const fetchCandidates = async () => {
     try {
@@ -115,7 +131,19 @@ export default function CandidateShortlist() {
         return;
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/v1/candidate/all`, {
+      const params = new URLSearchParams();
+      if (profileFilter && profileFilter.trim()) params.set('profile', profileFilter.trim());
+      if (statusFilter && statusFilter.trim()) params.set('status', statusFilter.trim());
+      if (experienceFilter !== '' && experienceFilter !== 'All') {
+        const exp = Number(experienceFilter);
+        if (!isNaN(exp)) params.set('experience', exp);
+      }
+      if (searchTerm && searchTerm.trim()) params.set('search', searchTerm.trim());
+      params.set('sortBy', sortBy || 'createdAt');
+      params.set('sortOrder', sortOrder || 'desc');
+      const query = params.toString();
+
+      const response = await fetch(`${API_BASE_URL}/api/v1/candidate/all${query ? `?${query}` : ''}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -217,16 +245,10 @@ export default function CandidateShortlist() {
     }
   };
 
-  // Filter candidates based on search and date
+  // Client-side filter only by date (search/profile/status/experience are via API)
   const filteredCandidates = candidates.filter(candidate => {
-    const matchesSearch = candidate.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      candidate.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      candidate.profile.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      candidate.experience.toLowerCase().includes(searchTerm.toLowerCase());
-
     const matchesDate = !dateFilter || candidate.createdAt === dateFilter;
-
-    return matchesSearch && matchesDate;
+    return matchesDate;
   });
 
   // Handle page change
@@ -234,10 +256,10 @@ export default function CandidateShortlist() {
     setCurrentPage(page);
   };
 
-  // Reset current page when search term or date filter changes
+  // Reset current page when filters or list length changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, dateFilter]);
+  }, [searchTerm, dateFilter, profileFilter, statusFilter, experienceFilter, candidates.length]);
 
   // Pagination
   const totalPages = Math.ceil(filteredCandidates.length / itemsPerPage);
@@ -527,26 +549,135 @@ export default function CandidateShortlist() {
     });
   };
 
-  // Status color helper
+  // Status color helper (API: Pending | Shortlisted | Interviewed | Selected | Rejected; we normalize to lowercase)
   const getStatusColor = (status) => {
-    switch (status) {
+    const s = (status || '').toLowerCase();
+    switch (s) {
       case 'shortlisted': return 'bg-blue-100 text-blue-700';
       case 'interviewed': return 'bg-yellow-100 text-yellow-700';
+      case 'selected': return 'bg-green-100 text-green-700';
       case 'hired': return 'bg-green-100 text-green-700';
       case 'rejected': return 'bg-red-100 text-red-700';
+      case 'pending': return 'bg-gray-100 text-gray-700';
       default: return 'bg-gray-100 text-gray-700';
     }
   };
 
   // Status icon helper
   const getStatusIcon = (status) => {
-    switch (status) {
-      case 'shortlisted': return <Clock size={14} />;
+    const s = (status || '').toLowerCase();
+    switch (s) {
+      case 'shortlisted': return <CheckCircle size={14} />;
       case 'interviewed': return <Eye size={14} />;
+      case 'selected': return <CheckCircle size={14} />;
       case 'hired': return <CheckCircle size={14} />;
       case 'rejected': return <XCircle size={14} />;
+      case 'pending': return <Clock size={14} />;
       default: return <Clock size={14} />;
     }
+  };
+
+  const formatStatusLabel = (status) => {
+    if (!status) return 'Pending';
+    const s = String(status);
+    return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+  };
+
+  const clearFilters = () => {
+    setProfileFilter('');
+    setStatusFilter('');
+    setExperienceFilter('All');
+    setSearchInput('');
+    setSearchTerm('');
+    setDateFilter('');
+    setSelectedIds([]);
+    setCurrentPage(1);
+  };
+
+  const handleShortlistSingle = (candidate) => {
+    setShortlistModal({
+      open: true,
+      candidateId: candidate.id,
+      candidateName: candidate.name,
+      interviewDate: candidate.interviewDate || '',
+      interviewNotes: candidate.notes || ''
+    });
+  };
+
+  const submitShortlistSingle = async () => {
+    const { candidateId, interviewDate, interviewNotes } = shortlistModal;
+    if (!candidateId) return;
+    setShortlistLoading(true);
+    try {
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      if (!token) {
+        alertify.error('Please login first');
+        return;
+      }
+      const body = {};
+      if (interviewDate && interviewDate.trim()) body.interviewDate = new Date(interviewDate.trim()).toISOString();
+      if (interviewNotes && interviewNotes.trim()) body.interviewNotes = interviewNotes.trim();
+      const response = await fetch(`${API_BASE_URL}/api/v1/candidate/${candidateId}/shortlist`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: Object.keys(body).length ? JSON.stringify(body) : undefined
+      });
+      const data = await response.json();
+      if (data.success) {
+        alertify.success(data.message || 'Candidate marked as shortlisted');
+        setShortlistModal({ open: false, candidateId: null, candidateName: '', interviewDate: '', interviewNotes: '' });
+        await fetchCandidates();
+      } else {
+        alertify.error(data.message || 'Failed to shortlist candidate');
+      }
+    } catch (err) {
+      console.error(err);
+      alertify.error('Failed to shortlist candidate');
+    } finally {
+      setShortlistLoading(false);
+    }
+  };
+
+  const handleShortlistBulk = async () => {
+    if (!selectedIds.length) return;
+    setBulkShortlistLoading(true);
+    try {
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      if (!token) {
+        alertify.error('Please login first');
+        return;
+      }
+      const response = await fetch(`${API_BASE_URL}/api/v1/candidate/bulk/shortlist`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ candidateIds: selectedIds })
+      });
+      const data = await response.json();
+      if (data.success) {
+        alertify.success(data.message || `Marked ${data.modifiedCount ?? selectedIds.length} candidate(s) as shortlisted`);
+        setSelectedIds([]);
+        await fetchCandidates();
+      } else {
+        alertify.error(data.message || 'Bulk shortlist failed');
+      }
+    } catch (err) {
+      console.error(err);
+      alertify.error('Bulk shortlist failed');
+    } finally {
+      setBulkShortlistLoading(false);
+    }
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length >= currentCandidates.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(currentCandidates.map(c => c.id));
+    }
+  };
+
+  const toggleSelectOne = (id) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
 
   // Video interview status color helper
@@ -781,9 +912,9 @@ export default function CandidateShortlist() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
               <input
                 type="text"
-                placeholder="Search candidates..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search name, email, phone..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
                 className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
               />
             </div>
@@ -799,32 +930,82 @@ export default function CandidateShortlist() {
             </button>
           </div>
 
-          {/* Third line: calendar + export/add on right */}
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="relative w-full sm:w-64 md:w-72">
+          {/* Filters row: Profile, Status, Experience, Date, Clear, Export, Shortlist selected, Add */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative w-full sm:w-40">
+              <select
+                value={profileFilter}
+                onChange={(e) => setProfileFilter(e.target.value)}
+                className="w-full pl-4 pr-8 py-3 border border-gray-200 rounded-2xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all text-sm"
+              >
+                <option value="">All Profile</option>
+                <option value="Sales">Sales</option>
+                <option value="CMT">CMT</option>
+                <option value="Driver">Driver</option>
+                <option value="Operation">Operation</option>
+                <option value="General">General</option>
+              </select>
+            </div>
+            <div className="relative w-full sm:w-40">
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="w-full pl-4 pr-8 py-3 border border-gray-200 rounded-2xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all text-sm"
+              >
+                <option value="">All Status</option>
+                <option value="Pending">Pending</option>
+                <option value="Shortlisted">Shortlisted</option>
+                <option value="Interviewed">Interviewed</option>
+                <option value="Selected">Selected</option>
+                <option value="Rejected">Rejected</option>
+              </select>
+            </div>
+            <div className="relative w-full sm:w-36">
+              <select
+                value={experienceFilter}
+                onChange={(e) => setExperienceFilter(e.target.value)}
+                className="w-full pl-4 pr-8 py-3 border border-gray-200 rounded-2xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all text-sm"
+              >
+                <option value="All">All Experience</option>
+                {[0, 1, 2, 3, 5, 7, 10].map(n => (
+                  <option key={n} value={n}>{n}+ years</option>
+                ))}
+              </select>
+            </div>
+            <div className="relative w-full sm:w-44">
               <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
               <input
                 type="date"
                 value={dateFilter}
                 onChange={(e) => setDateFilter(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all text-sm"
                 placeholder="Filter by date"
               />
             </div>
-
+            <button
+              onClick={clearFilters}
+              className="flex items-center gap-2 px-4 py-2.5 border border-gray-200 rounded-2xl bg-white text-gray-600 hover:bg-gray-50 transition-colors cursor-pointer text-sm font-medium"
+            >
+              Clear Filters
+            </button>
             <div className="flex flex-wrap gap-3 justify-end flex-1">
               <button
                 onClick={handleExcelExport}
                 disabled={filteredCandidates.length === 0}
-                className="flex items-center gap-2 px-5 py-2.5 border border-gray-200 rounded-2xl bg-white text-gray-700
-  hover:bg-gray-800 hover:text-white hover:border-gray-800
-  transition-all duration-200 cursor-pointer
-  disabled:opacity-50 disabled:hover:bg-white disabled:hover:text-gray-700 disabled:hover:border-gray-200"
-                title="Export to Excel"
+                className="flex items-center gap-2 px-5 py-2.5 border border-green-600 rounded-2xl bg-white text-green-700 hover:bg-green-50 transition-colors cursor-pointer disabled:opacity-50 text-sm font-medium"
+                title="Export to CSV/Excel"
               >
-                <Download size={18} /> Export Excel
+                <Download size={18} /> Export to CSV
               </button>
-
+              {selectedIds.length > 0 && (
+                <button
+                  onClick={handleShortlistBulk}
+                  disabled={bulkShortlistLoading}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors cursor-pointer disabled:opacity-50 text-sm"
+                >
+                  {bulkShortlistLoading ? 'Shortlisting...' : `Shortlist (${selectedIds.length})`}
+                </button>
+              )}
               <button
                 onClick={() => setShowAddForm(true)}
                 className="flex items-center gap-2 px-6 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors cursor-pointer"
@@ -842,16 +1023,24 @@ export default function CandidateShortlist() {
           <table className="min-w-full text-left border-separate border-spacing-y-4">
             <thead>
               <tr className="bg-gray-50">
-                <th className="px-5 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y first:border-l border-gray-200 rounded-l-lg">
+                <th className="px-3 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y first:border-l border-gray-200 rounded-l-lg w-12">
+                  <input
+                    type="checkbox"
+                    checked={currentCandidates.length > 0 && selectedIds.length >= currentCandidates.length}
+                    onChange={toggleSelectAll}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                </th>
+                <th className="px-5 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
                   Name
                 </th>
-                <th className="px-15 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
                   Profile
                 </th>
-                <th className="px-1 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
                   Experience
                 </th>
-                <th className="px-10 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
                   Status
                 </th>
                 <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
@@ -866,7 +1055,7 @@ export default function CandidateShortlist() {
               {apiLoading ? (
                 <tr>
                   <td
-                    colSpan="6"
+                    colSpan="7"
                     className="px-4 py-12 text-center border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg"
                   >
                     <div className="flex justify-center items-center">
@@ -880,7 +1069,15 @@ export default function CandidateShortlist() {
               ) : (
                 currentCandidates.map((candidate) => (
                   <tr key={candidate.id} className="bg-white hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-4 border-y first:border-l border-gray-200 first:rounded-l-lg">
+                    <td className="px-3 py-4 border-y first:border-l border-gray-200 first:rounded-l-lg">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(candidate.id)}
+                        onChange={() => toggleSelectOne(candidate.id)}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                    </td>
+                    <td className="px-4 py-4 border-y border-gray-200">
                       <div>
                         <div className="text-gray-900 font-semibold">{candidate.name}</div>
                         <div className="text-sm text-gray-500">{candidate.email}</div>
@@ -896,7 +1093,7 @@ export default function CandidateShortlist() {
                     <td className="px-4 py-4 border-y border-gray-200">
                       <span className={`inline-flex items-center gap-1 px-4 py-1.5 rounded-full text-gray-600 font-semibold ${getStatusColor(candidate.status)}`}>
                         {getStatusIcon(candidate.status)}
-                        {candidate.status}
+                        {formatStatusLabel(candidate.status)}
                       </span>
                     </td>
                     <td className="px-4 py-4 border-y border-gray-200">
@@ -906,13 +1103,22 @@ export default function CandidateShortlist() {
                       </span>
                     </td>
                     <td className="px-4 py-4 border-y last:border-r border-gray-200 last:rounded-r-lg">
-                     <button
-  onClick={() => handleViewCandidate(candidate.id)}
-  className="bg-transparent text-blue-600 border border-blue-600 px-6 py-1 rounded-lg font-medium hover:bg-blue-600 hover:text-white transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-300 cursor-pointer"
->
-  View
-</button>
-
+                      <div className="flex flex-wrap gap-2">
+                        {(candidate.status || '').toLowerCase() !== 'shortlisted' && (
+                          <button
+                            onClick={() => handleShortlistSingle(candidate)}
+                            className="bg-blue-600 text-white border border-blue-600 px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors cursor-pointer"
+                          >
+                            Shortlist
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleViewCandidate(candidate.id)}
+                          className="bg-transparent text-blue-600 border border-blue-600 px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-blue-600 hover:text-white transition-colors cursor-pointer"
+                        >
+                          View
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -977,6 +1183,30 @@ export default function CandidateShortlist() {
             >
               Next
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Shortlist (single) modal */}
+      {shortlistModal.open && (
+        <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4" onClick={() => !shortlistLoading && setShortlistModal(prev => ({ ...prev, open: false }))}>
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">Mark as shortlisted</h3>
+            <p className="text-sm text-gray-600 mb-4">Optional: add interview date and notes. They can be included in the notification to the candidate.</p>
+            <div className="space-y-3 mb-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1">Interview date</label>
+                <input type="datetime-local" value={shortlistModal.interviewDate || ''} onChange={e => setShortlistModal(prev => ({ ...prev, interviewDate: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1">Interview notes</label>
+                <textarea value={shortlistModal.interviewNotes || ''} onChange={e => setShortlistModal(prev => ({ ...prev, interviewNotes: e.target.value }))} rows={3} className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm" placeholder="e.g. Please bring original ID proof." />
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button type="button" onClick={() => !shortlistLoading && setShortlistModal(prev => ({ ...prev, open: false }))} className="px-4 py-2 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50">Cancel</button>
+              <button type="button" onClick={submitShortlistSingle} disabled={shortlistLoading} className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50">{shortlistLoading ? 'Shortlisting...' : 'Shortlist'}</button>
+            </div>
           </div>
         </div>
       )}
