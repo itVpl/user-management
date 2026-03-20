@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import axios from "axios";
 
@@ -172,6 +173,10 @@ const SearchableDropdown = ({
 };
 
 export default function Loads() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const openedLoadFromUrlRef = React.useRef(null);
+  const handleViewLoadRef = React.useRef(null);
+
   const [loads, setLoads] = useState([]);
 
   const [viewDoc, setViewDoc] = useState(false);
@@ -3620,6 +3625,28 @@ export default function Loads() {
       fetchCmtAssignment(load.loadNum);
     }
   };
+
+  handleViewLoadRef.current = handleViewLoad;
+
+  // Deep-link from notifications (e.g. important date reminders: /Loads?loadId=...)
+  useEffect(() => {
+    const loadId = searchParams.get("loadId");
+    if (!loadId) {
+      openedLoadFromUrlRef.current = null;
+      return;
+    }
+    if (loading) return;
+    if (openedLoadFromUrlRef.current === loadId) return;
+    const match = loads.find(
+      (l) =>
+        String(l.id) === String(loadId) || String(l.loadNum) === String(loadId),
+    );
+    if (match) {
+      openedLoadFromUrlRef.current = loadId;
+      handleViewLoadRef.current?.(match);
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, loads, loading, setSearchParams]);
 
   // Handle edit load
 
