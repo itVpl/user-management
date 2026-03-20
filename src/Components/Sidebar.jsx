@@ -142,7 +142,8 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Team Rating"
     ],
     "Tracking": [
-      "Tracking"
+      "Tracking",
+      "Load By Location"
     ],
     "Company Management": [
       "Sub Company"
@@ -292,6 +293,7 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "All Customers",
       "Daily Task",
       "Tracking",
+      "Load By Location",
       "Import Carrier Emails"
     ],
     "Company Management": [
@@ -439,6 +441,7 @@ const menuItems = [
   { name: "Dashboard", icon: DashboardImage, whiteIcon: WhiteDashboard, path: "/dashboard" },
   { name: "Company", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/companies" },
   { name: "Tracking", icon: LiveTracker, whiteIcon: WhiteLiveTracker, path: "/live-tracker" },
+  { name: "Load By Location", icon: LiveTracker, whiteIcon: WhiteLiveTracker, path: "/load-by-location" },
   { name: "Manage Users", icon: ManageUser, whiteIcon: WhiteManageUser, path: "/manage-users" },
   { name: "Users Permissions", icon: UserPermision, whiteIcon: WhiteUserPermission, path: "/permissions" },
   { name: "Report Analysis", icon: Analytics, whiteIcon: WhiteAnalytics, path: "/analytics" },
