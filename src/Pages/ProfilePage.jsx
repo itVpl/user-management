@@ -697,22 +697,23 @@ const ProfilePage = () => {
     // CSV headers
     const headers = [
       "Name",
-      "Mobile No",
-      "Total Experience",
-      "Current Location",
-      "Current Company",
-      "Current Salary",
-      "Notice Period",
+      "Age",
+      "Gender",
+      "Phone number",
       "Email",
+      "Job role",
+      "Salary",
+      "Expected salary",
+      "Experience",
+      "Last company name",
+      "Location",
+      "Resume",
       "English Fluency",
       "Status",
-      "Comment",
       "Shortlisted",
       "Candidate Status",
-      "Purpose",
       "Duration (mins)",
       "Date",
-      "Notes",
     ];
 
     // Convert data to CSV format (supports both headers-based and callDetails format)
@@ -728,22 +729,23 @@ const ProfilePage = () => {
       const notes = log.notes ?? log.callDetails?.notes ?? "";
       return [
         get("Name") || get("name"),
+        get("Age") || get("age"),
+        get("Gender") || get("gender"),
         get("Phone number") || get("mobileNo"),
-        get("Experience/ last company name") || get("totalExp"),
-        get("Location") || get("currentLocation"),
-        get("CurrentCompany") || get("currentCompany"),
-        get("Salary") || get("currentSalary"),
-        get("noticePeriod"),
         get("Email") || get("email"),
+        get("Job role") || get("profile"),
+        get("Salary") || get("currentSalary"),
+        get("Expected salary") || get("expectedSalary"),
+        get("Experience") || get("experience") || get("totalExp"),
+        get("Last company name") || get("lastCompanyName") || get("currentCompany"),
+        get("Location") || get("currentLocation"),
+        get("Resume") || get("resume"),
         get("English Fluency") || get("englishFluency"),
         get("Status") || get("status"),
-        get("comment"),
         shortlisted,
         candidateStatus,
-        get("purpose"),
         typeof dur === "string" ? dur : (dur != null ? `${dur}` : ""),
         date ? new Date(date).toISOString().slice(0, 10) : "",
-        notes,
       ];
     });
 
@@ -809,7 +811,20 @@ const ProfilePage = () => {
       Status: () =>
         log.Status ?? log.status ?? log.candidateStatus ?? cd.status,
       Salary: () => log.Salary ?? cd.currentSalary,
-      "Experience/ last company name": () => log["Experience/ last company name"] ?? cd.totalExp,
+      "Expected salary": () =>
+        log["Expected salary"] ?? log.expectedSalary ?? cd.expectedSalary,
+      Experience: () =>
+        log.Experience ??
+        log.experience ??
+        cd.experience ??
+        log["Experience/ last company name"] ??
+        cd.totalExp,
+      "Last company name": () =>
+        log["Last company name"] ??
+        log.lastCompanyName ??
+        cd.lastCompanyName,
+      "Experience/ last company name": () =>
+        log["Experience/ last company name"] ?? cd.totalExp,
       Location: () => log.Location ?? cd.currentLocation,
       Age: () => log.Age ?? cd.age,
       Gender: () => log.Gender ?? cd.gender,
@@ -820,6 +835,18 @@ const ProfilePage = () => {
       currentLocation: () => log.Location ?? cd.currentLocation,
       currentCompany: () => log.CurrentCompany ?? cd.currentCompany,
       currentSalary: () => log.Salary ?? cd.currentSalary,
+      expectedSalary: () =>
+        log["Expected salary"] ?? log.expectedSalary ?? cd.expectedSalary,
+      experience: () =>
+        log.Experience ??
+        log.experience ??
+        cd.experience ??
+        log["Experience/ last company name"] ??
+        cd.totalExp,
+      lastCompanyName: () =>
+        log["Last company name"] ??
+        log.lastCompanyName ??
+        cd.lastCompanyName,
       noticePeriod: () => log.NoticePeriod ?? cd.noticePeriod,
       email: () => log.Email ?? cd.email,
       englishFluency: () =>
@@ -842,23 +869,29 @@ const ProfilePage = () => {
     { key: "Phone number", label: "Phone number" },
     { key: "Email", label: "Email" },
     { key: "Job role", label: "Job role" },
+    { key: "Salary", label: "Salary" },
+    { key: "Expected salary", label: "Expected salary" },
+    { key: "Experience", label: "Experience" },
+    { key: "Last company name", label: "Last company name" },
+    { key: "Location", label: "Location" },
+    { key: "Resume", label: "Resume" },
     { key: "English Fluency", label: "English Fluency" },
     { key: "shortlisted", label: "Shortlisted" },
     { key: "candidateStatus", label: "Candidate Status" },
     { key: "Status", label: "Status" },
     { key: "durationFormatted", label: "Duration" },
     { key: "activityDate", label: "Date" },
-    { key: "Salary", label: "Salary" },
-    { key: "Experience/ last company name", label: "Experience/ last company name" },
-    { key: "Location", label: "Location" },
-    { key: "Resume", label: "Resume" },
   ];
 
   const hrLogsAfterExp =
     hrExpFilter === "all"
       ? callLogs
       : callLogs.filter((log) => {
-          const expVal = getLogVal(log, "Experience/ last company name") ?? getLogVal(log, "totalExp");
+          const expVal =
+            getLogVal(log, "Experience") ??
+            getLogVal(log, "experience") ??
+            getLogVal(log, "Experience/ last company name") ??
+            getLogVal(log, "totalExp");
           const years = expYearsFromText(expVal);
           if (years == null) return false;
           if (hrExpFilter === "10+") return years >= 10;
