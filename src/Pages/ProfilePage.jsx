@@ -2452,7 +2452,10 @@ const ProfilePage = () => {
               </div>
 
               <div className="bg-white border-1 border-gray-300 rounded-2xl p-4">
-                <div className="w-full overflow-x-auto">
+                <div
+                  className="scrollbar-show w-full overflow-x-scroll overflow-y-hidden pb-2"
+                  style={{ scrollbarGutter: "stable" }}
+                >
                   <table className="w-full text-left min-w-max border-separate border-spacing-y-3">
                     <thead>
                       <tr>
