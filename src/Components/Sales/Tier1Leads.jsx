@@ -1,17 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
-import {
-  Search,
-  Calendar,
-  X,
-  MapPin,
-  Phone,
-  Mail
-} from 'lucide-react';
-import { format, addDays } from 'date-fns';
+import { Search, Calendar, RefreshCw } from 'lucide-react';
+import Tier1LeadsModals from './Tier1LeadsModals.jsx';
+import { format } from 'date-fns';
 import API_CONFIG from '../../config/api.js';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
+import { toast, ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 const api = axios.create({
   baseURL: API_CONFIG.BASE_URL,
@@ -24,100 +20,453 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-const toYMD = (d) => (d ? format(d, 'yyyy-MM-dd') : null);
+const getToken = () =>
+  sessionStorage.getItem('token') ||
+  localStorage.getItem('token') ||
+  sessionStorage.getItem('authToken') ||
+  localStorage.getItem('authToken') ||
+  null;
+
+const ALLOWED_ACTION_EXT = ['PNG', 'JPG', 'JPEG', 'WEBP', 'PDF', 'DOC', 'DOCX'];
+const fileOk = (f) =>
+  !f || (ALLOWED_ACTION_EXT.includes((f?.name?.split('.').pop() || '').toUpperCase()) && f.size <= 10 * 1024 * 1024);
 
 export default function Tier1Leads() {
-  const [employees, setEmployees] = useState([]);
+  const [items, setItems] = useState([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [showPresetMenu, setShowPresetMenu] = useState(false);
-  const [range, setRange] = useState({
-    startDate: addDays(new Date(), -6),
-    endDate: new Date(),
-    key: 'selection'
-  });
   const [accessError, setAccessError] = useState(null);
 
-  const [showViewModal, setShowViewModal] = useState(false);
-  const [selectedEmployee, setSelectedEmployee] = useState(null);
+  const [viewModal, setViewModal] = useState({ open: false, customer: null, data: null, loading: false });
+  const [followUpHistory, setFollowUpHistory] = useState({ data: null, loading: false });
+  const [followUpModal, setFollowUpModal] = useState({ open: false, customer: null });
+  const [followUpForm, setFollowUpForm] = useState({
+    followUpMethod: 'call',
+    followUpNotes: '',
+    followUpDate: new Date().toISOString().slice(0, 16),
+    nextFollowUpDate: ''
+  });
+  const [followUpSubmitting, setFollowUpSubmitting] = useState(false);
+  const [followUpErrors, setFollowUpErrors] = useState({});
+  const [prospectForm, setProspectForm] = useState({
+    remark: '',
+    prospectStatus: 'Warm',
+    attachment: null
+  });
+  const [prospectSubmitting, setProspectSubmitting] = useState(false);
+  const [prospectErrors, setProspectErrors] = useState({});
 
-  const presets = {
-    'Today': [new Date(), new Date()],
-    'Yesterday': [addDays(new Date(), -1), addDays(new Date(), -1)],
-    'Last 7 Days': [addDays(new Date(), -6), new Date()],
-    'Last 30 Days': [addDays(new Date(), -29), new Date()],
-    'This Month': [
-      new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-      new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0)
-    ],
-    'Last Month': [
-      new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1),
-      new Date(new Date().getFullYear(), new Date().getMonth(), 0)
-    ]
-  };
+  const [actionOpen, setActionOpen] = useState(false);
+  const [actionType, setActionType] = useState('');
+  const [actionTarget, setActionTarget] = useState(null);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [actionForm, setActionForm] = useState({ reason: '', remarks: '', attachment: null });
+  const [actionErr, setActionErr] = useState({});
 
-  const applyPreset = (label) => {
-    const [s, e] = presets[label];
-    setRange({ startDate: s, endDate: e, key: 'selection' });
-    setShowPresetMenu(false);
-  };
-
-  const fetchSummary = async () => {
-    const start = range.startDate ? toYMD(range.startDate) : null;
-    const end = range.endDate ? toYMD(range.endDate) : null;
-    if (!start || !end) {
-      setEmployees([]);
-      setLoading(false);
-      return;
-    }
+  const fetchLaneForwards = useCallback(async () => {
     setLoading(true);
     setAccessError(null);
     try {
-      const res = await api.get('/api/v1/sales-executive-target/tier1-shippers-summary', {
-        params: { startDate: start, endDate: end }
-      });
+      const res = await api.get('/api/v1/shipper_driver/tier3/lane-forwards');
       const data = res?.data?.data ?? res?.data;
-      const list = data?.tier1Employees ?? [];
-      setEmployees(Array.isArray(list) ? list : []);
+      const list = data?.items ?? [];
+      setItems(Array.isArray(list) ? list : []);
+      setTotalCount(typeof data?.count === 'number' ? data.count : list.length);
     } catch (err) {
-      console.error('Fetch tier1 shippers summary error:', err);
+      console.error('Fetch tier3 lane-forwards error:', err);
       if (err?.response?.status === 403) {
-        const msg = err?.response?.data?.message || 'Access denied to Tier 1 shippers summary';
+        const msg = err?.response?.data?.message || 'Access denied to lane forwards';
         setAccessError(msg);
         alertify.error(msg);
       }
-      setEmployees([]);
+      setItems([]);
+      setTotalCount(0);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchSummary();
-  }, [range.startDate, range.endDate]);
+    fetchLaneForwards();
+  }, [fetchLaneForwards]);
 
   const searchLower = (searchTerm || '').trim().toLowerCase();
-  const filteredEmployees = searchLower
-    ? employees.filter(
-        (e) =>
-          (e.employeeName || '').toLowerCase().includes(searchLower) ||
-          (e.empId || '').toLowerCase().includes(searchLower)
-      )
-    : employees;
-  const totalShippersAdded = employees.reduce((sum, e) => sum + (e.shippersAddedCount ?? 0), 0);
+  const filteredItems = searchLower
+    ? items.filter((row) => {
+        const added = row.addedBy || {};
+        const last = row.lastForward || {};
+        const fb = last.forwardedBy || {};
+        const rec = last.tier3Recipient || {};
+        return (
+          (row.compName || '').toLowerCase().includes(searchLower) ||
+          (row.email || '').toLowerCase().includes(searchLower) ||
+          (row.phoneNo || '').toLowerCase().includes(searchLower) ||
+          (row.userId || '').toLowerCase().includes(searchLower) ||
+          (added.employeeName || '').toLowerCase().includes(searchLower) ||
+          (added.empId || '').toLowerCase().includes(searchLower) ||
+          (fb.employeeName || '').toLowerCase().includes(searchLower) ||
+          (rec.employeeName || '').toLowerCase().includes(searchLower) ||
+          (last.note || '').toLowerCase().includes(searchLower)
+        );
+      })
+    : items;
 
-  const openView = (emp) => {
-    setSelectedEmployee(emp);
-    setShowViewModal(true);
+  const handleView = async (customer) => {
+    const customerId = customer.userId || customer._id || customer.id;
+    if (!customerId) {
+      toast.error('Customer ID not found');
+      return;
+    }
+
+    setViewModal({ open: true, customer, data: null, loading: true });
+    setFollowUpHistory({ data: null, loading: true });
+
+    try {
+      const [customerResponse, followUpResponse] = await Promise.all([
+        api.get(`/api/v1/shipper_driver/${customerId}`),
+        api.get(`/api/v1/shipper_driver/${customerId}/follow-up-history`).catch((err) => {
+          console.warn('Failed to fetch follow-up history:', err);
+          return { data: { success: false } };
+        })
+      ]);
+
+      if (customerResponse.data && customerResponse.data.success) {
+        const customerData = customerResponse.data.data;
+        setViewModal({ open: true, customer, data: customerData, loading: false });
+        setItems((prev) =>
+          prev.map((it) => (it.userId === customerId ? { ...it, status: customerData?.status ?? it.status } : it))
+        );
+
+        if (customerData.prospectDetails) {
+          if (Array.isArray(customerData.prospectDetails) && customerData.prospectDetails.length > 0) {
+            const latestProspect = customerData.prospectDetails.sort((a, b) => {
+              const dateA = new Date(a.createdAt || a.prospectDate || 0);
+              const dateB = new Date(b.createdAt || b.prospectDate || 0);
+              return dateB - dateA;
+            })[0];
+            setProspectForm({
+              remark: latestProspect.remark || '',
+              prospectStatus: latestProspect.prospectStatus || 'Warm',
+              attachment: null
+            });
+          } else if (customerData.prospectDetails.remark || customerData.prospectDetails.prospectStatus) {
+            setProspectForm({
+              remark: customerData.prospectDetails.remark || '',
+              prospectStatus: customerData.prospectDetails.prospectStatus || 'Warm',
+              attachment: null
+            });
+          } else {
+            setProspectForm({ remark: '', prospectStatus: 'Warm', attachment: null });
+          }
+        } else {
+          setProspectForm({ remark: '', prospectStatus: 'Warm', attachment: null });
+        }
+      } else {
+        toast.error('Failed to fetch customer details');
+        setViewModal({ open: false, customer: null, data: null, loading: false });
+        setFollowUpHistory({ data: null, loading: false });
+      }
+
+      if (followUpResponse.data && followUpResponse.data.success) {
+        setFollowUpHistory({ data: followUpResponse.data.data, loading: false });
+      } else {
+        setFollowUpHistory({ data: null, loading: false });
+      }
+    } catch (error) {
+      console.error('Error fetching customer details:', error);
+      toast.error(error.response?.data?.message || 'Failed to fetch customer details');
+      setViewModal({ open: false, customer: null, data: null, loading: false });
+      setFollowUpHistory({ data: null, loading: false });
+    }
   };
 
-  const fmtDate = (d) => {
-    if (!d) return '—';
+  const closeViewModal = () => {
+    setViewModal({ open: false, customer: null, data: null, loading: false });
+    setFollowUpHistory({ data: null, loading: false });
+    setProspectForm({ remark: '', prospectStatus: 'Warm', attachment: null });
+    setProspectErrors({});
+  };
+
+  const handleFollowUp = (customer) => {
+    setFollowUpModal({ open: true, customer });
+    setFollowUpForm({
+      followUpMethod: 'call',
+      followUpNotes: '',
+      followUpDate: new Date().toISOString().slice(0, 16),
+      nextFollowUpDate: ''
+    });
+    setFollowUpErrors({});
+  };
+
+  const closeFollowUpModal = () => {
+    setFollowUpModal({ open: false, customer: null });
+    setFollowUpForm({
+      followUpMethod: 'call',
+      followUpNotes: '',
+      followUpDate: new Date().toISOString().slice(0, 16),
+      nextFollowUpDate: ''
+    });
+    setFollowUpErrors({});
+    setFollowUpSubmitting(false);
+  };
+
+  const handleFollowUpSubmit = async (e) => {
+    e.preventDefault();
+    const errors = {};
+    if (!followUpForm.followUpNotes.trim()) errors.followUpNotes = 'Follow-up notes are required';
+    if (!followUpForm.followUpMethod) errors.followUpMethod = 'Follow-up method is required';
+    if (Object.keys(errors).length > 0) {
+      setFollowUpErrors(errors);
+      return;
+    }
+
+    const customerId =
+      followUpModal.customer?.userId || followUpModal.customer?._id || followUpModal.customer?.id;
+    if (!customerId) {
+      toast.error('Customer ID not found');
+      return;
+    }
+
+    setFollowUpSubmitting(true);
+    setFollowUpErrors({});
+
     try {
-      const s = typeof d === 'string' ? d.slice(0, 10) : d;
-      return format(new Date(s), 'MMM dd, yyyy');
-    } catch {
-      return d;
+      const token = getToken();
+      const payload = {
+        followUpMethod: followUpForm.followUpMethod,
+        followUpNotes: followUpForm.followUpNotes.trim(),
+        followUpDate: followUpForm.followUpDate
+          ? new Date(followUpForm.followUpDate).toISOString()
+          : new Date().toISOString()
+      };
+      if (followUpForm.nextFollowUpDate) {
+        payload.nextFollowUpDate = new Date(followUpForm.nextFollowUpDate).toISOString();
+      }
+
+      const response = await axios.post(
+        `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/${customerId}/follow-up`,
+        payload,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          withCredentials: true
+        }
+      );
+
+      if (response.data && response.data.success) {
+        toast.success('Follow-up added successfully!');
+        closeFollowUpModal();
+
+        if (viewModal.open && viewModal.customer) {
+          const currentCustomerId =
+            viewModal.customer.userId || viewModal.customer._id || viewModal.customer.id;
+          if (currentCustomerId === customerId) {
+            try {
+              const followUpResponse = await axios.get(
+                `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/${customerId}/follow-up-history`,
+                {
+                  headers: { Authorization: `Bearer ${token}` },
+                  withCredentials: true
+                }
+              );
+              if (followUpResponse.data && followUpResponse.data.success) {
+                setFollowUpHistory({ data: followUpResponse.data.data, loading: false });
+              }
+            } catch (err) {
+              console.warn('Failed to refresh follow-up history:', err);
+            }
+          }
+        }
+      } else {
+        toast.error(response.data?.message || 'Failed to add follow-up');
+      }
+    } catch (error) {
+      console.error('Error adding follow-up:', error);
+      toast.error(error.response?.data?.message || 'Failed to add follow-up. Please try again.');
+    } finally {
+      setFollowUpSubmitting(false);
+    }
+  };
+
+  const handleProspectInput = (e) => {
+    const { name, value, files } = e.target;
+    if (name === 'attachment') {
+      const file = files?.[0] || null;
+      setProspectForm((prev) => ({ ...prev, attachment: file }));
+      if (file) {
+        setProspectErrors((prev) => {
+          const next = { ...prev };
+          delete next.attachment;
+          return next;
+        });
+      }
+      return;
+    }
+    setProspectForm((prev) => ({ ...prev, [name]: value }));
+    if (value) {
+      setProspectErrors((prev) => {
+        const next = { ...prev };
+        delete next[name];
+        return next;
+      });
+    }
+  };
+
+  const handleProspectSubmit = async (e) => {
+    e.preventDefault();
+    const errors = {};
+    if (!prospectForm.remark.trim()) errors.remark = 'Remark is required';
+    if (!prospectForm.prospectStatus) errors.prospectStatus = 'Prospect status is required';
+    if (Object.keys(errors).length > 0) {
+      setProspectErrors(errors);
+      return;
+    }
+
+    const customerId =
+      viewModal.data?.userId ||
+      viewModal.customer?.userId ||
+      viewModal.data?._id ||
+      viewModal.customer?._id ||
+      viewModal.customer?.id;
+    if (!customerId) {
+      toast.error('Customer ID not found');
+      return;
+    }
+
+    setProspectSubmitting(true);
+    setProspectErrors({});
+
+    try {
+      const token = getToken();
+      const formData = new FormData();
+      formData.append(
+        'prospectDetails',
+        JSON.stringify({
+          remark: prospectForm.remark.trim(),
+          prospectStatus: prospectForm.prospectStatus
+        })
+      );
+      if (prospectForm.attachment) {
+        formData.append('prospectAttachments', prospectForm.attachment);
+      }
+
+      const response = await axios.patch(
+        `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/update/${customerId}`,
+        formData,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data'
+          },
+          withCredentials: true
+        }
+      );
+
+      if (response.data && response.data.success) {
+        toast.success('Prospect information updated successfully!');
+        const refreshCustomerId = viewModal.data?.userId || customerId;
+        try {
+          const customerResponse = await axios.get(
+            `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/${refreshCustomerId}`,
+            {
+              headers: { Authorization: `Bearer ${token}` },
+              withCredentials: true
+            }
+          );
+          if (customerResponse.data && customerResponse.data.success) {
+            setViewModal((prev) => ({ ...prev, data: customerResponse.data.data }));
+          }
+        } catch (err) {
+          console.warn('Failed to refresh customer data:', err);
+        }
+        setProspectForm({ remark: '', prospectStatus: 'Warm', attachment: null });
+      } else {
+        toast.error(response.data?.message || 'Failed to update prospect information');
+      }
+    } catch (error) {
+      console.error('Error updating prospect information:', error);
+      toast.error(error.response?.data?.message || 'Failed to update prospect information. Please try again.');
+    } finally {
+      setProspectSubmitting(false);
+    }
+  };
+
+  const openAction = (cust) => {
+    const blacklisted = /blacklist/i.test(cust?.status);
+    setActionTarget(cust);
+    setActionType(blacklisted ? 'ok' : 'blacklist');
+    setActionForm({ reason: '', remarks: '', attachment: null });
+    setActionErr({});
+    setActionOpen(true);
+  };
+
+  const closeAction = () => {
+    setActionOpen(false);
+    setActionTarget(null);
+  };
+
+  const onActionInput = (e) => {
+    const { name, value, files } = e.target;
+    if (name === 'attachment') {
+      const f = files?.[0] || null;
+      if (!fileOk(f)) setActionErr((p) => ({ ...p, attachment: 'Only image/PDF/DOC/DOCX up to 10MB' }));
+      else {
+        setActionErr((p) => {
+          const c = { ...p };
+          delete c.attachment;
+          return c;
+        });
+        setActionForm((p) => ({ ...p, attachment: f }));
+      }
+      return;
+    }
+    setActionForm((p) => ({ ...p, [name]: value }));
+  };
+
+  const submitAction = async () => {
+    const errs = {};
+    if (!actionForm.reason.trim()) errs.reason = 'Required';
+    if (!fileOk(actionForm.attachment)) errs.attachment = 'Invalid file';
+    setActionErr(errs);
+    if (Object.keys(errs).length) return;
+
+    try {
+      setActionLoading(true);
+      const token = getToken();
+      const axiosInstance = axios.create({
+        baseURL: `${API_CONFIG.BASE_URL}`,
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+
+      const userId = actionTarget?._id || actionTarget?.userId || actionTarget?.id;
+      const fd = new FormData();
+
+      if (actionType === 'blacklist') {
+        fd.append('blacklistReason', actionForm.reason);
+        if (actionForm.remarks) fd.append('blacklistRemarks', actionForm.remarks);
+        if (actionForm.attachment) fd.append('attachments', actionForm.attachment);
+        fd.append('userid', userId);
+        await axiosInstance.put(`/api/v1/shipper_driver/blacklist/${userId}`, fd);
+        toast.success('User blacklisted successfully.');
+      } else {
+        fd.append('removalReason', actionForm.reason);
+        if (actionForm.remarks) fd.append('removalRemarks', actionForm.remarks);
+        if (actionForm.attachment) fd.append('attachments', actionForm.attachment);
+        await axiosInstance.put(`/api/v1/shipper_driver/blacklist/${userId}/remove`, fd);
+        toast.success('Removed from blacklist successfully.');
+      }
+
+      await fetchLaneForwards();
+      closeAction();
+    } catch (err) {
+      console.error('action failed', err);
+      toast.error('Action failed. Please try again.');
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -137,53 +486,38 @@ export default function Tier1Leads() {
           <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-white rounded-xl border border-gray-200 p-6 h-[90px] flex items-center relative">
               <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-gray-700 font-bold text-2xl">
-                {employees.length}
+                {totalCount}
               </div>
               <div className="absolute inset-0 flex items-center justify-center text-gray-700 font-semibold text-lg">
-                Tier 1 Employees
+                Lane forwards
               </div>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-6 h-[90px] flex items-center relative">
-              <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center text-gray-700 font-bold text-2xl">
-                {totalShippersAdded}
+              <div className="w-12 h-12 rounded-full bg-violet-100 flex items-center justify-center text-gray-700 font-bold text-2xl">
+                {items.length}
               </div>
               <div className="absolute inset-0 flex items-center justify-center text-gray-700 font-semibold text-lg">
-                Shippers Added
+                Shippers listed
               </div>
             </div>
           </div>
-          <div className="flex flex-col gap-1 w-full xl:w-[350px]">
-            <div className="relative w-full">
-              <button
-                type="button"
-                onClick={() => setShowPresetMenu((v) => !v)}
-                className="w-full text-left px-4 h-[45px] border border-gray-200 rounded-lg bg-white flex items-center justify-between text-gray-700 font-medium hover:border-gray-300 transition-colors cursor-pointer"
-              >
-                <span>
-                  {range.startDate && range.endDate
-                    ? `${format(range.startDate, 'MMM dd, yyyy')} - ${format(range.endDate, 'MMM dd, yyyy')}`
-                    : 'Select Date Range'}
-                </span>
-                <span className="ml-3 text-gray-400">▼</span>
-              </button>
-              {showPresetMenu && (
-                <div className="absolute z-50 mt-2 w-full rounded-lg border border-gray-100 bg-white shadow-lg py-1 right-0">
-                  <button type="button" onClick={() => { setRange({ startDate: addDays(new Date(), -6), endDate: new Date(), key: 'selection' }); setShowPresetMenu(false); }} className="block w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-600">Last 7 Days</button>
-                  <div className="my-1 border-t border-gray-100" />
-                  {Object.keys(presets).map((lbl) => (
-                    <button key={lbl} type="button" onClick={() => applyPreset(lbl)} className="block w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-700">{lbl}</button>
-                  ))}
-                  <div className="my-1 border-t border-gray-100" />
-                </div>
-              )}
-            </div>
+          <div className="flex flex-col gap-2 w-full xl:w-[200px] justify-center">
+            <button
+              type="button"
+              onClick={() => fetchLaneForwards()}
+              disabled={loading}
+              className="w-full px-4 h-[45px] border border-gray-200 rounded-lg bg-white flex items-center justify-center gap-2 text-gray-700 font-medium hover:border-gray-300 transition-colors disabled:opacity-50"
+            >
+              <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+              Refresh
+            </button>
           </div>
         </div>
         <div className="flex flex-col sm:flex-row gap-4 w-full">
           <div className="relative flex-1">
             <input
               type="text"
-              placeholder="Search by employee name or ID"
+              placeholder="Search by company, email, phone, added by, forward note…"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-8 pr-12 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-colors text-gray-600 placeholder-gray-400"
@@ -209,89 +543,117 @@ export default function Tier1Leads() {
               <table className="w-full">
                 <thead className="bg-white border-b border-gray-200">
                   <tr>
-                    <th className="text-left py-4 px-4 text-gray-600 font-semibold">Employee Name</th>
-                    <th className="text-left py-4 px-4 text-gray-600 font-semibold">Emp ID</th>
-                    <th className="text-left py-4 px-4 text-gray-600 font-semibold">Shippers Added</th>
+                    <th className="text-left py-4 px-4 text-gray-600 font-semibold">Company</th>
+                    <th className="text-left py-4 px-4 text-gray-600 font-semibold">Email</th>
+                    <th className="text-left py-4 px-4 text-gray-600 font-semibold">Phone</th>
+                    <th className="text-left py-4 px-4 text-gray-600 font-semibold">Added by</th>
+                    <th className="text-left py-4 px-4 text-gray-600 font-semibold">Forwards</th>
+                    <th className="text-left py-4 px-4 text-gray-600 font-semibold">Last forward</th>
                     <th className="text-left py-4 px-4 text-gray-600 font-semibold">Action</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredEmployees.map((emp) => (
-                    <tr key={emp.empId || emp.employeeName} className="border-b border-gray-100 hover:bg-gray-50">
-                      <td className="py-4 px-4 font-medium text-gray-700">{emp.employeeName || '—'}</td>
-                      <td className="py-4 px-4 font-medium text-gray-700">{emp.empId || '—'}</td>
-                      <td className="py-4 px-4 font-medium text-gray-700">{emp.shippersAddedCount ?? 0}</td>
-                      <td className="py-4 px-4">
-                        <button type="button" onClick={() => openView(emp)} className="px-3 py-1 rounded-lg border border-blue-500 text-blue-500 text-base font-medium hover:bg-blue-500 hover:text-white transition-all duration-200 cursor-pointer">View Shippers</button>
+                  {filteredItems.map((row) => (
+                    <tr key={row.userId || row.email} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="py-4 px-4 font-medium text-gray-800">{row.compName || '—'}</td>
+                      <td className="py-4 px-4 text-gray-700 max-w-[200px] truncate">{row.email || '—'}</td>
+                      <td className="py-4 px-4 text-gray-700">{row.phoneNo || '—'}</td>
+                      <td className="py-4 px-4 text-sm text-gray-700">
+                        {row.addedBy?.employeeName || '—'}
+                        {row.addedBy?.empId ? <span className="text-gray-500"> ({row.addedBy.empId})</span> : null}
+                      </td>
+                      <td className="py-4 px-4 text-gray-700">{row.forwardCountToMe ?? '—'}</td>
+                      <td className="py-4 px-4 text-sm text-gray-600 max-w-[220px]">
+                        {row.lastForward?.forwardedAt ? fmtDateTime(row.lastForward.forwardedAt) : '—'}
+                      </td>
+                      <td className="py-4 px-4 whitespace-nowrap align-middle">
+                        <div className="flex items-center gap-2 flex-nowrap">
+                          <button
+                            type="button"
+                            onClick={() => handleView(row)}
+                            className="px-4 py-1 font-medium rounded-md transition-colors border border-blue-300 text-blue-700 hover:bg-blue-50"
+                          >
+                            View
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleFollowUp(row)}
+                            className="px-4 py-1 font-medium rounded-md transition-colors border border-green-300 text-green-700 hover:bg-green-50 flex items-center gap-1"
+                          >
+                            Follow Up
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openAction(row)}
+                            className={`px-4 py-1 text-sm font-medium rounded-md transition-colors border ${
+                              /blacklist/i.test(row?.status)
+                                ? 'text-green-700 border-green-300 hover:bg-green-50'
+                                : 'text-red-700 border-red-300 hover:bg-red-50'
+                            }`}
+                          >
+                            {/blacklist/i.test(row?.status) ? 'Remove From Blacklist' : 'Blacklist'}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            {filteredEmployees.length === 0 && !loading && (
+            {filteredItems.length === 0 && !loading && (
               <div className="text-center py-12">
                 <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                <p className="text-gray-500 text-lg">{accessError ? accessError : searchTerm ? 'No employees match your search' : 'Select a date range to load Tier 1 shippers summary'}</p>
-                <p className="text-gray-400 text-sm">{!accessError && (searchTerm ? 'Try adjusting your search' : 'Data from tier1-shippers-summary API')}</p>
+                <p className="text-gray-500 text-lg">
+                  {accessError ? accessError : searchTerm ? 'No rows match your search' : 'No lane forwards yet'}
+                </p>
+                <p className="text-gray-400 text-sm">
+                  {!accessError && (searchTerm ? 'Try adjusting your search' : 'Data from tier3/lane-forwards API')}
+                </p>
               </div>
             )}
           </>
         )}
       </div>
 
-      {/* View Shippers Modal */}
-      {showViewModal && selectedEmployee && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => { setShowViewModal(false); setSelectedEmployee(null); }}>
-          <div className="bg-white rounded-2xl border border-gray-200 max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 py-4 bg-blue-600 text-white rounded-t-2xl">
-              <h3 className="text-lg font-semibold">Shippers — {selectedEmployee.employeeName || selectedEmployee.empId || '—'}</h3>
-              <button type="button" onClick={() => { setShowViewModal(false); setSelectedEmployee(null); }} className="p-2 rounded-lg hover:bg-white/10 cursor-pointer text-white"><X className="w-5 h-5" /></button>
-            </div>
-            <div className="p-6 overflow-y-auto flex-1">
-              <p className="text-sm text-gray-600 mb-4">Shippers added in selected date range: <span className="font-semibold text-gray-800">{selectedEmployee.shippersAddedCount ?? 0}</span></p>
-              {(selectedEmployee.shippers || []).length === 0 ? (
-                <p className="text-sm text-gray-500">No shippers in this period.</p>
-              ) : (
-                <div className="space-y-4">
-                  {(selectedEmployee.shippers || []).map((s) => (
-                    <div key={s._id} className="p-4 border border-gray-200 rounded-xl bg-gray-50">
-                      <div className="flex flex-wrap items-center gap-2 mb-2">
-                        <span className="font-medium text-gray-800">{s.compName || '—'}</span>
-                        <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-200 text-gray-700">{s.status || '—'}</span>
-                        {s.mc_dot_no && <span className="text-xs text-gray-500">MC/DOT: {s.mc_dot_no}</span>}
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
-                        <div className="flex items-center gap-2">
-                          <Mail className="text-gray-400 shrink-0" size={14} />
-                          <span className="text-gray-700 break-all">{s.email || '—'}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Phone className="text-gray-400 shrink-0" size={14} />
-                          <span className="text-gray-700">{s.phoneNo || '—'}</span>
-                        </div>
-                        <div className="sm:col-span-2 flex items-center gap-2">
-                          <MapPin className="text-gray-400 shrink-0" size={14} />
-                          <span className="text-gray-700">{[s.compAdd, s.city, s.state, s.zipcode].filter(Boolean).join(', ') || '—'}</span>
-                        </div>
-                      </div>
-                      {s.addedBy && (
-                        <p className="text-xs text-gray-500 mt-2">Added by: {s.addedBy.employeeName || s.addedBy.empId || '—'}</p>
-                      )}
-                      {s.createdAt && (
-                        <p className="text-xs text-gray-500">Created: {fmtDateTime(s.createdAt)}</p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-              <div className="mt-6 flex justify-end">
-                <button type="button" onClick={() => { setShowViewModal(false); setSelectedEmployee(null); }} className="px-6 py-2.5 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer">Close</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <Tier1LeadsModals
+        viewModal={viewModal}
+        followUpHistory={followUpHistory}
+        closeViewModal={closeViewModal}
+        prospectForm={prospectForm}
+        prospectErrors={prospectErrors}
+        prospectSubmitting={prospectSubmitting}
+        handleProspectInput={handleProspectInput}
+        handleProspectSubmit={handleProspectSubmit}
+        followUpModal={followUpModal}
+        followUpForm={followUpForm}
+        setFollowUpForm={setFollowUpForm}
+        followUpErrors={followUpErrors}
+        followUpSubmitting={followUpSubmitting}
+        closeFollowUpModal={closeFollowUpModal}
+        handleFollowUpSubmit={handleFollowUpSubmit}
+        actionOpen={actionOpen}
+        actionType={actionType}
+        actionTarget={actionTarget}
+        actionForm={actionForm}
+        actionErr={actionErr}
+        closeAction={closeAction}
+        onActionInput={onActionInput}
+        submitAction={submitAction}
+        actionLoading={actionLoading}
+      />
+
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="light"
+      />
     </div>
   );
 }

@@ -44,9 +44,10 @@ const NINETY_MIN_MS = 90 * 60 * 1000;
 const LS_START_KEY = "rr_timer_start";
 const LS_STOP_KEY = "rr_timer_stop";
 
-const loadShort = (id) => {
-  const s = (id ?? "").toString();
-  return s ? `L-${s.slice(-4)}` : "L-0000";
+const fullLoadId = (value, fallback = "N/A") => {
+  if (!value) return fallback;
+  if (typeof value === "object") return value._id || value.id || fallback;
+  return String(value);
 };
 
 function readLS(key) {
@@ -62,7 +63,7 @@ function writeLS(key, val) {
   } catch {}
 }
 
-const RateRequest = () => {
+const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
   const location = useLocation();
 
   const [search, setSearch] = useState("");
@@ -84,7 +85,7 @@ const RateRequest = () => {
   const [isFetching, setIsFetching] = useState(true);
   const [formErrors, setFormErrors] = useState({});
   const [touchedFields, setTouchedFields] = useState({});
-  const [activeTab, setActiveTab] = useState("rate"); // 'pending', 'rate', or 'rateDetails'
+  const [activeTab, setActiveTab] = useState(defaultTab); // 'pending', 'rate', or 'rateDetails'
   const [pendingRequests, setPendingRequests] = useState([]);
   const [completedRequests, setCompletedRequests] = useState([]);
   // Rate Request pagination
@@ -151,7 +152,6 @@ const RateRequest = () => {
   const [pickupDestLimit, setPickupDestLimit] = useState(20);
   const [pickupDestLoading, setPickupDestLoading] = useState(false);
   const [pickupDestError, setPickupDestError] = useState("");
-  const [pickupDestViewLoad, setPickupDestViewLoad] = useState(null);
 
   // timers
   const [timerStartMap, setTimerStartMap] = useState(() =>
@@ -896,6 +896,43 @@ const RateRequest = () => {
     }
   };
 
+  const openPickupDestLoadView = async (load) => {
+    const resolvedLoadId = fullLoadId(
+      load?._id || load?.actualLoadId || load?.loadId,
+      "",
+    );
+    if (!resolvedLoadId) {
+      toast.error("Unable to determine load ID");
+      return;
+    }
+
+    const baseOrigin = load?.origin || load?.origins?.[0] || {};
+    const baseDestination = load?.destination || load?.destinations?.[0] || {};
+
+    // Open the same "Load Information & Bid Details" modal immediately
+    // so pickup/destination view uses identical design and structure.
+    setBidDetailsModal({
+      visible: true,
+      load: {
+        ...load,
+        _id: resolvedLoadId,
+        loadId: resolvedLoadId,
+        origin: {
+          ...baseOrigin,
+          address: baseOrigin.address || baseOrigin.addressLine1,
+          zipcode: baseOrigin.zipcode || baseOrigin.zip,
+        },
+        destination: {
+          ...baseDestination,
+          address: baseDestination.address || baseDestination.addressLine1,
+          zipcode: baseDestination.zipcode || baseDestination.zip,
+        },
+      },
+    });
+
+    await fetchBidDetails(resolvedLoadId);
+  };
+
   // Get status color
   const getStatusColor = (status) => {
     switch (status?.toLowerCase()) {
@@ -954,13 +991,13 @@ const RateRequest = () => {
   useEffect(() => {
     const approval = location?.state?.openApprovalFromBroadcast;
     if (approval) {
-      setActiveTab("rate"); // Changed from 'pending' to 'rate' since pending tab is disabled
+      setActiveTab(hideTabs ? defaultTab : "rate"); // Changed from 'pending' to 'rate' since pending tab is disabled
       openApprovalModal(approval, "approval");
       // state clear so refresh pe dubara na khule
       window.history.replaceState({}, document.title);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [defaultTab, hideTabs]);
 
   // init
   useEffect(() => {
@@ -1785,7 +1822,7 @@ const RateRequest = () => {
     try {
       const dataToExport = filteredRequests.map((item, index) => ({
         "S.No": index + 1,
-        "Load ID": loadShort(item._id),
+        "Load ID": fullLoadId(item.loadId || item.actualLoadId || item._id),
         "Shipment Number": item.shipmentNumber || "N/A",
         "Weight (lbs)": item.weight || 0,
         "Pickup City": item.origin?.city || "N/A",
@@ -2227,6 +2264,7 @@ const RateRequest = () => {
       {/* Top section - same layout as Consignment: single white card, no shadow */}
       <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-8">
         {/* Tabs */}
+        {!hideTabs && (
         <div className="flex items-center gap-4 mb-6">
           <button
             onClick={() => setActiveTab("rate")}
@@ -2268,6 +2306,7 @@ const RateRequest = () => {
             </div>
           </button>
         </div>
+        )}
 
         {/* Stats row - Consignment style: border only, no shadow */}
         {activeTab !== "pickupDest" && (
@@ -2430,7 +2469,7 @@ const RateRequest = () => {
                     >
                       <td className="px-4 py-3">
                         <span className="font-medium text-gray-700">
-                          {loadShort(item.loadId || item._id)}
+                          {fullLoadId(item.loadId || item.actualLoadId || item._id)}
                         </span>
                       </td>
                       <td className="px-4 py-3">
@@ -2760,7 +2799,7 @@ const RateRequest = () => {
                       >
                         <td className="px-4 py-4 border-y first:border-l border-gray-200 first:rounded-l-lg">
                           <span className="font-medium text-gray-700">
-                            {loadShort(item._id)}
+                            {fullLoadId(item.loadId || item.actualLoadId || item._id)}
                           </span>
                         </td>
                         <td className="px-4 py-4 border-y border-gray-200">
@@ -4255,7 +4294,7 @@ const RateRequest = () => {
                         Load ID
                       </div>
                       <div className="text-sm font-semibold text-gray-800">
-                        {loadShort(
+                        {fullLoadId(
                           bidDetailsModal.load._id ||
                             bidDetailsModal.load.loadId,
                         )}
@@ -4597,9 +4636,6 @@ const RateRequest = () => {
                             Rate
                           </th>
                           <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">
-                            Status
-                          </th>
-                          <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">
                             Date
                           </th>
                         </tr>
@@ -4634,13 +4670,6 @@ const RateRequest = () => {
                               </span>
                             </td>
                             <td className="py-3 px-4">
-                              <span
-                                className={`text-xs px-3 py-1 rounded-full font-bold ${getStatusColor(bid.status)}`}
-                              >
-                                {bid.status || "N/A"}
-                              </span>
-                            </td>
-                            <td className="py-3 px-4">
                               <span className="text-sm text-gray-600">
                                 {bid.createdAt
                                   ? new Date(bid.createdAt).toLocaleDateString(
@@ -4661,7 +4690,7 @@ const RateRequest = () => {
                         {(!bidDetailsData?.recentBids ||
                           bidDetailsData.recentBids.length === 0) && (
                           <tr>
-                            <td colSpan="5" className="text-center py-12">
+                            <td colSpan="4" className="text-center py-12">
                               <div className="text-gray-500">
                                 <Truck className="w-12 h-12 mx-auto mb-4 text-gray-300" />
                                 <p className="text-lg font-medium">
@@ -4936,7 +4965,7 @@ const RateRequest = () => {
                       >
                         <td className="px-4 py-4 border-y first:border-l border-gray-200 first:rounded-l-lg">
                           <span className="font-medium text-gray-700">
-                            {loadShort(item._id)}
+                            {fullLoadId(item.loadId || item.actualLoadId || item._id)}
                           </span>
                         </td>
                         <td className="px-4 py-4 border-y border-gray-200">
@@ -5466,9 +5495,6 @@ const RateRequest = () => {
                           <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
                             Date & Time
                           </th>
-                          <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
-                            Trucker / Carrier
-                          </th>
                           <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y last:border-r border-gray-200 rounded-r-lg">
                             Details
                           </th>
@@ -5484,9 +5510,6 @@ const RateRequest = () => {
                           const destCity = dest.city || "—";
                           const destState = dest.state || "";
                           const destZip = dest.zip || dest.zipcode || "";
-                          const trucker = load.trucker;
-                          const truckerName = trucker?.compName ?? "No trucker assigned";
-                          const truckerMcDot = trucker?.mc_dot_no ? `MC/DOT: ${trucker.mc_dot_no}` : "";
                           return (
                             <tr
                               key={load._id}
@@ -5494,7 +5517,7 @@ const RateRequest = () => {
                             >
                               <td className="px-4 py-4 border-y first:border-l border-gray-200 first:rounded-l-lg">
                                 <span className="font-medium text-gray-700">
-                                  {loadShort(load._id)}
+                                  {fullLoadId(load?._id || load?.loadId)}
                                 </span>
                               </td>
                               <td className="px-4 py-4 border-y border-gray-200">
@@ -5554,18 +5577,10 @@ const RateRequest = () => {
                                   <span className="font-medium text-gray-400">—</span>
                                 )}
                               </td>
-                              <td className="px-4 py-4 border-y border-gray-200">
-                                <div>
-                                  <span className="font-medium text-gray-700">{truckerName}</span>
-                                  {truckerMcDot && (
-                                    <p className="text-xs text-gray-500">{truckerMcDot}</p>
-                                  )}
-                                </div>
-                              </td>
                               <td className="px-4 py-4 border-y last:border-r border-gray-200 last:rounded-r-lg">
                                 <button
                                   type="button"
-                                  onClick={() => setPickupDestViewLoad(load)}
+                                  onClick={() => openPickupDestLoadView(load)}
                                   className="px-3 py-1.5 text-sm font-medium text-amber-600 hover:text-amber-700 hover:bg-amber-50 rounded-lg transition-colors"
                                 >
                                   View
@@ -5609,95 +5624,6 @@ const RateRequest = () => {
               )}
             </div>
           )}
-        </div>
-      )}
-
-      {/* Load by Pickup & Destination - View load modal */}
-      {pickupDestViewLoad && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40"
-          onClick={() => setPickupDestViewLoad(null)}
-        >
-          <div
-            className="bg-white rounded-xl border border-gray-200 shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="p-6 border-b border-gray-200 flex justify-between items-center bg-gradient-to-r from-amber-50 to-orange-50">
-              <h3 className="text-lg font-semibold text-gray-800">
-                Load & trucker details — {loadShort(pickupDestViewLoad._id)}
-              </h3>
-              <button
-                type="button"
-                onClick={() => setPickupDestViewLoad(null)}
-                className="p-2 rounded-lg hover:bg-gray-200 text-gray-600"
-              >
-                <span className="sr-only">Close</span>
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="p-6 space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xs font-medium text-gray-500 uppercase">Shipment #</p>
-                  <p className="font-medium text-gray-800">{pickupDestViewLoad.shipmentNumber || "—"}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-gray-500 uppercase">Status</p>
-                  <p className="font-medium text-gray-800">{pickupDestViewLoad.status || "—"}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-gray-500 uppercase">Weight</p>
-                  <p className="font-medium text-gray-800">{(pickupDestViewLoad.weight ?? 0).toLocaleString()} lbs</p>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-gray-500 uppercase">Vehicle type</p>
-                  <p className="font-medium text-gray-800">{pickupDestViewLoad.vehicleType || "—"}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-gray-500 uppercase">Load type</p>
-                  <p className="font-medium text-gray-800">{pickupDestViewLoad.loadType || "—"}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-gray-500 uppercase">Commodity</p>
-                  <p className="font-medium text-gray-800">{pickupDestViewLoad.commodity || "—"}</p>
-                </div>
-              </div>
-              <div>
-                <p className="text-xs font-medium text-gray-500 uppercase mb-2">Pickup</p>
-                <p className="text-gray-800">
-                  {(() => {
-                    const o = pickupDestViewLoad.origins?.[0] || pickupDestViewLoad.origin || {};
-                    return [o.addressLine1, o.city, o.state, o.zip || o.zipcode].filter(Boolean).join(", ") || "—";
-                  })()}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs font-medium text-gray-500 uppercase mb-2">Destination</p>
-                <p className="text-gray-800">
-                  {(() => {
-                    const d = pickupDestViewLoad.destinations?.[0] || pickupDestViewLoad.destination || {};
-                    return [d.addressLine1, d.city, d.state, d.zip || d.zipcode].filter(Boolean).join(", ") || "—";
-                  })()}
-                </p>
-              </div>
-              <div className="pt-4 border-t border-gray-200">
-                <p className="text-sm font-semibold text-gray-700 mb-2">Trucker / Carrier</p>
-                {pickupDestViewLoad.trucker ? (
-                  <div className="bg-gray-50 rounded-lg p-4 space-y-1 text-sm">
-                    <p><span className="text-gray-500">Company:</span> {pickupDestViewLoad.trucker.compName || "—"}</p>
-                    <p><span className="text-gray-500">MC/DOT:</span> {pickupDestViewLoad.trucker.mc_dot_no || "—"}</p>
-                    <p><span className="text-gray-500">City, State:</span> {[pickupDestViewLoad.trucker.city, pickupDestViewLoad.trucker.state].filter(Boolean).join(", ") || "—"}</p>
-                    {pickupDestViewLoad.trucker.email && <p><span className="text-gray-500">Email:</span> {pickupDestViewLoad.trucker.email}</p>}
-                    {pickupDestViewLoad.trucker.phoneNo && <p><span className="text-gray-500">Phone:</span> {pickupDestViewLoad.trucker.phoneNo}</p>}
-                  </div>
-                ) : (
-                  <p className="text-gray-500">No trucker assigned</p>
-                )}
-              </div>
-            </div>
-          </div>
         </div>
       )}
 

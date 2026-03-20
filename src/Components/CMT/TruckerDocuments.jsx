@@ -672,6 +672,7 @@ const handleWorkingAddressFileChange = (idx, file) => {
       phoneNo: trucker.phoneNo || '',
       secondaryPhoneNo: trucker.secondaryPhoneNo || '',
       onboardCompany: trucker.assignedCompany || trucker.onboardCompany || trucker.companyName || '',
+      loadRef: trucker.loadRef || trucker.loadReference || '',
       mc_dot_no: trucker.mc_dot_no || '',
       carrierType: trucker.carrierType || '',
       fleetsize: trucker.fleetsize || '',
@@ -881,6 +882,7 @@ const handleWorkingAddressFileChange = (idx, file) => {
         phoneNo: editFormData.phoneNo,
         secondaryPhoneNo: editFormData.secondaryPhoneNo || '',
         assignedCompany: editFormData.onboardCompany || '',
+        loadRef: editFormData.loadRef || '',
         mc_dot_no: editFormData.mc_dot_no,
         // Banking Details
         ...(editFormData.paymentType ? {
@@ -1488,6 +1490,17 @@ const handleWorkingAddressFileChange = (idx, file) => {
                         error=""
                       />
                     </div>
+                  </div>
+                  <div className="mt-3">
+                    <label className="text-sm font-medium text-gray-700">Load Reference</label>
+                    <input
+                      type="text"
+                      name="loadRef"
+                      placeholder="Load Reference"
+                      value={editFormData.loadRef || ''}
+                      onChange={handleEditInputChange}
+                      className="w-full border px-4 py-2 rounded-lg border-gray-400"
+                    />
                   </div>
 
                   {/* City | State */}
@@ -2198,6 +2211,9 @@ const handleWorkingAddressFileChange = (idx, file) => {
               <div className="flex items-center gap-2 text-gray-700"><FileText size={16} /> <span className="font-medium">MC/DOT No:</span> {selectedTrucker.mc_dot_no}</div>
               <div className="flex items-center gap-2 text-gray-700"><Mail size={16} /> <span className="font-medium">Email:</span> {selectedTrucker.email}</div>
               <div className="flex items-center gap-2 text-gray-700"><Phone size={16} /> <span className="font-medium">Phone:</span> {selectedTrucker.phoneNo}</div>
+              {(selectedTrucker.loadRef || selectedTrucker.loadReference) && (
+                <div className="flex items-center gap-2 text-gray-700"><FileText size={16} /> <span className="font-medium">Load Reference:</span> {selectedTrucker.loadRef || selectedTrucker.loadReference}</div>
+              )}
               <div className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold mt-2 ${statusColor(selectedTrucker.status)}`}>
                 {selectedTrucker.status === 'approved' && <CheckCircle size={14} />}
                 {selectedTrucker.status === 'rejected' && <XCircle size={14} />}
@@ -2446,6 +2462,17 @@ const handleWorkingAddressFileChange = (idx, file) => {
                       <div>
                         <p className="text-sm text-gray-600">Onboard Company</p>
                         <p className="font-semibold text-gray-800">{selectedTrucker.assignedCompany || selectedTrucker.onboardCompany || selectedTrucker.companyName}</p>
+                      </div>
+                    </div>
+                  )}
+                  {(selectedTrucker.loadRef || selectedTrucker.loadReference) && (
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                        <FileText className="text-purple-600" size={16} />
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Load Reference</p>
+                        <p className="font-semibold text-gray-800">{selectedTrucker.loadRef || selectedTrucker.loadReference}</p>
                       </div>
                     </div>
                   )}
