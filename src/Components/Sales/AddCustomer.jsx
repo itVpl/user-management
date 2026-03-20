@@ -1,7 +1,8 @@
 // src/pages/AddCustomer.jsx
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import axios from 'axios';
-import { User, Building2, FileText, PlusCircle, Eye, EyeOff, Search, Mail, X, Calendar, MapPin, Phone, CreditCard, Clock, CheckCircle, XCircle, Building, MessageSquare } from 'lucide-react';
+import { User, Building2, FileText, PlusCircle, Eye, EyeOff, Search, Mail, X, Calendar, MapPin, Phone, CreditCard, Clock, CheckCircle, XCircle, Building, MessageSquare, Truck, Send } from 'lucide-react';
+import { format, addDays } from 'date-fns';
 import API_CONFIG from '../../config/api.js';
 import { toast, ToastContainer } from 'react-toastify';
 import { Plus } from 'lucide-react';
@@ -220,13 +221,51 @@ const Select = React.memo(function Select({
   );
 });
 
+/**
+ * DB shape: laneDetails is an Array of lane objects (pickup/drop/equipment, addedBy, _id, etc.).
+ * Also handles a single object if API ever returns one lane without wrapping in [].
+ */
+function customerHasLaneDetails(cust) {
+  const ld = cust?.laneDetails;
+  if (ld == null || ld === '') return false;
+  if (Array.isArray(ld)) return ld.length > 0;
+  if (typeof ld === 'object') {
+    return !!(ld.pickupAddress || ld.dropAddress || ld._id || ld.equipmentType);
+  }
+  return false;
+}
 
-const CustomerTable = React.memo(function CustomerTable({ customers, onAction }) {
+/** DB: laneDetails is usually Array; normalize for .map() in UI */
+function getLaneDetailsList(cust) {
+  const ld = cust?.laneDetails;
+  if (!ld) return [];
+  if (Array.isArray(ld)) return ld;
+  if (typeof ld === 'object') return [ld];
+  return [];
+}
+
+const CustomerTable = React.memo(function CustomerTable({ customers, onAction, onLaneDetailsSaved }) {
   const [page, setPage] = useState(1);
   const pageSize = 50;
   const [viewModal, setViewModal] = useState({ open: false, customer: null, data: null, loading: false });
   const [followUpHistory, setFollowUpHistory] = useState({ data: null, loading: false });
   const [followUpModal, setFollowUpModal] = useState({ open: false, customer: null });
+  const [laneDetailModal, setLaneDetailModal] = useState({ open: false, customer: null });
+  const [laneForm, setLaneForm] = useState({
+    pickupAddress: '',
+    pickupCity: '',
+    pickupState: '',
+    pickupZip: '',
+    dropAddress: '',
+    dropCity: '',
+    dropState: '',
+    dropZip: '',
+    equipmentType: '',
+    weight: '',
+    targetRate: '',
+    hazmat: 'No'
+  });
+  const [laneFormSubmitting, setLaneFormSubmitting] = useState(false);
   const [followUpForm, setFollowUpForm] = useState({
     followUpMethod: 'call',
     followUpNotes: '',
@@ -243,12 +282,86 @@ const CustomerTable = React.memo(function CustomerTable({ customers, onAction })
   const [prospectSubmitting, setProspectSubmitting] = useState(false);
   const [prospectErrors, setProspectErrors] = useState({});
 
+  // Forward to Tier 3
+  const [forwardTier3Form, setForwardTier3Form] = useState({
+    note: 'Please check date and equipment'
+  });
+  const [forwardTier3Manager, setForwardTier3Manager] = useState({
+    managerName: '',
+    managerEmpId: '',
+    loading: false,
+    error: ''
+  });
+  const [forwardTier3Submitting, setForwardTier3Submitting] = useState(false);
+  const [forwardTier3Errors, setForwardTier3Errors] = useState({});
+  const [forwardedTier3Map, setForwardedTier3Map] = useState({});
+
+  const isForwardedToTier3 = (shipperId) => {
+    // If View API already marks forwarded, disable immediately.
+    if (viewModal?.data?.forwardedAt) return true;
+    if (!shipperId) return false;
+    if (forwardedTier3Map[shipperId] === true) return true;
+    try {
+      return localStorage.getItem(`tier3Forwarded:${shipperId}`) === '1';
+    } catch {
+      return false;
+    }
+  };
+
+  const getForwardShipperId = () =>
+    viewModal.data?.userId ||
+    viewModal.customer?.userId ||
+    viewModal.data?._id ||
+    viewModal.customer?._id ||
+    viewModal.data?.id ||
+    viewModal.customer?.id;
+
   const totalPages = Math.max(1, Math.ceil(customers.length / pageSize));
 
 
   useEffect(() => {
     if (page > totalPages) setPage(1);
   }, [customers.length, totalPages, page]);
+
+  // Fetch logged-in employee's manager info (used for Forward to Tier 3)
+  useEffect(() => {
+    const currentEmpId = sessionStorage.getItem('empId') || localStorage.getItem('empId');
+    if (!currentEmpId) return;
+
+    const loadManager = async () => {
+      try {
+        const token = getToken();
+        if (!token) return;
+
+        setForwardTier3Manager((p) => ({ ...p, loading: true, error: '' }));
+        const res = await axios.get(
+          `${API_CONFIG.BASE_URL}/api/v1/inhouseUser/${currentEmpId}`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+            withCredentials: true
+          }
+        );
+
+        const employee = res?.data?.employee || res?.data?.data?.employee || res?.data?.data || null;
+        setForwardTier3Manager({
+          managerName: employee?.managerName || '',
+          managerEmpId: employee?.managerEmpId || '',
+          loading: false,
+          error: ''
+        });
+      } catch (err) {
+        console.error('Failed to fetch manager for forward:', err);
+        setForwardTier3Manager((p) => ({
+          ...p,
+          loading: false,
+          error: err?.response?.data?.message || 'Failed to fetch manager info'
+        }));
+      }
+    };
+
+    loadManager();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
 
   const pageData = useMemo(() => {
@@ -360,6 +473,9 @@ const CustomerTable = React.memo(function CustomerTable({ customers, onAction })
       attachment: null
     });
     setProspectErrors({});
+    setForwardTier3Form({ note: 'Please check date and equipment' });
+    setForwardTier3Errors({});
+    setForwardTier3Submitting(false);
   };
 
   const handleFollowUp = (customer) => {
@@ -383,6 +499,168 @@ const CustomerTable = React.memo(function CustomerTable({ customers, onAction })
     });
     setFollowUpErrors({});
     setFollowUpSubmitting(false);
+  };
+
+  const handleLaneDetail = (customer) => {
+    setLaneDetailModal({ open: true, customer });
+    setLaneForm({
+      pickupAddress: '',
+      pickupCity: '',
+      pickupState: '',
+      pickupZip: '',
+      dropAddress: '',
+      dropCity: '',
+      dropState: '',
+      dropZip: '',
+      equipmentType: '',
+      weight: '',
+      targetRate: '',
+      hazmat: 'No'
+    });
+  };
+
+  const closeLaneDetailModal = () => {
+    setLaneDetailModal({ open: false, customer: null });
+  };
+
+  const onLaneFormChange = (e) => {
+    const { name, value } = e.target;
+    setLaneForm(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleLaneDetailSubmit = async (e) => {
+    e.preventDefault();
+    const customer = laneDetailModal.customer;
+    const customerId = customer?.userId || customer?._id || customer?.id;
+    if (!customerId) {
+      toast.error('Customer ID not found');
+      return;
+    }
+    setLaneFormSubmitting(true);
+    try {
+      const token = getToken();
+      const res = await axios.patch(
+        `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/shipper/${customerId}/lane-details`,
+        {
+          pickupAddress: laneForm.pickupAddress || '',
+          pickupCity: laneForm.pickupCity || '',
+          pickupState: laneForm.pickupState || '',
+          pickupZip: laneForm.pickupZip || '',
+          dropAddress: laneForm.dropAddress || '',
+          dropCity: laneForm.dropCity || '',
+          dropState: laneForm.dropState || '',
+          dropZip: laneForm.dropZip || '',
+          equipmentType: laneForm.equipmentType || '',
+          weight: laneForm.weight || '',
+          targetRate: laneForm.targetRate || '',
+          hazmat: laneForm.hazmat || 'No'
+        },
+        { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, withCredentials: true }
+      );
+      if (res.data?.success) {
+        toast.success('Lane details saved successfully.');
+        closeLaneDetailModal();
+        onLaneDetailsSaved?.(customerId);
+      } else {
+        toast.error(res.data?.message || 'Failed to save lane details');
+      }
+    } catch (err) {
+      console.error('Lane details PATCH error:', err);
+      toast.error(err?.response?.data?.message || err?.message || 'Failed to save lane details');
+    } finally {
+      setLaneFormSubmitting(false);
+    }
+  };
+
+  const handleForwardToTier3 = async (e) => {
+    e.preventDefault();
+
+    const shipperId =
+      viewModal.data?.userId ||
+      viewModal.customer?.userId ||
+      viewModal.data?._id ||
+      viewModal.customer?._id ||
+      viewModal.data?.id ||
+      viewModal.customer?.id;
+
+    if (!shipperId) {
+      toast.error('Customer ID not found');
+      return;
+    }
+
+    const alreadyForwarded =
+      forwardedTier3Map[shipperId] === true || (() => {
+        try {
+          return localStorage.getItem(`tier3Forwarded:${shipperId}`) === '1';
+        } catch {
+          return false;
+        }
+      })();
+
+    if (alreadyForwarded) {
+      toast.error('Already forwarded to Tier 3.');
+      return;
+    }
+
+    const tier3EmpId = String(forwardTier3Manager.managerEmpId || '').trim();
+    const note = String(forwardTier3Form.note || '').trim();
+
+    const errors = {};
+    if (!note) errors.note = 'Note is required';
+    if (!tier3EmpId) errors.manager = 'Manager info not available';
+
+    setForwardTier3Errors(errors);
+    if (Object.keys(errors).length > 0) return;
+
+    setForwardTier3Submitting(true);
+    try {
+      const token = getToken();
+      const res = await axios.post(
+        `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/shipper/${shipperId}/forward-lane-to-tier3`,
+        { note, tier3EmpId },
+        {
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          withCredentials: true
+        }
+      );
+
+      if (res.data?.success) {
+        toast.success('Forwarded to Tier 3 successfully!');
+        setForwardTier3Errors({});
+        setForwardedTier3Map((prev) => ({ ...prev, [shipperId]: true }));
+        try {
+          localStorage.setItem(`tier3Forwarded:${shipperId}`, '1');
+        } catch {
+          // ignore storage errors
+        }
+        // Refresh view data so `forwardedAt` becomes available for disabling the button
+        if (viewModal.open) {
+          try {
+            const token = getToken();
+            const customerResponse = await axios.get(
+              `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/${shipperId}`,
+              {
+                headers: { Authorization: `Bearer ${token}` },
+                withCredentials: true
+              }
+            );
+            if (customerResponse.data && customerResponse.data.success) {
+              setViewModal((prev) => ({ ...prev, data: customerResponse.data.data }));
+            }
+          } catch (refreshErr) {
+            console.warn('Failed to refresh view data after forward:', refreshErr);
+          }
+        }
+        onLaneDetailsSaved?.(shipperId);
+      } else {
+        toast.error(res.data?.message || 'Failed to forward to Tier 3');
+      }
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Failed to forward to Tier 3');
+      console.error('forward-lane-to-tier3 error:', err);
+    } finally {
+      setForwardTier3Submitting(false);
+    }
   };
 
   const handleFollowUpSubmit = async (e) => {
@@ -666,6 +944,14 @@ const CustomerTable = React.memo(function CustomerTable({ customers, onAction })
                       View
                     </button>
                     <button
+                      onClick={() => handleLaneDetail(cust)}
+                      disabled={customerHasLaneDetails(cust)}
+                      title={customerHasLaneDetails(cust) ? 'Lane details already added' : 'Add lane details'}
+                      className="px-4 py-1 font-medium rounded-md transition-colors border border-violet-300 text-violet-700 hover:bg-violet-50 flex items-center gap-1 disabled:opacity-60 disabled:cursor-not-allowed disabled:border-gray-300 disabled:text-gray-500 disabled:hover:bg-transparent"
+                    >
+                      Lane Detail
+                    </button>
+                    <button
                       onClick={() => handleFollowUp(cust)}
                       className="px-4 py-1 font-medium rounded-md transition-colors border border-green-300 text-green-700 hover:bg-green-50 flex items-center gap-1"
                     >
@@ -859,6 +1145,188 @@ const CustomerTable = React.memo(function CustomerTable({ customers, onAction })
                     </div>
                   </div>
                 </div>
+
+                {/* Lane Details */}
+                <div className="bg-gradient-to-br from-slate-50 to-violet-50 rounded-2xl p-6 border border-violet-100">
+                  <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <Truck className="text-violet-600" size={20} />
+                    Lane Details
+                  </h3>
+                  {customerHasLaneDetails(viewModal.data) ? (
+                    <div className="space-y-4">
+                      {getLaneDetailsList(viewModal.data).map((lane, laneIdx) => (
+                        <div key={lane._id || laneIdx} className="bg-white rounded-xl p-4 border border-violet-200 shadow-sm">
+                          <div className="flex flex-wrap items-center justify-between gap-2 mb-3 pb-3 border-b border-violet-100">
+                            <span className="text-xs font-semibold text-violet-700 uppercase tracking-wide">Lane #{laneIdx + 1}</span>
+                            {lane.createdAt && (
+                              <span className="text-xs text-gray-500">
+                                <Clock size={12} className="inline mr-1" />
+                                {new Date(lane.createdAt).toLocaleString()}
+                              </span>
+                            )}
+                          </div>
+                          {lane.addedBy && (
+                            <div className="mb-4 p-3 rounded-lg bg-violet-50/80 border border-violet-100">
+                              <p className="text-xs text-gray-500 mb-1">Added by</p>
+                              <p className="text-sm font-semibold text-gray-800">
+                                {lane.addedBy.employeeName || 'N/A'}
+                                {lane.addedBy.empId ? <span className="text-gray-600 font-normal"> ({lane.addedBy.empId})</span> : null}
+                              </p>
+                              {lane.addedBy.department && (
+                                <p className="text-xs text-gray-600 mt-0.5">{lane.addedBy.department}</p>
+                              )}
+                            </div>
+                          )}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="md:col-span-2">
+                              <p className="text-xs font-semibold text-green-700 mb-2 flex items-center gap-1">
+                                <MapPin size={14} /> Pickup
+                              </p>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                                <div className="md:col-span-2">
+                                  <p className="text-gray-500">Address</p>
+                                  <p className="font-medium text-gray-800">{lane.pickupAddress || 'N/A'}</p>
+                                </div>
+                                <div>
+                                  <p className="text-gray-500">City / State / ZIP</p>
+                                  <p className="font-medium text-gray-800">
+                                    {[lane.pickupCity, lane.pickupState, lane.pickupZip].filter(Boolean).join(', ') || 'N/A'}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="md:col-span-2">
+                              <p className="text-xs font-semibold text-red-700 mb-2 flex items-center gap-1">
+                                <MapPin size={14} /> Drop
+                              </p>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                                <div className="md:col-span-2">
+                                  <p className="text-gray-500">Address</p>
+                                  <p className="font-medium text-gray-800">{lane.dropAddress || 'N/A'}</p>
+                                </div>
+                                <div>
+                                  <p className="text-gray-500">City / State / ZIP</p>
+                                  <p className="font-medium text-gray-800">
+                                    {[lane.dropCity, lane.dropState, lane.dropZip].filter(Boolean).join(', ') || 'N/A'}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Equipment type</p>
+                              <p className="font-semibold text-gray-800">{lane.equipmentType || 'N/A'}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Weight</p>
+                              <p className="font-semibold text-gray-800">{lane.weight || 'N/A'}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Target rate</p>
+                              <p className="font-semibold text-gray-800">{lane.targetRate != null && lane.targetRate !== '' ? `$${lane.targetRate}` : 'N/A'}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Hazmat</p>
+                              <p className="font-semibold text-gray-800">{lane.hazmat === true ? 'Yes' : lane.hazmat === false ? 'No' : 'N/A'}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 rounded-xl bg-white/60 border border-dashed border-violet-200">
+                      <Truck className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+                      <p className="text-gray-500 text-sm">No lane details recorded for this customer</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Forward to Tier 3 */}
+                {customerHasLaneDetails(viewModal.data) && (
+                  <div className="bg-gradient-to-br from-indigo-50 to-blue-50 rounded-2xl p-6 border border-indigo-100">
+                    <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                      <Send className="text-indigo-600" size={20} />
+                      Forward to Tier 3
+                    </h3>
+
+                    <form onSubmit={handleForwardToTier3} className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Manager Name (Forward uses Manager EmpId)
+                          </label>
+                          <input
+                            type="text"
+                            value={forwardTier3Manager.managerName || ''}
+                            readOnly
+                            placeholder={forwardTier3Manager.loading ? 'Loading...' : 'Not available'}
+                            className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 transition-all ${
+                              forwardTier3Errors.manager
+                                ? 'border-red-300 focus:border-red-500 focus:ring-red-200'
+                                : 'border-gray-200 focus:ring-indigo-100 focus:border-indigo-300'
+                            }`}
+                          />
+                          {forwardTier3Errors.manager && (
+                            <p className="text-red-500 text-xs mt-1">{forwardTier3Errors.manager}</p>
+                          )}
+                        </div>
+
+                        <div className="md:col-span-1">
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Note <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={forwardTier3Form.note}
+                            onChange={(e) => setForwardTier3Form((p) => ({ ...p, note: e.target.value }))}
+                            placeholder="Please check date and equipment"
+                            className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 transition-all ${
+                              forwardTier3Errors.note
+                                ? 'border-red-300 focus:border-red-500 focus:ring-red-200'
+                                : 'border-gray-200 focus:ring-indigo-100 focus:border-indigo-300'
+                            }`}
+                          />
+                          {forwardTier3Errors.note && (
+                            <p className="text-red-500 text-xs mt-1">{forwardTier3Errors.note}</p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end gap-3 pt-2 border-t border-indigo-100">
+                        <button
+                          type="submit"
+                          disabled={
+                            forwardTier3Submitting ||
+                            forwardTier3Manager.loading ||
+                            !forwardTier3Manager.managerEmpId ||
+                            isForwardedToTier3(getForwardShipperId())
+                          }
+                          className={`px-6 py-3 rounded-xl font-semibold text-white transition-all flex items-center gap-2 ${
+                            forwardTier3Submitting || isForwardedToTier3(getForwardShipperId())
+                              ? 'bg-gray-400 cursor-not-allowed'
+                              : 'bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700'
+                          }`}
+                        >
+                          {forwardTier3Submitting ? (
+                            <>
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                              Forwarding...
+                            </>
+                          ) : isForwardedToTier3(getForwardShipperId()) ? (
+                            <>
+                              <CheckCircle size={18} />
+                              Forwarded
+                            </>
+                          ) : (
+                            <>
+                              <Send size={18} />
+                              Forward to Tier 3
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )}
 
                 {/* Prospect Information - Show for both prospect and final_customer */}
                 {(viewModal.data.type === 'prospect' || viewModal.data.userType === 'prospect' || 
@@ -1147,6 +1615,132 @@ const CustomerTable = React.memo(function CustomerTable({ customers, onAction })
         </div>
       )}
 
+      {/* Lane Detail Modal - form only (same design as Add Customer form) */}
+      {laneDetailModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={closeLaneDetailModal}>
+          <div
+            className="bg-white rounded-3xl max-w-6xl w-full max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl flex justify-between items-center sticky top-0 z-10">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                  <Truck className="text-white" size={24} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold">Lane Details</h2>
+                  <p className="text-blue-100 text-sm">{laneDetailModal.customer?.compName || 'Customer'}</p>
+                </div>
+              </div>
+              <button type="button" onClick={closeLaneDetailModal} className="text-white hover:text-gray-200 text-2xl font-bold transition-colors">×</button>
+            </div>
+
+            <form onSubmit={handleLaneDetailSubmit} className="p-6 space-y-6">
+              {/* Pickup - same style as Add Customer form */}
+              <div className="bg-orange-50 p-4 rounded-lg border border-orange-100">
+                <h3 className="text-lg font-semibold text-orange-800 mb-4">Pickup</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Pickup Address</label>
+                    <input type="text" name="pickupAddress" value={laneForm.pickupAddress} onChange={onLaneFormChange} placeholder="Enter pickup address" className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
+                    <input type="text" name="pickupCity" value={laneForm.pickupCity} onChange={onLaneFormChange} placeholder="Enter city" className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
+                    <input type="text" name="pickupState" value={laneForm.pickupState} onChange={onLaneFormChange} placeholder="Enter state" className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">ZIP</label>
+                    <input type="text" name="pickupZip" value={laneForm.pickupZip} onChange={onLaneFormChange} placeholder="Enter ZIP" className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                  </div>
+                </div>
+              </div>
+              {/* Drop */}
+              <div className="bg-teal-50 p-4 rounded-lg border border-teal-100">
+                <h3 className="text-lg font-semibold text-teal-800 mb-4">Drop</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Drop Address</label>
+                    <input type="text" name="dropAddress" value={laneForm.dropAddress} onChange={onLaneFormChange} placeholder="Enter drop address" className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
+                    <input type="text" name="dropCity" value={laneForm.dropCity} onChange={onLaneFormChange} placeholder="Enter city" className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
+                    <input type="text" name="dropState" value={laneForm.dropState} onChange={onLaneFormChange} placeholder="Enter state" className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">ZIP</label>
+                    <input type="text" name="dropZip" value={laneForm.dropZip} onChange={onLaneFormChange} placeholder="Enter ZIP" className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                  </div>
+                </div>
+              </div>
+              {/* Equipment & Rate */}
+              <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                <h3 className="text-lg font-semibold text-blue-800 mb-4">Equipment & Rate</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Equipment Type</label>
+                    <input type="text" name="equipmentType" value={laneForm.equipmentType} onChange={onLaneFormChange} placeholder="e.g. Dry Van" className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Weight</label>
+                    <input type="text" name="weight" value={laneForm.weight} onChange={onLaneFormChange} placeholder="e.g. 42000 lbs" className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Target Rate</label>
+                    <input type="text" name="targetRate" value={laneForm.targetRate} onChange={onLaneFormChange} placeholder="e.g. 2500" className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Hazmat</label>
+                    <select name="hazmat" value={laneForm.hazmat} onChange={onLaneFormChange} className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                      <option value="No">No</option>
+                      <option value="Yes">Yes</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions - same design as Add Customer form */}
+              <div className="flex justify-end gap-4 mt-8 pt-6 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={closeLaneDetailModal}
+                  className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 hover:border-gray-400 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={laneFormSubmitting}
+                  className={`px-6 py-3 rounded-xl font-semibold text-white transition-all flex items-center gap-2 ${!laneFormSubmitting
+                    ? 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700'
+                    : 'bg-gray-300 cursor-not-allowed'
+                  }`}
+                >
+                  {laneFormSubmitting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <PlusCircle className="w-5 h-5" />
+                      Submit
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Follow Up Modal */}
       {followUpModal.open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={closeFollowUpModal}>
@@ -1403,6 +1997,37 @@ const AddCustomer = () => {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filterType, setFilterType] = useState('total'); // 'all' | 'total' | 'today'
+
+  // Date range filter
+  const [dateRange, setDateRange] = useState({ startDate: null, endDate: null });
+  const [showDateRangeMenu, setShowDateRangeMenu] = useState(false);
+  const dateRangePresets = {
+    Today: [new Date(), new Date()],
+    Yesterday: [addDays(new Date(), -1), addDays(new Date(), -1)],
+    'Last 7 Days': [addDays(new Date(), -6), new Date()],
+    'Last 30 Days': [addDays(new Date(), -29), new Date()],
+    'This Month': [
+      new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+      new Date()
+    ],
+    'Last Month': [
+      new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1),
+      new Date(new Date().getFullYear(), new Date().getMonth(), 0)
+    ]
+  };
+  const applyDateRangePreset = (label) => {
+    const [s, e] = dateRangePresets[label];
+    setDateRange({ startDate: s, endDate: e });
+    setShowDateRangeMenu(false);
+  };
+  const dateRangeMenuRef = useRef(null);
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dateRangeMenuRef.current && !dateRangeMenuRef.current.contains(e.target)) setShowDateRangeMenu(false);
+    };
+    if (showDateRangeMenu) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showDateRangeMenu]);
  
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 200);
@@ -1433,6 +2058,25 @@ const AddCustomer = () => {
     } catch (error) {
       console.error('❌ Error fetching customers:', error);
     }
+  };
+
+  /** After lane PATCH: mark row as having laneDetails (matches DB array shape) + refetch list */
+  const handleLaneDetailsSaved = (customerId) => {
+    if (customerId) {
+      setCustomers((prev) =>
+        prev.map((c) => {
+          const id = String(c.userId || c._id || c.id || '');
+          if (id !== String(customerId)) return c;
+          if (customerHasLaneDetails(c)) return c;
+          const existing = Array.isArray(c.laneDetails) ? c.laneDetails : [];
+          return {
+            ...c,
+            laneDetails: existing.length > 0 ? existing : [{ _id: `local-${Date.now()}` }]
+          };
+        })
+      );
+    }
+    fetchAllCustomers();
   };
 
 
@@ -1676,6 +2320,19 @@ const AddCustomer = () => {
     } else if (filterType === 'total') {
       filtered = customers; // Show all
     }
+
+    // Apply date range filter (when both start and end are set)
+    if (dateRange.startDate && dateRange.endDate) {
+      const start = new Date(dateRange.startDate);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(dateRange.endDate);
+      end.setHours(23, 59, 59, 999);
+      filtered = filtered.filter(c => {
+        if (!c.addedAt) return false;
+        const dt = new Date(c.addedAt);
+        return dt >= start && dt <= end;
+      });
+    }
    
     // Apply search filter
     const q = debouncedSearch.trim().toLowerCase();
@@ -1684,7 +2341,7 @@ const AddCustomer = () => {
     }
    
     return filtered;
-  }, [customers, debouncedSearch, filterType]);
+  }, [customers, debouncedSearch, filterType, dateRange.startDate, dateRange.endDate]);
 
 
   /* ---------- BLACKLIST / REMOVE ACTION (Modal + API) ---------- */
@@ -1815,8 +2472,8 @@ const AddCustomer = () => {
           </button>
         </div>
 
-        <div className="flex flex-col md:flex-row items-center gap-4">
-          <div className="relative flex-grow w-full md:w-auto">
+        <div className="flex flex-row items-center gap-4 flex-nowrap">
+          <div className="relative flex-1 min-w-0">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
             <input
               type="text"
@@ -1826,10 +2483,47 @@ const AddCustomer = () => {
               className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent text-base transition-all"
             />
           </div>
+          <div className="relative shrink-0 w-[240px]" ref={dateRangeMenuRef}>
+            <button
+              type="button"
+              onClick={() => setShowDateRangeMenu(v => !v)}
+              className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-white flex items-center justify-between text-gray-700 font-medium hover:border-gray-300 transition-colors text-base"
+            >
+              <Calendar className="text-gray-400 shrink-0" size={20} />
+              <span className="truncate ml-2">
+                {dateRange.startDate && dateRange.endDate
+                  ? `${format(dateRange.startDate, 'dd MMM yyyy')} – ${format(dateRange.endDate, 'dd MMM yyyy')}`
+                  : 'Date Range'}
+              </span>
+              <span className="ml-2 text-gray-400">▼</span>
+            </button>
+            {showDateRangeMenu && (
+              <div className="absolute z-50 mt-2 left-0 right-0 md:right-auto md:min-w-[240px] rounded-xl border border-gray-200 bg-white shadow-lg py-1">
+                <button
+                  type="button"
+                  onClick={() => { setDateRange({ startDate: null, endDate: null }); setShowDateRangeMenu(false); }}
+                  className="block w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-600 text-sm"
+                >
+                  Clear filter
+                </button>
+                <div className="my-1 border-t border-gray-100" />
+                {Object.keys(dateRangePresets).map(label => (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => applyDateRangePreset(label)}
+                    className="block w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-700 text-sm"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
           <button
             onClick={handleOpen}
-            className="flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 rounded-xl text-white font-semibold hover:bg-blue-700 transition-colors shadow-sm text-base"
+            className="flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 rounded-xl text-white font-semibold hover:bg-blue-700 transition-colors shadow-sm text-base shrink-0"
           >
             <Plus size={18} strokeWidth={4} /> Add Customer
           </button>
@@ -1838,7 +2532,7 @@ const AddCustomer = () => {
 
 
       {/* Table hidden while modal open */}
-      {!open && <CustomerTable customers={filteredCustomers} onAction={openAction} />}
+      {!open && <CustomerTable customers={filteredCustomers} onAction={openAction} onLaneDetailsSaved={handleLaneDetailsSaved} />}
 
 
       {/* Add Modal */}

@@ -109,7 +109,8 @@ const DEPARTMENT_MODULE_CATEGORIES = {
     ],
     "Communication": [
       "Chat",
-      "Email"
+      "Email",
+      "Import Carrier Emails"
     ],
     "Documents": [
       "Shipper",
@@ -123,7 +124,6 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "All Meeting Schedules",
       "My Email Logs",
       "Software Sell Record",
-      "Tier 1 Leads",
       "All Sales TL"
     ],
     "Invoices": [
@@ -291,7 +291,8 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Add Customer",
       "All Customers",
       "Daily Task",
-      "Tracking"
+      "Tracking",
+      "Import Carrier Emails"
     ],
     "Company Management": [
       "Sub Company"
@@ -452,6 +453,7 @@ const menuItems = [
   { name: "Call Data", icon: BlueCall, whiteIcon: WhiteCall, path: "/call-dashboard" },
   { name: "Chat", icon: ChatBlue, whiteIcon: ChatWhite, path: "/Chat" },
   { name: "Email", icon: BlueInbox, whiteIcon: WhiteInbox, path: "/Inbox" },
+  { name: "Import Carrier Emails", icon: BlueInbox, whiteIcon: WhiteInbox, path: "/ImportCarrierEmails" },
   { name: "Revenue & Satatistics", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/AgentRevenueStatistics" },
   { name: "Employee Hygiene", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/EmployeeHygiene" },
   { name: "Pay Rolls", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/PayrollPage" },
@@ -480,6 +482,8 @@ const menuItems = [
   { name: "Target Reports", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/target-reports" },
   { name: "Employee Target Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/employee-target-report" },
   { name: "Rate Request", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/RateRequest" },
+  { name: "All Rate Request", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/all-rate-request" },
+  { name: "Rate Suggestion", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/rate-suggestion" },
   { name: "Rate Approved", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/RateApproved" },
   { name: "Manager Rate Approval", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/ManagerRateApproval" },
   { name: "Carrier Approval", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/CarrierApproval" },
@@ -1042,6 +1046,10 @@ const Sidebar = () => {
             (str || '').trim().replace(/\s+/g, ' ').replace(/-/g, ' ').replace(/([A-Z])/g, ' $1').trim().toLowerCase();
           // Allow "Dept" <-> "Department" so "CMT Department Report" matches "CMT Dept Report"
           const normalizeDept = (s) => s.replace(/\bdept\b/g, 'department');
+          const moduleAliases = {
+            "all rate request": ["rate request"],
+            "rate suggestion": ["rate request"],
+          };
           const matchedMenus = menuItems.filter((item) => {
             const match = activeModules.some((mod) => {
               const modName = normalizeForMatch(mod.name);
@@ -1049,11 +1057,13 @@ const Sidebar = () => {
               const itemName = normalizeForMatch(item.name);
               const modNameDept = normalizeDept(modName);
               const itemNameDept = normalizeDept(itemName);
+              const aliases = moduleAliases[itemName] || [];
               
               // Match by name OR label (including Dept/Department variant)
               const isMatch =
                 modName === itemName || modLabel === itemName ||
-                modNameDept === itemNameDept || normalizeDept(modLabel) === itemNameDept;
+                modNameDept === itemNameDept || normalizeDept(modLabel) === itemNameDept ||
+                aliases.includes(modName) || aliases.includes(modLabel);
               if (isMatch) {
                 console.log(`✅ Matched: "${mod.name}"${mod.label ? ` (label: "${mod.label}")` : ''} (ID: ${mod._id}) with menu item "${item.name}"`);
               }
@@ -1171,7 +1181,7 @@ const Sidebar = () => {
             
             // Other menus (Dashboard, Companies) - common modules
             // For superadmin, Tracking will be added separately outside departments
-            const commonModules = ["Dashboard"];
+            const commonModules = ["Dashboard", "Tier 1 Leads", "All Rate Request", "Rate Suggestion"];
             const otherMenus = matchedMenus.filter(item => 
               commonModules.includes(item.name)
             );

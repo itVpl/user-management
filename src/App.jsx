@@ -47,6 +47,8 @@ const ManagerShippersLDocuments = lazy(() => import("./Components/Agent-Manager/
 const TruckerLDocuments = lazy(() => import("./Components/CMT-Manager/TruckerDocumetCMT-Manager.jsx"));
 const HrCreateTask = lazy(() => import("./Components/HRDashboard/HrCreateTask.jsx"));
 const RateRequest = lazy(() => import("./Components/CMT-Manager/RateRequest.jsx"));
+const AllRateRequest = lazy(() => import("./Components/CMT-Manager/AllRateRequest.jsx"));
+const RateSuggestion = lazy(() => import("./Components/CMT-Manager/RateSuggestion.jsx"));
 const LeaveApproval = lazy(() => import("./Components/HRDashboard/LeaveApproval.jsx"));
 const RateApproved = lazy(() => import("./Components/CMT/RateApproved.jsx"));
 const ManagerPendingBids = lazy(() => import("./Components/CMT/ManagerPendingBids.jsx"));
@@ -61,6 +63,7 @@ const SoftwareSellRecord = lazy(() => import("./Components/Sales/SoftwareSellRec
 const Tier1Leads = lazy(() => import("./Components/Sales/Tier1Leads.jsx"));
 const AllSalesTL = lazy(() => import("./Components/Sales/AllSalesTL.jsx"));
 const DOReport = lazy(() => import("./Components/Sales/DOReport.jsx"));
+const ImportCarrierEmails = lazy(() => import("./Components/Sales/ImportCarrierEmails.jsx"));
 const AllDOAssignedCMT = lazy(() => import("./Components/Sales/AllDOAssignedCMT.jsx"));
 const TeamRating = lazy(() => import("./Components/Sales/TeamRating.jsx"));
 const DailyFollowUp = lazy(() => import("./Pages/DailyFollowUp.jsx"));
@@ -666,6 +669,8 @@ function App() {
           <Route path="ManagerShippersLDocuments" element={<ManagerShippersLDocuments />} />
           <Route path="TruckerLDocuments" element={<TruckerLDocuments />} />
           <Route path="RateRequest" element={<RateRequest />} />
+          <Route path="all-rate-request" element={<AllRateRequest />} />
+          <Route path="rate-suggestion" element={<RateSuggestion />} />
           <Route path="RateApproved" element={<RateApproved />} />
           <Route path="ManagerRateApproval" element={<ManagerPendingBids />} />
           <Route path="Loads" element={<Loads />} />
@@ -685,6 +690,7 @@ function App() {
           <Route path="team-rating" element={<TeamRating />} />
           <Route path="daily-follow-up" element={<DailyFollowUp />} />
           <Route path="AddCustomer" element={<AddCustomer />} />
+          <Route path="ImportCarrierEmails" element={<ImportCarrierEmails />} />
           <Route path="AssignAgent" element={<AssignAgent />} />
           <Route path="CarrierDocs" element={<CarrierDocs />} />
           <Route path="DODetails" element={<DoDetails />} />

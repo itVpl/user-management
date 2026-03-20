@@ -236,6 +236,7 @@ export default function AddTruckerForm({ onSuccess }) {
     mc_dot_no: "",
     carrierType: "",
     fleetsize: "",
+    loadRef: "",
     email: "",
     password: "",
     confirmPassword: "",
@@ -612,6 +613,7 @@ React.useEffect(() => {
     truckerData.append("phoneNo", formData.phoneNo.trim());
     truckerData.append("secondaryPhoneNo", formData.secondaryPhoneNo?.trim() || "");
     truckerData.append("assignedCompany", formData.onboardCompany?.trim() || "");
+    truckerData.append("loadRef", formData.loadRef?.trim() || "");
     truckerData.append("email", formData.email.trim());
     truckerData.append("password", formData.password);
     // Banking Details
@@ -686,6 +688,7 @@ React.useEffect(() => {
           phoneNo: "",
           secondaryPhoneNo: "",
           onboardCompany: "",
+          loadRef: "",
           paymentType: "",
           factoringName: "",
           bankName: "",
@@ -925,6 +928,20 @@ React.useEffect(() => {
                 />
                 {renderError("onboardCompany")}
               </div>
+            </div>
+            <div className="mt-4">
+              <label className="text-sm font-medium text-gray-700">
+                Load Reference
+              </label>
+              <input
+                type="text"
+                name="loadRef"
+                placeholder="Load Reference"
+                value={formData.loadRef}
+                onChange={handleChange}
+                className="border border-gray-400 px-4 py-2 rounded-lg w-full"
+              />
+              {renderError("loadRef")}
             </div>
           </div>
         </div>
