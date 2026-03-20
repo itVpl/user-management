@@ -112,6 +112,31 @@ body::-webkit-scrollbar {
   height: 0 !important;
 }
 
+.scrollbar-show {
+  -ms-overflow-style: auto !important;
+  scrollbar-width: auto !important;
+}
+
+.scrollbar-show::-webkit-scrollbar {
+  display: block !important;
+  width: 10px !important;
+  height: 10px !important;
+}
+
+.scrollbar-show::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.06) !important;
+  border-radius: 9999px !important;
+}
+
+.scrollbar-show::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.25) !important;
+  border-radius: 9999px !important;
+}
+
+.scrollbar-show::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.35) !important;
+}
+
 /* Notification Toast Animation */
 @keyframes slideUp {
   from {
