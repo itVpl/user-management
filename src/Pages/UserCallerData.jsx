@@ -1,9 +1,19 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import * as XLSX from "xlsx";
 import { Phone, CheckCircle, XCircle, BarChart3, Clock, FileText, Users, MessageSquare, Download, ChevronLeft, ChevronRight, AlertTriangle, X, Info } from "lucide-react";
 import API_CONFIG from "../config/api";
 import { format } from "date-fns";
+
+const BASE_8X8 = `${API_CONFIG.BASE_URL}/api/v1/analytics/8x8`;
+const getAuthHeaders = () => API_CONFIG.getAuthHeaders();
+
+// Fallback category options if API fails (“Follow up” opens a modal, not a dropdown option)
+const CATEGORY_OPTIONS_FALLBACK = [
+  "No answer", "Voice mail", "Call drop", "RPC Not Available", "Call back",
+  "Not interested", "Introduction/email", "RPC", "MAIL/Email price list",
+  "Rate follow up", "Prospect", "Lead"
+];
 
 const formatDateTime = (date) => {
   const d = new Date(date);
@@ -67,6 +77,152 @@ const CONVERSION_BADGE = {
   "Open":      "bg-yellow-500 text-white",
 };
 
+const emptyFollowUpDetails = () => ({
+  customerName: "",
+  emailAddress: "",
+  address: "",
+  contactPerson: "",
+  followUpNotes: "",
+  remark: "",
+});
+
+function FollowUpModal({ open, onClose, initialDetails, onSave, saving, modalError }) {
+  const [form, setForm] = useState(emptyFollowUpDetails());
+  const [fieldErrors, setFieldErrors] = useState({});
+
+  useEffect(() => {
+    if (open) {
+      const d = initialDetails && typeof initialDetails === "object" ? initialDetails : {};
+      setForm({ ...emptyFollowUpDetails(), ...d });
+      setFieldErrors({});
+    }
+  }, [open, initialDetails]);
+
+  if (!open) return null;
+
+  const setField = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  const submit = (e) => {
+    e.preventDefault();
+    const errs = {};
+    if (!String(form.emailAddress || "").trim()) errs.emailAddress = "Email Address is required";
+    if (!String(form.contactPerson || "").trim()) errs.contactPerson = "Contact Person is required";
+    setFieldErrors(errs);
+    if (Object.keys(errs).length) return;
+
+    onSave({
+      customerName: String(form.customerName || "").trim(),
+      emailAddress: String(form.emailAddress || "").trim(),
+      address: String(form.address || "").trim(),
+      contactPerson: String(form.contactPerson || "").trim(),
+      followUpNotes: String(form.followUpNotes || "").trim(),
+      remark: String(form.remark || "").trim(),
+    });
+  };
+
+  const labelClass = "block text-sm font-medium text-gray-700 mb-1";
+  const inputClass =
+    "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500";
+  const textareaClass = `${inputClass} resize-y min-h-[72px]`;
+
+  return (
+    <div
+      className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/45"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="follow-up-modal-title"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto border border-gray-200"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between rounded-t-xl">
+          <h2 id="follow-up-modal-title" className="text-lg font-semibold text-gray-900">
+            Follow up
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
+            aria-label="Close"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <form onSubmit={submit} className="p-6 space-y-4">
+          {modalError ? (
+            <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">{modalError}</div>
+          ) : null}
+
+          <div>
+            <label className={labelClass}>Customer Name</label>
+            <input type="text" value={form.customerName} onChange={setField("customerName")} className={inputClass} />
+          </div>
+          <div>
+            <label className={labelClass}>
+              Email Address <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="email"
+              value={form.emailAddress}
+              onChange={setField("emailAddress")}
+              className={`${inputClass} ${fieldErrors.emailAddress ? "border-red-400" : ""}`}
+            />
+            {fieldErrors.emailAddress ? (
+              <p className="mt-1 text-xs text-red-600">{fieldErrors.emailAddress}</p>
+            ) : null}
+          </div>
+          <div>
+            <label className={labelClass}>Address</label>
+            <input type="text" value={form.address} onChange={setField("address")} className={inputClass} />
+          </div>
+          <div>
+            <label className={labelClass}>
+              Contact Person <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={form.contactPerson}
+              onChange={setField("contactPerson")}
+              className={`${inputClass} ${fieldErrors.contactPerson ? "border-red-400" : ""}`}
+            />
+            {fieldErrors.contactPerson ? (
+              <p className="mt-1 text-xs text-red-600">{fieldErrors.contactPerson}</p>
+            ) : null}
+          </div>
+          <div>
+            <label className={labelClass}>Follow-up Notes</label>
+            <textarea value={form.followUpNotes} onChange={setField("followUpNotes")} rows={3} className={textareaClass} />
+          </div>
+          <div>
+            <label className={labelClass}>Remark</label>
+            <textarea value={form.remark} onChange={setField("remark")} rows={2} className={textareaClass} />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-300"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="px-4 py-2 text-sm font-medium text-white bg-teal-600 rounded-lg hover:bg-teal-700 disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-teal-500"
+            >
+              {saving ? "Saving..." : "Save"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 const UserCallDashboard = () => {
   const [records, setRecords] = useState([]);
   const [selectedDate, setSelectedDate] = useState(() =>
@@ -80,6 +236,14 @@ const UserCallDashboard = () => {
     outgoing: 0,
     totalTalkTime: "00:00:00",
   });
+
+  // Category dropdown options (from API or fallback) and per-row saved category / followUp / followUpDetails
+  const [categoryOptions, setCategoryOptions] = useState(CATEGORY_OPTIONS_FALLBACK);
+  const [categories, setCategories] = useState({}); // callId -> { category, followUp, followUpDetails }
+
+  const [modalCallId, setModalCallId] = useState(null);
+  const [modalError, setModalError] = useState("");
+  const [savingModal, setSavingModal] = useState(false);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -98,16 +262,17 @@ const UserCallDashboard = () => {
 
     try {
       const res = await axios.get(
-        `${API_CONFIG.BASE_URL}/api/v1/analytics/8x8/call-records/filter`,
+        `${BASE_8X8}/call-records/filter`,
         {
-          // IMPORTANT: Keep both to fetch when user is caller or callee
           params: { callerName: alias, calleeName: alias, from, to },
+          headers: getAuthHeaders(),
         }
       );
 
       const rawData = res.data?.data || [];
       if (rawData.length === 0) {
         setRecords([]);
+        setCategories({});
         setStats({
           total: 0,
           answered: 0,
@@ -158,6 +323,7 @@ const UserCallDashboard = () => {
 
         // For "Called No" column we’ll keep callee (as in your UI)
         return {
+          callId: record.callId,
           date,
           callee: record.callee,
           callTime: time,
@@ -168,6 +334,30 @@ const UserCallDashboard = () => {
       });
 
       const total = transformed.length;
+
+      // Fetch saved category/followUp for these callIds
+      const callIds = transformed.map((r) => r.callId).filter(Boolean);
+      if (callIds.length > 0) {
+        try {
+          const catRes = await axios.get(
+            `${BASE_8X8}/call-records/categories`,
+            {
+              params: { callIds: callIds.join(",") },
+              headers: getAuthHeaders(),
+            }
+          );
+          if (catRes.data?.success && catRes.data?.data) {
+            setCategories(catRes.data.data);
+          } else {
+            setCategories({});
+          }
+        } catch (catErr) {
+          console.warn("Categories fetch failed:", catErr);
+          setCategories({});
+        }
+      } else {
+        setCategories({});
+      }
 
       setRecords(transformed);
       setStats({
@@ -184,6 +374,114 @@ const UserCallDashboard = () => {
     }
   };
 
+  // Fetch category options once on load
+  useEffect(() => {
+    const loadCategoryOptions = async () => {
+      try {
+        const res = await axios.get(
+          `${BASE_8X8}/call-records/category-options`,
+          { headers: getAuthHeaders() }
+        );
+        if (res.data?.success && Array.isArray(res.data?.options)) {
+          setCategoryOptions(res.data.options);
+        }
+      } catch (err) {
+        console.warn("Category options fetch failed, using fallback:", err);
+      }
+    };
+    loadCategoryOptions();
+  }, []);
+
+  const updateCategory = useCallback(async (callId, payload) => {
+    if (!callId) return { success: false, error: "Missing call ID" };
+    try {
+      const res = await axios.put(
+        `${BASE_8X8}/call-records/${encodeURIComponent(callId)}/category`,
+        payload,
+        { headers: getAuthHeaders() }
+      );
+      if (res.data?.success && res.data?.data) {
+        const d = res.data.data;
+        setCategories((prev) => {
+          const prevRow = prev[callId] || {};
+          return {
+            ...prev,
+            [callId]: {
+              category: d.category !== undefined ? d.category : prevRow.category,
+              followUp: d.followUp !== undefined ? d.followUp : prevRow.followUp,
+              followUpDetails:
+                d.followUpDetails !== undefined
+                  ? d.followUpDetails || {}
+                  : prevRow.followUpDetails || {},
+            },
+          };
+        });
+        return { success: true, data: d };
+      }
+      return { success: false, error: res.data?.message || "Save failed" };
+    } catch (e) {
+      const msg =
+        e.response?.data?.message ||
+        e.response?.data?.error ||
+        e.message ||
+        "Save failed";
+      console.error("Failed to update category:", e);
+      return { success: false, error: msg };
+    }
+  }, []);
+
+  const onCategoryChange = async (callId, value) => {
+    const current = categories[callId] || {};
+    const newCategory = value || null;
+    setCategories((prev) => ({
+      ...prev,
+      [callId]: {
+        ...current,
+        category: newCategory,
+        ...(newCategory === "Voice mail"
+          ? { followUp: false, followUpDetails: {} }
+          : {}),
+      },
+    }));
+    await updateCategory(callId, { category: newCategory });
+    if (newCategory === "Voice mail") {
+      await updateCategory(callId, { followUp: false });
+    }
+  };
+
+  const openFollowUpModal = (callId) => {
+    setModalError("");
+    setModalCallId(callId);
+  };
+
+  const closeFollowUpModal = () => {
+    setModalCallId(null);
+    setModalError("");
+  };
+
+  const saveFollowUpModal = async (details) => {
+    if (!modalCallId) return;
+    setSavingModal(true);
+    setModalError("");
+    const current = categories[modalCallId] || {};
+    const result = await updateCategory(modalCallId, {
+      category: current.category ?? null,
+      followUp: true,
+      followUpDetails: details,
+    });
+    setSavingModal(false);
+    if (result.success) {
+      closeFollowUpModal();
+    } else {
+      setModalError(result.error || "Could not save");
+    }
+  };
+
+  const modalFollowUpDetails =
+    modalCallId && categories[modalCallId]?.followUpDetails
+      ? categories[modalCallId].followUpDetails
+      : {};
+
   const exportToExcel = () => {
     if (records.length === 0) {
       setNotification({
@@ -196,15 +494,30 @@ const UserCallDashboard = () => {
     }
 
     // Prepare data with proper headers
-    const headers = ["Date", "Called No", "Call Time", "Call Duration", "Call Status", "Conversion Status"];
-    const data = records.map(record => [
-      record.date,
-      record.callee,
-      record.callTime,
-      record.callDuration,
-      record.callStatus,
-      record.conversionStatus
-    ]);
+    const headers = [
+      "Date", "Called No", "Call Time", "Call Duration", "Call Status", "Conversion Status",
+      "Category", "Follow up", "Customer Name", "Email", "Contact Person", "Address", "Follow-up Notes", "Remark",
+    ];
+    const data = records.map(record => {
+      const cat = categories[record.callId] || {};
+      const d = cat.followUpDetails && typeof cat.followUpDetails === "object" ? cat.followUpDetails : {};
+      return [
+        record.date,
+        record.callee,
+        record.callTime,
+        record.callDuration,
+        record.callStatus,
+        record.conversionStatus,
+        cat.category ?? "",
+        cat.followUp ? "Yes" : "No",
+        d.customerName ?? "",
+        d.emailAddress ?? "",
+        d.contactPerson ?? "",
+        d.address ?? "",
+        d.followUpNotes ?? "",
+        d.remark ?? "",
+      ];
+    });
 
     const worksheet = XLSX.utils.aoa_to_sheet([headers, ...data]);
     const workbook = XLSX.utils.book_new();
@@ -249,6 +562,15 @@ const UserCallDashboard = () => {
 
   return (
     <div className="bg-white p-4 sm:p-6">
+      <FollowUpModal
+        open={!!modalCallId}
+        initialDetails={modalFollowUpDetails}
+        onClose={closeFollowUpModal}
+        onSave={saveFollowUpModal}
+        saving={savingModal}
+        modalError={modalError}
+      />
+
       {/* Notification Toast */}
       {notification.show && (
         <div className="fixed top-4 right-4 z-50 animate-fade-in">
@@ -402,35 +724,75 @@ const UserCallDashboard = () => {
                 <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Call Duration</th>
                 <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Call Status</th>
                 <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Conversion Status</th>
+                <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Category</th>
+                <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Follow up</th>
               </tr>
             </thead>
             <tbody>
               {currentRecords.length > 0 ? (
-                currentRecords.map((r, index) => (
-                  <tr key={index} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                    <td className="py-4 px-6 text-gray-800 font-medium">{r.date}</td>
-                    <td className="py-4 px-6 text-gray-800">{r.callee}</td>
-                    <td className="py-4 px-6 text-gray-800">{r.callTime}</td>
-                    <td className="py-4 px-6 text-gray-800 font-semibold">{r.callDuration}</td>
-                    <td className="py-4 px-6">
-                      <span
-                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${STATUS_BADGE[r.callStatus] || "bg-gray-200 text-gray-800"}`}
-                      >
-                        {r.callStatus}
-                      </span>
-                    </td>
-                    <td className="py-4 px-6">
-                      <span
-                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${CONVERSION_BADGE[r.conversionStatus] || "bg-gray-200 text-gray-800"}`}
-                      >
-                        {r.conversionStatus}
-                      </span>
-                    </td>
-                  </tr>
-                ))
+                currentRecords.map((r) => {
+                  const cat = categories[r.callId] || {};
+                  const showFollowUpBtn = cat.category !== "Voice mail";
+                  return (
+                    <tr key={r.callId ?? r.date + r.callee + r.callTime} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                      <td className="py-4 px-6 text-gray-800 font-medium">{r.date}</td>
+                      <td className="py-4 px-6 text-gray-800">{r.callee}</td>
+                      <td className="py-4 px-6 text-gray-800">{r.callTime}</td>
+                      <td className="py-4 px-6 text-gray-800 font-semibold">{r.callDuration}</td>
+                      <td className="py-4 px-6">
+                        <span
+                          className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${STATUS_BADGE[r.callStatus] || "bg-gray-200 text-gray-800"}`}
+                        >
+                          {r.callStatus}
+                        </span>
+                      </td>
+                      <td className="py-4 px-6">
+                        <span
+                          className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${CONVERSION_BADGE[r.conversionStatus] || "bg-gray-200 text-gray-800"}`}
+                        >
+                          {r.conversionStatus}
+                        </span>
+                      </td>
+                      <td className="py-4 px-6">
+                        <select
+                          value={cat.category ?? ""}
+                          onChange={(e) => onCategoryChange(r.callId, e.target.value || null)}
+                          className="w-full max-w-[180px] px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-transparent"
+                        >
+                          <option value="">Select...</option>
+                          {categoryOptions.map((opt) => (
+                            <option key={opt} value={opt}>{opt}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="py-4 px-6">
+                        {showFollowUpBtn ? (
+                          <button
+                            type="button"
+                            onClick={() => openFollowUpModal(r.callId)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-teal-700 bg-teal-50 border border-teal-200 rounded-lg hover:bg-teal-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                          >
+                            {cat.followUp ? (
+                              <>
+                                Edit follow up
+                                <span className="text-teal-600 font-bold" aria-hidden>
+                                  ✓
+                                </span>
+                              </>
+                            ) : (
+                              "Follow up"
+                            )}
+                          </button>
+                        ) : (
+                          <span className="text-gray-400">–</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
               ) : (
                 <tr>
-                  <td colSpan={6} className="py-8 px-6 text-center text-gray-500">
+                  <td colSpan={8} className="py-8 px-6 text-center text-gray-500">
                     <div className="flex flex-col items-center">
                       <Phone className="w-8 h-8 text-gray-300 mb-2" />
                       <p>No call records found</p>
