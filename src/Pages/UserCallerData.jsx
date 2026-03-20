@@ -719,11 +719,11 @@ const UserCallDashboard = () => {
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
                 <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Date</th>
-                <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Called No</th>
+                <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Phone No</th>
                 <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Call Time</th>
                 <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Call Duration</th>
                 <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Call Status</th>
-                <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Conversion Status</th>
+                {/* <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Conversion Status</th> */}
                 <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Category</th>
                 <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Follow up</th>
               </tr>
@@ -746,13 +746,13 @@ const UserCallDashboard = () => {
                           {r.callStatus}
                         </span>
                       </td>
-                      <td className="py-4 px-6">
+                      {/* <td className="py-4 px-6">
                         <span
                           className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${CONVERSION_BADGE[r.conversionStatus] || "bg-gray-200 text-gray-800"}`}
                         >
                           {r.conversionStatus}
                         </span>
-                      </td>
+                      </td> */}
                       <td className="py-4 px-6">
                         <select
                           value={cat.category ?? ""}
