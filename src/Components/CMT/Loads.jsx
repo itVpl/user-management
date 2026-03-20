@@ -300,6 +300,7 @@ export default function Loads() {
   const [pickupDestinationPagination, setPickupDestinationPagination] = useState(null);
   const [pickupDestinationError, setPickupDestinationError] = useState("");
   const [pickupDestinationPage, setPickupDestinationPage] = useState(1);
+  const [pickupDestinationLimit, setPickupDestinationLimit] = useState(20);
   const [showPickupDestinationSection, setShowPickupDestinationSection] = useState(false);
 
   // Vehicle Type options - Dynamic based on load type
@@ -3023,7 +3024,7 @@ export default function Loads() {
           }
 
           return {
-            id: `LD-${load._id?.slice(-6) || "000000"}`,
+            id: load._id || "N/A",
 
             loadNum: load._id || "N/A",
 
@@ -3368,7 +3369,7 @@ export default function Loads() {
   };
 
   // Load by Pickup & Destination API
-  const getLoadsByPickupDestination = async (page = 1, limit = 20) => {
+  const getLoadsByPickupDestination = async (page = 1, limit = pickupDestinationLimit) => {
     const hasPickup = (pickupZip && pickupZip.trim()) || (pickupCity && pickupCity.trim());
     const hasDestination = (destinationZip && destinationZip.trim()) || (destinationCity && destinationCity.trim());
     if (!hasPickup || !hasDestination) {
@@ -3385,8 +3386,8 @@ export default function Loads() {
       if (pickupCity && pickupCity.trim()) params.set("pickupCity", pickupCity.trim());
       if (destinationZip && destinationZip.trim()) params.set("destinationZip", destinationZip.trim());
       if (destinationCity && destinationCity.trim()) params.set("destinationCity", destinationCity.trim());
-      params.set("page", page);
-      params.set("limit", limit);
+      params.set("page", String(page));
+      params.set("limit", String(limit));
 
       const res = await axios.get(
         `${API_CONFIG.BASE_URL}/api/v1/load/by-pickup-destination?${params}`,
@@ -3401,6 +3402,7 @@ export default function Loads() {
         setPickupDestinationLoads(Array.isArray(data.data) ? data.data : []);
         setPickupDestinationPagination(data.pagination || null);
         setPickupDestinationPage(page);
+        setPickupDestinationLimit(Number(data?.pagination?.limit) || Number(limit) || 20);
         setShowPickupDestinationSection(true);
       } else {
         setPickupDestinationLoads([]);
@@ -3552,7 +3554,7 @@ export default function Loads() {
         // Add the new load to the existing loads list
 
         const newLoad = {
-          id: `LD-${response.data.data._id.slice(-6)}`,
+          id: response.data.data._id || "N/A",
 
           loadNum: response.data.data._id,
 
@@ -4681,13 +4683,33 @@ export default function Loads() {
             <div className="flex items-center gap-3 mb-4">
               <button
                 type="button"
-                onClick={() => getLoadsByPickupDestination(1, 20)}
+                onClick={() => getLoadsByPickupDestination(1, pickupDestinationLimit)}
                 disabled={pickupDestinationLoading}
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Search className="w-4 h-4" />
                 {pickupDestinationLoading ? "Searching..." : "Search Previous Loads"}
               </button>
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-gray-600">Rows:</label>
+                <select
+                  value={pickupDestinationLimit}
+                  onChange={(e) => {
+                    const newLimit = Number(e.target.value);
+                    setPickupDestinationLimit(newLimit);
+                    if (pickupDestinationLoads.length > 0) {
+                      getLoadsByPickupDestination(1, newLimit);
+                    }
+                  }}
+                  className="px-2 py-2 border border-gray-300 rounded-lg text-sm bg-white"
+                >
+                  {[10, 20, 50, 100].map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <span className="text-sm text-gray-500">At least one of pickup zip/city and one of destination zip/city required.</span>
             </div>
             {pickupDestinationError && (
@@ -4704,12 +4726,11 @@ export default function Loads() {
                   <table className="w-full border-collapse">
                     <thead>
                       <tr className="bg-[#F1F4F9]">
-                        <th className="text-left py-3 px-4 text-gray-800 font-medium text-sm rounded-l-xl">#</th>
-                        <th className="text-left py-3 px-4 text-gray-800 font-medium text-sm">Shipment #</th>
-                        <th className="text-left py-3 px-4 text-gray-800 font-medium text-sm">Origin(s)</th>
+                        <th className="text-left py-3 px-4 text-gray-800 font-medium text-sm rounded-l-xl">Origin(s)</th>
                         <th className="text-left py-3 px-4 text-gray-800 font-medium text-sm">Destination(s)</th>
-                        <th className="text-left py-3 px-4 text-gray-800 font-medium text-sm">Rate</th>
-                        <th className="text-left py-3 px-4 text-gray-800 font-medium text-sm rounded-r-xl">Rate Details</th>
+                        <th className="text-left py-3 px-4 text-gray-800 font-medium text-sm">Carrier Rate</th>
+                        <th className="text-left py-3 px-4 text-gray-800 font-medium text-sm">Rate Details</th>
+                        <th className="text-left py-3 px-4 text-gray-800 font-medium text-sm rounded-r-xl">CMT Agent</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -4721,9 +4742,47 @@ export default function Loads() {
                         const destStr = (load.destinations && Array.isArray(load.destinations) && load.destinations.length > 0)
                           ? load.destinations.map((d) => [d.addressLine1, d.city, d.state, d.zip].filter(Boolean).join(", ")).join(" | ")
                           : "—";
-                        const totalRate = load.rateDetails?.totalRates ?? load.rate ?? 0;
+                        // Carrier Rate: prefer DO pricing (new API), then bid/load fallbacks
+                        const carrierRate =
+                          load?.doRate?.carrierRate != null
+                            ? load.doRate.carrierRate
+                            : load.totalrates != null
+                              ? load.totalrates
+                              : load.totalRates != null
+                                ? load.totalRates
+                                : load.rate != null
+                                  ? load.rate
+                                  : load.rateDetails?.totalRates != null
+                                    ? load.rateDetails.totalRates
+                                    : null;
+
+                        // Bid total fallback sources used for legacy responses
+                        const bidTotal =
+                          load.totalrates != null
+                            ? load.totalrates
+                            : load.totalRates != null
+                              ? load.totalRates
+                              : load.rate != null
+                                ? load.rate
+                                : load.rateDetails?.totalRates != null
+                                  ? load.rateDetails.totalRates
+                                  : null;
+
                         let rateDetailsStr = "—";
-                        if (load.rateDetails) {
+                        if (Array.isArray(load.rates) && load.rates.length > 0) {
+                          rateDetailsStr = load.rates
+                            .map((r) => {
+                              const lineTotal =
+                                r.total != null
+                                  ? r.total
+                                  : r.amount != null && r.quantity != null
+                                    ? r.amount * r.quantity
+                                    : r.amount ?? 0;
+                              const label = r.name || "Item";
+                              return `${label}: $${Number(lineTotal).toLocaleString()}`;
+                            })
+                            .join("; ");
+                        } else if (load.rateDetails) {
                           const parts = [];
                           if (load.rateDetails.lineHaul != null) parts.push(`Line: $${Number(load.rateDetails.lineHaul).toLocaleString()}`);
                           if (load.rateDetails.fsc != null) parts.push(`FSC: $${Number(load.rateDetails.fsc).toLocaleString()}`);
@@ -4737,21 +4796,29 @@ export default function Loads() {
                           }
                           rateDetailsStr = parts.length > 0 ? parts.join("; ") : "—";
                         }
+
                         return (
                           <tr key={load._id || load.shipmentNumber} className="border-b border-gray-200 hover:bg-gray-50">
-                            <td className="py-3 px-4 text-gray-700 text-sm font-semibold">{serialNo}</td>
-                            <td className="py-3 px-4 text-gray-900 text-sm font-medium">{load.shipmentNumber || "—"}</td>
                             <td className="py-3 px-4 text-gray-700 text-sm max-w-[200px] truncate" title={originStr}>{originStr}</td>
                             <td className="py-3 px-4 text-gray-700 text-sm max-w-[200px] truncate" title={destStr}>{destStr}</td>
-                            <td className="py-3 px-4 text-gray-900 text-sm font-medium">${typeof totalRate === "number" ? totalRate.toLocaleString() : totalRate}</td>
+                            <td className="py-3 px-4 text-gray-900 text-sm font-medium">
+                              {carrierRate != null && typeof carrierRate === "number"
+                                ? `$${carrierRate.toLocaleString()}`
+                                : carrierRate != null
+                                  ? `$${carrierRate}`
+                                  : (
+                                    <span className="text-gray-500 font-normal">No bid</span>
+                                  )}
+                            </td>
                             <td className="py-3 px-4 text-gray-600 text-sm">{rateDetailsStr}</td>
+                            <td className="py-3 px-4 text-gray-700 text-sm">{serialNo}</td>
                           </tr>
                         );
                       })}
                     </tbody>
                   </table>
                 </div>
-                {pickupDestinationPagination && pickupDestinationPagination.totalPages > 1 && (
+                {pickupDestinationPagination && (
                   <div className="flex items-center justify-between mt-4">
                     <span className="text-sm text-gray-600">
                       Page {pickupDestinationPage} of {pickupDestinationPagination.totalPages} ({pickupDestinationPagination.total} total)
@@ -4759,7 +4826,7 @@ export default function Loads() {
                     <div className="flex gap-2">
                       <button
                         type="button"
-                        onClick={() => getLoadsByPickupDestination(pickupDestinationPage - 1, 20)}
+                        onClick={() => getLoadsByPickupDestination(pickupDestinationPage - 1, pickupDestinationLimit)}
                         disabled={pickupDestinationPage <= 1 || pickupDestinationLoading}
                         className="px-3 py-1 border border-gray-300 rounded-lg text-sm font-medium disabled:opacity-50"
                       >
@@ -4767,7 +4834,7 @@ export default function Loads() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => getLoadsByPickupDestination(pickupDestinationPage + 1, 20)}
+                        onClick={() => getLoadsByPickupDestination(pickupDestinationPage + 1, pickupDestinationLimit)}
                         disabled={pickupDestinationPage >= pickupDestinationPagination.totalPages || pickupDestinationLoading}
                         className="px-3 py-1 border border-gray-300 rounded-lg text-sm font-medium disabled:opacity-50"
                       >

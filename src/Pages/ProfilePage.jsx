@@ -704,6 +704,8 @@ const ProfilePage = () => {
       "Current Salary",
       "Notice Period",
       "Email",
+      "English Fluency",
+      "Status",
       "Comment",
       "Shortlisted",
       "Candidate Status",
@@ -733,6 +735,8 @@ const ProfilePage = () => {
         get("Salary") || get("currentSalary"),
         get("noticePeriod"),
         get("Email") || get("email"),
+        get("English Fluency") || get("englishFluency"),
+        get("Status") || get("status"),
         get("comment"),
         shortlisted,
         candidateStatus,
@@ -800,6 +804,10 @@ const ProfilePage = () => {
       "Phone number": () => log["Phone number"] ?? cd.mobileNo,
       Email: () => log.Email ?? cd.email,
       "Job role": () => log["Job role"] ?? cd.profile,
+      "English Fluency": () =>
+        log["English Fluency"] ?? log.englishFluency ?? cd.englishFluency,
+      Status: () =>
+        log.Status ?? log.status ?? log.candidateStatus ?? cd.status,
       Salary: () => log.Salary ?? cd.currentSalary,
       "Experience/ last company name": () => log["Experience/ last company name"] ?? cd.totalExp,
       Location: () => log.Location ?? cd.currentLocation,
@@ -814,6 +822,10 @@ const ProfilePage = () => {
       currentSalary: () => log.Salary ?? cd.currentSalary,
       noticePeriod: () => log.NoticePeriod ?? cd.noticePeriod,
       email: () => log.Email ?? cd.email,
+      englishFluency: () =>
+        log["English Fluency"] ?? log.englishFluency ?? cd.englishFluency,
+      status: () =>
+        log.Status ?? log.status ?? log.candidateStatus ?? cd.status,
       comment: () => log.Comment ?? cd.comment,
       purpose: () => log.Purpose ?? cd.purpose,
       notes: () => log.notes ?? cd.notes,
@@ -822,25 +834,24 @@ const ProfilePage = () => {
     return log[key] ?? cd[key];
   };
 
-  // Fixed 15 columns for HR Call table (14 data + Action for Shortlist)
+  // HR Call table columns (+ Action for shortlist flow)
   const HR_CALL_TABLE_COLUMNS = [
-   
-    // { key: "durationFormatted", label: "Duration" },
-   
     { key: "Name", label: "Name" },
     { key: "Age", label: "Age" },
     { key: "Gender", label: "Gender" },
     { key: "Phone number", label: "Phone number" },
     { key: "Email", label: "Email" },
     { key: "Job role", label: "Job role" },
-     { key: "shortlisted", label: "Shortlisted" },
+    { key: "English Fluency", label: "English Fluency" },
+    { key: "shortlisted", label: "Shortlisted" },
     { key: "candidateStatus", label: "Candidate Status" },
-     { key: "activityDate", label: "Date" },
+    { key: "Status", label: "Status" },
+    { key: "durationFormatted", label: "Duration" },
+    { key: "activityDate", label: "Date" },
     { key: "Salary", label: "Salary" },
     { key: "Experience/ last company name", label: "Experience/ last company name" },
     { key: "Location", label: "Location" },
     { key: "Resume", label: "Resume" },
-    { key: "_action", label: "Action" },
   ];
 
   const hrLogsAfterExp =
@@ -2484,21 +2495,6 @@ const ProfilePage = () => {
                             if (key === "candidateStatus") {
                               const status = log.candidateStatus ?? (shortlisted ? "Shortlisted" : null);
                               return statusLabel(status) ?? <span className="text-gray-400">—</span>;
-                            }
-                            if (key === "_action") {
-                              if (canShortlist) {
-                                return (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleHrShortlist(log)}
-                                    disabled={isShortlisting}
-                                    className="px-3 py-1.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
-                                  >
-                                    {isShortlisting ? "Shortlisting…" : "Shortlist"}
-                                  </button>
-                                );
-                              }
-                              return <span className="text-gray-400">—</span>;
                             }
                             const val = getLogVal(log, key);
                             return val !== undefined && val !== null && val !== "" ? String(val) : "—";
