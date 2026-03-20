@@ -63,6 +63,7 @@ const SoftwareSellRecord = lazy(() => import("./Components/Sales/SoftwareSellRec
 const Tier1Leads = lazy(() => import("./Components/Sales/Tier1Leads.jsx"));
 const AllSalesTL = lazy(() => import("./Components/Sales/AllSalesTL.jsx"));
 const DOReport = lazy(() => import("./Components/Sales/DOReport.jsx"));
+const LoadByLocation = lazy(() => import("./Components/Sales/LoadByLocation.jsx"));
 const ImportCarrierEmails = lazy(() => import("./Components/Sales/ImportCarrierEmails.jsx"));
 const AllDOAssignedCMT = lazy(() => import("./Components/Sales/AllDOAssignedCMT.jsx"));
 const TeamRating = lazy(() => import("./Components/Sales/TeamRating.jsx"));
@@ -674,6 +675,7 @@ function App() {
           <Route path="RateApproved" element={<RateApproved />} />
           <Route path="ManagerRateApproval" element={<ManagerPendingBids />} />
           <Route path="Loads" element={<Loads />} />
+          <Route path="load-by-location" element={<LoadByLocation />} />
           <Route path="SubCompanies" element={<SubCompanies />} />
           <Route path="CarrierApproval" element={<CarrierApproval />} />
           <Route path="HrCreateTask" element={<HrCreateTask />} />
