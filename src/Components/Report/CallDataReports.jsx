@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import * as XLSX from "xlsx";
 import { toast } from "react-toastify";
@@ -45,7 +45,7 @@ const CallDataReports = () => {
       callerName: "",
       category: "",
       page: 1,
-      limit: 20,
+      limit: 10,
     },
     categoryOptions: [],
     summary: null,
@@ -58,6 +58,12 @@ const CallDataReports = () => {
   const [savingRows, setSavingRows] = useState({});
   const [rowErrors, setRowErrors] = useState({});
   const [followUpModal, setFollowUpModal] = useState({ open: false, callId: null });
+  const [activeSectionTab, setActiveSectionTab] = useState("employeeSummary");
+  const [callerDropdownOpen, setCallerDropdownOpen] = useState(false);
+  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
+  const [callerSearchText, setCallerSearchText] = useState("");
+  const callerDropdownRef = useRef(null);
+  const categoryDropdownRef = useRef(null);
 
   const activeRecord = useMemo(
     () => state.records.find((r) => r.callId === followUpModal.callId) || null,
@@ -153,33 +159,72 @@ const CallDataReports = () => {
 
   const fetchReport = async (incomingFilters) => {
     const filters = incomingFilters || state.filters;
+    const page = Math.max(1, Number(filters.page || 1));
+    const limit = 10;
     setState((prev) => ({ ...prev, loading: true, error: null }));
     try {
-      const params = new URLSearchParams();
-      if (filters.from) params.set("from", filters.from);
-      if (filters.to) params.set("to", filters.to);
-      if (filters.callerName?.trim()) params.set("callerName", filters.callerName.trim());
-      if (filters.category?.trim()) params.set("category", filters.category.trim());
-      params.set("pageSize", "1500");
-      params.set("page", String(filters.page || 1));
-      params.set("limit", String(filters.limit || 20));
+      const buildParams = (requestedPage, requestedLimit) => {
+        const params = new URLSearchParams();
+        if (filters.from) params.set("from", filters.from);
+        if (filters.to) params.set("to", filters.to);
+        if (filters.callerName?.trim()) params.set("callerName", filters.callerName.trim());
+        if (filters.category?.trim()) params.set("category", filters.category.trim());
+        params.set("pageSize", String(requestedLimit));
+        params.set("page", String(requestedPage));
+        params.set("limit", String(requestedLimit));
+        return params;
+      };
 
-      // Prefer unified report API; gracefully fallback to legacy filter API.
-      let payload = null;
-      try {
-        const reportRes = await axios.get(`${REPORT_BASE}/call-records/report?${params.toString()}`, getAuthConfig());
-        payload = reportRes?.data || {};
-      } catch (primaryErr) {
-        console.warn("Primary report API failed, trying filter API:", primaryErr);
-        const filterRes = await axios.get(`${REPORT_BASE}/call-records/filter?${params.toString()}`, getAuthConfig());
-        payload = filterRes?.data || {};
+      const requestPayload = async (requestedPage, requestedLimit) => {
+        const params = buildParams(requestedPage, requestedLimit);
+        try {
+          const reportRes = await axios.get(`${REPORT_BASE}/call-records/report?${params.toString()}`, getAuthConfig());
+          return reportRes?.data || {};
+        } catch (primaryErr) {
+          console.warn("Primary report API failed, trying filter API:", primaryErr);
+          const filterRes = await axios.get(`${REPORT_BASE}/call-records/filter?${params.toString()}`, getAuthConfig());
+          return filterRes?.data || {};
+        }
+      };
+
+      const firstPayload = await requestPayload(1, 1500);
+      if (!firstPayload?.success) {
+        throw new Error(firstPayload?.message || "Failed to load call report");
       }
 
-      if (!payload?.success) {
-        throw new Error(payload?.message || "Failed to load call report");
-      }
+      const firstPageRecords = Array.isArray(firstPayload.data)
+        ? firstPayload.data
+        : Array.isArray(firstPayload.records)
+          ? firstPayload.records
+          : [];
 
-      const nextRecords = Array.isArray(payload.data) ? payload.data : Array.isArray(payload.records) ? payload.records : [];
+      let nextRecords = [...firstPageRecords];
+      const totalFromApi = Number(
+        firstPayload?.pagination?.total ??
+        firstPayload?.pagination?.totalRecords ??
+        firstPayload?.total ??
+        nextRecords.length
+      ) || nextRecords.length;
+      const totalPagesFromApi = Number(firstPayload?.pagination?.totalPages || 0);
+      const apiLimit = Number(
+        firstPayload?.pagination?.limit ??
+        firstPayload?.pagination?.pageSize ??
+        nextRecords.length
+      ) || 0;
+      if (totalPagesFromApi > 1 && totalFromApi > nextRecords.length) {
+        const pageFetchLimit = apiLimit > 0 ? apiLimit : 100;
+        for (let p = 2; p <= totalPagesFromApi; p += 1) {
+          const pagePayload = await requestPayload(p, pageFetchLimit);
+          const pageRecords = Array.isArray(pagePayload?.data)
+            ? pagePayload.data
+            : Array.isArray(pagePayload?.records)
+              ? pagePayload.records
+              : [];
+          if (!pageRecords.length) break;
+          nextRecords = [...nextRecords, ...pageRecords];
+          if (nextRecords.length >= totalFromApi) break;
+        }
+      }
       const computedSummary = {
         totalEmployees: new Set(
           nextRecords.map((r) => r.callerName || r.calleeName || "").filter(Boolean)
@@ -227,14 +272,12 @@ const CallDataReports = () => {
         loading: false,
         filters: {
           ...filters,
-          page: Number(payload?.pagination?.page || filters.page || 1),
-          limit: Number(payload?.pagination?.limit || filters.limit || 20),
-          totalPages: Number(payload?.pagination?.totalPages || 1),
-          totalRecords: Number(payload?.pagination?.total || nextRecords.length || 0),
+          page,
+          limit,
         },
-        summary: payload.summary || computedSummary,
-        employeeSummary: Array.isArray(payload.employeeSummary) && payload.employeeSummary.length
-          ? payload.employeeSummary
+        summary: firstPayload.summary || computedSummary,
+        employeeSummary: Array.isArray(firstPayload.employeeSummary) && firstPayload.employeeSummary.length
+          ? firstPayload.employeeSummary
           : computedEmployeeSummary,
         records: nextRecords,
         error: null,
@@ -262,11 +305,30 @@ const CallDataReports = () => {
     init();
   }, []);
 
+  useEffect(() => {
+    const onMouseDown = (event) => {
+      if (callerDropdownRef.current && !callerDropdownRef.current.contains(event.target)) {
+        setCallerDropdownOpen(false);
+      }
+      if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(event.target)) {
+        setCategoryDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, []);
+
   const updateFilter = (key, value) => {
+    const next = {
+      ...state.filters,
+      [key]: value,
+      page: 1,
+    };
     setState((prev) => ({
       ...prev,
-      filters: { ...prev.filters, [key]: value },
+      filters: next,
     }));
+    fetchReport(next);
   };
 
   const updateDraft = (callId, updates) => {
@@ -296,9 +358,37 @@ const CallDataReports = () => {
   };
 
   const handleReset = async () => {
-    const defaults = { ...getTodayRange(), callerName: "", category: "", page: 1, limit: 20 };
+    const defaults = { ...getTodayRange(), callerName: "", category: "", page: 1, limit: 10 };
     setState((prev) => ({ ...prev, filters: defaults }));
     await fetchReport(defaults);
+  };
+
+  const pageSize = 10;
+  const filteredCallerOptions = employeeOptions.filter((option) =>
+    option.label.toLowerCase().includes(callerSearchText.trim().toLowerCase())
+  );
+  const activeRows = activeSectionTab === "employeeSummary" ? state.employeeSummary : state.records;
+  const totalRecords = activeRows.length;
+  const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
+  const currentPage = Math.min(Math.max(1, Number(state.filters.page || 1)), totalPages);
+  const showingFrom = totalRecords === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const showingTo = totalRecords === 0 ? 0 : Math.min(currentPage * pageSize, totalRecords);
+  const employeeSummaryPageRows = state.employeeSummary.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const detailedCallsPageRows = state.records.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const getVisiblePages = () => {
+    const pages = [];
+    if (totalPages <= 5) {
+      for (let i = 1; i <= totalPages; i += 1) pages.push(i);
+      return pages;
+    }
+    pages.push(1);
+    if (currentPage > 3) pages.push("ellipsis-left");
+    const start = Math.max(2, currentPage - 1);
+    const end = Math.min(totalPages - 1, currentPage + 1);
+    for (let i = start; i <= end; i += 1) pages.push(i);
+    if (currentPage < totalPages - 2) pages.push("ellipsis-right");
+    pages.push(totalPages);
+    return pages;
   };
 
   const saveRow = async (record) => {
@@ -381,240 +471,486 @@ const CallDataReports = () => {
     XLSX.writeFile(wb, `Call_Data_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
+  const summaryCards = state.summary
+    ? [
+        {
+          key: "employees",
+          title: "Total Employees",
+          value: state.summary.totalEmployees || 0,
+          iconBg: "bg-blue-50",
+          iconColor: "text-blue-600",
+          icon: (
+            <svg viewBox="0 0 24 24" fill="none" className="w-6 h-6">
+              <path d="M16 19v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              <circle cx="9.5" cy="7" r="3" stroke="currentColor" strokeWidth="1.8" />
+              <path d="M22 19v-1a4 4 0 0 0-3-3.87" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          ),
+        },
+        {
+          key: "calls",
+          title: "Total Calls",
+          value: state.summary.totalCalls || 0,
+          iconBg: "bg-emerald-50",
+          iconColor: "text-emerald-600",
+          icon: (
+            <svg viewBox="0 0 24 24" fill="none" className="w-6 h-6">
+              <path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.8 19.8 0 0 1 3 5.18 2 2 0 0 1 5 3h3a2 2 0 0 1 2 1.72c.12.89.33 1.76.62 2.6a2 2 0 0 1-.45 2.1l-1.27 1.27a16 16 0 0 0 6.2 6.2l1.27-1.27a2 2 0 0 1 2.1-.45c.84.29 1.71.5 2.6.62A2 2 0 0 1 22 16.92Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          ),
+        },
+        {
+          key: "answeredMissed",
+          title: "Answered/Missed",
+          value: `${state.summary.answeredCalls || 0}/${state.summary.missedCalls || 0}`,
+          iconBg: "bg-violet-50",
+          iconColor: "text-violet-600",
+          icon: (
+            <svg viewBox="0 0 24 24" fill="none" className="w-6 h-6">
+              <path d="m9 12 2 2 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
+            </svg>
+          ),
+        },
+        {
+          key: "talkTime",
+          title: "Talk Time (min)",
+          value: state.summary.totalTalkTimeMinutes || 0,
+          iconBg: "bg-amber-50",
+          iconColor: "text-amber-600",
+          icon: (
+            <svg viewBox="0 0 24 24" fill="none" className="w-6 h-6">
+              <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
+              <path d="M12 7v5l3 2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          ),
+        },
+        {
+          key: "categorized",
+          title: "Categorized Calls",
+          value: state.summary.categorizedCalls || 0,
+          iconBg: "bg-fuchsia-50",
+          iconColor: "text-fuchsia-600",
+          icon: (
+            <svg viewBox="0 0 24 24" fill="none" className="w-6 h-6">
+              <path d="M20.59 13.41 12 22l-8.59-8.59A2 2 0 0 1 3 12V5a2 2 0 0 1 2-2h7a2 2 0 0 1 1.41.59L22 12a2 2 0 0 1 0 2.82Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              <circle cx="7.5" cy="7.5" r="1.5" fill="currentColor" />
+            </svg>
+          ),
+        },
+        {
+          key: "followup",
+          title: "Follow-up Calls",
+          value: state.summary.followUpCount || 0,
+          iconBg: "bg-rose-50",
+          iconColor: "text-rose-600",
+          icon: (
+            <svg viewBox="0 0 24 24" fill="none" className="w-6 h-6">
+              <path d="M3 12a9 9 0 0 1 15.3-6.36L21 8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M21 3v5h-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M21 12a9 9 0 0 1-15.3 6.36L3 16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M8 16H3v5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          ),
+        },
+      ]
+    : [];
+
   return (
     <div className="p-6 max-w-[1700px] mx-auto space-y-6">
+      <style>{`
+        .call-report-scroll {
+          overflow-x: scroll !important;
+          scrollbar-width: thin !important;
+          scrollbar-color: #9ca3af #eef2f7 !important;
+        }
+        .call-report-scroll::-webkit-scrollbar {
+          display: block !important;
+          height: 12px !important;
+        }
+        .call-report-scroll::-webkit-scrollbar-track {
+          background: #eef2f7 !important;
+          border-radius: 9999px !important;
+        }
+        .call-report-scroll::-webkit-scrollbar-thumb {
+          background: #9ca3af !important;
+          border-radius: 9999px !important;
+        }
+        .call-report-scroll::-webkit-scrollbar-thumb:hover {
+          background: #6b7280 !important;
+        }
+      `}</style>
       <div>
         <h1 className="text-2xl font-bold text-indigo-800">Call Data Reports</h1>
         <p className="text-gray-600 mt-1">Employee-wise call details with category and follow-up in one view.</p>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-3">
+
+
+{state.summary && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {summaryCards.map((card) => (
+            <div key={card.key} className="rounded-2xl border border-gray-200 bg-white px-5 py-4 min-h-[116px] flex items-center justify-between">
+              <div className="min-w-0">
+                <p className="text-lg leading-tight font-semibold text-gray-600 truncate">{card.title}</p>
+                <p className="text-2xl leading-none font-bold text-gray-800 mt-4">{card.value}</p>
+              </div>
+              <div className={`h-12 w-12 rounded-full flex items-center justify-center ${card.iconBg} ${card.iconColor}`}>
+                {card.icon}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+
+
+
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="flex items-center gap-3 flex-nowrap overflow-visible pb-1">
           <input
             type="date"
             value={state.filters.from}
             onChange={(e) => updateFilter("from", e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg"
+            className="w-[240px] shrink-0 px-3 py-2 border border-gray-300 rounded-lg cursor-pointer"
           />
           <input
             type="date"
             value={state.filters.to}
             onChange={(e) => updateFilter("to", e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg"
+            className="w-[240px] shrink-0 px-3 py-2 border border-gray-300 rounded-lg cursor-pointer"
           />
-          <select
-            value={state.filters.callerName}
-            onChange={(e) => updateFilter("callerName", e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg"
-          >
-            <option value="">All caller aliases</option>
-            {employeeOptions.map((option) => (
-              <option key={`caller-${option.empId}-${option.value}`} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <select
-            value={state.filters.category}
-            onChange={(e) => updateFilter("category", e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg"
-          >
-            <option value="">All categories</option>
-            {state.categoryOptions.map((option) => (
-              <option key={`filter-category-${option}`} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-          <button
-            onClick={() => {
-              const next = { ...state.filters, page: 1 };
-              setState((prev) => ({ ...prev, filters: next }));
-              fetchReport(next);
-            }}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
-          >
-            Search
-          </button>
-          <div className="flex gap-2">
-            <select
+          <div className={`relative w-[250px] shrink-0 ${callerDropdownOpen ? "z-40" : "z-10"}`} ref={callerDropdownRef}>
+            <button
+              type="button"
+              onClick={() => {
+                setCallerDropdownOpen((prev) => !prev);
+              }}
+              className="h-[42px] w-full px-3 border border-gray-300 rounded-lg text-left bg-white flex items-center justify-between cursor-pointer"
+            >
+              <span className="truncate text-gray-800">{state.filters.callerName || "All caller aliases"}</span>
+              <span className="text-gray-500">▾</span>
+            </button>
+            {callerDropdownOpen && (
+              <div className="absolute z-30 top-full mt-2 left-0 right-0 rounded-xl border border-gray-200 bg-white shadow-xl p-2">
+                <input
+                  type="text"
+                  value={callerSearchText}
+                  onChange={(e) => setCallerSearchText(e.target.value)}
+                  placeholder="Search caller"
+                  className="h-10 w-full rounded-lg border border-gray-300 px-3 text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    updateFilter("callerName", "");
+                    setCallerDropdownOpen(false);
+                  }}
+                  className={`mt-2 w-full h-10 px-3 rounded-lg text-left ${
+                    !state.filters.callerName ? "bg-indigo-600 text-white" : "hover:bg-gray-100 text-gray-800"
+                  }`}
+                >
+                  All caller aliases
+                </button>
+                <div className="mt-1 max-h-72 overflow-y-auto">
+                  {filteredCallerOptions.length === 0 ? (
+                    <div className="px-3 py-2 text-sm text-gray-500">No caller found</div>
+                  ) : (
+                    filteredCallerOptions.map((option) => (
+                      <button
+                        key={`caller-${option.empId}-${option.value}`}
+                        type="button"
+                        onClick={() => {
+                          updateFilter("callerName", option.value);
+                          setCallerDropdownOpen(false);
+                        }}
+                        className={`w-full h-10 px-3 rounded-lg text-left ${
+                          state.filters.callerName === option.value
+                            ? "bg-indigo-600 text-white"
+                            : "hover:bg-gray-100 text-gray-800"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+          <div className={`relative w-[250px] shrink-0 ${categoryDropdownOpen ? "z-40" : "z-10"}`} ref={categoryDropdownRef}>
+            <button
+              type="button"
+              onClick={() => {
+                setCategoryDropdownOpen((prev) => !prev);
+              }}
+              className="h-[42px] w-full px-3 border border-gray-300 rounded-lg text-left bg-white flex items-center justify-between cursor-pointer"
+            >
+              <span className="truncate text-gray-800">{state.filters.category || "All categories"}</span>
+              <span className="text-gray-500">▾</span>
+            </button>
+            {categoryDropdownOpen && (
+              <div className="absolute z-30 top-full mt-2 left-0 right-0 rounded-xl border border-gray-200 bg-white shadow-xl p-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    updateFilter("category", "");
+                    setCategoryDropdownOpen(false);
+                  }}
+                  className={`w-full h-10 px-3 rounded-lg text-left ${
+                    !state.filters.category ? "bg-indigo-600 text-white" : "hover:bg-gray-100 text-gray-800"
+                  }`}
+                >
+                  All categories
+                </button>
+                <div className="mt-1 max-h-72 overflow-y-auto">
+                  {state.categoryOptions.map((option) => (
+                    <button
+                      key={`filter-category-${option}`}
+                      type="button"
+                      onClick={() => {
+                        updateFilter("category", option);
+                        setCategoryDropdownOpen(false);
+                      }}
+                      className={`w-full h-10 px-3 rounded-lg text-left ${
+                        state.filters.category === option
+                          ? "bg-indigo-600 text-white"
+                          : "hover:bg-gray-100 text-gray-800"
+                      }`}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="flex gap-2 shrink-0">
+            {/* <select
               value={state.filters.limit}
               onChange={(e) => {
                 const next = {
                   ...state.filters,
                   page: 1,
-                  limit: Number(e.target.value),
+                  limit: 10,
                 };
                 setState((prev) => ({ ...prev, filters: next }));
                 fetchReport(next);
               }}
               className="px-3 py-2 border border-gray-300 rounded-lg"
             >
-              <option value={20}>20 / page</option>
-              <option value={50}>50 / page</option>
-              <option value={100}>100 / page</option>
-              <option value={200}>200 / page</option>
-            </select>
-            <button onClick={handleReset} className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
+              <option value={10}>10 / page</option>
+            </select> */}
+            <button onClick={handleReset} className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer">
               Reset
             </button>
-            <button onClick={exportRows} className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">
-              Export
-            </button>
           </div>
+          <button onClick={exportRows} className="ml-auto shrink-0 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 cursor-pointer">
+            Export
+          </button>
         </div>
       </div>
 
-      {state.summary && (
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
-          <div className="bg-white p-4 rounded-xl border">Total Employees: <strong>{state.summary.totalEmployees || 0}</strong></div>
-          <div className="bg-white p-4 rounded-xl border">Total Calls: <strong>{state.summary.totalCalls || 0}</strong></div>
-          <div className="bg-white p-4 rounded-xl border">Answered/Missed: <strong>{state.summary.answeredCalls || 0}/{state.summary.missedCalls || 0}</strong></div>
-          <div className="bg-white p-4 rounded-xl border">Talk Time (min): <strong>{state.summary.totalTalkTimeMinutes || 0}</strong></div>
-          <div className="bg-white p-4 rounded-xl border">Categorized Calls: <strong>{state.summary.categorizedCalls || 0}</strong></div>
-          <div className="bg-white p-4 rounded-xl border">Follow-up Calls: <strong>{state.summary.followUpCount || 0}</strong></div>
-        </div>
-      )}
-
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-x-auto">
-        <div className="p-4 border-b font-semibold text-indigo-700">Employee Summary</div>
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-gray-600">
-            <tr>
-              <th className="text-left p-3">Employee</th>
-              <th className="text-left p-3">Total Calls</th>
-              <th className="text-left p-3">Answered</th>
-              <th className="text-left p-3">Missed</th>
-              <th className="text-left p-3">Talk Time (min)</th>
-              <th className="text-left p-3">Categorized</th>
-              <th className="text-left p-3">Follow-up</th>
-            </tr>
-          </thead>
-          <tbody>
-            {state.employeeSummary.length === 0 ? (
-              <tr><td colSpan={7} className="p-6 text-center text-gray-500">No employee summary found</td></tr>
-            ) : (
-              state.employeeSummary.map((emp, index) => (
-                <tr key={`${emp.employeeName}-${index}`} className="border-t">
-                  <td className="p-3">{emp.employeeName || "-"}</td>
-                  <td className="p-3">{emp.totalCalls || 0}</td>
-                  <td className="p-3">{emp.answeredCalls || 0}</td>
-                  <td className="p-3">{emp.missedCalls || 0}</td>
-                  <td className="p-3">{emp.totalTalkTimeMinutes || 0}</td>
-                  <td className="p-3">{emp.categorizedCalls || 0}</td>
-                  <td className="p-3">{emp.followUpCount || 0}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-x-auto">
-        <div className="p-4 border-b font-semibold text-indigo-700">Detailed Calls</div>
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-gray-600">
-            <tr>
-              <th className="text-left p-3">Date/Time</th>
-              <th className="text-left p-3">Call ID</th>
-              <th className="text-left p-3">Caller</th>
-              <th className="text-left p-3">Direction</th>
-              <th className="text-left p-3">Answered</th>
-              <th className="text-left p-3">Talk Time (min)</th>
-              <th className="text-left p-3">Category</th>
-              <th className="text-left p-3">Follow Up</th>
-              <th className="text-left p-3">Details</th>
-              <th className="text-left p-3">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {state.records.length === 0 ? (
-              <tr><td colSpan={10} className="p-8 text-center text-gray-500">No call records found for selected filters</td></tr>
-            ) : (
-              state.records.map((record, index) => {
-                const merged = mergeDraft(record);
-                return (
-                  <tr key={`${record.callId}-${index}`} className="border-t align-top">
-                    <td className="p-3">{record.startTime ? new Date(record.startTime).toLocaleString() : "-"}</td>
-                    <td className="p-3">{record.callId || "-"}</td>
-                    <td className="p-3">{record.callerName || "-"}</td>
-                    <td className="p-3">{record.direction || "-"}</td>
-                    <td className="p-3">{record.answered || "-"}</td>
-                    <td className="p-3">{toMinutes(record.talkTimeMS)}</td>
-                    <td className="p-3">
-                      <select
-                        value={merged.category || ""}
-                        onChange={(e) => updateDraft(record.callId, { category: e.target.value })}
-                        className="px-2 py-1 border border-gray-300 rounded-md min-w-[140px]"
-                      >
-                        <option value="">Select</option>
-                        {state.categoryOptions.map((option) => (
-                          <option key={option} value={option}>{option}</option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="p-3">
-                      <input
-                        type="checkbox"
-                        checked={toBool(merged.followUp)}
-                        onChange={(e) => updateDraft(record.callId, { followUp: e.target.checked })}
-                      />
-                    </td>
-                    <td className="p-3">
-                      <button
-                        className="px-3 py-1 border border-gray-300 rounded-md hover:bg-gray-50"
-                        onClick={() => setFollowUpModal({ open: true, callId: record.callId })}
-                      >
-                        View/Edit
-                      </button>
-                    </td>
-                    <td className="p-3">
-                      <button
-                        onClick={() => saveRow(record)}
-                        disabled={!!savingRows[record.callId]}
-                        className="px-3 py-1 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50"
-                      >
-                        {savingRows[record.callId] ? "Saving..." : "Save"}
-                      </button>
-                      {rowErrors[record.callId] && <p className="text-xs text-red-600 mt-1">{rowErrors[record.callId]}</p>}
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex items-center justify-between">
-        <p className="text-sm text-gray-600">
-          Page {state.filters.page || 1} of {state.filters.totalPages || 1}
-          {typeof state.filters.totalRecords === "number" ? ` • Total records: ${state.filters.totalRecords}` : ""}
-        </p>
-        <div className="flex items-center gap-2">
+      <div className="bg-white rounded-2xl border border-gray-200 p-3">
+        <div className="flex flex-wrap gap-3">
           <button
             onClick={() => {
-              const nextPage = Math.max(1, Number(state.filters.page || 1) - 1);
-              const next = { ...state.filters, page: nextPage };
-              setState((prev) => ({ ...prev, filters: next }));
-              fetchReport(next);
+              setActiveSectionTab("employeeSummary");
+              setState((prev) => ({ ...prev, filters: { ...prev.filters, page: 1 } }));
             }}
-            disabled={Number(state.filters.page || 1) <= 1 || state.loading}
-            className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50"
+            className={`h-11 px-5 rounded-xl border font-semibold transition-colors cursor-pointer ${
+              activeSectionTab === "employeeSummary"
+                ? "bg-amber-500 border-amber-500 text-white"
+                : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
+            }`}
           >
-            Previous
+            Employee Summary
           </button>
           <button
             onClick={() => {
-              const current = Number(state.filters.page || 1);
-              const totalPages = Number(state.filters.totalPages || 1);
-              const nextPage = Math.min(totalPages, current + 1);
+              setActiveSectionTab("detailedCalls");
+              setState((prev) => ({ ...prev, filters: { ...prev.filters, page: 1 } }));
+            }}
+            className={`h-11 px-5 rounded-xl border font-semibold transition-colors cursor-pointer ${
+              activeSectionTab === "detailedCalls"
+                ? "bg-amber-500 border-amber-500 text-white"
+                : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            Detailed Calls
+          </button>
+        </div>
+      </div>
+
+      {activeSectionTab === "employeeSummary" && (
+        <div className="bg-white rounded-2xl border border-gray-200 p-3 space-y-3">
+          <div className="px-1 pb-1 font-semibold text-indigo-700">Employee Summary</div>
+          <div className="overflow-x-auto pb-1">
+            {/* className="overflow-x-scroll call-report-scroll pb-1" */}
+            <div className="min-w-[920px]">
+              <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1.2fr_1.2fr_1fr] gap-4 items-center rounded-xl border border-gray-200 bg-slate-50 px-4 py-3 text-base font-semibold text-gray-600">
+                <div>Employee</div>
+                <div>Total Calls</div>
+                <div>Answered</div>
+                <div>Missed</div>
+                <div>Talk Time (min)</div>
+                <div>Categorized</div>
+                <div>Follow-up</div>
+              </div>
+              {employeeSummaryPageRows.length === 0 ? (
+                <div className="mt-3 rounded-xl border border-gray-200 px-4 py-8 text-center text-gray-500">
+                  No employee summary found
+                </div>
+              ) : (
+                employeeSummaryPageRows.map((emp, index) => (
+                  <div
+                    key={`${emp.employeeName}-${index}`}
+                    className="mt-3 grid grid-cols-[2fr_1fr_1fr_1fr_1.2fr_1.2fr_1fr] gap-4 items-center rounded-xl border border-gray-200 bg-white px-4 py-4 font-medium text-gray-900"
+                  >
+                    <div className="truncate">{emp.employeeName || "-"}</div>
+                    <div>{emp.totalCalls || 0}</div>
+                    <div>{emp.answeredCalls || 0}</div>
+                    <div>{emp.missedCalls || 0}</div>
+                    <div>{emp.totalTalkTimeMinutes || 0}</div>
+                    <div>{emp.categorizedCalls || 0}</div>
+                    <div>{emp.followUpCount || 0}</div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeSectionTab === "detailedCalls" && (
+        <div className="bg-white rounded-2xl border border-gray-200 p-3 space-y-3">
+          <div className="px-1 pb-1 font-semibold text-indigo-700">Detailed Calls</div>
+          <div className="overflow-x-scroll call-report-scroll pb-1">
+            <div className="min-w-[1650px]">
+              <div className="grid grid-cols-[1.5fr_1.2fr_1.2fr_1fr_1fr_1fr_1.3fr_0.8fr_1fr_1fr] gap-4 items-center rounded-xl border border-gray-200 bg-slate-50 px-4 py-3 text-base font-semibold text-gray-600">
+                <div>Date/Time</div>
+                <div>Call ID</div>
+                <div>Caller</div>
+                <div>Direction</div>
+                <div>Answered</div>
+                <div>Talk Time (min)</div>
+                <div>Category</div>
+                <div>Follow Up</div>
+                <div>Details</div>
+                <div>Action</div>
+              </div>
+              {detailedCallsPageRows.length === 0 ? (
+                <div className="mt-3 rounded-xl border border-gray-200 px-4 py-8 text-center text-gray-500">
+                  No call records found for selected filters
+                </div>
+              ) : (
+                detailedCallsPageRows.map((record, index) => {
+                  const merged = mergeDraft(record);
+                  return (
+                    <div
+                      key={`${record.callId}-${index}`}
+                      className="mt-3 grid grid-cols-[1.5fr_1.2fr_1.2fr_1fr_1fr_1fr_1.3fr_0.8fr_1fr_1fr] gap-4 items-center rounded-xl border border-gray-200 bg-white px-4 py-4 font-medium text-gray-900"
+                    >
+                      <div>{record.startTime ? new Date(record.startTime).toLocaleString() : "-"}</div>
+                      <div className="truncate">{record.callId || "-"}</div>
+                      <div className="truncate">{record.callerName || "-"}</div>
+                      <div>{record.direction || "-"}</div>
+                      <div>{record.answered || "-"}</div>
+                      <div>{toMinutes(record.talkTimeMS)}</div>
+                      <div>
+                        <select
+                          value={merged.category || ""}
+                          onChange={(e) => updateDraft(record.callId, { category: e.target.value })}
+                          className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                        >
+                          <option value="">Select</option>
+                          {state.categoryOptions.map((option) => (
+                            <option key={option} value={option}>{option}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={toBool(merged.followUp)}
+                          onChange={(e) => updateDraft(record.callId, { followUp: e.target.checked })}
+                          className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                      </div>
+                      <div>
+                        <button
+                          className="h-10 w-full rounded-lg border border-blue-500 bg-white px-3 text-blue-600 hover:bg-blue-50"
+                          onClick={() => setFollowUpModal({ open: true, callId: record.callId })}
+                        >
+                          View/Edit
+                        </button>
+                      </div>
+                      <div>
+                        <button
+                          onClick={() => saveRow(record)}
+                          disabled={!!savingRows[record.callId]}
+                          className="h-10 w-full rounded-lg border border-emerald-500 bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {savingRows[record.callId] ? "Saving..." : "Save"}
+                        </button>
+                        {rowErrors[record.callId] && <p className="text-xs text-red-600 mt-1">{rowErrors[record.callId]}</p>}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-white rounded-xl border border-gray-200 p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <p className="text-sm text-gray-700">
+          Showing {showingFrom} to {showingTo} of {totalRecords} records
+        </p>
+        <div className="flex items-center gap-2 text-base font-medium text-gray-800">
+          <button
+            onClick={() => {
+              const nextPage = Math.max(1, currentPage - 1);
               const next = { ...state.filters, page: nextPage };
               setState((prev) => ({ ...prev, filters: next }));
-              fetchReport(next);
             }}
-            disabled={Number(state.filters.page || 1) >= Number(state.filters.totalPages || 1) || state.loading}
-            className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50"
+            disabled={currentPage <= 1 || state.loading}
+            className="px-2 py-1 text-gray-800 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+          >
+            Previous
+          </button>
+          {getVisiblePages().map((item) => {
+            if (String(item).startsWith("ellipsis")) {
+              return <span key={item} className="px-1 text-gray-400">...</span>;
+            }
+            const isActive = Number(item) === currentPage;
+            return (
+              <button
+                key={`page-${item}`}
+                onClick={() => {
+                  const next = { ...state.filters, page: Number(item) };
+                  setState((prev) => ({ ...prev, filters: next }));
+                }}
+                className={`h-8 min-w-8 px-2 rounded-lg border cursor-pointer ${
+                  isActive
+                    ? "border-gray-900 bg-white text-gray-900"
+                    : "border-transparent bg-transparent text-gray-700 hover:border-gray-200"
+                }`}
+              >
+                {item}
+              </button>
+            );
+          })}
+          <button
+            onClick={() => {
+              const nextPage = Math.min(totalPages, currentPage + 1);
+              const next = { ...state.filters, page: nextPage };
+              setState((prev) => ({ ...prev, filters: next }));
+            }}
+            disabled={currentPage >= totalPages || state.loading}
+            className="px-2 py-1 text-gray-800 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
           >
             Next
           </button>
