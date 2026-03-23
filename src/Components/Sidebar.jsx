@@ -56,6 +56,7 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Sales Dept Report",
       "DO Report",
       "DO and Scheduling Report",
+      "Call Data Reports",
       "Follow Up Report",
       "Trucker Report",
       "Rate Request Report",
@@ -142,12 +143,14 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Team Rating"
     ],
     "Tracking": [
-      "Tracking"
+      "Tracking",
+      "Load By Location"
     ],
     "Company Management": [
       "Sub Company"
     ],
     "Reports": [
+      "Call Data Reports",
       "Call Data",
       "Call Records (Id)",
       "Report Analysis",
@@ -177,6 +180,7 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Inventry"
     ],
     "Reports": [
+      "Call Data Reports",
       "Finance Dashboard",
       "Call Data",
       "Call Records (Id)",
@@ -214,6 +218,7 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Trucker Report",
       "Rate Request Report",
       "DO Report",
+      "Call Data Reports",
       "Call Records (Id)",
       "Call Data",
       "Report Analysis",
@@ -276,6 +281,7 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Assigned Rate Request"
     ],
     "Common Reports": [
+      "Call Data Reports",
       "Call Data",
       "Call Records (Id)",
       "Report Analysis",
@@ -292,6 +298,7 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "All Customers",
       "Daily Task",
       "Tracking",
+      "Load By Location",
       "Import Carrier Emails"
     ],
     "Company Management": [
@@ -307,6 +314,7 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "DO Report"
     ],
     "Common Reports": [
+      "Call Data Reports",
       "Call Data",
       "Call Records (Id)",
       "Report Analysis",
@@ -332,6 +340,7 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "DO Report"
     ],
     "Common Reports": [
+      "Call Data Reports",
       "Call Data",
       "Call Records (Id)",
       "Report Analysis",
@@ -350,6 +359,7 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Sales Dept Report",
       "DO Report",
       "DO and Scheduling Report",
+      "Call Data Reports",
       "Follow Up Report",
       "Trucker Report",
       "Rate Request Report",
@@ -440,6 +450,7 @@ const menuItems = [
   { name: "Tracker", icon: BlueCall, whiteIcon: WhiteCall, path: "/Tracker" },
   { name: "Company", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/companies" },
   { name: "Tracking", icon: LiveTracker, whiteIcon: WhiteLiveTracker, path: "/live-tracker" },
+  { name: "Load By Location", icon: LiveTracker, whiteIcon: WhiteLiveTracker, path: "/load-by-location" },
   { name: "Manage Users", icon: ManageUser, whiteIcon: WhiteManageUser, path: "/manage-users" },
   { name: "Users Permissions", icon: UserPermision, whiteIcon: WhiteUserPermission, path: "/permissions" },
   { name: "Report Analysis", icon: Analytics, whiteIcon: WhiteAnalytics, path: "/analytics" },
@@ -541,6 +552,7 @@ const menuItems = [
   { name: "Emp Login Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/emp-login-report" },
   { name: "HR Call Reports", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/hr-call-reports" },
   { name: "Assigned Rate Request", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/assigned-rate-request" },
+  { name: "Call Data Reports", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/analytics/call-data-reports" },
   { name: "Sub Company", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/SubCompanies" },
   { name: "Docs Upload", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/docs-upload" },
   
@@ -573,6 +585,7 @@ const REPORT_NAMES = [
   "Assigned Rate Request",
   "Team Rating",
   "Call Data",
+  "Call Data Reports",
   "Call Records (Id)",
   "Report Analysis",
   "Emp Login Report",
@@ -627,6 +640,7 @@ const DEPARTMENT_REPORTS = {
     "QA Call Report"
   ],
   "Common": [
+    "Call Data Reports",
     "Call Data",
     "Call Records (Id)",
     "Report Analysis",

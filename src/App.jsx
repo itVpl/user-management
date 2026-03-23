@@ -63,6 +63,7 @@ const SoftwareSellRecord = lazy(() => import("./Components/Sales/SoftwareSellRec
 const Tier1Leads = lazy(() => import("./Components/Sales/Tier1Leads.jsx"));
 const AllSalesTL = lazy(() => import("./Components/Sales/AllSalesTL.jsx"));
 const DOReport = lazy(() => import("./Components/Sales/DOReport.jsx"));
+const LoadByLocation = lazy(() => import("./Components/Sales/LoadByLocation.jsx"));
 const ImportCarrierEmails = lazy(() => import("./Components/Sales/ImportCarrierEmails.jsx"));
 const AllDOAssignedCMT = lazy(() => import("./Components/Sales/AllDOAssignedCMT.jsx"));
 const TeamRating = lazy(() => import("./Components/Sales/TeamRating.jsx"));
@@ -89,6 +90,7 @@ const EmpLoginReport = lazy(() => import("./Components/Report/EmpLoginReport.jsx
 const AssignedRateRequest = lazy(() => import("./Components/Report/AssignedRateRequest.jsx"));
 const DOAndSchedulingReport = lazy(() => import("./Components/Report/DOAndSchedulingReport.jsx"));
 const FinalChargesReport = lazy(() => import("./Components/Report/FinalChargesReport.jsx"));
+const CallDataReports = lazy(() => import("./Components/Report/CallDataReports.jsx"));
 const Invoices = lazy(() => import("./Components/Accountant/Invoices.jsx"));
 const CheckInvoice = lazy(() => import("./Components/Sales/CheckInvoice.jsx"));
 const AssignLoad = lazy(() => import("./Components/CMT-Manager/AssignLoad.jsx"));
@@ -677,6 +679,7 @@ function App() {
           <Route path="RateApproved" element={<RateApproved />} />
           <Route path="ManagerRateApproval" element={<ManagerPendingBids />} />
           <Route path="Loads" element={<Loads />} />
+          <Route path="load-by-location" element={<LoadByLocation />} />
           <Route path="SubCompanies" element={<SubCompanies />} />
           <Route path="CarrierApproval" element={<CarrierApproval />} />
           <Route path="HrCreateTask" element={<HrCreateTask />} />
@@ -720,6 +723,7 @@ function App() {
           <Route path="assigned-rate-request" element={<AssignedRateRequest />} />
           <Route path="do-scheduling-report" element={<DOAndSchedulingReport />} />
           <Route path="final-charges-report" element={<FinalChargesReport />} />
+          <Route path="analytics/call-data-reports" element={<CallDataReports />} />
           <Route path="Invoices" element={<Invoices />} />
           <Route path="CheckInvoice" element={<CheckInvoice />} />
           <Route path="AssignLoad" element={<AssignLoad />} />

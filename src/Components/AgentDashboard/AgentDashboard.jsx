@@ -8,7 +8,7 @@ import CheckCircleOutlineSharpIcon from '@mui/icons-material/CheckCircleOutlineS
 import { MoreHorizontal, Phone, Users, Calendar, FileText, Clock, CheckCircle, AlertCircle, TrendingUp, Award, Truck, DollarSign, Target, UserPlus, AlertTriangle, User, Info } from 'lucide-react';
 import UpcomingBirthdays from '../UpcomingBirthdays';
 import { IoCall } from "react-icons/io5";
-import DailyFollowNotification from '../DailyFollowNotification';
+import CallFollowUpsDashboardCard from './CallFollowUpsDashboardCard';
 import API_CONFIG from '../../config/api';
 // import firstIcon from "../../assets/Icon.svg"
 
@@ -922,7 +922,6 @@ const Dashboard = () => {
             />
           </div>
 
-
                          {/* Recent Delivery Orders */}
 <div className="bg-white border border-[#C8C8C8] rounded-[17.59px] p-6 mb-3" 
      style={{
@@ -1252,10 +1251,10 @@ const Dashboard = () => {
 </div>
 
 
-          {/* Upcoming Birthdays and Daily Follow Notification */}
-          <div className="grid lg:grid-cols-2 gap-8 mb-3">
+          {/* Upcoming Birthdays and Call follow-ups (8x8) */}
+          <div className="grid lg:grid-cols-2 gap-8 mb-3 lg:items-stretch">
             <UpcomingBirthdays limit={3} />
-            <DailyFollowNotification limit={3} />
+            <CallFollowUpsDashboardCard variant="sidebar" limit={15} />
           </div>
         </>
       ) : null}
