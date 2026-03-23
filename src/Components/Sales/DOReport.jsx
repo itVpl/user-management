@@ -460,6 +460,7 @@ export default function DOReport() {
   const [updateExisting, setUpdateExisting] = useState(false);
   const [importResult, setImportResult] = useState(null);
   const [importLoading, setImportLoading] = useState(false);
+  const [exportingCsv, setExportingCsv] = useState(false);
   const [importStep, setImportStep] = useState(1); // 1: upload, 2: mapping, 3: results
   const [importCompany, setImportCompany] = useState(""); // Company selection for Excel import
 
@@ -2579,72 +2580,165 @@ export default function DOReport() {
     return `"${s}"`;
   };
 
-  // Export to CSV - fetches full DO details so Importer/Exporter (and all view data) are included
   const exportToCSV = async () => {
+    if (exportingCsv) return;
     const token =
       sessionStorage.getItem("token") || localStorage.getItem("token");
     if (!token) {
       alertify.error("Not authenticated");
       return;
     }
-    if (filteredOrders.length === 0) {
-      alertify.warning("No data to export");
-      return;
-    }
-
+    const hasDateRange =
+      dateFilterApplied && range.startDate && range.endDate;
+    const startDate = hasDateRange ? ymd(range.startDate) : null;
+    const endDate = hasDateRange ? ymd(range.endDate) : null;
+    const {
+      loadNumber,
+      workOrderNo,
+      shipmentNo,
+      containerNo,
+      carrierName,
+      billTo,
+    } = parseSearchTerm(activeSearchTerm, searchFieldType);
+    const exportParams = {
+      ...(selectedCompany ? { addDispature: selectedCompany } : {}),
+      ...(selectedCreatedBy ? { createdByEmpId: selectedCreatedBy } : {}),
+      ...(loadNumber ? { loadNumber } : {}),
+      ...(workOrderNo ? { workOrderNo } : {}),
+      ...(shipmentNo ? { shipmentNo } : {}),
+      ...(containerNo ? { containerNo } : {}),
+      ...(carrierName ? { carrierName } : {}),
+      ...(billTo ? { billTo } : {}),
+      ...(hasDateRange ? { startDate, endDate } : {}),
+    };
+    const hasAnyFilter = Object.keys(exportParams).length > 0;
+    const PAGE_SIZE = 200;
+    const PAGE_BATCH_SIZE = 4;
     const BATCH_SIZE = 8;
+    const ENRICHMENT_LIMIT = 60;
     const getOrderId = (o) =>
       o.originalId ||
       o._id ||
       (o.id && o.id.startsWith("DO-") ? o.id.replace("DO-", "") : o.id);
 
     try {
-      alertify.message("Preparing export with full details...");
-      const ordersWithFullData = [];
-      for (let i = 0; i < filteredOrders.length; i += BATCH_SIZE) {
-        const batch = filteredOrders.slice(i, i + BATCH_SIZE);
-        const results = await Promise.all(
-          batch.map(async (order) => {
-            const orderId = getOrderId(order);
-            if (!orderId) return order;
-            try {
-              const res = await axios.get(
-                `${API_CONFIG.BASE_URL}/api/v1/do/do/${orderId}`,
-                {
-                  headers: { Authorization: `Bearer ${token}` },
-                  timeout: 10000,
-                },
-              );
-              if (res?.data?.success && res.data.data) {
-                const full = res.data.data;
-                return {
-                  ...order,
-                  returnLocation:
-                    order.returnLocation || full.returnLocation || {},
-                  importerName: full.importerName ?? order.importerName ?? "",
-                  importerAddress:
-                    full.importerAddress ?? order.importerAddress ?? "",
-                  exporterName: full.exporterName ?? order.exporterName ?? "",
-                  exporterAddress:
-                    full.exporterAddress ?? order.exporterAddress ?? "",
-                  bols: order.bols?.length ? order.bols : full.bols || [],
-                  shipper: order.shipper || full.shipper || {},
-                  customers: order.customers?.length
-                    ? order.customers
-                    : full.customers || [],
-                };
+      setExportingCsv(true);
+      alertify.message(
+        hasAnyFilter
+          ? "Preparing filtered CSV export..."
+          : "Preparing full CSV export...",
+      );
+
+      const fetchPage = async (page) => {
+        const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/do/do/report`, {
+          params: {
+            page,
+            limit: PAGE_SIZE,
+            ...exportParams,
+          },
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          timeout: 15000,
+        });
+        if (!res?.data?.success) {
+          throw new Error("Failed to fetch export data");
+        }
+        const pageRows = Array.isArray(res?.data?.data)
+          ? res.data.data
+          : res?.data?.data?.dos || [];
+        const totalPages = Number(res?.data?.pagination?.totalPages || 1);
+        return {
+          pageRows,
+          totalPages: Number.isFinite(totalPages) && totalPages > 0 ? totalPages : 1,
+        };
+      };
+
+      const firstPage = await fetchPage(1);
+      const rawOrders = [...firstPage.pageRows];
+      const remainingPages = Array.from(
+        { length: Math.max(firstPage.totalPages - 1, 0) },
+        (_, idx) => idx + 2,
+      );
+      for (let i = 0; i < remainingPages.length; i += PAGE_BATCH_SIZE) {
+        const pageBatch = remainingPages.slice(i, i + PAGE_BATCH_SIZE);
+        const pageResults = await Promise.all(pageBatch.map(fetchPage));
+        pageResults.forEach((result) => {
+          rawOrders.push(...result.pageRows);
+        });
+      }
+
+      if (rawOrders.length === 0) {
+        alertify.warning("No data found for selected filters");
+        return;
+      }
+
+      const exportOrders = rawOrders.map((order) => ({
+        ...order,
+        originalId: order.doId || order._id || order.originalId,
+        doNum: order.customers?.[0]?.loadNo || order.loadNo || order.doNum || "N/A",
+        clientName:
+          order.customers?.[0]?.billTo ||
+          order.customerName ||
+          order.clientName ||
+          "N/A",
+        carrierName: order.carrier?.carrierName || order.carrierName || "N/A",
+        carrierFees: order.carrier?.totalCarrierFees ?? order.carrierFees ?? 0,
+        customers: Array.isArray(order.customers) ? order.customers : [],
+        shipper: order.shipper || {},
+        returnLocation: order.returnLocation || {},
+        bols: Array.isArray(order.bols) ? order.bols : [],
+      }));
+
+      let ordersWithFullData = exportOrders;
+      if (exportOrders.length <= ENRICHMENT_LIMIT) {
+        ordersWithFullData = [];
+        for (let i = 0; i < exportOrders.length; i += BATCH_SIZE) {
+          const batch = exportOrders.slice(i, i + BATCH_SIZE);
+          const results = await Promise.all(
+            batch.map(async (order) => {
+              const orderId = getOrderId(order);
+              if (!orderId) return order;
+              try {
+                const res = await axios.get(
+                  `${API_CONFIG.BASE_URL}/api/v1/do/do/${orderId}`,
+                  {
+                    headers: { Authorization: `Bearer ${token}` },
+                    timeout: 10000,
+                  },
+                );
+                if (res?.data?.success && res.data.data) {
+                  const full = res.data.data;
+                  return {
+                    ...order,
+                    returnLocation:
+                      order.returnLocation || full.returnLocation || {},
+                    importerName: full.importerName ?? order.importerName ?? "",
+                    importerAddress:
+                      full.importerAddress ?? order.importerAddress ?? "",
+                    exporterName: full.exporterName ?? order.exporterName ?? "",
+                    exporterAddress:
+                      full.exporterAddress ?? order.exporterAddress ?? "",
+                    bols: order.bols?.length ? order.bols : full.bols || [],
+                    shipper: order.shipper || full.shipper || {},
+                    customers: order.customers?.length
+                      ? order.customers
+                      : full.customers || [],
+                  };
+                }
+              } catch (e) {
+                console.warn(
+                  "Fetch full DO for export failed for",
+                  orderId,
+                  e?.response?.status,
+                );
               }
-            } catch (e) {
-              console.warn(
-                "Fetch full DO for export failed for",
-                orderId,
-                e?.response?.status,
-              );
-            }
-            return order;
-          }),
-        );
-        ordersWithFullData.push(...results);
+              return order;
+            }),
+          );
+          ordersWithFullData.push(...results);
+        }
       }
 
       const headers = [
@@ -2753,16 +2847,27 @@ export default function DOReport() {
       const url = URL.createObjectURL(blob);
       link.setAttribute("href", url);
       const dateStr = format(new Date(), "yyyy-MM-dd");
-      link.setAttribute("download", `DO_Report_${dateStr}.csv`);
+      const exportRange = hasDateRange ? `${startDate}_to_${endDate}` : "all_dates";
+      const exportScope = hasAnyFilter ? "filtered_data" : "all_data";
+      link.setAttribute(
+        "download",
+        `DO_Report_${exportScope}_${exportRange}_${dateStr}.csv`,
+      );
       link.style.visibility = "hidden";
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-      alertify.success("CSV exported successfully!");
+      alertify.success(
+        hasAnyFilter
+          ? "CSV exported with applied filters"
+          : "CSV exported for all data",
+      );
     } catch (error) {
       console.error("Export to CSV error:", error);
       alertify.error("Failed to export CSV");
+    } finally {
+      setExportingCsv(false);
     }
   };
 
@@ -6837,10 +6942,11 @@ export default function DOReport() {
             <div className="hidden md:flex items-center gap-3 ml-4">
               <button
                 onClick={exportToCSV}
-                className="px-4 py-2 border border-blue-600 text-blue-700 bg-white rounded-lg hover:bg-blue-600 hover:text-white transition-colors font-medium cursor-pointer flex items-center gap-2"
+                disabled={exportingCsv}
+                className="px-4 py-2 border border-blue-600 text-blue-700 bg-white rounded-lg hover:bg-blue-600 hover:text-white transition-colors font-medium cursor-pointer flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <FaDownload size={16} />
-                <span>Export CSV</span>
+                <span>{exportingCsv ? "Exporting..." : "Export CSV"}</span>
               </button>
               <button
                 onClick={() => {
@@ -7026,9 +7132,10 @@ export default function DOReport() {
             <div className="flex md:hidden items-center gap-2 w-full">
               <button
                 onClick={exportToCSV}
-                className="flex-1 px-4 py-2 border border-blue-600 text-blue-700 bg-white rounded-lg hover:bg-blue-600 hover:text-white transition-colors font-medium cursor-pointer"
+                disabled={exportingCsv}
+                className="flex-1 px-4 py-2 border border-blue-600 text-blue-700 bg-white rounded-lg hover:bg-blue-600 hover:text-white transition-colors font-medium cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                Export CSV
+                {exportingCsv ? "Exporting..." : "Export CSV"}
               </button>
               <button
                 onClick={() => {
