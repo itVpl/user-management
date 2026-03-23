@@ -348,6 +348,23 @@ const RateRequestReport = () => {
     setShowDetailsModal(true);
   };
 
+  /** startedAt → completedAt: HH:MM:SS only */
+  const formatSlaStartedToCompleted = (sla) => {
+    if (!sla) return null;
+    const start = sla.startedAt;
+    const end = sla.completedAt || sla.closedAt;
+    if (!start || !end) return null;
+    const ms = new Date(end).getTime() - new Date(start).getTime();
+    if (Number.isNaN(ms) || ms < 0) return null;
+    const totalSec = Math.floor(ms / 1000);
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    const pad = (n) => String(n).padStart(2, "0");
+    const hms = `${pad(h)}:${pad(m)}:${pad(s)}`;
+    return { hms, startedAt: start, completedAt: end };
+  };
+
   const getStatusBadge = (status) => {
     const statusMap = {
       Bidding: { bg: "bg-[#E1F5FE]", text: "text-[#0277BD]", label: "Bidding" },
@@ -1324,6 +1341,66 @@ const RateRequestReport = () => {
                 </div>
               )}
 
+              {/* SLA: startedAt → completedAt duration */}
+              {selectedLoad.cmtBidSla &&
+                (() => {
+                  const slaFmt = formatSlaStartedToCompleted(
+                    selectedLoad.cmtBidSla,
+                  );
+                  return (
+                    <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-6 border border-amber-100">
+                      <div className="flex items-center gap-2 mb-4">
+                        <Calendar className="text-amber-600" size={20} />
+                        <h3 className="text-lg font-bold text-gray-800">
+                          SLA (Bid window)
+                        </h3>
+                      </div>
+                      <div className="bg-white rounded-xl p-4 border border-amber-200">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-sm text-gray-600">Started at</p>
+                            <p className="font-medium text-gray-800">
+                              {selectedLoad.cmtBidSla.startedAt
+                                ? new Date(
+                                    selectedLoad.cmtBidSla.startedAt,
+                                  ).toLocaleString()
+                                : "N/A"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Completed at</p>
+                            <p className="font-medium text-gray-800">
+                              {selectedLoad.cmtBidSla.completedAt
+                                ? new Date(
+                                    selectedLoad.cmtBidSla.completedAt,
+                                  ).toLocaleString()
+                                : "N/A"}
+                            </p>
+                          </div>
+                          {slaFmt && (
+                            <div className="sm:col-span-2 pt-2 border-t border-amber-100">
+                              <p className="text-sm text-gray-600 mb-1">
+                                Time between started & completed
+                              </p>
+                              <p className="font-semibold text-amber-800 text-lg tabular-nums tracking-tight font-mono">
+                                {slaFmt.hms}
+                              </p>
+                            </div>
+                          )}
+                          {!slaFmt &&
+                            selectedLoad.cmtBidSla.startedAt &&
+                            !selectedLoad.cmtBidSla.completedAt && (
+                              <div className="sm:col-span-2 text-sm text-gray-500">
+                                Completed time not available yet — duration will
+                                show once SLA is completed.
+                              </div>
+                            )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
               {/* Bids Section */}
               {selectedLoad.bids && selectedLoad.bids.length > 0 ? (
                 <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl p-6">
@@ -1347,28 +1424,28 @@ const RateRequestReport = () => {
                             </p>
                           </div>
                           <div>
-                            <p className="text-sm text-gray-600">Status</p>
-                            <div className="mt-1">
-                              <span
-                                className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                                  bid.status === "Approved"
-                                    ? "bg-green-100 text-green-700"
-                                    : bid.status === "Rejected"
-                                      ? "bg-red-100 text-red-700"
-                                      : "bg-yellow-100 text-yellow-700"
-                                }`}
-                              >
-                                {bid.status || "Pending"}
-                              </span>
-                            </div>
+                            <p className="text-sm text-gray-600">Bid placed</p>
+                            <p className="font-medium text-gray-800">
+                              {bid.createdAt
+                                ? new Date(bid.createdAt).toLocaleString()
+                                : "N/A"}
+                            </p>
                           </div>
-                          <div>
+                          <div className="col-span-2">
                             <p className="text-sm text-gray-600">Carrier</p>
                             <p className="font-medium text-gray-800">
                               {bid.carrier?.compName || "N/A"}
                             </p>
+                            {bid.carrier?.createdAt && (
+                              <p className="text-xs text-gray-500 mt-1">
+                                Added to system:{" "}
+                                {new Date(
+                                  bid.carrier.createdAt,
+                                ).toLocaleString()}
+                              </p>
+                            )}
                           </div>
-                          <div>
+                          <div className="col-span-2">
                             <p className="text-sm text-gray-600">Placed By</p>
                             <p className="font-medium text-gray-800">
                               {bid.placedByCMTUser?.employeeName ||
@@ -1389,16 +1466,6 @@ const RateRequestReport = () => {
                               <p className="text-sm text-gray-600">Phone</p>
                               <p className="font-medium text-gray-800">
                                 {bid.carrier.phoneNo || "N/A"}
-                              </p>
-                            </div>
-                            <div className="col-span-2">
-                              <p className="text-sm text-gray-600">
-                                Created At
-                              </p>
-                              <p className="font-medium text-gray-800">
-                                {bid.createdAt
-                                  ? new Date(bid.createdAt).toLocaleString()
-                                  : "N/A"}
                               </p>
                             </div>
                           </div>

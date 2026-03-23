@@ -109,6 +109,10 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
   });
   const [bidDetailsData, setBidDetailsData] = useState(null);
   const [bidDetailsLoading, setBidDetailsLoading] = useState(false);
+  const [callsSectionOpen, setCallsSectionOpen] = useState(false);
+  const [callsStatsData, setCallsStatsData] = useState(null);
+  const [callsStatsLoading, setCallsStatsLoading] = useState(false);
+  const [callsStatsLoadId, setCallsStatsLoadId] = useState("");
   const [approvalModal, setApprovalModal] = useState({
     visible: false,
     type: null,
@@ -213,6 +217,152 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
     const m = Math.floor(ms / 60000);
     const s = Math.floor((ms % 60000) / 1000);
     return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  };
+
+  const formatHMS = (ms) => {
+    const totalSeconds = Math.floor(ms / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  };
+
+  const getSlaTimeValue = (slaLike, key) => {
+    if (!slaLike) return null;
+    return (
+      slaLike?.[key] ||
+      slaLike?._doc?.[key] ||
+      slaLike?.$__parent?.[key] ||
+      slaLike?.$__parent?.cmtBidSlaCurrent?.[key] ||
+      null
+    );
+  };
+
+  const findSlaDeep = (root) => {
+    const visited = new Set();
+    const stack = [root];
+    let guard = 0;
+
+    while (stack.length && guard < 5000) {
+      guard += 1;
+      const node = stack.pop();
+      if (!node || typeof node !== "object") continue;
+      if (visited.has(node)) continue;
+      visited.add(node);
+
+      const started =
+        node?.startedAt ||
+        node?._doc?.startedAt ||
+        node?.$__parent?.startedAt ||
+        node?.$__parent?.cmtBidSlaCurrent?.startedAt;
+      const deadline =
+        node?.deadlineAt ||
+        node?.endsAt ||
+        node?.endAt ||
+        node?.[" "] ||
+        node?._doc?.deadlineAt ||
+        node?._doc?.[" "] ||
+        node?.$__parent?.deadlineAt ||
+        node?.$__parent?.cmtBidSlaCurrent?.deadlineAt ||
+        node?.$__parent?.cmtBidSlaCurrent?.[" "];
+
+      if (started || deadline) return node;
+
+      if (Array.isArray(node)) {
+        for (const child of node) stack.push(child);
+      } else {
+        for (const value of Object.values(node)) stack.push(value);
+      }
+    }
+
+    return null;
+  };
+
+  const getSlaCurrent = (item) => {
+    const candidates = [
+      item?.cmtBidSlaCurrent,
+      item?.loadData?.cmtBidSlaCurrent,
+      item?.rawApproval?.cmtBidSlaCurrent,
+      item?.rawApproval?.loadId?.cmtBidSlaCurrent,
+      item?.rawApproval?.load?.cmtBidSlaCurrent,
+      item?.rawApproval?.cmtBid?.cmtBidSlaCurrent,
+      item?.rawApproval?.loadId?.cmtBid?.cmtBidSlaCurrent,
+      item?.cmtApprovals?.[0]?.cmtBidSlaCurrent,
+      item?.cmtApprovals?.find((a) => a?.cmtBidSlaCurrent)?.cmtBidSlaCurrent,
+      item?.cmtApprovals?.find((a) => a?.startedAt && a?.deadlineAt),
+      item?.rawApproval?.cmtApprovals?.find((a) => a?.cmtBidSlaCurrent)
+        ?.cmtBidSlaCurrent,
+      item?.rawApproval?.cmtApprovals?.find((a) => a?.startedAt && a?.deadlineAt),
+    ];
+
+    const direct = candidates.find(
+      (c) =>
+        c &&
+        (c.startedAt ||
+          c.deadlineAt ||
+          c?.[" "] ||
+          c?._doc?.startedAt ||
+          c?._doc?.deadlineAt ||
+          c?.$__parent?.cmtBidSlaCurrent?.startedAt),
+    );
+
+    if (direct) return direct;
+
+    return findSlaDeep(item);
+  };
+
+  const renderSlaTimer = (item) => {
+    const sla = getSlaCurrent(item);
+    const startedAtRaw = getSlaTimeValue(sla, "startedAt");
+    // Some payloads are returning deadline in malformed key " "
+    const deadlineAtRaw =
+      getSlaTimeValue(sla, "deadlineAt") ||
+      getSlaTimeValue(sla, "endsAt") ||
+      getSlaTimeValue(sla, "endAt") ||
+      sla?.[" "] ||
+      sla?._doc?.[" "] ||
+      sla?.$__parent?.cmtBidSlaCurrent?.[" "] ||
+      null;
+
+    const startedAt = startedAtRaw ? new Date(startedAtRaw).getTime() : null;
+    const deadlineAt = deadlineAtRaw ? new Date(deadlineAtRaw).getTime() : null;
+    const completedAtRaw = getSlaTimeValue(sla, "completedAt");
+    const completedAt = completedAtRaw ? new Date(completedAtRaw).getTime() : null;
+    const statusRaw = getSlaTimeValue(sla, "status");
+    const status = typeof statusRaw === "string" ? statusRaw.toLowerCase() : "";
+    const isCompleted = status === "completed" && completedAt && !Number.isNaN(completedAt);
+
+    if (!startedAt || Number.isNaN(startedAt)) {
+      return (
+        <div className="inline-flex flex-col items-center justify-center gap-0.5 text-gray-400">
+          <Clock className="shrink-0" size={18} strokeWidth={2} aria-hidden />
+          <span className="text-xs font-medium tabular-nums">—</span>
+        </div>
+      );
+    }
+
+    const now = Date.now();
+    const elapsed = isCompleted
+      ? Math.max(0, completedAt - startedAt)
+      : Math.max(0, now - startedAt);
+    const isWithinDeadline = deadlineAt && !Number.isNaN(deadlineAt) ? now <= deadlineAt : true;
+
+    const toneClass = isCompleted
+      ? "text-gray-600"
+      : isWithinDeadline
+        ? "text-green-600"
+        : "text-red-600";
+
+    return (
+      <div
+        className={`inline-flex flex-col items-center justify-center gap-0.5 min-w-[3.25rem] ${toneClass}`}
+      >
+        <Clock className="shrink-0" size={20} strokeWidth={2.25} aria-hidden />
+        <span className="text-sm font-semibold tabular-nums tracking-tight leading-tight">
+          {formatHMS(elapsed)}
+        </span>
+      </div>
+    );
   };
 
   const renderTimerChip = (loadId) => {
@@ -403,6 +553,7 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
         return {
           _id: approval._id, // approval id
           loadId, // real load id for timers
+            loadData: approval.loadId || null,
           actualLoadId: loadId, // Store actual MongoDB load ID for chat API calls
           shipmentNumber: approval.loadId.shipmentNumber || null,
           weight: approval.loadId.weight || 0,
@@ -551,6 +702,7 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
               null,
             // Add bid count
             bidCount: approval.loadId?.bidCount || 0,
+            cmtBidSlaCurrent: approval.cmtBidSlaCurrent || null,
           };
         }
 
@@ -676,6 +828,11 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
             null,
           // Add bid count
           bidCount: approval.loadId?.bidCount || 0,
+          cmtBidSlaCurrent:
+            approval.loadId?.cmtBidSlaCurrent ||
+            approval.cmtBidSlaCurrent ||
+            null,
+          rawApproval: approval,
         };
       });
       // ---- broadcast new pending approvals (cross-tab + same tab) ----
@@ -788,6 +945,58 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
     setBidDetailsModal({ visible: false, load: null });
     setBidDetailsData(null);
     setBidDetailsLoading(false);
+    setCallsSectionOpen(false);
+    setCallsStatsData(null);
+    setCallsStatsLoading(false);
+    setCallsStatsLoadId("");
+  };
+
+  const fetchSlaCallStats = async (loadId) => {
+    if (!loadId) {
+      toast.error("Load ID not found for call stats");
+      return;
+    }
+    try {
+      setCallsStatsLoading(true);
+      const token =
+        sessionStorage.getItem("authToken") ||
+        localStorage.getItem("authToken") ||
+        sessionStorage.getItem("token") ||
+        localStorage.getItem("token");
+
+      if (!token) {
+        toast.error("Authentication required. Please login again.");
+        return;
+      }
+
+      const response = await axios.get(
+        `${API_CONFIG.BASE_URL}/api/v1/cmt-assignments/sla-call-stats/${loadId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+
+      if (response.data?.success) {
+        setCallsStatsData(response.data?.data || null);
+        setCallsStatsLoadId(loadId);
+      } else {
+        setCallsStatsData(null);
+        toast.error(response.data?.message || "Failed to fetch call stats");
+      }
+    } catch (error) {
+      console.error("Error fetching SLA call stats:", error);
+      setCallsStatsData(null);
+      if (error.response?.data?.message) {
+        toast.error(error.response.data.message);
+      } else {
+        toast.error("Failed to fetch call stats");
+      }
+    } finally {
+      setCallsStatsLoading(false);
+    }
   };
 
   // Fetch load details to get sales user info
@@ -2781,6 +2990,9 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
                         Date & Time
                       </th>
                       <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                        Time
+                      </th>
+                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
                         Rate
                       </th>
                       <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
@@ -2866,6 +3078,9 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
                           ) : (
                             <span className="font-medium text-gray-400">—</span>
                           )}
+                        </td>
+                        <td className="px-4 py-4 border-y border-gray-200">
+                          {renderSlaTimer(item)}
                         </td>
                         <td className="px-4 py-4 border-y border-gray-200">
                           <span className="font-bold text-green-600">
@@ -3031,7 +3246,7 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
                     ))}
                     {filteredRequests.length === 0 && (
                       <tr>
-                        <td colSpan="10" className="text-center py-12">
+                        <td colSpan="11" className="text-center py-12">
                           <CheckCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                           <p className="text-gray-500 text-lg">
                             {search
@@ -4632,11 +4847,14 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
                           <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">
                             Carrier
                           </th>
+                          <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide whitespace-nowrap">
+                            Carrier Added
+                          </th>
                           <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">
                             Rate
                           </th>
                           <th className="text-left py-3 px-4 text-gray-800 font-bold text-sm uppercase tracking-wide">
-                            Date
+                            Bid Date
                           </th>
                         </tr>
                       </thead>
@@ -4664,6 +4882,30 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
                                 </p>
                               </div>
                             </td>
+                            <td className="py-3 px-4 align-top">
+                              <span className="text-sm text-gray-600">
+                                {(() => {
+                                  const carrierAdded =
+                                    bid.carrier?.addedAt ||
+                                    bid.carrier?.createdAt ||
+                                    bid.carrier?.created_at ||
+                                    bid.carrier?.onboardedAt ||
+                                    null;
+                                  return carrierAdded
+                                    ? new Date(carrierAdded).toLocaleString(
+                                        "en-US",
+                                        {
+                                          year: "numeric",
+                                          month: "short",
+                                          day: "numeric",
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                        },
+                                      )
+                                    : "N/A";
+                                })()}
+                              </span>
+                            </td>
                             <td className="py-3 px-4">
                               <span className="font-bold text-green-600">
                                 ${bid.rate?.toLocaleString() || "0"}
@@ -4690,7 +4932,7 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
                         {(!bidDetailsData?.recentBids ||
                           bidDetailsData.recentBids.length === 0) && (
                           <tr>
-                            <td colSpan="4" className="text-center py-12">
+                            <td colSpan="5" className="text-center py-12">
                               <div className="text-gray-500">
                                 <Truck className="w-12 h-12 mx-auto mb-4 text-gray-300" />
                                 <p className="text-lg font-medium">
@@ -4705,6 +4947,93 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
                         )}
                       </tbody>
                     </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Calls Section */}
+              <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden mt-8">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const modalLoadId = fullLoadId(
+                      bidDetailsModal?.load?.loadId ||
+                        bidDetailsModal?.load?.actualLoadId ||
+                        bidDetailsModal?.load?._id,
+                      "",
+                    );
+                    const nextOpen = !callsSectionOpen;
+                    setCallsSectionOpen(nextOpen);
+                    if (
+                      nextOpen &&
+                      modalLoadId &&
+                      (callsStatsLoadId !== modalLoadId || !callsStatsData)
+                    ) {
+                      fetchSlaCallStats(modalLoadId);
+                    }
+                  }}
+                  className="w-full px-6 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between hover:bg-gray-100 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                      <MessageCircle className="w-4 h-4 text-purple-600" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-800">Calls</h3>
+                  </div>
+                  <span className="text-gray-500 text-sm">
+                    {callsSectionOpen ? "Hide" : "View"}
+                  </span>
+                </button>
+
+                {callsSectionOpen && (
+                  <div className="p-6">
+                    {callsStatsLoading ? (
+                      <div className="text-sm text-gray-600">Loading call stats...</div>
+                    ) : !callsStatsData ? (
+                      <div className="text-sm text-gray-500">
+                        No call stats available for this load.
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                          <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                            Source
+                          </div>
+                          <div className="text-sm font-semibold text-gray-800">
+                            {callsStatsData.selectedSource || "N/A"}
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                            Assigned CMT
+                          </div>
+                          <div className="text-sm font-semibold text-gray-800">
+                            {callsStatsData.assignedCMTUser?.empName || "N/A"}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {callsStatsData.assignedCMTUser?.empId || ""}
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                            SLA Status
+                          </div>
+                          <div className="text-sm font-semibold text-gray-800">
+                            {callsStatsData.cmtBidSla?.status || "N/A"}
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                            Call Stats
+                          </div>
+                          <div className="text-sm font-semibold text-gray-800">
+                            {callsStatsData.callStats
+                              ? JSON.stringify(callsStatsData.callStats)
+                              : "N/A"}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -4947,6 +5276,9 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
                         Date & Time
                       </th>
                       <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
+                        Time
+                      </th>
+                      <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
                         Rate
                       </th>
                       <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
@@ -5092,6 +5424,9 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
                           ) : (
                             <span className="font-medium text-gray-400">—</span>
                           )}
+                        </td>
+                        <td className="px-4 py-4 border-y border-gray-200">
+                          {renderSlaTimer(item)}
                         </td>
                         <td className="px-4 py-4 border-y border-gray-200">
                           <span className="font-bold text-green-600">
@@ -5257,7 +5592,7 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
                     ))}
                     {filteredRequests.length === 0 && (
                       <tr>
-                        <td colSpan="10" className="text-center py-12">
+                        <td colSpan="11" className="text-center py-12">
                           <CheckCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                           <p className="text-gray-500 text-lg">
                             {search

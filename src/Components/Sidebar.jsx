@@ -437,6 +437,7 @@ const getDepartmentDropdownName = (department) => {
 
 const menuItems = [
   { name: "Dashboard", icon: DashboardImage, whiteIcon: WhiteDashboard, path: "/dashboard" },
+  { name: "Tracker", icon: BlueCall, whiteIcon: WhiteCall, path: "/Tracker" },
   { name: "Company", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/companies" },
   { name: "Tracking", icon: LiveTracker, whiteIcon: WhiteLiveTracker, path: "/live-tracker" },
   { name: "Manage Users", icon: ManageUser, whiteIcon: WhiteManageUser, path: "/manage-users" },
@@ -545,6 +546,22 @@ const menuItems = [
   
   
 ];
+
+/** Keep "Tracker" at top level: immediately after Dashboard (outer sidebar, not inside dept flyout). */
+const pinTrackerAfterDashboard = (menus) => {
+  if (!Array.isArray(menus) || menus.length === 0) return menus;
+  const idx = menus.findIndex((i) => i.name === "Tracker");
+  if (idx < 0) return menus;
+  const tracker = menus[idx];
+  const rest = menus.filter((i) => i.name !== "Tracker");
+  const dIdx = rest.findIndex((i) => i.name === "Dashboard");
+  if (dIdx >= 0) {
+    const out = [...rest];
+    out.splice(dIdx + 1, 0, tracker);
+    return out;
+  }
+  return [tracker, ...rest];
+};
 
 // List of report names to filter for Reports section
 const REPORT_NAMES = [
@@ -685,6 +702,8 @@ const Sidebar = () => {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [userDepartment, setUserDepartment] = useState(null);
+  /** HR / profile department (not overwritten when universal user gets first flyout dept) — for Tracker label */
+  const [userAssignedDepartment, setUserAssignedDepartment] = useState("");
   const [userRole, setUserRole] = useState(null); // Store user role
   const [isVPL100, setIsVPL100] = useState(false); // Track if user is VPL100
   
@@ -975,6 +994,7 @@ const Sidebar = () => {
         const isUniversalUser = role === "universal_user";
         isSuperAdmin = role === "superadmin" || role === "super admin";
         setUserDepartment(department);
+        setUserAssignedDepartment(String(user?.department || "").trim());
         setUserRole(role); // Set role early so it's available everywhere
         const hasDepartmentCategories = getDepartmentCategories(department, role) !== null;
 
@@ -1049,6 +1069,8 @@ const Sidebar = () => {
           const moduleAliases = {
             "all rate request": ["rate request"],
             "rate suggestion": ["rate request"],
+            // Backend module name is "Tracker"; allow legacy "Trucker" if ever used
+            tracker: ["trucker"],
           };
           const matchedMenus = menuItems.filter((item) => {
             const match = activeModules.some((mod) => {
@@ -1181,7 +1203,13 @@ const Sidebar = () => {
             
             // Other menus (Dashboard, Companies) - common modules
             // For superadmin, Tracking will be added separately outside departments
-            const commonModules = ["Dashboard", "Tier 1 Leads", "All Rate Request", "Rate Suggestion"];
+            const commonModules = [
+              "Dashboard",
+              "Tracker",
+              "Tier 1 Leads",
+              "All Rate Request",
+              "Rate Suggestion",
+            ];
             const otherMenus = matchedMenus.filter(item => 
               commonModules.includes(item.name)
             );
@@ -1231,7 +1259,7 @@ const Sidebar = () => {
             setReportMenuItems(reports);
             setReportCategories(categorizedReports);
             
-            setFilteredMenuItems(otherMenus);
+            setFilteredMenuItems(pinTrackerAfterDashboard(otherMenus));
             
             console.log(`✅ ${isUniversalUser ? 'Universal user' : 'Superadmin'} setup complete`);
             console.log("📋 Department categories:", Object.keys(departmentCategoriesMap));
@@ -1353,7 +1381,7 @@ const Sidebar = () => {
               if (isSuperAdmin) {
                 console.log("📋 Chat, Email, Dinner Status, and Tracking moved outside departments for superadmin");
               }
-              setFilteredMenuItems(otherMenus);
+              setFilteredMenuItems(pinTrackerAfterDashboard(otherMenus));
             } else {
               // For users without department categories, separate reports from other menus
               // Only include reports that user has permission for
@@ -1381,7 +1409,7 @@ const Sidebar = () => {
               // Show Reports dropdown for any user who has report modules
               setReportMenuItems(reports);
               setReportCategories(categorizedReports);
-              setFilteredMenuItems(otherMenus);
+              setFilteredMenuItems(pinTrackerAfterDashboard(otherMenus));
               setDepartmentMenuItems([]);
               setDepartmentCategories({});
             }
@@ -1521,6 +1549,20 @@ const Sidebar = () => {
     return () => document.removeEventListener("click", handleClickOutside);
   }, []);
 
+  const getMenuLabel = (item) => {
+    if (item?.name === "Tracker") {
+      const dept = String(
+        userAssignedDepartment || userDepartment || "",
+      )
+        .toLowerCase()
+        .trim();
+      if (dept === "cmt") return "CMT Follow up Tracker";
+      if (dept === "sales") return "Sales Follow up Tracker";
+      return "Tracker";
+    }
+    return item?.name ?? "";
+  };
+
   // Show loading state
   if (loading) {
     return (
@@ -1610,7 +1652,7 @@ const Sidebar = () => {
                         <React.Fragment key={idx}>
                           <NavLink
                             to={item.path}
-                            title={!isExpanded ? item.name : ""}
+                            title={!isExpanded ? getMenuLabel(item) : ""}
                             className={({ isActive }) =>
                               `sidebar-item flex items-center ${isExpanded ? "sidebar-item-expanded justify-start" : "justify-center mx-1"} gap-3 p-3 transition-all ${isActive ? "sidebar-item-active text-white" : "text-gray-700"}`
                             }
@@ -1622,12 +1664,12 @@ const Sidebar = () => {
                                 <div className="relative">
                                   <img
                                     src={isActive ? item.whiteIcon || item.icon : item.icon}
-                                    alt={item.name}
+                                    alt={getMenuLabel(item)}
                                     className="w-5 h-5"
                                   />
                                 </div>
                                 <span className={`${isExpanded ? "inline" : "hidden"} font-medium`}>
-                                  {item.name}
+                                  {getMenuLabel(item)}
                                 </span>
                               </>
                             )}
@@ -1712,7 +1754,7 @@ const Sidebar = () => {
                       <NavLink
                         to={item.path}
                         key={idx}
-                        title={!isExpanded ? item.name : ""}
+                        title={!isExpanded ? getMenuLabel(item) : ""}
                         className={({ isActive }) =>
                           `sidebar-item flex items-center ${isExpanded ? "sidebar-item-expanded justify-start" : "justify-center mx-1"} gap-3 p-3 transition-all ${isActive ? "sidebar-item-active text-white" : "text-gray-700"}`
                         }
@@ -1724,7 +1766,7 @@ const Sidebar = () => {
                             <div className="relative">
                               <img
                                 src={isActive ? item.whiteIcon || item.icon : item.icon}
-                                alt={item.name}
+                                alt={getMenuLabel(item)}
                                 className="w-5 h-5"
                               />
                               {/* Red dot badge for Chat when there are unread messages */}
@@ -1739,7 +1781,7 @@ const Sidebar = () => {
                               )}
                             </div>
                             <span className={`${isExpanded ? "inline" : "hidden"} font-medium`}>
-                              {item.name}
+                              {getMenuLabel(item)}
                             </span>
                             {/* Show count badge next to Chat name if expanded and has unread */}
                             {item.name === "Chat" && hasUnread && isExpanded && totalUnreadCount > 0 && (

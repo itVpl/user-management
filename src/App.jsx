@@ -651,6 +651,9 @@ function App() {
           <Route path="load-board" element={<LoadBoard />} />
           <Route path="profile" element={<ProfilePage />} />
           <Route path="DailyTask" element={<CallDashboard />} />
+          {/* Tracker / Trucker: same UI as Call Data (8x8 today's performance + table) */}
+          <Route path="Tracker" element={<UserCallDashboard />} />
+          <Route path="Trucker" element={<UserCallDashboard />} />
           <Route path="call-dashboard" element={<UserCallDashboard />} />
           <Route path="Fleet" element={<FleetTable />} />
           <Route path="analytics" element={<AnalyticsReport />} />
