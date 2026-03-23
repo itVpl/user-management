@@ -2,13 +2,21 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import NotificationToast from './NotificationToast';
+import LoadReminderCenterModal from './LoadReminderCenterModal';
 import sharedSocketService from '../services/sharedSocketService';
+import {
+  isLoadImportantDateReminder,
+  getLoadReminderDedupeKey,
+} from '../utils/loadImportantDateReminder';
 
 const NotificationHandler = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [socket, setSocket] = useState(null);
   const [notifications, setNotifications] = useState([]);
+  const [loadReminderOverlay, setLoadReminderOverlay] = useState(null);
+  const loadReminderOverlayRef = useRef(null);
+  loadReminderOverlayRef.current = loadReminderOverlay;
   const [notificationPermission, setNotificationPermission] = useState('default');
   const [userEmpId, setUserEmpId] = useState(null);
   const notificationIdsRef = useRef(new Set()); // Track shown notifications to prevent duplicates
@@ -229,6 +237,15 @@ const NotificationHandler = () => {
     }
     
     if (notificationData.type === 'load') {
+      if (isLoadImportantDateReminder(notificationData)) {
+        if (currentPath.includes('/DODetails')) {
+          const params = new URLSearchParams(location.search);
+          if (params.get('loadId') === notificationData.loadId) {
+            return false;
+          }
+        }
+        return true;
+      }
       // For load chats, check if viewing this specific load
       return !currentPath.includes(`/load/${notificationData.loadId}`);
     }
@@ -252,7 +269,7 @@ const NotificationHandler = () => {
     
     // Default: show notification if we can't determine
     return true;
-  }, [location.pathname, selectedChatEmpId, selectedChatGroupId]);
+  }, [location.pathname, location.search, selectedChatEmpId, selectedChatGroupId]);
 
   // Handle notification click navigation
   const handleNotificationClick = useCallback((notificationData) => {
@@ -279,9 +296,11 @@ const NotificationHandler = () => {
         break;
         
       case 'load':
-        // Navigate to load chat - adjust route based on your app structure
+        if (isLoadImportantDateReminder(notificationData) && notificationData.loadId) {
+          navigate(`/DODetails?loadId=${encodeURIComponent(notificationData.loadId)}`);
+          break;
+        }
         navigate('/Chat');
-        // Dispatch a custom event that Chat component can listen to
         window.dispatchEvent(new CustomEvent('openLoadChat', {
           detail: { loadId: notificationData.loadId }
         }));
@@ -482,40 +501,46 @@ const NotificationHandler = () => {
         return;
       }
 
+      const isReminder = isLoadImportantDateReminder(notificationData);
       // CRITICAL: Prevent duplicate processing - check if we've already processed this notification
-      // Use messageId if available, otherwise create a composite key
-      const notificationKey = notificationData.messageId || 
-                             `${notificationData.from || 'unknown'}-${notificationData.timestamp || Date.now()}-${notificationData.type || 'default'}`;
-      
+      const notificationKey =
+        notificationData.messageId ||
+        (isReminder
+          ? getLoadReminderDedupeKey(notificationData)
+          : `${notificationData.from || 'unknown'}-${notificationData.timestamp || Date.now()}-${notificationData.type || 'default'}`);
+
       if (notificationProcessedRef.current.has(notificationKey)) {
         console.log('⚠️ Duplicate notification detected, ignoring:', notificationKey);
         console.log('📦 Notification data:', notificationData);
         return;
       }
-      
+
       console.log('✅ Processing new notification:', notificationKey);
       console.log('📦 Full notification data:', notificationData);
-      
-      // Mark as processed
+
       notificationProcessedRef.current.add(notificationKey);
-      
-      // Clean up old notification keys after 30 seconds to prevent memory leak (reduced from 60s for faster cleanup)
+
       setTimeout(() => {
         notificationProcessedRef.current.delete(notificationKey);
       }, 30000);
 
-      // Show browser notification (uses latest callback)
-      showBrowserNotification(notificationData);
+      // Important-date reminders: same socket `notification` event (incl. deliverPendingNotifications replay)
+      if (isReminder) {
+        showBrowserNotification(notificationData);
+        if (shouldShowNotification(notificationData)) {
+          playNotificationSound();
+        }
+        setLoadReminderOverlay(notificationData);
+        return;
+      }
 
-      // Show in-app notification (uses latest callback)
+      showBrowserNotification(notificationData);
       showInAppNotification(notificationData);
 
-      // Play sound (only if not viewing that chat)
       if (shouldShowNotification(notificationData)) {
         playNotificationSound();
       }
 
-      // Update unread count
       updateUnreadCount(notificationData);
     };
 
@@ -807,8 +832,23 @@ const NotificationHandler = () => {
     );
   }, []);
 
+  const confirmYesAndOpenDoDetails = useCallback(() => {
+    const loadId = loadReminderOverlayRef.current?.loadId;
+    if (loadId) {
+      navigate(`/DODetails?loadId=${encodeURIComponent(loadId)}`);
+    }
+    setLoadReminderOverlay(null);
+  }, [navigate]);
+
   return (
     <>
+      {loadReminderOverlay && (
+        <LoadReminderCenterModal
+          notification={loadReminderOverlay}
+          onConfirmYes={confirmYesAndOpenDoDetails}
+        />
+      )}
+
       {/* In-app notification toasts */}
       <div 
         style={{ 

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { FaBox, FaSearch, FaFilePdf, FaEye, FaTimes, FaTrash, FaUpload } from 'react-icons/fa';
 import { FaDownload } from 'react-icons/fa';
@@ -48,6 +49,21 @@ const getFileName = (url = '') => {
   try { return decodeURIComponent(url.split('/').pop() || 'document'); } catch { return 'document'; }
 };
 const isImage = (url = '') => /\.(png|jpe?g|webp|gif)$/i.test(url);
+
+/** Match a DO row to the load MongoDB id (loadReference / load). */
+function findOrderByLoadMongoId(orders, loadId) {
+  if (!loadId || !Array.isArray(orders)) return null;
+  const target = String(loadId);
+  for (const o of orders) {
+    const raw = o?.raw || {};
+    const lr = raw.loadReference || {};
+    const ids = [lr._id, lr.loadId, lr.id, raw.load?._id, raw.loadId]
+      .filter(Boolean)
+      .map(String);
+    if (ids.includes(target)) return o;
+  }
+  return null;
+}
 
 /* ====================== MS/Fluent theme tokens (COLORS ONLY) ====================== */
 const MS = {
@@ -3656,6 +3672,8 @@ export default function DODetails({ overrideEmpId }) {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 9;
 
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const resolvedEmpId =
     overrideEmpId ||
     localStorage.getItem('empId') ||
@@ -3898,6 +3916,42 @@ export default function DODetails({ overrideEmpId }) {
   const currentOrders = currentData.slice(startIndex, endIndex);
 
   useEffect(() => { setCurrentPage(1); }, [searchTerm, activeTab]);
+
+  useEffect(() => {
+    const loadId = searchParams.get('loadId');
+    if (!loadId || loading) return;
+    if (!orders.length) return;
+
+    const match = findOrderByLoadMongoId(orders, loadId);
+    if (!match) {
+      alertify.warning('No delivery order found for this load yet.');
+      setSearchParams({}, { replace: true });
+      return;
+    }
+
+    setActiveTab('assign-do');
+    setSearchTerm('');
+
+    const term = '';
+    const base = orders.filter((o) =>
+      o.loadNo?.toLowerCase().includes(term) ||
+      o.billTo?.toLowerCase().includes(term) ||
+      o.dispatcherName?.toLowerCase().includes(term) ||
+      o.workOrderNo?.toLowerCase().includes(term) ||
+      o.carrierName?.toLowerCase().includes(term) ||
+      o.shipperName?.toLowerCase().includes(term) ||
+      o.containerNo?.toLowerCase().includes(term) ||
+      o.doId?.toLowerCase().includes(term)
+    );
+    const sorted = base.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+    const idx = sorted.findIndex((o) => o.id === match.id);
+    if (idx >= 0) {
+      setCurrentPage(Math.floor(idx / itemsPerPage) + 1);
+    }
+
+    setViewingOrder(match);
+    setSearchParams({}, { replace: true });
+  }, [orders, loading, searchParams, setSearchParams, itemsPerPage]);
 
   const handlePageChange = (page) => { if (page >= 1 && page <= totalPages) setCurrentPage(page); };
 
