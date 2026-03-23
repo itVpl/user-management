@@ -1011,7 +1011,7 @@ const CallDataReports = () => {
                       </div>
                       <div>
                         <button
-                          className="h-10 w-full rounded-lg border border-blue-500 bg-white px-3 text-blue-600 hover:bg-blue-50"
+                          className="h-10 w-full rounded-lg border border-blue-500 bg-white px-3 text-blue-700 hover:bg-blue-500 hover:text-white cursor-pointer"
                           onClick={() => setFollowUpModal({ open: true, callId: record.callId })}
                         >
                           View/Edit
@@ -1021,7 +1021,7 @@ const CallDataReports = () => {
                         <button
                           onClick={() => saveRow(record)}
                           disabled={!!savingRows[record.callId]}
-                          className="h-10 w-full rounded-lg border border-emerald-500 bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="h-10 w-full rounded-lg border border-emerald-500 bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                         >
                           {savingRows[record.callId] ? "Saving..." : "Save"}
                         </button>
@@ -1105,34 +1105,76 @@ const CallDataReports = () => {
       )}
 
       {followUpModal.open && activeRecord && (
-        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-2xl rounded-xl shadow-xl">
-            <div className="p-4 border-b flex items-center justify-between">
-              <h3 className="font-semibold text-lg">Follow-up Details - {activeRecord.callId}</h3>
-              <button onClick={() => setFollowUpModal({ open: false, callId: null })} className="text-gray-500 hover:text-gray-800">
-                Close
-              </button>
-            </div>
-            <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-              {Object.keys(EMPTY_DETAILS).map((key) => {
-                const current = mergeDraft(activeRecord)?.followUpDetails?.[key] || "";
-                return (
-                  <input
-                    key={key}
-                    value={current}
-                    placeholder={key}
-                    onChange={(e) => updateDraftDetails(activeRecord.callId, key, e.target.value)}
-                    className="px-3 py-2 border border-gray-300 rounded-lg"
-                  />
-                );
-              })}
-            </div>
-            <div className="p-4 border-t flex justify-end gap-2">
+        <div className="fixed inset-0 bg-black/35 backdrop-blur-[1px] z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-100 w-full max-w-4xl rounded-2xl shadow-2xl border border-slate-300 overflow-hidden">
+            <div className="px-6 py-5 bg-blue-600 flex items-start justify-between">
+              <div>
+                <h3 className="font-semibold text-3xl text-white leading-none">Follow-up Details</h3>
+                <p className="text-blue-100 mt-1">Call ID: {activeRecord.callId}</p>
+              </div>
               <button
                 onClick={() => setFollowUpModal({ open: false, callId: null })}
-                className="px-4 py-2 border border-gray-300 rounded-lg"
+                className="h-10 w-10 rounded-xl bg-white/15 text-white border border-white/35 hover:bg-white/25 text-xl leading-none cursor-pointer"
               >
-                Done
+                ×
+              </button>
+            </div>
+            <div className="p-6 bg-slate-100 space-y-5">
+              <div className="rounded-2xl border border-blue-200 bg-blue-100/60 p-4">
+                <h4 className="text-blue-700 font-semibold mb-3">Basic Information</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {["customerName", "emailAddress", "address", "contactPerson"].map((key) => {
+                    const current = mergeDraft(activeRecord)?.followUpDetails?.[key] || "";
+                    const placeholder = key
+                      .replace(/([A-Z])/g, " $1")
+                      .replace(/^./, (c) => c.toUpperCase());
+                    return (
+                      <input
+                        key={key}
+                        value={current}
+                        placeholder={placeholder}
+                        onChange={(e) => updateDraftDetails(activeRecord.callId, key, e.target.value)}
+                        className="h-12 px-4 border border-blue-200 rounded-xl bg-slate-50 text-slate-700 placeholder:text-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="rounded-2xl border border-violet-200 bg-violet-100/60 p-4">
+                <h4 className="text-violet-700 font-semibold mb-3">Notes</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {Object.keys(EMPTY_DETAILS)
+                    .filter((key) => !["customerName", "emailAddress", "address", "contactPerson"].includes(key))
+                    .map((key) => {
+                      const current = mergeDraft(activeRecord)?.followUpDetails?.[key] || "";
+                      const placeholder = key
+                        .replace(/([A-Z])/g, " $1")
+                        .replace(/^./, (c) => c.toUpperCase());
+                      return (
+                        <input
+                          key={key}
+                          value={current}
+                          placeholder={placeholder}
+                          onChange={(e) => updateDraftDetails(activeRecord.callId, key, e.target.value)}
+                          className="h-12 px-4 border border-violet-200 rounded-xl bg-slate-50 text-slate-700 placeholder:text-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                        />
+                      );
+                    })}
+                </div>
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-slate-300 bg-slate-200/60 flex justify-end gap-3">
+              <button
+                onClick={() => setFollowUpModal({ open: false, callId: null })}
+                className="cursor-pointer h-11 px-6 rounded-xl border border-slate-300 text-slate-800 font-semibold hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => setFollowUpModal({ open: false, callId: null })}
+                className="cursor-pointer h-11 px-7 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700"
+              >
+                Save
               </button>
             </div>
           </div>
