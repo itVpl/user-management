@@ -44,9 +44,12 @@ const CallDataReports = () => {
       ...getTodayRange(),
       callerName: "",
       category: "",
+      mobileNo: "",
       page: 1,
       limit: 10,
     },
+    /** Echoed from GET /call-records/report `filters` (callerName, calleeName, mobileNo, resolvedEmployee, etc.) */
+    reportFilters: null,
     categoryOptions: [],
     summary: null,
     employeeSummary: [],
@@ -169,6 +172,11 @@ const CallDataReports = () => {
         if (filters.to) params.set("to", filters.to);
         if (filters.callerName?.trim()) params.set("callerName", filters.callerName.trim());
         if (filters.category?.trim()) params.set("category", filters.category.trim());
+        const mobile = String(filters.mobileNo || "").trim();
+        if (mobile) {
+          params.set("mobileNo", mobile);
+          params.set("mobile", mobile);
+        }
         params.set("pageSize", String(requestedLimit));
         params.set("page", String(requestedPage));
         params.set("limit", String(requestedLimit));
@@ -181,6 +189,7 @@ const CallDataReports = () => {
           const reportRes = await axios.get(`${REPORT_BASE}/call-records/report?${params.toString()}`, getAuthConfig());
           return reportRes?.data || {};
         } catch (primaryErr) {
+          if (primaryErr?.response?.status === 404) throw primaryErr;
           console.warn("Primary report API failed, trying filter API:", primaryErr);
           const filterRes = await axios.get(`${REPORT_BASE}/call-records/filter?${params.toString()}`, getAuthConfig());
           return filterRes?.data || {};
@@ -275,6 +284,7 @@ const CallDataReports = () => {
           page,
           limit,
         },
+        reportFilters: firstPayload.filters ?? null,
         summary: firstPayload.summary || computedSummary,
         employeeSummary: Array.isArray(firstPayload.employeeSummary) && firstPayload.employeeSummary.length
           ? firstPayload.employeeSummary
@@ -286,6 +296,22 @@ const CallDataReports = () => {
       setRowErrors({});
     } catch (error) {
       console.error("Call report fetch failed:", error);
+      const status = error?.response?.status;
+      const apiMessage = error?.response?.data?.message;
+      if (status === 404) {
+        toast.error(apiMessage || "No employee found for this mobile number");
+        setState((prev) => ({
+          ...prev,
+          loading: false,
+          filters,
+          reportFilters: null,
+          records: [],
+          employeeSummary: [],
+          summary: null,
+          error: null,
+        }));
+        return;
+      }
       setState((prev) => ({
         ...prev,
         loading: false,
@@ -358,7 +384,7 @@ const CallDataReports = () => {
   };
 
   const handleReset = async () => {
-    const defaults = { ...getTodayRange(), callerName: "", category: "", page: 1, limit: 10 };
+    const defaults = { ...getTodayRange(), callerName: "", category: "", mobileNo: "", page: 1, limit: 10 };
     setState((prev) => ({ ...prev, filters: defaults }));
     await fetchReport(defaults);
   };
@@ -447,9 +473,17 @@ const CallDataReports = () => {
         to: state.filters.to,
         callerFilter: state.filters.callerName,
         categoryFilter: state.filters.category,
+        mobileNoFilter: state.filters.mobileNo || "",
+        resolvedEmployee: state.reportFilters?.resolvedEmployee
+          ? JSON.stringify(state.reportFilters.resolvedEmployee)
+          : "",
         callId: merged.callId || "",
         callerName: merged.callerName || "",
         calleeName: merged.calleeName || "",
+        empId: merged.employee?.empId || "",
+        employeeName: merged.employee?.employeeName || "",
+        aliasName: merged.employee?.aliasName || "",
+        employeeMobileNo: merged.employee?.mobileNo || "",
         startTime: merged.startTime || "",
         direction: merged.direction || "",
         answered: merged.answered || "",
@@ -558,7 +592,10 @@ const CallDataReports = () => {
     : [];
 
   return (
-    <div className="p-6 max-w-[1700px] mx-auto space-y-6">
+    <div
+      className="p-6 max-w-[1700px] mx-auto space-y-6 relative min-h-[280px]"
+      aria-busy={state.loading}
+    >
       <style>{`
         .call-report-scroll {
           overflow-x: scroll !important;
@@ -613,21 +650,25 @@ const CallDataReports = () => {
             type="date"
             value={state.filters.from}
             onChange={(e) => updateFilter("from", e.target.value)}
-            className="w-[240px] shrink-0 px-3 py-2 border border-gray-300 rounded-lg cursor-pointer"
+            disabled={state.loading}
+            className="w-[240px] shrink-0 px-3 py-2 border border-gray-300 rounded-lg cursor-pointer disabled:opacity-50 disabled:cursor-wait"
           />
           <input
             type="date"
             value={state.filters.to}
             onChange={(e) => updateFilter("to", e.target.value)}
-            className="w-[240px] shrink-0 px-3 py-2 border border-gray-300 rounded-lg cursor-pointer"
+            disabled={state.loading}
+            className="w-[240px] shrink-0 px-3 py-2 border border-gray-300 rounded-lg cursor-pointer disabled:opacity-50 disabled:cursor-wait"
           />
           <div className={`relative w-[250px] shrink-0 ${callerDropdownOpen ? "z-40" : "z-10"}`} ref={callerDropdownRef}>
             <button
               type="button"
               onClick={() => {
+                if (state.loading) return;
                 setCallerDropdownOpen((prev) => !prev);
               }}
-              className="h-[42px] w-full px-3 border border-gray-300 rounded-lg text-left bg-white flex items-center justify-between cursor-pointer"
+              disabled={state.loading}
+              className="h-[42px] w-full px-3 border border-gray-300 rounded-lg text-left bg-white flex items-center justify-between cursor-pointer disabled:opacity-50 disabled:cursor-wait"
             >
               <span className="truncate text-gray-800">{state.filters.callerName || "All caller aliases"}</span>
               <span className="text-gray-500">▾</span>
@@ -683,9 +724,11 @@ const CallDataReports = () => {
             <button
               type="button"
               onClick={() => {
+                if (state.loading) return;
                 setCategoryDropdownOpen((prev) => !prev);
               }}
-              className="h-[42px] w-full px-3 border border-gray-300 rounded-lg text-left bg-white flex items-center justify-between cursor-pointer"
+              disabled={state.loading}
+              className="h-[42px] w-full px-3 border border-gray-300 rounded-lg text-left bg-white flex items-center justify-between cursor-pointer disabled:opacity-50 disabled:cursor-wait"
             >
               <span className="truncate text-gray-800">{state.filters.category || "All categories"}</span>
               <span className="text-gray-500">▾</span>
@@ -726,6 +769,41 @@ const CallDataReports = () => {
               </div>
             )}
           </div>
+          <input
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel"
+            placeholder="Employee mobile (optional)"
+            title="Resolves employee from Employee collection; filters 8x8 calls by alias/name"
+            value={state.filters.mobileNo}
+            disabled={state.loading}
+            onChange={(e) =>
+              setState((prev) => ({
+                ...prev,
+                filters: { ...prev.filters, mobileNo: e.target.value },
+              }))
+            }
+            onBlur={(e) => {
+              const mobile = e.target.value.trim();
+              setState((prev) => {
+                const next = { ...prev.filters, mobileNo: mobile, page: 1 };
+                fetchReport(next);
+                return { ...prev, filters: next };
+              });
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                const mobile = e.currentTarget.value.trim();
+                setState((prev) => {
+                  const next = { ...prev.filters, mobileNo: mobile, page: 1 };
+                  fetchReport(next);
+                  return { ...prev, filters: next };
+                });
+              }
+            }}
+            className="w-[240px] shrink-0 px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:opacity-50 disabled:cursor-wait"
+          />
           <div className="flex gap-2 shrink-0">
             {/* <select
               value={state.filters.limit}
@@ -742,24 +820,52 @@ const CallDataReports = () => {
             >
               <option value={10}>10 / page</option>
             </select> */}
-            <button onClick={handleReset} className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer">
+            <button
+              type="button"
+              onClick={handleReset}
+              disabled={state.loading}
+              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer disabled:opacity-50 disabled:cursor-wait"
+            >
               Reset
             </button>
           </div>
-          <button onClick={exportRows} className="ml-auto shrink-0 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 cursor-pointer">
+          <button
+            type="button"
+            onClick={exportRows}
+            disabled={state.loading}
+            className="ml-auto shrink-0 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 cursor-pointer disabled:opacity-50 disabled:cursor-wait"
+          >
             Export
           </button>
         </div>
+        {state.reportFilters?.resolvedEmployee && (
+          <p className="mt-3 text-sm text-gray-600">
+            <span className="font-medium text-gray-800">Resolved employee:</span>{" "}
+            {typeof state.reportFilters.resolvedEmployee === "object"
+              ? [
+                  state.reportFilters.resolvedEmployee.employeeName ||
+                    state.reportFilters.resolvedEmployee.aliasName,
+                  state.reportFilters.resolvedEmployee.empId,
+                  state.reportFilters.resolvedEmployee.mobileNo,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")
+              : String(state.reportFilters.resolvedEmployee)}
+          </p>
+        )}
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-200 p-3">
         <div className="flex flex-wrap gap-3">
           <button
+            type="button"
             onClick={() => {
+              if (state.loading) return;
               setActiveSectionTab("employeeSummary");
               setState((prev) => ({ ...prev, filters: { ...prev.filters, page: 1 } }));
             }}
-            className={`h-11 px-5 rounded-xl border font-semibold transition-colors cursor-pointer ${
+            disabled={state.loading}
+            className={`h-11 px-5 rounded-xl border font-semibold transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-wait ${
               activeSectionTab === "employeeSummary"
                 ? "bg-amber-500 border-amber-500 text-white"
                 : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
@@ -768,11 +874,14 @@ const CallDataReports = () => {
             Employee Summary
           </button>
           <button
+            type="button"
             onClick={() => {
+              if (state.loading) return;
               setActiveSectionTab("detailedCalls");
               setState((prev) => ({ ...prev, filters: { ...prev.filters, page: 1 } }));
             }}
-            className={`h-11 px-5 rounded-xl border font-semibold transition-colors cursor-pointer ${
+            disabled={state.loading}
+            className={`h-11 px-5 rounded-xl border font-semibold transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-wait ${
               activeSectionTab === "detailedCalls"
                 ? "bg-amber-500 border-amber-500 text-white"
                 : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
@@ -808,13 +917,20 @@ const CallDataReports = () => {
                     key={`${emp.employeeName}-${index}`}
                     className="mt-3 grid grid-cols-[2fr_1fr_1fr_1fr_1.2fr_1.2fr_1fr] gap-4 items-center rounded-xl border border-gray-200 bg-white px-4 py-4 font-medium text-gray-900"
                   >
-                    <div className="truncate">{emp.employeeName || "-"}</div>
-                    <div>{emp.totalCalls || 0}</div>
-                    <div>{emp.answeredCalls || 0}</div>
-                    <div>{emp.missedCalls || 0}</div>
-                    <div>{emp.totalTalkTimeMinutes || 0}</div>
-                    <div>{emp.categorizedCalls || 0}</div>
-                    <div>{emp.followUpCount || 0}</div>
+                    <div className="min-w-0">
+                      <div className="truncate">{emp.employeeName || "-"}</div>
+                      {(emp.empId || emp.mobileNo) && (
+                        <div className="text-sm text-gray-600 truncate mt-0.5 tabular-nums font-medium">
+                          {[emp.empId, emp.mobileNo].filter(Boolean).join(" · ")}
+                        </div>
+                      )}
+                    </div>
+                    <div className="tabular-nums text-base">{emp.totalCalls || 0}</div>
+                    <div className="tabular-nums text-base">{emp.answeredCalls || 0}</div>
+                    <div className="tabular-nums text-base">{emp.missedCalls || 0}</div>
+                    <div className="tabular-nums text-lg font-semibold text-gray-900">{emp.totalTalkTimeMinutes || 0}</div>
+                    <div className="tabular-nums text-base">{emp.categorizedCalls || 0}</div>
+                    <div className="tabular-nums text-base">{emp.followUpCount || 0}</div>
                   </div>
                 ))
               )}
@@ -852,12 +968,27 @@ const CallDataReports = () => {
                       key={`${record.callId}-${index}`}
                       className="mt-3 grid grid-cols-[1.5fr_1.2fr_1.2fr_1fr_1fr_1fr_1.3fr_0.8fr_1fr_1fr] gap-4 items-center rounded-xl border border-gray-200 bg-white px-4 py-4 font-medium text-gray-900"
                     >
-                      <div>{record.startTime ? new Date(record.startTime).toLocaleString() : "-"}</div>
-                      <div className="truncate">{record.callId || "-"}</div>
-                      <div className="truncate">{record.callerName || "-"}</div>
-                      <div>{record.direction || "-"}</div>
-                      <div>{record.answered || "-"}</div>
-                      <div>{toMinutes(record.talkTimeMS)}</div>
+                      <div className="text-base">{record.startTime ? new Date(record.startTime).toLocaleString() : "-"}</div>
+                      <div className="truncate tabular-nums text-base font-medium text-gray-900">{record.callId || "-"}</div>
+                      <div className="min-w-0">
+                        <div className="truncate text-base font-semibold">{record.callerName || "-"}</div>
+                        {record.employee && (
+                          <div className="text-sm text-gray-600 truncate mt-1 tabular-nums font-medium leading-snug">
+                            {[
+                              record.employee.empId,
+                              record.employee.aliasName && record.employee.aliasName !== record.callerName
+                                ? record.employee.aliasName
+                                : null,
+                              record.employee.mobileNo,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-base">{record.direction || "-"}</div>
+                      <div className="text-base">{record.answered || "-"}</div>
+                      <div className="text-lg font-semibold tabular-nums text-gray-900">{toMinutes(record.talkTimeMS)}</div>
                       <div>
                         <select
                           value={merged.category || ""}
@@ -957,8 +1088,21 @@ const CallDataReports = () => {
         </div>
       </div>
 
-      {state.loading && <div className="text-center text-gray-600 py-4">Loading...</div>}
-      {state.error && <div className="text-red-600 text-sm">{state.error}</div>}
+      {state.error && !state.loading && <div className="text-red-600 text-sm">{state.error}</div>}
+
+      {state.loading && (
+        <div
+          className="absolute inset-0 z-40 flex items-center justify-center rounded-xl bg-white/75 backdrop-blur-[2px]"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="flex flex-col items-center gap-4 rounded-2xl border border-gray-200 bg-white px-10 py-8 shadow-xl">
+            <div className="h-12 w-12 animate-spin rounded-full border-4 border-indigo-100 border-t-indigo-600" />
+            <p className="text-base font-semibold text-gray-800">Loading report…</p>
+            <p className="text-sm text-gray-500">Applying filters</p>
+          </div>
+        </div>
+      )}
 
       {followUpModal.open && activeRecord && (
         <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4">

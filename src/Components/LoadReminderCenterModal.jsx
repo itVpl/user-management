@@ -1,29 +1,12 @@
-import React, { useEffect } from "react";
-import { Bell, CalendarClock, X } from "lucide-react";
+import React, { useState } from "react";
+import { Bell, CalendarClock } from "lucide-react";
 
 /**
- * Center-screen overlay for important-date load reminders (socket `notification`).
+ * Center-screen overlay for important-date load reminders.
+ * User must confirm they took updates (Yes) to open DO Details; choosing No cannot dismiss the dialog.
  */
-export default function LoadReminderCenterModal({
-  notification,
-  onClose,
-  onViewLoad,
-  autoCloseMs = 12000,
-}) {
-  useEffect(() => {
-    if (!notification) return;
-    const t = setTimeout(onClose, autoCloseMs);
-    return () => clearTimeout(t);
-  }, [notification, onClose, autoCloseMs]);
-
-  useEffect(() => {
-    if (!notification) return;
-    const onKey = (e) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [notification, onClose]);
+export default function LoadReminderCenterModal({ notification, onConfirmYes }) {
+  const [noAcknowledged, setNoAcknowledged] = useState(false);
 
   if (!notification) return null;
 
@@ -37,24 +20,14 @@ export default function LoadReminderCenterModal({
       aria-modal="true"
       aria-labelledby="load-reminder-title"
     >
-      <div
-        className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm transition-opacity"
-        onClick={onClose}
-        aria-hidden
-      />
+      {/* Backdrop: not clickable — user cannot dismiss without choosing Yes */}
+      <div className="absolute inset-0 bg-slate-900/55 backdrop-blur-sm" aria-hidden />
+
       <div className="relative w-full max-w-md animate-fade-in">
         <div className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-2xl shadow-slate-900/20 ring-1 ring-slate-900/5">
           <div className="h-1.5 bg-gradient-to-r from-amber-400 via-amber-500 to-orange-500" />
-          <button
-            type="button"
-            onClick={onClose}
-            className="absolute right-3 top-[calc(0.375rem+2px)] rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
-            aria-label="Dismiss"
-          >
-            <X className="h-5 w-5" />
-          </button>
 
-          <div className="flex gap-4 p-6 pr-12 pt-5">
+          <div className="flex gap-4 p-6 pt-5">
             <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50 text-amber-600 shadow-inner ring-1 ring-amber-100/80">
               <CalendarClock className="h-7 w-7" strokeWidth={1.75} />
             </div>
@@ -72,23 +45,43 @@ export default function LoadReminderCenterModal({
                 {title}
               </h2>
               <p className="mt-3 text-sm leading-relaxed text-slate-600">{body}</p>
+
+              <div className="mt-5 rounded-xl border border-amber-100 bg-amber-50/80 px-4 py-3">
+                <p className="text-sm font-semibold text-slate-900">
+                  Did you take any updates on this load?
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-slate-600">
+                  Choose <span className="font-medium text-slate-800">Yes</span> only after you
+                  have completed your updates — you will be taken to DO Details with this load
+                  opened. If you have not updated yet, choose{" "}
+                  <span className="font-medium text-slate-800">No</span>; this message will stay
+                  here until you confirm with Yes.
+                </p>
+              </div>
+
+              {noAcknowledged && (
+                <p className="mt-3 text-sm font-medium text-amber-800">
+                  Please complete your updates first, then tap &quot;Yes, I have updated&quot; to
+                  continue. This reminder cannot be closed until then.
+                </p>
+              )}
             </div>
           </div>
 
           <div className="flex flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50/90 px-6 py-4 sm:flex-row sm:justify-end sm:gap-3">
             <button
               type="button"
-              onClick={onClose}
-              className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
+              onClick={() => setNoAcknowledged(true)}
+              className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-100"
             >
-              Dismiss
+              No, not yet
             </button>
             <button
               type="button"
-              onClick={onViewLoad}
+              onClick={() => onConfirmYes?.()}
               className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-amber-500/25 transition hover:from-amber-600 hover:to-orange-600"
             >
-              View load
+              Yes, I have updated
             </button>
           </div>
         </div>

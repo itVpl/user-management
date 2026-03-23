@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import axios from "axios";
 import * as XLSX from "xlsx";
 import { Phone, CheckCircle, XCircle, BarChart3, Clock, FileText, Users, MessageSquare, Download, ChevronLeft, ChevronRight, AlertTriangle, X, Info } from "lucide-react";
@@ -77,6 +78,37 @@ const CONVERSION_BADGE = {
   "Open":      "bg-yellow-500 text-white",
 };
 
+/** Stored remark → value for input[type=datetime-local] (supports ISO, legacy text, yyyy-mm-ddThh:mm[:ss]). */
+const toDatetimeLocalValue = (s) => {
+  if (s == null || s === "") return "";
+  const str = String(s).trim();
+  if (!str) return "";
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(str)) {
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(str)) return str.slice(0, 19);
+    return str.slice(0, 16);
+  }
+  const d = new Date(str);
+  if (Number.isNaN(d.getTime())) return "";
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const min = String(d.getMinutes()).padStart(2, "0");
+  const ss = String(d.getSeconds()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}T${hh}:${min}:${ss}`;
+};
+
+const formatNextFollowUpForExport = (remark) => {
+  const localVal = toDatetimeLocalValue(remark);
+  if (!localVal) return remark == null ? "" : String(remark).trim();
+  const [datePart, timePart = "00:00:00"] = localVal.split("T");
+  const [y, mo, da] = datePart.split("-").map(Number);
+  const [hh = 0, mi = 0, se = 0] = timePart.split(":").map((n) => Number(n) || 0);
+  const dt = new Date(y, mo - 1, da, hh, mi, se);
+  if (Number.isNaN(dt.getTime())) return String(remark).trim();
+  return format(dt, "yyyy-MM-dd HH:mm:ss");
+};
+
 const emptyFollowUpDetails = () => ({
   customerName: "",
   emailAddress: "",
@@ -93,7 +125,9 @@ function FollowUpModal({ open, onClose, initialDetails, onSave, saving, modalErr
   useEffect(() => {
     if (open) {
       const d = initialDetails && typeof initialDetails === "object" ? initialDetails : {};
-      setForm({ ...emptyFollowUpDetails(), ...d });
+      const merged = { ...emptyFollowUpDetails(), ...d };
+      merged.remark = toDatetimeLocalValue(merged.remark);
+      setForm(merged);
       setFieldErrors({});
     }
   }, [open, initialDetails]);
@@ -197,8 +231,14 @@ function FollowUpModal({ open, onClose, initialDetails, onSave, saving, modalErr
             <textarea value={form.followUpNotes} onChange={setField("followUpNotes")} rows={3} className={textareaClass} />
           </div>
           <div>
-            <label className={labelClass}>Remark</label>
-            <textarea value={form.remark} onChange={setField("remark")} rows={2} className={textareaClass} />
+            <label className={labelClass}>Next follow up date &amp; time</label>
+            <input
+              type="datetime-local"
+              step="1"
+              value={form.remark}
+              onChange={setField("remark")}
+              className={inputClass}
+            />
           </div>
 
           <div className="flex justify-end gap-3 pt-2">
@@ -224,6 +264,7 @@ function FollowUpModal({ open, onClose, initialDetails, onSave, saving, modalErr
 }
 
 const UserCallDashboard = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [records, setRecords] = useState([]);
   const [selectedDate, setSelectedDate] = useState(() =>
     new Date().toISOString().split("T")[0]
@@ -248,6 +289,9 @@ const UserCallDashboard = () => {
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 12;
+
+  /** Row highlight when opening Call Data from dashboard (?focusCallId=) */
+  const [highlightCallId, setHighlightCallId] = useState(null);
 
   // Notification state
   const [notification, setNotification] = useState({ show: false, message: '', type: 'info' });
@@ -496,7 +540,7 @@ const UserCallDashboard = () => {
     // Prepare data with proper headers
     const headers = [
       "Date", "Called No", "Call Time", "Call Duration", "Call Status", "Conversion Status",
-      "Category", "Follow up", "Customer Name", "Email", "Contact Person", "Address", "Follow-up Notes", "Remark",
+      "Category", "Follow up", "Customer Name", "Email", "Contact Person", "Address", "Follow-up Notes", "Next follow up date & time",
     ];
     const data = records.map(record => {
       const cat = categories[record.callId] || {};
@@ -515,7 +559,7 @@ const UserCallDashboard = () => {
         d.contactPerson ?? "",
         d.address ?? "",
         d.followUpNotes ?? "",
-        d.remark ?? "",
+        formatNextFollowUpForExport(d.remark),
       ];
     });
 
@@ -541,9 +585,59 @@ const UserCallDashboard = () => {
 
   const handlePageChange = (page) => setCurrentPage(page);
 
+  const focusCallIdParam = searchParams.get("focusCallId");
+
   useEffect(() => {
     setCurrentPage(1);
   }, [selectedDate]);
+
+  /** Deep link from dashboard: /call-dashboard?focusCallId=… */
+  useEffect(() => {
+    const raw = focusCallIdParam;
+    if (!raw || records.length === 0) return;
+
+    const clearParam = () => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete("focusCallId");
+          return next;
+        },
+        { replace: true }
+      );
+    };
+
+    const idx = records.findIndex((r) => String(r.callId) === String(raw));
+    if (idx < 0) {
+      clearParam();
+      setNotification({
+        show: true,
+        message:
+          "This call is not on the selected date. Pick the call’s date above, then use View again from the dashboard.",
+        type: "warning",
+      });
+      setTimeout(() => setNotification({ show: false, message: "", type: "info" }), 6000);
+      return;
+    }
+
+    const page = Math.floor(idx / itemsPerPage) + 1;
+    setCurrentPage(page);
+    setHighlightCallId(raw);
+    clearParam();
+
+    const scrollTimer = setTimeout(() => {
+      const safe = String(raw).replace(/"/g, "");
+      const el = document.querySelector(`tr[data-call-id="${safe}"]`);
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 300);
+
+    const unhighlightTimer = setTimeout(() => setHighlightCallId(null), 6000);
+
+    return () => {
+      clearTimeout(scrollTimer);
+      clearTimeout(unhighlightTimer);
+    };
+  }, [records, focusCallIdParam, setSearchParams, itemsPerPage]);
 
   useEffect(() => {
     const storedUser = sessionStorage.getItem("user");
@@ -734,7 +828,15 @@ const UserCallDashboard = () => {
                   const cat = categories[r.callId] || {};
                   const showFollowUpBtn = cat.category !== "Voice mail";
                   return (
-                    <tr key={r.callId ?? r.date + r.callee + r.callTime} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                    <tr
+                      key={r.callId ?? r.date + r.callee + r.callTime}
+                      data-call-id={r.callId != null ? String(r.callId) : undefined}
+                      className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${
+                        highlightCallId != null && String(highlightCallId) === String(r.callId)
+                          ? "bg-teal-50 ring-2 ring-inset ring-teal-300"
+                          : ""
+                      }`}
+                    >
                       <td className="py-4 px-6 text-gray-800 font-medium">{r.date}</td>
                       <td className="py-4 px-6 text-gray-800">{r.callee}</td>
                       <td className="py-4 px-6 text-gray-800">{r.callTime}</td>

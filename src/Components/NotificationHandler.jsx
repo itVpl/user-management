@@ -238,7 +238,7 @@ const NotificationHandler = () => {
     
     if (notificationData.type === 'load') {
       if (isLoadImportantDateReminder(notificationData)) {
-        if (currentPath.includes('/Loads')) {
+        if (currentPath.includes('/DODetails')) {
           const params = new URLSearchParams(location.search);
           if (params.get('loadId') === notificationData.loadId) {
             return false;
@@ -297,7 +297,7 @@ const NotificationHandler = () => {
         
       case 'load':
         if (isLoadImportantDateReminder(notificationData) && notificationData.loadId) {
-          navigate(`/Loads?loadId=${encodeURIComponent(notificationData.loadId)}`);
+          navigate(`/DODetails?loadId=${encodeURIComponent(notificationData.loadId)}`);
           break;
         }
         navigate('/Chat');
@@ -832,14 +832,10 @@ const NotificationHandler = () => {
     );
   }, []);
 
-  const closeLoadReminderOverlay = useCallback(() => {
-    setLoadReminderOverlay(null);
-  }, []);
-
-  const viewLoadFromReminderOverlay = useCallback(() => {
+  const confirmYesAndOpenDoDetails = useCallback(() => {
     const loadId = loadReminderOverlayRef.current?.loadId;
     if (loadId) {
-      navigate(`/Loads?loadId=${encodeURIComponent(loadId)}`);
+      navigate(`/DODetails?loadId=${encodeURIComponent(loadId)}`);
     }
     setLoadReminderOverlay(null);
   }, [navigate]);
@@ -849,8 +845,7 @@ const NotificationHandler = () => {
       {loadReminderOverlay && (
         <LoadReminderCenterModal
           notification={loadReminderOverlay}
-          onClose={closeLoadReminderOverlay}
-          onViewLoad={viewLoadFromReminderOverlay}
+          onConfirmYes={confirmYesAndOpenDoDetails}
         />
       )}
 
