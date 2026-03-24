@@ -1407,6 +1407,9 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
   const [addDocs, setAddDocs] = useState([]);
   const [addDocsLoading, setAddDocsLoading] = useState(false);
   const [addDocsErr, setAddDocsErr] = useState("");
+  const [accountantImgs, setAccountantImgs] = useState(null);
+  const [accountantImgsLoading, setAccountantImgsLoading] = useState(false);
+  const [accountantImgsErr, setAccountantImgsErr] = useState("");
 
   // Final approval form state
   const [approvalAction, setApprovalAction] = useState("approve"); // "approve" | "reject"
@@ -3002,6 +3005,30 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     }
   };
 
+  // ===== Accountant forwarded images snapshot by DO id =====
+  const fetchAccountantImages = async (doId) => {
+    if (!doId) {
+      setAccountantImgs(null);
+      return;
+    }
+    setAccountantImgsLoading(true);
+    setAccountantImgsErr("");
+    try {
+      const url = `${API_CONFIG.BASE_URL}/api/v1/do/${doId}/accountant-images`;
+      const resp = await axios.get(url, { headers });
+      setAccountantImgs(resp?.data?.data || null);
+    } catch (e) {
+      setAccountantImgsErr(
+        e?.response?.data?.message ||
+          e?.message ||
+          "Failed to load reupload documents",
+      );
+      setAccountantImgs(null);
+    } finally {
+      setAccountantImgsLoading(false);
+    }
+  };
+
   // ===== POST: Accountant approval (Approve) =====
   const postAccountantApproval = async () => {
     if (!selected?._id) {
@@ -4050,6 +4077,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     const shipmentNo = row?.loadReference?.shipmentNumber;
     fetchShipmentImages(shipmentNo);
     fetchAdditionalDocs(row?._id);
+    fetchAccountantImages(row?._id);
   };
 
   // Update selected item when table data changes (to keep modal in sync)
@@ -6862,6 +6890,14 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                               ...(shipImgs.images.eirTickets || []),
                               ...(shipImgs.images.containerImages || []),
                               ...(shipImgs.images.sealImages || []),
+                              ...((selected?.loadReference?.origins || [])
+                                .flatMap((origin) => origin?.pickupImages || [])
+                                .map((item) =>
+                                  typeof item === "string"
+                                    ? item
+                                    : item?.imageUrl || item?.url || "",
+                                )
+                                .filter(Boolean)),
                             ].map((img, i) => (
                               <a
                                 key={i}
@@ -6910,6 +6946,14 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                 ?.dropLocationImages || []),
                               ...(shipImgs.images.dropLocationImages
                                 ?.emptyTruckImages || []),
+                              ...((selected?.loadReference?.destinations || [])
+                                .flatMap((dest) => dest?.dropImages || [])
+                                .map((item) =>
+                                  typeof item === "string"
+                                    ? item
+                                    : item?.imageUrl || item?.url || "",
+                                )
+                                .filter(Boolean)),
                             ].map((img, i) => (
                               <a
                                 key={i}
@@ -7112,6 +7156,141 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                           );
                         })}
                       </Grid>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Reupload Documents (Forwarded to Accountant) */}
+                <Card variant="outlined">
+                  <Box
+                    sx={{
+                      px: 2,
+                      py: 1,
+                      backgroundColor: alpha("#22c55e", 0.07),
+                    }}
+                  >
+                    <Typography variant="subtitle1" fontWeight={700}>
+                      Reupload Documents
+                    </Typography>
+                  </Box>
+                  <CardContent>
+                    {accountantImgsLoading && (
+                      <Typography variant="body2">
+                        Loading reupload documents...
+                      </Typography>
+                    )}
+                    {accountantImgsErr && (
+                      <Typography variant="body2" color="error">
+                        {accountantImgsErr}
+                      </Typography>
+                    )}
+                    {!accountantImgsLoading &&
+                      !accountantImgsErr &&
+                      (() => {
+                        const fromSnapshot = accountantImgs?.reuploadImages || [];
+                        const fromImagesArray = (accountantImgs?.images || []).filter(
+                          (img) => (img?.sourceType || "").toLowerCase() === "reupload",
+                        );
+                        const docs = [...fromSnapshot, ...fromImagesArray];
+                        if (!docs.length) {
+                          return (
+                            <Typography variant="body2" color="text.secondary">
+                              No reupload documents.
+                            </Typography>
+                          );
+                        }
+                        return (
+                          <Grid container spacing={2}>
+                            {docs.map((doc, idx) => {
+                              const url = doc?.url || doc?.imageUrl || "";
+                              const isImg = isImageUrl(url);
+                              const isPdf = isPdfUrl(url);
+                              if (!url) return null;
+                              return (
+                                <Grid item xs={12} sm={6} md={4} key={doc?._id || doc?.imageId || `${url}-${idx}`}>
+                                  <Paper variant="outlined" sx={{ p: 1.5 }}>
+                                    <Stack
+                                      direction="row"
+                                      spacing={1}
+                                      alignItems="center"
+                                      sx={{ mb: 1 }}
+                                    >
+                                      {isImg ? (
+                                        <ImageIcon fontSize="small" />
+                                      ) : (
+                                        <DescriptionIcon fontSize="small" />
+                                      )}
+                                      <MuiLink
+                                        href={url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        underline="hover"
+                                      >
+                                        {isPdf ? "PDF Document" : isImg ? "Image" : "File"}
+                                      </MuiLink>
+                                      <Chip
+                                        size="small"
+                                        variant="outlined"
+                                        label={isPdf ? "PDF" : isImg ? "Image" : "File"}
+                                        sx={{ ml: "auto" }}
+                                      />
+                                    </Stack>
+
+                                    {isImg && (
+                                      <a href={url} target="_blank" rel="noopener noreferrer">
+                                        <img
+                                          src={url}
+                                          alt="reupload-doc"
+                                          style={{
+                                            width: "100%",
+                                            height: 140,
+                                            objectFit: "cover",
+                                            borderRadius: 6,
+                                            border: "1px solid #eee",
+                                          }}
+                                        />
+                                      </a>
+                                    )}
+
+                                    <Stack spacing={0.25} sx={{ mt: isImg ? 1 : 0 }}>
+                                      <Typography variant="caption" color="text.secondary">
+                                        Uploaded by:{" "}
+                                        {doc?.uploadedBy?.employeeName ||
+                                          accountantImgs?.forwardedBy?.employeeName ||
+                                          "—"}
+                                      </Typography>
+                                      <Typography variant="caption" color="text.secondary">
+                                        At:{" "}
+                                        {fmtDateTime(
+                                          doc?.uploadedAt ||
+                                            accountantImgs?.forwardedAt,
+                                        )}
+                                      </Typography>
+                                    </Stack>
+                                  </Paper>
+                                </Grid>
+                              );
+                            })}
+                          </Grid>
+                        );
+                      })()}
+
+                    {!accountantImgsLoading && !accountantImgsErr && accountantImgs && (
+                      <Stack spacing={0.5} sx={{ mt: 1.5 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          Forwarded At: {fmtDateTime(accountantImgs?.forwardedAt)}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Forwarded By:{" "}
+                          {accountantImgs?.forwardedBy?.employeeName || "—"} (
+                          {accountantImgs?.forwardedBy?.empId || "—"})
+                        </Typography>
+                        {accountantImgs?.remarks ? (
+                          <Typography variant="caption" color="text.secondary">
+                            Remarks: {accountantImgs.remarks}
+                          </Typography>
+                        ) : null}
+                      </Stack>
                     )}
                   </CardContent>
                 </Card>

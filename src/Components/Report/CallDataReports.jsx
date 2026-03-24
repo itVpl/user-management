@@ -37,6 +37,13 @@ const getAuthConfig = () => {
 const toBool = (val) => val === true || val === "true";
 const toMinutes = (ms) => (Number(ms || 0) / 60000).toFixed(2);
 
+/** Normalized receiver line from report row (matches backend: calleeNumber / receiverNumber or callee.phoneNumber). */
+const getCalleeReceiverNumber = (record) =>
+  record?.receiverNumber ??
+  record?.calleeNumber ??
+  record?.callee?.phoneNumber ??
+  null;
+
 const CallDataReports = () => {
   const [state, setState] = useState(() => ({
     loading: false,
@@ -44,11 +51,10 @@ const CallDataReports = () => {
       ...getTodayRange(),
       callerName: "",
       category: "",
-      mobileNo: "",
       page: 1,
       limit: 10,
     },
-    /** Echoed from GET /call-records/report `filters` (callerName, calleeName, mobileNo, resolvedEmployee, etc.) */
+    /** Echoed from GET /call-records/report `filters` (callerName, calleeName, resolvedEmployee, etc.) */
     reportFilters: null,
     categoryOptions: [],
     summary: null,
@@ -172,11 +178,6 @@ const CallDataReports = () => {
         if (filters.to) params.set("to", filters.to);
         if (filters.callerName?.trim()) params.set("callerName", filters.callerName.trim());
         if (filters.category?.trim()) params.set("category", filters.category.trim());
-        const mobile = String(filters.mobileNo || "").trim();
-        if (mobile) {
-          params.set("mobileNo", mobile);
-          params.set("mobile", mobile);
-        }
         params.set("pageSize", String(requestedLimit));
         params.set("page", String(requestedPage));
         params.set("limit", String(requestedLimit));
@@ -384,7 +385,7 @@ const CallDataReports = () => {
   };
 
   const handleReset = async () => {
-    const defaults = { ...getTodayRange(), callerName: "", category: "", mobileNo: "", page: 1, limit: 10 };
+    const defaults = { ...getTodayRange(), callerName: "", category: "", page: 1, limit: 10 };
     setState((prev) => ({ ...prev, filters: defaults }));
     await fetchReport(defaults);
   };
@@ -473,13 +474,13 @@ const CallDataReports = () => {
         to: state.filters.to,
         callerFilter: state.filters.callerName,
         categoryFilter: state.filters.category,
-        mobileNoFilter: state.filters.mobileNo || "",
         resolvedEmployee: state.reportFilters?.resolvedEmployee
           ? JSON.stringify(state.reportFilters.resolvedEmployee)
           : "",
         callId: merged.callId || "",
         callerName: merged.callerName || "",
         calleeName: merged.calleeName || "",
+        receiverNumber: getCalleeReceiverNumber(merged) || "",
         empId: merged.employee?.empId || "",
         employeeName: merged.employee?.employeeName || "",
         aliasName: merged.employee?.aliasName || "",
@@ -769,41 +770,6 @@ const CallDataReports = () => {
               </div>
             )}
           </div>
-          <input
-            type="tel"
-            inputMode="tel"
-            autoComplete="tel"
-            placeholder="Employee mobile (optional)"
-            title="Resolves employee from Employee collection; filters 8x8 calls by alias/name"
-            value={state.filters.mobileNo}
-            disabled={state.loading}
-            onChange={(e) =>
-              setState((prev) => ({
-                ...prev,
-                filters: { ...prev.filters, mobileNo: e.target.value },
-              }))
-            }
-            onBlur={(e) => {
-              const mobile = e.target.value.trim();
-              setState((prev) => {
-                const next = { ...prev.filters, mobileNo: mobile, page: 1 };
-                fetchReport(next);
-                return { ...prev, filters: next };
-              });
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                const mobile = e.currentTarget.value.trim();
-                setState((prev) => {
-                  const next = { ...prev.filters, mobileNo: mobile, page: 1 };
-                  fetchReport(next);
-                  return { ...prev, filters: next };
-                });
-              }
-            }}
-            className="w-[240px] shrink-0 px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:opacity-50 disabled:cursor-wait"
-          />
           <div className="flex gap-2 shrink-0">
             {/* <select
               value={state.filters.limit}
@@ -943,11 +909,12 @@ const CallDataReports = () => {
         <div className="bg-white rounded-2xl border border-gray-200 p-3 space-y-3">
           <div className="px-1 pb-1 font-semibold text-indigo-700">Detailed Calls</div>
           <div className="overflow-x-scroll call-report-scroll pb-1">
-            <div className="min-w-[1650px]">
-              <div className="grid grid-cols-[1.5fr_1.2fr_1.2fr_1fr_1fr_1fr_1.3fr_0.8fr_1fr_1fr] gap-4 items-center rounded-xl border border-gray-200 bg-slate-50 px-4 py-3 text-base font-semibold text-gray-600">
+            <div className="min-w-[1780px]">
+              <div className="grid grid-cols-[1.5fr_1.2fr_1.2fr_1.2fr_1fr_1fr_1fr_1.3fr_0.8fr_1fr_1fr] gap-4 items-center rounded-xl border border-gray-200 bg-slate-50 px-4 py-3 text-base font-semibold text-gray-600">
                 <div>Date/Time</div>
                 <div>Call ID</div>
                 <div>Caller</div>
+                <div>Callee</div>
                 <div>Direction</div>
                 <div>Answered</div>
                 <div>Talk Time (min)</div>
@@ -963,10 +930,14 @@ const CallDataReports = () => {
               ) : (
                 detailedCallsPageRows.map((record, index) => {
                   const merged = mergeDraft(record);
+                  const calleeDisplayName = (
+                    (merged.calleeName || merged.callee?.name || "").trim() || ""
+                  );
+                  const calleeReceiver = getCalleeReceiverNumber(merged);
                   return (
                     <div
                       key={`${record.callId}-${index}`}
-                      className="mt-3 grid grid-cols-[1.5fr_1.2fr_1.2fr_1fr_1fr_1fr_1.3fr_0.8fr_1fr_1fr] gap-4 items-center rounded-xl border border-gray-200 bg-white px-4 py-4 font-medium text-gray-900"
+                      className="mt-3 grid grid-cols-[1.5fr_1.2fr_1.2fr_1.2fr_1fr_1fr_1fr_1.3fr_0.8fr_1fr_1fr] gap-4 items-center rounded-xl border border-gray-200 bg-white px-4 py-4 font-medium text-gray-900"
                     >
                       <div className="text-base">{record.startTime ? new Date(record.startTime).toLocaleString() : "-"}</div>
                       <div className="truncate tabular-nums text-base font-medium text-gray-900">{record.callId || "-"}</div>
@@ -986,20 +957,23 @@ const CallDataReports = () => {
                           </div>
                         )}
                       </div>
+                      <div className="min-w-0">
+                        <div className="truncate text-base font-semibold">
+                          {calleeDisplayName || calleeReceiver || "—"}
+                        </div>
+                        {calleeDisplayName && calleeReceiver ? (
+                          <div className="text-sm text-gray-600 truncate mt-1 tabular-nums font-medium leading-snug">
+                            {calleeReceiver}
+                          </div>
+                        ) : null}
+                      </div>
                       <div className="text-base">{record.direction || "-"}</div>
                       <div className="text-base">{record.answered || "-"}</div>
                       <div className="text-lg font-semibold tabular-nums text-gray-900">{toMinutes(record.talkTimeMS)}</div>
-                      <div>
-                        <select
-                          value={merged.category || ""}
-                          onChange={(e) => updateDraft(record.callId, { category: e.target.value })}
-                          className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-                        >
-                          <option value="">Select</option>
-                          {state.categoryOptions.map((option) => (
-                            <option key={option} value={option}>{option}</option>
-                          ))}
-                        </select>
+                      <div className="min-w-0 text-base text-gray-900">
+                        <span className="block truncate" title={String(merged.category || "").trim() || undefined}>
+                          {String(merged.category || "").trim() || "—"}
+                        </span>
                       </div>
                       <div className="flex items-center">
                         <input
