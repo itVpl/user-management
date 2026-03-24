@@ -781,12 +781,12 @@ const RateRequestReport = () => {
                   <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
                     POSTED BY
                   </th>
-                  <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
-                    DATE
-                  </th>
-                  <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                   <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
                     ASSIGNED CMT
                   </th>
+                  <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                    DATE
+                  </th>  
                   <th className="text-center px-5 py-3 text-gray-700 font-medium text-[15px] last:rounded-r-xl border-y border-gray-200 last:border-r last:border-gray-200">
                     ACTION
                   </th>
