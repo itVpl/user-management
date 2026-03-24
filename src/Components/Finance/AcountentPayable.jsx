@@ -229,6 +229,9 @@ const AcountentPayable = () => {
   const [addDocs, setAddDocs] = useState([]);
   const [addDocsLoading, setAddDocsLoading] = useState(false);
   const [addDocsErr, setAddDocsErr] = useState("");
+  const [accountantImgs, setAccountantImgs] = useState(null);
+  const [accountantImgsLoading, setAccountantImgsLoading] = useState(false);
+  const [accountantImgsErr, setAccountantImgsErr] = useState("");
 
   // Fetch DOs using Redux - smart caching
   useEffect(() => {
@@ -254,11 +257,15 @@ const AcountentPayable = () => {
   const handleDoSelect = async (doId) => {
     if (!doId) {
       setSelectedDoDetails(null);
+      setAccountantImgs(null);
+      setAccountantImgsErr("");
       return;
     }
 
     try {
       setLoadingDetails(true);
+      setAccountantImgs(null);
+      setAccountantImgsErr("");
       const token =
         sessionStorage.getItem("token") || localStorage.getItem("token");
       const headers = { Authorization: `Bearer ${token}` };
@@ -323,6 +330,30 @@ const AcountentPayable = () => {
         } finally {
           setAddDocsLoading(false);
         }
+
+        const doIdForAccountant = order?._id || order?.id;
+        if (doIdForAccountant) {
+          setAccountantImgsLoading(true);
+          setAccountantImgsErr("");
+          try {
+            const accResp = await axios.get(
+              `${API_CONFIG.BASE_URL}/api/v1/do/${doIdForAccountant}/accountant-images`,
+              { headers },
+            );
+            setAccountantImgs(accResp?.data?.data || null);
+          } catch (e) {
+            setAccountantImgsErr(
+              e?.response?.data?.message ||
+                e?.message ||
+                "Failed to load reupload documents",
+            );
+            setAccountantImgs(null);
+          } finally {
+            setAccountantImgsLoading(false);
+          }
+        } else {
+          setAccountantImgs(null);
+        }
       } else {
         alertify.error("Failed to load DO details");
       }
@@ -381,6 +412,8 @@ const AcountentPayable = () => {
       setShowDetailsModal(false);
       setSelectedDoDetails(null);
       setSelectedDoId("");
+      setAccountantImgs(null);
+      setAccountantImgsErr("");
     } catch (error) {
       console.error("Error submitting payment:", error);
       alertify.error("Failed to submit payment");
@@ -779,6 +812,8 @@ const AcountentPayable = () => {
             setShowDetailsModal(false);
             setSelectedDoDetails(null);
             setSelectedDoId("");
+            setAccountantImgs(null);
+            setAccountantImgsErr("");
           }}
         >
           <div
@@ -802,6 +837,8 @@ const AcountentPayable = () => {
                     setShowDetailsModal(false);
                     setSelectedDoDetails(null);
                     setSelectedDoId("");
+                    setAccountantImgs(null);
+                    setAccountantImgsErr("");
                   }}
                   className="text-white hover:text-gray-200 text-2xl font-bold"
                 >
@@ -1348,6 +1385,125 @@ const AcountentPayable = () => {
                   </div>
                 </div>
               )}
+
+              {/* Reupload documents (same API as Accountant Invoices) */}
+              <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl p-6 border border-emerald-200">
+                <div className="flex items-center gap-2 mb-4">
+                  <Paperclip className="text-emerald-600" size={20} />
+                  <h3 className="text-lg font-bold text-gray-800">
+                    Reupload Documents
+                  </h3>
+                </div>
+                {accountantImgsLoading && (
+                  <p className="text-gray-600 text-sm">
+                    Loading reupload documents...
+                  </p>
+                )}
+                {accountantImgsErr && (
+                  <p className="text-red-600 text-sm">{accountantImgsErr}</p>
+                )}
+                {!accountantImgsLoading &&
+                  !accountantImgsErr &&
+                  (() => {
+                    const fromSnapshot = accountantImgs?.reuploadImages || [];
+                    const fromImagesArray = (
+                      accountantImgs?.images || []
+                    ).filter(
+                      (img) =>
+                        (img?.sourceType || "").toLowerCase() === "reupload",
+                    );
+                    const docs = [...fromSnapshot, ...fromImagesArray];
+                    if (!docs.length) {
+                      return (
+                        <p className="text-gray-500 text-sm">
+                          No reupload documents.
+                        </p>
+                      );
+                    }
+                    return (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {docs.map((doc, idx) => {
+                          const url = doc?.url || doc?.imageUrl || "";
+                          const isImg = isImageUrl(url);
+                          if (!url) return null;
+                          return (
+                            <div
+                              key={doc?._id || doc?.imageId || `${url}-${idx}`}
+                              className="bg-white rounded-lg p-3 border border-emerald-200"
+                            >
+                              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                <FileText
+                                  className={
+                                    isImg ? "text-blue-500" : "text-gray-500"
+                                  }
+                                  size={16}
+                                />
+                                <a
+                                  href={url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                                >
+                                  {isPdfUrl(url)
+                                    ? "PDF Document"
+                                    : isImg
+                                      ? "Image"
+                                      : "File"}
+                                </a>
+                              </div>
+                              {isImg && (
+                                <a
+                                  href={url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  <img
+                                    src={url}
+                                    alt="reupload-doc"
+                                    className="w-full h-32 object-cover rounded border border-gray-200"
+                                  />
+                                </a>
+                              )}
+                              <div className="mt-2 text-xs text-gray-500 space-y-0.5">
+                                <p>
+                                  Uploaded by:{" "}
+                                  {doc?.uploadedBy?.employeeName ||
+                                    accountantImgs?.forwardedBy?.employeeName ||
+                                    "—"}
+                                </p>
+                                <p>
+                                  At:{" "}
+                                  {fmtDateTime(
+                                    doc?.uploadedAt ||
+                                      accountantImgs?.forwardedAt,
+                                  )}
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+                {!accountantImgsLoading &&
+                  !accountantImgsErr &&
+                  accountantImgs && (
+                    <div className="mt-3 space-y-1 text-xs text-gray-600 border-t border-emerald-100 pt-3">
+                      <p>
+                        Forwarded At:{" "}
+                        {fmtDateTime(accountantImgs?.forwardedAt)}
+                      </p>
+                      <p>
+                        Forwarded By:{" "}
+                        {accountantImgs?.forwardedBy?.employeeName || "—"} (
+                        {accountantImgs?.forwardedBy?.empId || "—"})
+                      </p>
+                      {accountantImgs?.remarks ? (
+                        <p>Remarks: {accountantImgs.remarks}</p>
+                      ) : null}
+                    </div>
+                  )}
+              </div>
 
               {/* Totals */}
               <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6 border border-green-200">

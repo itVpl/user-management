@@ -10,6 +10,7 @@ import 'alertifyjs/build/css/alertify.css';
 import Logo from '../../assets/LogoFinal.png';
 import IdentificaLogo from '../../assets/identifica_logo.png';
 import MtPoconoLogo from '../../assets/mtPocono.png';
+import AccountantReuploadForAccountant from './AccountantReuploadForAccountant.jsx';
 
 /* ====================== Helpers ====================== */
 const fmtCurrency = (amount) => {
@@ -2746,6 +2747,15 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
               </section>
             );
           })()}
+
+          {!reportView && (
+            <AccountantReuploadForAccountant
+              doMongoId={doMongoId}
+              cmtEmpId={cmtEmpId}
+              accountantImageForward={order?.raw?.accountantImageForward || order?.accountantImageForward}
+              onSuccess={onLoadReferenceUpdate}
+            />
+          )}
 
           {/* ========== Invoice (VIEW) - shown in all views including report view ========== */}
           <section className={`${SOFT.cardBlue} md:col-span-2`}>
