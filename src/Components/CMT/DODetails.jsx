@@ -87,6 +87,16 @@ const SOFT = {
   insetWhite: 'p-3 rounded-xl border bg-white',
 };
 
+const ALLOWED_USA_TIMEZONES = [
+  'America/New_York',
+  'America/Chicago',
+  'America/Denver',
+  'America/Los_Angeles',
+  'America/Anchorage',
+  'Pacific/Honolulu',
+  'America/Phoenix'
+];
+
 /* ====================== Details Modal ====================== */
 function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, reportView = false, onLoadReferenceUpdate }) {
   if (!open || !order) return null;
@@ -238,6 +248,11 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
   const [updatingDates, setUpdatingDates] = useState(false);
   const MAX_IMPORTANT_DATE_ATTACHMENTS = 5;
   const [importantDateAttachments, setImportantDateAttachments] = useState([]); // { id, file, previewUrl }[]
+  const [shipperEmailSchedule, setShipperEmailSchedule] = useState({
+    enabled: false,
+    timeZone: 'America/New_York',
+    sendAtLocal: ''
+  });
 
   // Send Email to Shipper state
   const [emailSubject, setEmailSubject] = useState('');
@@ -274,6 +289,11 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
         readyToReturnDate: getDateValue(raw.readyToReturnDate || raw.loadReference?.readyToReturnDate || apiImportantDates.readyToReturnDate),
         // Only use dlvyDate from importantDates
         deliveryDate: getDateValue(apiImportantDates.dlvyDate)
+      });
+      setShipperEmailSchedule({
+        enabled: false,
+        timeZone: 'America/New_York',
+        sendAtLocal: ''
       });
     }
     // Only run when modal opens/closes, not when order changes
@@ -1556,6 +1576,27 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
     });
   };
 
+  const buildShipperEmailSchedulePayload = () => {
+    if (!shipperEmailSchedule?.enabled) return null;
+
+    const selectedTimeZone = (shipperEmailSchedule.timeZone || '').trim();
+    if (!ALLOWED_USA_TIMEZONES.includes(selectedTimeZone)) return 'INVALID_TIMEZONE';
+
+    const payload = {
+      enabled: true,
+      timeZone: selectedTimeZone
+    };
+
+    const localDateTime = (shipperEmailSchedule.sendAtLocal || '').trim();
+    if (localDateTime) {
+      const localDateTimePattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
+      if (!localDateTimePattern.test(localDateTime)) return 'INVALID_LOCAL_DATETIME';
+      payload.sendAtLocal = localDateTime;
+    }
+
+    return payload;
+  };
+
   /* ---------------- Important Dates: UPDATE ---------------- */
   const updateImportantDates = async () => {
     try {
@@ -1634,6 +1675,13 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
       console.log('Important Dates Payload:', importantDatesPayload);
 
       const hasAttachments = importantDateAttachments.length > 0;
+      const schedulePayload = buildShipperEmailSchedulePayload();
+      if (schedulePayload === 'INVALID_TIMEZONE') {
+        return alertify.error('Please select a valid USA timezone for shipper email scheduling.');
+      }
+      if (schedulePayload === 'INVALID_LOCAL_DATETIME') {
+        return alertify.error('Please provide schedule date/time in YYYY-MM-DDTHH:mm format.');
+      }
       let response;
 
       if (hasAttachments) {
@@ -1644,14 +1692,21 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
           payloadForForm[k] = typeof v === 'string' && v.includes('T') ? v.split('T')[0] : v;
         });
         formData.append('importantDates', JSON.stringify(payloadForForm));
+        if (schedulePayload) {
+          formData.append('shipperEmailSchedule', JSON.stringify(schedulePayload));
+        }
         importantDateAttachments.forEach(({ file }) => formData.append('attachments', file));
         response = await axios.put(url, formData, {
           headers: { Authorization: `Bearer ${token}` }
         });
       } else {
+        const bodyPayload = { importantDates: importantDatesPayload };
+        if (schedulePayload) {
+          bodyPayload.shipperEmailSchedule = schedulePayload;
+        }
         response = await axios.put(
           url,
-          { importantDates: importantDatesPayload },
+          bodyPayload,
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -1663,6 +1718,12 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
 
       if (response?.data?.success) {
         alertify.success(response?.data?.message || 'Important dates updated successfully');
+        const scheduleResult = response?.data?.data?.shipperEmailSchedule;
+        if (scheduleResult?.scheduled) {
+          alertify.success(`Email scheduled for ${scheduleResult.timeZone} (${scheduleResult.scheduledForUtc}).`);
+        } else {
+          alertify.message('Load updated. No shipper email scheduled.');
+        }
         setImportantDateAttachments((prev) => {
           prev.forEach(({ previewUrl }) => { if (previewUrl) URL.revokeObjectURL(previewUrl); });
           return [];
@@ -1674,46 +1735,56 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
           if (updatedData) {
             // Update order.raw with the response data
             if (!order.raw) order.raw = {};
-            
-            // Update importantDates if present in response
-            if (updatedData.importantDates) {
+
+            // Backend often returns importantDates on data.load; merge all known shapes
+            const importantDatesFromResponse = {
+              ...(updatedData.importantDates || {}),
+              ...(updatedData.loadReference?.importantDates || {}),
+              ...(updatedData.load?.importantDates || {})
+            };
+            const hasImportantPatch = Object.keys(importantDatesFromResponse).length > 0;
+
+            if (hasImportantPatch) {
               if (!order.raw.importantDates) order.raw.importantDates = {};
-              order.raw.importantDates = { ...order.raw.importantDates, ...updatedData.importantDates };
-            }
-            
-            // Update loadReference.importantDates if present
-            if (updatedData.loadReference?.importantDates) {
+              order.raw.importantDates = { ...order.raw.importantDates, ...importantDatesFromResponse };
               if (!order.raw.loadReference) order.raw.loadReference = {};
               if (!order.raw.loadReference.importantDates) order.raw.loadReference.importantDates = {};
-              order.raw.loadReference.importantDates = { ...order.raw.loadReference.importantDates, ...updatedData.loadReference.importantDates };
-            }
-            
-            // Get updated importantDates from response (priority: response > existing)
-            const apiImportantDates = updatedData.importantDates || updatedData.loadReference?.importantDates || order.raw.importantDates || order.raw.loadReference?.importantDates || {};
-            
-            // Check if deliveryDate (dlvyDate) was in the payload we sent
-            const wasDeliveryDateInPayload = importantDatesPayload.dlvyDate !== undefined;
-            
-            // Always update all dates from the response
-            setImportantDates(prev => {
-              // For deliveryDate: if it was updated, keep the current state value (user just entered it)
-              // State already has the updated value from the input field onChange handler
-              const updatedDeliveryDate = wasDeliveryDateInPayload 
-                ? prev.deliveryDate  // Keep current state value (what user just entered)
-                : (apiImportantDates.dlvyDate ? getDateValue(apiImportantDates.dlvyDate) : prev.deliveryDate);
-              
-              return {
-                vesselETA: getDateValue(apiImportantDates.vesselDate || apiImportantDates.vesselETA || prev.vesselETA),
-                latfreeDate: getDateValue(apiImportantDates.lastFreeDate || apiImportantDates.latfreeDate || prev.latfreeDate),
-                dischargeDate: getDateValue(apiImportantDates.dischargeDate || prev.dischargeDate),
-                outgateDate: getDateValue(apiImportantDates.outgateDate || prev.outgateDate),
-                emptyDate: getDateValue(apiImportantDates.emptyDate || prev.emptyDate),
-                perDiemFreeDay: getDateValue(apiImportantDates.perDiemFreeDate || apiImportantDates.perDiemFreeDay || prev.perDiemFreeDay),
-                ingateDate: getDateValue(apiImportantDates.ingateDate || prev.ingateDate),
-                readyToReturnDate: getDateValue(apiImportantDates.readyToReturnDate || prev.readyToReturnDate),
-                deliveryDate: updatedDeliveryDate
+              order.raw.loadReference.importantDates = {
+                ...order.raw.loadReference.importantDates,
+                ...importantDatesFromResponse
               };
-            });
+
+              const apiImportantDates =
+                order.raw.importantDates ||
+                order.raw.loadReference?.importantDates ||
+                {};
+
+              const pickImpDate = (rawVal, prev) =>
+                rawVal !== undefined ? getDateValue(rawVal) : prev;
+
+              setImportantDates((prev) => ({
+                vesselETA: pickImpDate(
+                  apiImportantDates.vesselDate ?? apiImportantDates.vesselETA,
+                  prev.vesselETA
+                ),
+                latfreeDate: pickImpDate(
+                  apiImportantDates.lastFreeDate ?? apiImportantDates.latfreeDate,
+                  prev.latfreeDate
+                ),
+                dischargeDate: pickImpDate(apiImportantDates.dischargeDate, prev.dischargeDate),
+                outgateDate: pickImpDate(apiImportantDates.outgateDate, prev.outgateDate),
+                emptyDate: pickImpDate(apiImportantDates.emptyDate, prev.emptyDate),
+                perDiemFreeDay: pickImpDate(
+                  apiImportantDates.perDiemFreeDate ?? apiImportantDates.perDiemFreeDay,
+                  prev.perDiemFreeDay
+                ),
+                ingateDate: pickImpDate(apiImportantDates.ingateDate, prev.ingateDate),
+                readyToReturnDate: pickImpDate(apiImportantDates.readyToReturnDate, prev.readyToReturnDate),
+                deliveryDate: pickImpDate(apiImportantDates.dlvyDate, prev.deliveryDate)
+              }));
+            }
+
+            onLoadReferenceUpdate?.();
           }
         } catch (updateError) {
           console.error('Error updating local state after date update:', updateError);
@@ -3242,6 +3313,50 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
                       </li>
                     ))}
                   </ul>
+                )}
+              </div>
+            )}
+            {!reportView && (
+              <div className="mt-4 rounded-lg border border-gray-200 bg-white p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <label className="text-sm font-medium text-gray-700">Schedule shipper email</label>
+                  <input
+                    type="checkbox"
+                    checked={shipperEmailSchedule.enabled}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setShipperEmailSchedule((prev) => ({
+                        ...prev,
+                        enabled: checked
+                      }));
+                    }}
+                    className="h-4 w-4"
+                  />
+                </div>
+                {shipperEmailSchedule.enabled && (
+                  <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">USA Timezone</label>
+                      <select
+                        value={shipperEmailSchedule.timeZone}
+                        onChange={(e) => setShipperEmailSchedule((prev) => ({ ...prev, timeZone: e.target.value }))}
+                        className="w-full text-sm px-3 py-2 border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        {ALLOWED_USA_TIMEZONES.map((tz) => (
+                          <option key={tz} value={tz}>{tz}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Send At Local (optional)</label>
+                      <input
+                        type="datetime-local"
+                        value={shipperEmailSchedule.sendAtLocal}
+                        onChange={(e) => setShipperEmailSchedule((prev) => ({ ...prev, sendAtLocal: e.target.value }))}
+                        className="w-full text-sm px-3 py-2 border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
                 )}
               </div>
             )}
