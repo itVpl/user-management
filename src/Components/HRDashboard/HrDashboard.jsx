@@ -3,6 +3,7 @@ import axios from 'axios';
 import { MoreHorizontal, User, Settings, Users, Calendar, FileText, Clock, CheckCircle, AlertCircle, TrendingUp, Award } from 'lucide-react';
 import API_CONFIG from '../../config/api.js';
 import UpcomingBirthdays from '../UpcomingBirthdays';
+import TodaysCandidateInterviews from './TodaysCandidateInterviews.jsx';
 
 
 const HRDashboard = () => {
@@ -423,7 +424,14 @@ const HRDashboard = () => {
         {/* <UpcomingBirthdays limit={3} /> */}
       </div>
 
-      
+      <div className="grid lg:grid-cols-2 gap-8 mb-8 items-stretch">
+        <div className="min-w-0">
+          <UpcomingBirthdays limit={3} />
+        </div>
+        <div className="min-w-0">
+          <TodaysCandidateInterviews embedded />
+        </div>
+      </div>
 
       {/* Leave Request Table */}
       <div className="bg-white border border-[#C8C8C8] rounded-[17.59px] p-6 mb-3"
@@ -534,14 +542,6 @@ const HRDashboard = () => {
         </div>
         {totalPages > 1 && <Pagination />}
       </div>
-
-      <div className="grid lg:grid-cols-3 gap-8 mb-8">
-        {/* Upcoming Birthdays */}
-        <div className="lg:col-span-3">
-          <UpcomingBirthdays limit={3} />
-        </div>
-      </div>
-
 
     </div>
   );

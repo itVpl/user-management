@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import axios from "axios";
 import { NavLink, useLocation } from "react-router-dom";
 import {
@@ -560,6 +560,120 @@ const menuItems = [
 ];
 
 /** Keep "Tracker" at top level: immediately after Dashboard (outer sidebar, not inside dept flyout). */
+const BREAK_TYPES = ["Bio break", "Smoking/Tea Break", "Dinner break"]; // POST /api/v1/break/start { breakType }
+
+/** GET /api/v1/break/remaining — daily pool (not per break type). */
+function parseBreakRemainingPayload(payload) {
+  if (!payload || typeof payload !== "object") return null;
+  const root = payload.data !== undefined ? payload.data : payload;
+  if (root.success === false || payload.success === false) return null;
+  const remMin = root.remainingMinutes;
+  const remSec = root.remainingSeconds;
+  if (remMin == null && remSec == null) return null;
+  const remainingSeconds =
+    remSec != null ? Number(remSec) : remMin != null ? Number(remMin) * 60 : null;
+  const remainingMinutes =
+    remMin != null
+      ? Number(remMin)
+      : remainingSeconds != null
+        ? Math.max(0, Math.floor(remainingSeconds / 60))
+        : null;
+  return {
+    remainingMinutes,
+    remainingSeconds,
+    maxLimitMinutes:
+      root.maxLimitMinutes != null ? Number(root.maxLimitMinutes) : null,
+    usedMinutes: root.usedMinutes != null ? Number(root.usedMinutes) : null,
+    dailyLimitReached: !!root.dailyLimitReached,
+    isOnBreak: !!root.isOnBreak,
+    ongoingBreak: root.ongoingBreak ?? null,
+  };
+}
+
+function formatBreakMinutesLeftLabel(parsed) {
+  if (!parsed) return null;
+  if (parsed.dailyLimitReached) return "Limit reached";
+  let m = parsed.remainingMinutes;
+  if ((m == null || Number.isNaN(m)) && parsed.remainingSeconds != null) {
+    m = Math.max(0, Math.ceil(parsed.remainingSeconds / 60));
+  }
+  if (m == null || Number.isNaN(m)) return null;
+  if (m <= 0) return "0 min left";
+  return `${m} min left`;
+}
+
+function firstNonNegativeSeconds(...vals) {
+  for (const v of vals) {
+    if (v != null && v !== "" && !Number.isNaN(Number(v))) {
+      const n = Math.floor(Number(v));
+      if (n >= 0) return n;
+    }
+  }
+  return null;
+}
+
+/** Current break session countdown (seconds), from start/remaining/ongoingBreak payloads. */
+function parseBreakSessionSecondsLeft(payload) {
+  if (!payload || typeof payload !== "object") return null;
+  const root = payload.data !== undefined ? payload.data : payload;
+
+  const endsAtRaw =
+    root.sessionEndsAt ||
+    root.breakEndsAt ||
+    root.endsAt ||
+    (root.ongoingBreak &&
+      typeof root.ongoingBreak === "object" &&
+      root.ongoingBreak !== null &&
+      (root.ongoingBreak.sessionEndsAt ||
+        root.ongoingBreak.breakEndsAt ||
+        root.ongoingBreak.endsAt));
+  if (endsAtRaw) {
+    const t = Date.parse(endsAtRaw);
+    if (!Number.isNaN(t)) {
+      return Math.max(0, Math.floor((t - Date.now()) / 1000));
+    }
+  }
+
+  const ob =
+    root.ongoingBreak && typeof root.ongoingBreak === "object"
+      ? root.ongoingBreak
+      : null;
+  const fromOngoing = firstNonNegativeSeconds(
+    ob?.sessionRemainingSeconds,
+    ob?.remainingSessionSeconds,
+    ob?.remainingSeconds,
+    ob?.secondsRemaining,
+    ob?.sessionSecondsLeft,
+  );
+  if (fromOngoing != null) return fromOngoing;
+
+  const obRemMin = ob?.sessionRemainingMinutes ?? ob?.remainingSessionMinutes;
+  if (obRemMin != null && !Number.isNaN(Number(obRemMin))) {
+    return Math.max(0, Math.floor(Number(obRemMin) * 60));
+  }
+
+  const direct = firstNonNegativeSeconds(
+    root.sessionRemainingSeconds,
+    root.sessionSecondsRemaining,
+    root.breakSessionSecondsRemaining,
+    root.remainingSessionSeconds,
+    root.perSessionRemainingSeconds,
+    root.maxSessionSeconds,
+    root.sessionMaxSeconds,
+  );
+  if (direct != null) return direct;
+
+  const sm =
+    root.sessionRemainingMinutes ??
+    root.maxSessionMinutes ??
+    root.perBreakMaxMinutes;
+  if (sm != null && !Number.isNaN(Number(sm))) {
+    return Math.max(0, Math.floor(Number(sm) * 60));
+  }
+
+  return null;
+}
+
 const pinTrackerAfterDashboard = (menus) => {
   if (!Array.isArray(menus) || menus.length === 0) return menus;
   const idx = menus.findIndex((i) => i.name === "Tracker");
@@ -728,15 +842,19 @@ const Sidebar = () => {
   });
   const [elapsedTime, setElapsedTime] = useState("00:00:00");
   const [onBreak, setOnBreak] = useState(false);
-  const [breakTimeLeft, setBreakTimeLeft] = useState(60 * 60); // 60 mins in seconds
-  const [breakIntervalId, setBreakIntervalId] = useState(null);
+  /** Daily break pool from GET /api/v1/break/remaining */
+  const [breakRemaining, setBreakRemaining] = useState(null);
   const [onMeeting, setOnMeeting] = useState(false);
   const [meetingTime, setMeetingTime] = useState(0);
   const [meetingIntervalId, setMeetingIntervalId] = useState(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [breakLoading, setBreakLoading] = useState(false);
   const [meetingLoading, setMeetingLoading] = useState(false);
-  
+  const [activeBreakType, setActiveBreakType] = useState("");
+  /** Countdown for the active break session (HH:MM:SS), not daily quota */
+  const [breakSessionSecondsLeft, setBreakSessionSecondsLeft] = useState(null);
+  const breakTickRef = useRef(null);
+
   // Flyout menu states
   const [flyoutOpen, setFlyoutOpen] = useState(false);
   const [flyoutType, setFlyoutType] = useState(''); // 'sales' or 'reports'
@@ -753,32 +871,168 @@ const Sidebar = () => {
     return `${h}:${m}:${s}`;
   };
 
+  const refreshBreakRemaining = useCallback(async () => {
+    const token =
+      sessionStorage.getItem("token") ||
+      localStorage.getItem("token") ||
+      sessionStorage.getItem("authToken") ||
+      localStorage.getItem("authToken");
+    const cfg = {
+      withCredentials: true,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    };
+    try {
+      const res = await axios.get(
+        `${API_CONFIG.BASE_URL}/api/v1/break/remaining`,
+        cfg,
+      );
+      const parsed = parseBreakRemainingPayload(res.data);
+      if (parsed) {
+        setBreakRemaining(parsed);
+        if (typeof parsed.isOnBreak === "boolean") {
+          setOnBreak(parsed.isOnBreak);
+          if (!parsed.isOnBreak) {
+            setActiveBreakType("");
+            setBreakSessionSecondsLeft(null);
+          } else {
+            if (parsed.ongoingBreak) {
+              const ob = parsed.ongoingBreak;
+              const type =
+                typeof ob === "object" && ob !== null
+                  ? ob.breakType || ob.type || ob.name || ""
+                  : typeof ob === "string"
+                    ? ob
+                    : "";
+              if (type) setActiveBreakType(type);
+            }
+            let sess = parseBreakSessionSecondsLeft(res.data);
+            if (
+              sess == null &&
+              parsed.remainingSeconds != null &&
+              parsed.remainingSeconds > 0
+            ) {
+              sess = Math.floor(parsed.remainingSeconds);
+            }
+            if (sess != null && sess >= 0) {
+              setBreakSessionSecondsLeft(sess);
+            }
+          }
+        }
+      }
+    } catch {
+      /* ignore — sidebar should still work */
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isVPL100) return;
+    refreshBreakRemaining();
+  }, [isVPL100, refreshBreakRemaining]);
+
+  useEffect(() => {
+    if (!dropdownOpen || isVPL100) return;
+    refreshBreakRemaining();
+  }, [dropdownOpen, isVPL100, refreshBreakRemaining]);
+
+  useEffect(() => {
+    if (!onBreak) {
+      if (breakTickRef.current) {
+        clearInterval(breakTickRef.current);
+        breakTickRef.current = null;
+      }
+      return;
+    }
+    breakTickRef.current = setInterval(() => {
+      setBreakSessionSecondsLeft((prev) => {
+        if (prev == null) return prev;
+        if (prev <= 1) {
+          if (breakTickRef.current) {
+            clearInterval(breakTickRef.current);
+            breakTickRef.current = null;
+          }
+          setOnBreak(false);
+          setActiveBreakType("");
+          setTimeout(() => refreshBreakRemaining(), 0);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => {
+      if (breakTickRef.current) {
+        clearInterval(breakTickRef.current);
+        breakTickRef.current = null;
+      }
+    };
+  }, [onBreak, refreshBreakRemaining]);
+
   // Break/Meeting handlers
-  const handleStartBreak = async () => {
+  const handleStartBreak = async (breakType) => {
+    if (!breakType || !BREAK_TYPES.includes(breakType)) {
+      alert("Please select a valid break type.");
+      return;
+    }
     try {
       setBreakLoading(true);
+      const token =
+        sessionStorage.getItem("token") ||
+        localStorage.getItem("token") ||
+        sessionStorage.getItem("authToken") ||
+        localStorage.getItem("authToken");
       const res = await axios.post(
         `${API_CONFIG.BASE_URL}/api/v1/break/start`,
-        {},
-        { withCredentials: true }
+        { breakType },
+        {
+          withCredentials: true,
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        },
       );
       if (res.data.success) {
         setOnBreak(true);
-        const remaining = res.data.remainingMinutes || 60;
-        setBreakTimeLeft(remaining * 60);
+        setActiveBreakType(breakType);
+        const merged = parseBreakRemainingPayload(res.data);
+        if (merged) {
+          setBreakRemaining(merged);
+        } else {
+          refreshBreakRemaining();
+        }
 
-        const intervalId = setInterval(() => {
-          setBreakTimeLeft((prev) => {
-            if (prev <= 1) {
-              clearInterval(intervalId);
-              setOnBreak(false);
-              return 0;
+        let sess = parseBreakSessionSecondsLeft(res.data);
+        if (sess == null || sess <= 0) {
+          try {
+            const r = await axios.get(
+              `${API_CONFIG.BASE_URL}/api/v1/break/remaining`,
+              {
+                withCredentials: true,
+                headers: {
+                  "Content-Type": "application/json",
+                  ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+              },
+            );
+            sess = parseBreakSessionSecondsLeft(r.data);
+            const daily = parseBreakRemainingPayload(r.data);
+            if (
+              sess == null &&
+              daily?.remainingSeconds != null &&
+              daily.remainingSeconds > 0
+            ) {
+              sess = Math.floor(daily.remainingSeconds);
             }
-            return prev - 1;
-          });
-        }, 1000);
+          } catch {
+            /* use fallback below */
+          }
+        }
+        setBreakSessionSecondsLeft(
+          sess != null && sess > 0 ? sess : 60 * 60,
+        );
 
-        setBreakIntervalId(intervalId);
         setDropdownOpen(false);
       }
     } catch (err) {
@@ -791,14 +1045,32 @@ const Sidebar = () => {
   const handleEndBreak = async () => {
     try {
       setBreakLoading(true);
+      const token =
+        sessionStorage.getItem("token") ||
+        localStorage.getItem("token") ||
+        sessionStorage.getItem("authToken") ||
+        localStorage.getItem("authToken");
       const res = await axios.post(
         `${API_CONFIG.BASE_URL}/api/v1/break/end`,
         {},
-        { withCredentials: true }
+        {
+          withCredentials: true,
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        },
       );
       if (res.data.success) {
-        clearInterval(breakIntervalId);
         setOnBreak(false);
+        setActiveBreakType("");
+        setBreakSessionSecondsLeft(null);
+        const merged = parseBreakRemainingPayload(res.data);
+        if (merged) {
+          setBreakRemaining(merged);
+        } else {
+          refreshBreakRemaining();
+        }
       }
     } catch (err) {
       alert("Break end failed.");
@@ -1886,9 +2158,28 @@ const Sidebar = () => {
                     </div>
                     <span className="text-gray-800 text-sm font-medium">Meeting</span>
                   </div>
-                  <div className="flex items-center">
+                  <div className="flex items-center min-w-0">
                     <span className="text-gray-800 text-sm font-medium">Break</span>
-                    <div className="w-6 h-6 bg-amber-100 rounded-full flex items-center justify-center ml-2">
+                    {onBreak ? (
+                      <span
+                        className="ml-2 text-xs font-bold text-amber-800 tabular-nums truncate max-w-[5.5rem]"
+                        title="Break session left"
+                      >
+                        {breakSessionSecondsLeft != null
+                          ? formatTime(breakSessionSecondsLeft)
+                          : "On break"}
+                      </span>
+                    ) : (
+                      formatBreakMinutesLeftLabel(breakRemaining) && (
+                        <span
+                          className="ml-2 text-xs font-semibold text-amber-800 tabular-nums truncate"
+                          title="Break time left today"
+                        >
+                          {formatBreakMinutesLeftLabel(breakRemaining)}
+                        </span>
+                      )
+                    )}
+                    <div className="w-6 h-6 bg-amber-100 rounded-full flex items-center justify-center ml-2 shrink-0">
                       <svg className="w-4 h-4 text-amber-700" fill="currentColor" viewBox="0 0 24 24">
                         <path d="M2,21V19H20V21H2M20,8V5L18,5V8H20M18,8.5V10.5C18,11.3 17.3,12 16.5,12H15.5C14.7,12 14,11.3 14,10.5V8.5C14,7.7 14.7,7 15.5,7H16.5C17.3,7 18,7.7 18,8.5M16,8.75A0.25,0.25 0 0,0 15.75,8.5A0.25,0.25 0 0,0 15.5,8.75A0.25,0.25 0 0,0 15.75,9A0.25,0.25 0 0,0 16,8.75M14,20.5V16.5C14,15.7 14.7,15 15.5,15H16.5C17.3,15 18,15.7 18,16.5V20.5C18,21.3 17.3,22 16.5,22H15.5C14.7,22 14,21.3 14,20.5M16,16.75A0.25,0.25 0 0,0 15.75,16.5A0.25,0.25 0 0,0 15.5,16.75A0.25,0.25 0 0,0 15.75,17A0.25,0.25 0 0,0 16,16.75M5,3H7C8,3 9,4 9,5V6H11L12,7H14C15,7 16,8 16,9V11C16,12 15,13 14,13H7C6,13 5,12 5,11V3M7,9A1,1 0 0,0 8,10A1,1 0 0,0 9,9A1,1 0 0,0 8,8A1,1 0 0,0 7,9Z"/>
                       </svg>
@@ -1899,26 +2190,60 @@ const Sidebar = () => {
                 {dropdownOpen && (
                   <div className="absolute bottom-full left-0 right-0 mb-2 bg-white rounded-lg shadow-lg py-2 animate-fade-in z-50 border border-gray-200">
                     {/* Break Section */}
-                    <div className="px-4 py-2 hover:bg-gray-100 text-sm text-gray-800 flex justify-between items-center">
-                      <span>Break</span>
-                      {onBreak ? (
-                        <span className="text-yellow-600 font-semibold">
-                          {formatTime(breakTimeLeft)}
-                        </span>
-                      ) : (
-                        <button
-                          onClick={handleStartBreak}
-                          disabled={breakLoading}
-                          className="text-xs bg-yellow-200 px-2 py-1 rounded-full flex items-center gap-1"
-                        >
-                          {breakLoading ? (
-                            <>
-                              <span className="animate-spin">⏳</span> Starting...
-                            </>
-                          ) : (
-                            "Start"
+                    <div className="px-3 py-2 border-b border-gray-100">
+                      <div className="flex justify-between items-start gap-2 mb-1">
+                        <span className="text-sm text-gray-800 font-medium">Break</span>
+                        {onBreak ? (
+                          breakSessionSecondsLeft != null && (
+                            <div className="text-right shrink-0">
+                              <p className="text-[10px] text-gray-500 leading-tight">
+                                Session left
+                              </p>
+                              <span className="text-yellow-700 font-bold text-sm tabular-nums">
+                                {formatTime(breakSessionSecondsLeft)}
+                              </span>
+                            </div>
+                          )
+                        ) : (
+                          formatBreakMinutesLeftLabel(breakRemaining) && (
+                            <span className="text-amber-800 font-semibold text-xs shrink-0">
+                              {formatBreakMinutesLeftLabel(breakRemaining)}
+                            </span>
+                          )
+                        )}
+                      </div>
+                      {onBreak && activeBreakType && (
+                        <p className="text-xs text-gray-500 mb-1 truncate" title={activeBreakType}>
+                          {activeBreakType}
+                        </p>
+                      )}
+                      {!onBreak && (
+                        <div className="space-y-1 mt-1">
+                          <p className="text-xs text-gray-500 mb-1">Choose type</p>
+                          {BREAK_TYPES.map((bt) => {
+                            const blocked =
+                              breakRemaining?.dailyLimitReached ||
+                              (breakRemaining != null &&
+                                breakRemaining.remainingMinutes != null &&
+                                breakRemaining.remainingMinutes <= 0);
+                            return (
+                            <button
+                              key={bt}
+                              type="button"
+                              onClick={() => handleStartBreak(bt)}
+                              disabled={breakLoading || blocked}
+                              className="w-full text-left text-xs px-2 py-1.5 rounded-md bg-yellow-50 hover:bg-yellow-100 text-gray-800 border border-yellow-200 disabled:opacity-50"
+                            >
+                              {bt}
+                            </button>
+                            );
+                          })}
+                          {breakLoading && (
+                            <p className="text-xs text-center text-gray-500 flex items-center justify-center gap-1">
+                              <span className="animate-spin">⏳</span> Starting…
+                            </p>
                           )}
-                        </button>
+                        </div>
                       )}
                     </div>
                     {onBreak && (

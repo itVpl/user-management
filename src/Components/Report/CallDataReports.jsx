@@ -5,6 +5,45 @@ import { toast } from "react-toastify";
 import API_CONFIG from "../../config/api";
 
 const REPORT_BASE = `${API_CONFIG.BASE_URL}/api/v1/analytics/8x8`;
+/**
+ * 1-1 feedback (not under 8x8 analytics base).
+ * GET by document id: GET /api/v1/one-on-one-feedback/:id
+ * e.g. http://localhost:4000/api/v1/one-on-one-feedback/69c2d0bf6305d4954f40d72d
+ * POST create/update: POST /api/v1/one-on-one-feedback
+ */
+const ONE_ON_ONE_FEEDBACK_API = `${API_CONFIG.BASE_URL}/api/v1/one-on-one-feedback`;
+
+/** Accepts common GET shapes: { success, data }, { data }, or the document at root. */
+const extractOneOnOneDocFromGetResponse = (res) => {
+  const d = res?.data;
+  if (!d || typeof d !== "object") return null;
+  if (d.success === false) return null;
+
+  if (d.data !== undefined && d.data !== null) {
+    let item = d.data;
+    if (Array.isArray(item)) item = item.find((x) => x && typeof x === "object") ?? item[0];
+    if (item && typeof item === "object") return item;
+  }
+
+  if (d._id != null || d.callId != null || typeof d.feedback === "string") {
+    return d;
+  }
+  return null;
+};
+
+const formatOneOnOneFieldValue = (key, value) => {
+  if (value == null) return "—";
+  if (typeof value === "object") return JSON.stringify(value, null, 2);
+  if (
+    (key === "createdAt" || key === "updatedAt" || /At$/i.test(key)) &&
+    (typeof value === "string" || typeof value === "number")
+  ) {
+    const t = new Date(value);
+    if (!Number.isNaN(t.getTime())) return t.toLocaleString();
+  }
+  return String(value);
+};
+
 const EMPTY_DETAILS = {
   customerName: "",
   emailAddress: "",
@@ -44,6 +83,16 @@ const getCalleeReceiverNumber = (record) =>
   record?.callee?.phoneNumber ??
   null;
 
+/** Call No column / payload: same callee line as the Callee column (name + number). */
+const getCallNoFromCallee = (record) => {
+  const name = (record?.calleeName || record?.callee?.name || "").trim();
+  const num = getCalleeReceiverNumber(record);
+  if (name && num) return `${name} · ${num}`;
+  if (name) return name;
+  if (num != null && String(num).trim() !== "") return String(num);
+  return "";
+};
+
 const CallDataReports = () => {
   const [state, setState] = useState(() => ({
     loading: false,
@@ -64,9 +113,13 @@ const CallDataReports = () => {
   }));
   const [employeeOptions, setEmployeeOptions] = useState([]);
   const [drafts, setDrafts] = useState({});
-  const [savingRows, setSavingRows] = useState({});
-  const [rowErrors, setRowErrors] = useState({});
   const [followUpModal, setFollowUpModal] = useState({ open: false, callId: null });
+  const [oneOnOneModal, setOneOnOneModal] = useState({ open: false, record: null });
+  const [oneOnOneFeedbackText, setOneOnOneFeedbackText] = useState("");
+  const [submittingOneOnOne, setSubmittingOneOnOne] = useState(false);
+  const [loadingOneOnOneFetch, setLoadingOneOnOneFetch] = useState(false);
+  /** Full object from GET /one-on-one-feedback/:id — shown in modal */
+  const [oneOnOneServerData, setOneOnOneServerData] = useState(null);
   const [activeSectionTab, setActiveSectionTab] = useState("employeeSummary");
   const [callerDropdownOpen, setCallerDropdownOpen] = useState(false);
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
@@ -294,7 +347,6 @@ const CallDataReports = () => {
         error: null,
       }));
       setDrafts({});
-      setRowErrors({});
     } catch (error) {
       console.error("Call report fetch failed:", error);
       const status = error?.response?.status;
@@ -366,7 +418,6 @@ const CallDataReports = () => {
         ...updates,
       },
     }));
-    setRowErrors((prev) => ({ ...prev, [callId]: "" }));
   };
 
   const updateDraftDetails = (callId, key, value) => {
@@ -381,7 +432,6 @@ const CallDataReports = () => {
         },
       },
     }));
-    setRowErrors((prev) => ({ ...prev, [callId]: "" }));
   };
 
   const handleReset = async () => {
@@ -418,6 +468,112 @@ const CallDataReports = () => {
     return pages;
   };
 
+  const getOneOnOneFeedbackDocId = (r) => {
+    const candidates = [
+      r?.oneOnOneFeedbackId,
+      r?.feedbackId,
+      r?.oneOnOneFeedback?._id,
+      r?.oneOnOneFeedback?.id,
+      r?.one_on_one_feedback_id,
+    ];
+    for (const c of candidates) {
+      if (c != null && String(c).trim() !== "") return String(c).trim();
+    }
+    return null;
+  };
+
+  const loadOneOnOneFeedbackForModal = async (record) => {
+    setOneOnOneServerData(null);
+    setOneOnOneFeedbackText("");
+    const docId = getOneOnOneFeedbackDocId(record);
+    const callId = record?.callId;
+    if (!docId && !callId) {
+      setLoadingOneOnOneFetch(false);
+      return;
+    }
+    setLoadingOneOnOneFetch(true);
+    try {
+      let res;
+      if (docId) {
+        res = await axios.get(`${ONE_ON_ONE_FEEDBACK_API}/${encodeURIComponent(docId)}`, getAuthConfig());
+      } else {
+        res = await axios.get(ONE_ON_ONE_FEEDBACK_API, {
+          ...getAuthConfig(),
+          params: { callId },
+        });
+      }
+
+      const item = extractOneOnOneDocFromGetResponse(res);
+      if (!item) return;
+
+      setOneOnOneServerData(item);
+      if (item.feedback != null) setOneOnOneFeedbackText(String(item.feedback));
+    } catch (e) {
+      if (e?.response?.status !== 404) {
+        console.warn("Could not load 1-1 feedback:", e?.response?.data || e.message);
+        toast.error(
+          e?.response?.data?.message || e?.message || "Could not load feedback from server",
+        );
+      }
+    } finally {
+      setLoadingOneOnOneFetch(false);
+    }
+  };
+
+  const openOneOnOneFeedback = async (record) => {
+    setOneOnOneModal({ open: true, record });
+    await loadOneOnOneFeedbackForModal(record);
+  };
+
+  const submitOneOnOneFeedback = async () => {
+    const record = oneOnOneModal.record;
+    if (!record?.callId) return;
+    const text = oneOnOneFeedbackText.trim();
+    if (!text) {
+      toast.error("Please enter feedback");
+      return;
+    }
+    const emp = record.employee || {};
+    const srv = oneOnOneServerData;
+    const body = {
+      callId: record.callId,
+      callNo:
+        getCallNoFromCallee(record) ||
+        (srv?.callNo != null && String(srv.callNo) !== "" ? String(srv.callNo) : "") ||
+        "",
+      feedback: text,
+      aliasName: emp.aliasName || srv?.aliasName || "",
+      empId:
+        emp.empId != null
+          ? String(emp.empId)
+          : srv?.empId != null && String(srv.empId) !== ""
+            ? String(srv.empId)
+            : "",
+      employeeName: emp.employeeName || emp.empName || srv?.employeeName || "",
+    };
+    setSubmittingOneOnOne(true);
+    try {
+      const res = await axios.post(ONE_ON_ONE_FEEDBACK_API, body, getAuthConfig());
+      if (res?.data?.success === false) {
+        throw new Error(res?.data?.message || "Failed to submit 1-1 feedback");
+      }
+      toast.success("1-1 feedback submitted");
+      setOneOnOneModal({ open: false, record: null });
+      setOneOnOneFeedbackText("");
+      setOneOnOneServerData(null);
+      await fetchReport();
+    } catch (error) {
+      console.error("1-1 feedback failed:", error);
+      toast.error(
+        error?.response?.data?.message ||
+          error?.message ||
+          "Failed to submit 1-1 feedback",
+      );
+    } finally {
+      setSubmittingOneOnOne(false);
+    }
+  };
+
   const saveRow = async (record) => {
     const merged = mergeDraft(record);
     const followUpEnabled = toBool(merged.followUp);
@@ -429,7 +585,6 @@ const CallDataReports = () => {
 
     if (followUpEnabled && (!details.emailAddress?.trim() || !details.contactPerson?.trim())) {
       const message = "Email address and contact person are required for follow-up";
-      setRowErrors((prev) => ({ ...prev, [record.callId]: message }));
       toast.error(message);
       return;
     }
@@ -440,23 +595,17 @@ const CallDataReports = () => {
       followUpDetails: details,
     };
 
-    setSavingRows((prev) => ({ ...prev, [record.callId]: true }));
     try {
       const res = await axios.put(`${REPORT_BASE}/call-records/${record.callId}/category`, body, getAuthConfig());
       if (!res?.data?.success) {
         throw new Error(res?.data?.message || "Failed to update category/follow-up");
       }
       toast.success("Call record updated");
+      setFollowUpModal({ open: false, callId: null });
       await fetchReport();
     } catch (error) {
       console.error("Update row failed:", error);
-      setRowErrors((prev) => ({
-        ...prev,
-        [record.callId]: error?.response?.data?.message || "Failed to save this row",
-      }));
-      toast.error("Failed to save this row");
-    } finally {
-      setSavingRows((prev) => ({ ...prev, [record.callId]: false }));
+      toast.error(error?.response?.data?.message || "Failed to save this row");
     }
   };
 
@@ -934,13 +1083,21 @@ const CallDataReports = () => {
                     (merged.calleeName || merged.callee?.name || "").trim() || ""
                   );
                   const calleeReceiver = getCalleeReceiverNumber(merged);
+                  const callNoLine = getCallNoFromCallee(merged);
                   return (
                     <div
                       key={`${record.callId}-${index}`}
                       className="mt-3 grid grid-cols-[1.5fr_1.2fr_1.2fr_1.2fr_1fr_1fr_1fr_1.3fr_0.8fr_1fr_1fr] gap-4 items-center rounded-xl border border-gray-200 bg-white px-4 py-4 font-medium text-gray-900"
                     >
                       <div className="text-base">{record.startTime ? new Date(record.startTime).toLocaleString() : "-"}</div>
-                      <div className="truncate tabular-nums text-base font-medium text-gray-900">{record.callId || "-"}</div>
+                      <div className="min-w-0">
+                        <div className="truncate tabular-nums text-base font-medium text-gray-900">{record.callId || "-"}</div>
+                        {callNoLine ? (
+                          <div className="text-xs text-gray-500 truncate mt-1 font-medium" title={callNoLine}>
+                            {callNoLine}
+                          </div>
+                        ) : null}
+                      </div>
                       <div className="min-w-0">
                         <div className="truncate text-base font-semibold">{record.callerName || "-"}</div>
                         {record.employee && (
@@ -993,13 +1150,12 @@ const CallDataReports = () => {
                       </div>
                       <div>
                         <button
-                          onClick={() => saveRow(record)}
-                          disabled={!!savingRows[record.callId]}
-                          className="h-10 w-full rounded-lg border border-emerald-500 bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                          type="button"
+                          onClick={() => openOneOnOneFeedback(record)}
+                          className="h-10 w-full rounded-lg border border-violet-500 bg-violet-600 text-white text-sm font-semibold hover:bg-violet-700 cursor-pointer"
                         >
-                          {savingRows[record.callId] ? "Saving..." : "Save"}
+                          1-1 Feedback
                         </button>
-                        {rowErrors[record.callId] && <p className="text-xs text-red-600 mt-1">{rowErrors[record.callId]}</p>}
                       </div>
                     </div>
                   );
@@ -1145,10 +1301,161 @@ const CallDataReports = () => {
                 Cancel
               </button>
               <button
-                onClick={() => setFollowUpModal({ open: false, callId: null })}
+                type="button"
+                onClick={() => saveRow(activeRecord)}
                 className="cursor-pointer h-11 px-7 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700"
               >
                 Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {oneOnOneModal.open && oneOnOneModal.record && (
+        <div className="fixed inset-0 bg-black/35 backdrop-blur-[1px] z-[60] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-gray-200 overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="px-5 py-4 bg-gradient-to-r from-violet-600 to-indigo-600 flex items-start justify-between gap-3 shrink-0">
+              <div>
+                <h3 className="font-semibold text-xl text-white">1-1 Feedback</h3>
+                <p className="text-violet-100 text-sm mt-1">
+                  {oneOnOneServerData
+                    ? "Loaded from server — edit feedback and submit to update"
+                    : "Submit feedback for this call"}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setOneOnOneModal({ open: false, record: null });
+                  setOneOnOneFeedbackText("");
+                  setOneOnOneServerData(null);
+                }}
+                className="h-9 w-9 rounded-lg bg-white/15 text-white border border-white/30 hover:bg-white/25 text-xl leading-none cursor-pointer shrink-0"
+              >
+                ×
+              </button>
+            </div>
+            <div className="p-5 space-y-4 overflow-y-auto">
+              {loadingOneOnOneFetch && (
+                <div className="flex items-center justify-center gap-2 py-2 text-sm text-violet-700 bg-violet-50 rounded-xl border border-violet-100">
+                  <span className="h-4 w-4 border-2 border-violet-200 border-t-violet-600 rounded-full animate-spin" />
+                  GET /one-on-one-feedback … loading
+                </div>
+              )}
+
+              {oneOnOneServerData && (
+                <div className="rounded-xl border border-violet-200 bg-violet-50/70 px-4 py-3 text-sm">
+                  <p className="font-semibold text-violet-900 mb-3">GET API — saved feedback (full response)</p>
+                  <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
+                    {Object.keys(oneOnOneServerData)
+                      .sort((a, b) => a.localeCompare(b))
+                      .map((key) => (
+                        <div key={key} className={key === "feedback" ? "sm:col-span-2" : ""}>
+                          <dt className="text-violet-800/90 font-medium text-xs uppercase tracking-wide">
+                            {key}
+                          </dt>
+                          <dd className="mt-0.5 text-gray-900 break-words whitespace-pre-wrap font-mono text-[13px] leading-relaxed">
+                            {formatOneOnOneFieldValue(key, oneOnOneServerData[key])}
+                          </dd>
+                        </div>
+                      ))}
+                  </dl>
+                  <details className="mt-3 group">
+                    <summary className="cursor-pointer text-violet-800 font-medium text-sm list-none flex items-center gap-1 [&::-webkit-details-marker]:hidden">
+                      <span className="text-violet-500 group-open:rotate-90 transition-transform">▸</span>
+                      Raw JSON (GET)
+                    </summary>
+                    <pre className="mt-2 p-3 bg-slate-900 text-slate-100 rounded-lg overflow-x-auto max-h-56 text-xs leading-relaxed">
+                      {JSON.stringify(oneOnOneServerData, null, 2)}
+                    </pre>
+                  </details>
+                </div>
+              )}
+
+              {!oneOnOneServerData && !loadingOneOnOneFetch && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm rounded-xl border border-gray-100 bg-gray-50/80 px-4 py-3">
+                  <p className="sm:col-span-2 text-xs text-gray-600">
+                    No GET payload yet (new feedback or nothing on server). Call context from report row:
+                  </p>
+                  <div className="sm:col-span-2">
+                    <span className="text-gray-500 font-medium">Call ID</span>
+                    <p className="mt-1 font-mono text-gray-900 break-all text-base">
+                      {oneOnOneModal.record.callId || "—"}
+                    </p>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <span className="text-gray-500 font-medium">Call No</span>
+                    <p className="mt-1 text-gray-900 text-base">{getCallNoFromCallee(oneOnOneModal.record) || "—"}</p>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <span className="text-gray-500 font-medium">Alias name</span>
+                    <p className="mt-1 text-gray-900">{oneOnOneModal.record.employee?.aliasName || "—"}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 font-medium">Emp ID</span>
+                    <p className="mt-1 text-gray-900 tabular-nums">
+                      {oneOnOneModal.record.employee?.empId != null
+                        ? String(oneOnOneModal.record.employee.empId)
+                        : "—"}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 font-medium">Employee name</span>
+                    <p
+                      className="mt-1 text-gray-900 truncate"
+                      title={
+                        oneOnOneModal.record.employee?.employeeName || oneOnOneModal.record.employee?.empName
+                      }
+                    >
+                      {oneOnOneModal.record.employee?.employeeName ||
+                        oneOnOneModal.record.employee?.empName ||
+                        "—"}
+                    </p>
+                  </div>
+                </div>
+              )}
+              <div>
+                <label className="block text-sm font-semibold text-gray-800 mb-2">
+                  Feedback *{" "}
+                  {oneOnOneServerData && (
+                    <span className="font-normal text-gray-500">(editable — same text as GET &quot;feedback&quot; above)</span>
+                  )}
+                </label>
+                {loadingOneOnOneFetch ? (
+                  <p className="text-sm text-gray-500 py-6 text-center border border-dashed border-gray-200 rounded-xl">
+                    Waiting for API…
+                  </p>
+                ) : (
+                  <textarea
+                    value={oneOnOneFeedbackText}
+                    onChange={(e) => setOneOnOneFeedbackText(e.target.value)}
+                    rows={5}
+                    placeholder="e.g. 1-1 went well. Discussed Q2 targets and follow-up on key accounts."
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder:text-gray-400 focus:border-violet-500 focus:ring-2 focus:ring-violet-100 resize-y min-h-[120px]"
+                  />
+                )}
+              </div>
+            </div>
+            <div className="px-5 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setOneOnOneModal({ open: false, record: null });
+                  setOneOnOneFeedbackText("");
+                  setOneOnOneServerData(null);
+                }}
+                className="h-11 px-5 rounded-xl border border-gray-300 text-gray-800 font-semibold hover:bg-gray-100 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={submittingOneOnOne}
+                onClick={submitOneOnOneFeedback}
+                className="h-11 px-6 rounded-xl bg-violet-600 text-white font-semibold hover:bg-violet-700 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+              >
+                {submittingOneOnOne ? "Submitting…" : "Submit"}
               </button>
             </div>
           </div>
