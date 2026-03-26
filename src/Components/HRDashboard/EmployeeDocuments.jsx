@@ -37,7 +37,15 @@ const EmployeeDocuments = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDocumentTypeModal, setShowDocumentTypeModal] = useState(false);
   const [showSignatureUploadModal, setShowSignatureUploadModal] = useState(false);
-  const [documentType, setDocumentType] = useState('offer_letter'); // 'offer_letter', 'letter_of_intent', 'salary_slip', 'fnf'
+  const [documentType, setDocumentType] = useState('offer_letter'); // 'offer_letter', 'letter_of_intent', 'salary_slip', 'fnf', 'experience_cum_relieving_letter', 'relieving_letter'
+  const [availableDocumentTypes, setAvailableDocumentTypes] = useState([
+    'offer_letter',
+    'letter_of_intent',
+    'salary_slip',
+    'fnf',
+    'experience_cum_relieving_letter',
+    'relieving_letter',
+  ]);
   
   // Filters
   const [filters, setFilters] = useState({
@@ -91,6 +99,37 @@ const EmployeeDocuments = () => {
       setLoading(false);
     }
   };
+
+  const normalizeDocumentType = (type = '') => type.toString().trim().toLowerCase();
+
+  const fetchDocumentTypes = async () => {
+    try {
+      const response = await employeeDocumentsService.getDocumentTypes();
+      if (!response?.success) return;
+
+      const raw = response?.data;
+      let keys = [];
+
+      if (Array.isArray(raw)) {
+        if (raw.length > 0 && typeof raw[0] === 'object' && raw[0] != null && 'key' in raw[0]) {
+          keys = raw.map((item) => normalizeDocumentType(item.key)).filter(Boolean);
+        } else {
+          keys = raw.map((type) => normalizeDocumentType(type)).filter(Boolean);
+        }
+      } else if (raw && typeof raw === 'object' && Array.isArray(raw.documentTypes)) {
+        keys = raw.documentTypes.map((type) => normalizeDocumentType(type)).filter(Boolean);
+      }
+
+      if (keys.length === 0) return;
+      setAvailableDocumentTypes(Array.from(new Set(keys)));
+    } catch (error) {
+      console.warn('Document types API unavailable, using fallback types:', error?.message);
+    }
+  };
+
+  useEffect(() => {
+    fetchDocumentTypes();
+  }, []);
 
   useEffect(() => {
     if (activeTab === 'documents') {
@@ -228,7 +267,7 @@ const EmployeeDocuments = () => {
 
   // Get document type icon
   const getDocumentTypeIcon = (type) => {
-    switch (type) {
+    switch (normalizeDocumentType(type)) {
       case 'offer_letter':
         return <Briefcase className="w-5 h-5" />;
       case 'letter_of_intent':
@@ -237,6 +276,10 @@ const EmployeeDocuments = () => {
         return <DollarSign className="w-5 h-5" />;
       case 'fnf':
         return <Receipt className="w-5 h-5" />;
+      case 'experience_cum_relieving_letter':
+        return <UserCheck className="w-5 h-5" />;
+      case 'relieving_letter':
+        return <FileCheck className="w-5 h-5" />;
       default:
         return <FileText className="w-5 h-5" />;
     }
@@ -244,7 +287,7 @@ const EmployeeDocuments = () => {
 
   // Get document type label
   const getDocumentTypeLabel = (type) => {
-    switch (type) {
+    switch (normalizeDocumentType(type)) {
       case 'offer_letter':
         return 'Offer Letter';
       case 'letter_of_intent':
@@ -253,6 +296,10 @@ const EmployeeDocuments = () => {
         return 'Salary Slip';
       case 'fnf':
         return 'FNF';
+      case 'experience_cum_relieving_letter':
+        return 'Experience Cum Relieving Letter';
+      case 'relieving_letter':
+        return 'Relieving Letter';
       default:
         return type;
     }
@@ -334,7 +381,7 @@ const EmployeeDocuments = () => {
       <div className="mb-6">
         <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-1">Employee Documents</h1>
         <p className="text-gray-600 text-sm md:text-base">
-          Manage HR documents including offer letters, LOIs, salary slips, and FNF documents
+          Manage HR documents including offer letters, LOIs, salary slips, FNF, and relieving letters
         </p>
       </div>
 
@@ -424,10 +471,11 @@ const EmployeeDocuments = () => {
                 className="w-full md:w-auto md:flex-1 px-4 py-3 border border-gray-200 rounded-2xl bg-gray-50 focus:bg-white focus:outline-none"
               >
                 <option value="">All Types</option>
-                <option value="offer_letter">Offer Letter</option>
-                <option value="letter_of_intent">Letter of Intent</option>
-                <option value="salary_slip">Salary Slip</option>
-                <option value="fnf">FNF</option>
+                {availableDocumentTypes.map((type) => (
+                  <option key={type} value={type}>
+                    {getDocumentTypeLabel(type)}
+                  </option>
+                ))}
               </select>
 
               <select
@@ -719,6 +767,46 @@ const EmployeeDocuments = () => {
                     <div>
                       <h4 className="font-semibold text-gray-900 mb-1">FNF Document</h4>
                       <p className="text-sm text-gray-600">Create Full and Final settlement documents</p>
+                    </div>
+                  </div>
+                </button>
+
+                {/* Experience Cum Relieving Letter */}
+                <button
+                  onClick={() => {
+                    setDocumentType('experience_cum_relieving_letter');
+                    setShowDocumentTypeModal(false);
+                    setShowCreateModal(true);
+                  }}
+                  className="p-6 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all text-left group"
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="p-3 bg-indigo-100 rounded-lg group-hover:bg-indigo-200 transition-colors">
+                      <UserCheck className="w-6 h-6 text-indigo-600" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-gray-900 mb-1">Experience Cum Relieving Letter</h4>
+                      <p className="text-sm text-gray-600">Generate combined experience and relieving letter</p>
+                    </div>
+                  </div>
+                </button>
+
+                {/* Relieving Letter */}
+                <button
+                  onClick={() => {
+                    setDocumentType('relieving_letter');
+                    setShowDocumentTypeModal(false);
+                    setShowCreateModal(true);
+                  }}
+                  className="p-6 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all text-left group"
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="p-3 bg-emerald-100 rounded-lg group-hover:bg-emerald-200 transition-colors">
+                      <FileCheck className="w-6 h-6 text-emerald-600" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-gray-900 mb-1">Relieving Letter</h4>
+                      <p className="text-sm text-gray-600">Generate employee relieving confirmation letter</p>
                     </div>
                   </div>
                 </button>

@@ -119,6 +119,19 @@ export const deleteEmailAccount = async (accountId) => {
   return response.data;
 };
 
+/** Gmail OAuth step A: returns `{ url }` — assign `window.location.href = url` for full-page redirect. */
+export const getGoogleAuthUrl = async (accountId) => {
+  const token = getAuthToken();
+  if (!token) {
+    throw new Error('Please login to access this resource');
+  }
+  const response = await axios.get(
+    `${API_BASE_URL}/email-accounts/${accountId}/google-auth-url`,
+    { headers: getAuthHeaders() }
+  );
+  return response.data;
+};
+
 // --- Email Signatures (per account) ---
 
 export const getSignatures = async (accountId) => {
@@ -363,7 +376,10 @@ export const fetchEmailByUid = async (uid, accountId, folder = 'INBOX', includeT
   if (refresh) {
     params.append('refresh', 'true');
   }
-  
+  // Bust HTTP caches without sending Cache-Control/Pragma headers — those trigger CORS preflight
+  // and fail if the API allowlist omits them (browser shows "CORS error" even when OPTIONS returns 200).
+  params.append('_', Date.now().toString());
+
   const emailUrl = `${API_BASE_URL}/email-inbox/${uidString}?${params.toString()}`;
 
   try {
@@ -374,13 +390,10 @@ export const fetchEmailByUid = async (uid, accountId, folder = 'INBOX', includeT
     console.log(`📧 API URL: ${emailUrl}`);
     console.log(`📧 markAsRead parameter: ${markAsRead} (folder: ${folder.toUpperCase()})`);
     
-    const response = await axios.get(
-      emailUrl,
-      { 
-        headers: getAuthHeaders(),
-        timeout: timeout
-      }
-    );
+    const response = await axios.get(emailUrl, {
+      headers: getAuthHeaders(),
+      timeout: timeout,
+    });
 
     // Log the seen status from API response
     // Backend now always returns seen at top level (email.seen)
@@ -741,6 +754,44 @@ const decodeMimeWords = (str) => {
   return decoded;
 };
 
+/**
+ * Plain + HTML from various backend shapes (IMAP/DB, Gmail API). Uses preview/snippet only when no full body exists.
+ */
+export const pickEmailBodyFields = (msg = {}) => {
+  const plain =
+    msg.body ||
+    msg.text ||
+    msg.content ||
+    msg.textPlain ||
+    msg.plainText ||
+    msg.plainBody ||
+    msg.textBody ||
+    msg.messageText ||
+    msg.messageBody ||
+    '';
+  const preview =
+    msg.contentPreview ||
+    msg.preview ||
+    (typeof msg.snippet === 'string' ? msg.snippet : '') ||
+    '';
+  const bodyPlain = plain && String(plain).trim();
+  const bodyPreview = preview && String(preview).trim();
+  const body = bodyPlain || bodyPreview || '';
+  const html =
+    msg.html ||
+    msg.htmlBody ||
+    msg.htmlContent ||
+    msg.textHtml ||
+    msg.htmlText ||
+    '';
+  const content =
+    (msg.content && String(msg.content).trim()) ||
+    (msg.body && String(msg.body).trim()) ||
+    (msg.text && String(msg.text).trim()) ||
+    body;
+  return { body, content, html };
+};
+
 // Transform API email to app format
 export const transformEmail = (email, index) => {
   // Parse the date field from API - try multiple possible fields
@@ -829,10 +880,15 @@ export const transformEmail = (email, index) => {
     })(),
     to: email.to || email.recipient || '',
     subject: decodeMimeWords(email.subject) || 'No Subject', // Decode MIME encoded subjects
-    body: email.body || email.text || email.content || email.contentPreview || '', // Map 'content' field from API to 'body'
-    html: email.html || email.htmlBody || email.htmlContent || '',
-    content: email.content || email.contentPreview || email.body || email.text || '', // Also preserve 'content' field
-    contentPreview: email.contentPreview || '', // Preview snippet for sent emails
+    ...(() => {
+      const p = pickEmailBodyFields(email);
+      return {
+        body: p.body,
+        html: p.html,
+        content: p.content,
+      };
+    })(),
+    contentPreview: email.contentPreview || email.preview || (typeof email.snippet === 'string' ? email.snippet : '') || '', // Preview snippet for sent emails
     timestamp: finalDate,
     date: email.date, // Preserve original date string
     seen: email.seen !== undefined ? email.seen : (email.isRead || email.read || false), // Preserve seen property from API
@@ -848,6 +904,33 @@ export const transformEmail = (email, index) => {
     references: email.references || email.referencesHeader || null, // Preserve References header for threading
     labels: email.labels || [] // Preserve labels from API response
   };
+};
+
+/** Map raw API thread messages to display rows (same body rules as list/detail). */
+export const mapApiMessagesForThreadDisplay = (messages) => {
+  if (!Array.isArray(messages)) return [];
+  return messages.map((msg, idx) => {
+    const t = transformEmail(msg, idx);
+    const p = pickEmailBodyFields(msg);
+    const apiAttachments = msg.attachments || msg.attachment || msg.files || msg.Attachments || [];
+    const finalAttachments =
+      Array.isArray(apiAttachments) && apiAttachments.length > 0 ? apiAttachments : t.attachments || [];
+    const reportedCount =
+      msg.attachmentCount !== undefined ? msg.attachmentCount : t.attachmentCount || finalAttachments.length;
+    return {
+      ...t,
+      uid: msg.uid ?? t.uid,
+      body: (p.body && String(p.body).trim()) ? p.body : t.body,
+      content: (p.content && String(p.content).trim()) ? p.content : t.content,
+      html: (p.html && String(p.html).trim()) ? p.html : t.html,
+      attachments: finalAttachments,
+      hasAttachments: finalAttachments.length > 0 || !!msg.hasAttachments,
+      attachmentCount: Math.max(finalAttachments.length, reportedCount || 0),
+      messageId: msg.messageId || msg.messageID || msg.message_id || t.messageId,
+      inReplyTo: msg.inReplyTo || msg.inReplyToHeader || t.inReplyTo,
+      references: msg.references || msg.referencesHeader || t.references,
+    };
+  });
 };
 
 // Send email (JSON with base64 attachments)

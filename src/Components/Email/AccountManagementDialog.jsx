@@ -28,6 +28,7 @@ import {
   Edit as EditIcon,
   Star as StarIcon,
   Draw as DrawIcon,
+  Google as GoogleIcon,
 } from '@mui/icons-material';
 
 const AccountManagementDialog = ({
@@ -38,6 +39,7 @@ const AccountManagementDialog = ({
   onDelete,
   onUpdate,
   onManageSignatures,
+  onConnectGoogle,
   loading = false,
 }) => {
   const [anchorEl, setAnchorEl] = useState(null);
@@ -95,6 +97,19 @@ const AccountManagementDialog = ({
       onManageSignatures(selectedAccount);
     }
     handleMenuClose();
+  };
+
+  const handleConnectGoogle = async () => {
+    if (!selectedAccount || !onConnectGoogle) return;
+    setActionLoading(true);
+    setError(null);
+    try {
+      await onConnectGoogle(selectedAccount._id);
+    } catch (err) {
+      setError(err?.message || err?.response?.data?.message || 'Could not start Google sign-in');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   return (
@@ -193,14 +208,32 @@ const AccountManagementDialog = ({
                             {account.notes}
                           </Typography>
                         )}
-                        <Typography variant="caption" sx={{ color: '#9e9e9e', display: 'block', mt: 0.5 }}>
-                          Status: {account.isActive ? 'Active' : 'Inactive'} •{' '}
-                          {account.connectionStatus === 'connected'
-                            ? 'Connected'
-                            : account.connectionStatus === 'not_tested'
-                            ? 'Not Tested'
-                            : 'Disconnected'}
-                        </Typography>
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5, alignItems: 'center' }}>
+                          <Typography variant="caption" sx={{ color: '#9e9e9e' }}>
+                            Status: {account.isActive ? 'Active' : 'Inactive'} •{' '}
+                            {account.connectionStatus === 'connected'
+                              ? 'Connected'
+                              : account.connectionStatus === 'not_tested'
+                              ? 'Not Tested'
+                              : 'Disconnected'}
+                          </Typography>
+                          {account.gmailApiConnected ? (
+                            <Chip
+                              label="Connected with Google"
+                              size="small"
+                              color="success"
+                              variant="outlined"
+                              sx={{ height: 20, fontSize: '0.65rem' }}
+                            />
+                          ) : (
+                            <Chip
+                              label="Gmail API not linked"
+                              size="small"
+                              variant="outlined"
+                              sx={{ height: 20, fontSize: '0.65rem', color: '#5f6368' }}
+                            />
+                          )}
+                        </Box>
                       </Box>
                     }
                   />
@@ -244,6 +277,12 @@ const AccountManagementDialog = ({
           <MenuItem onClick={handleManageSignatures}>
             <DrawIcon sx={{ mr: 1.5, fontSize: 20, color: '#5f6368' }} />
             Manage signatures
+          </MenuItem>
+        )}
+        {selectedAccount && onConnectGoogle && !selectedAccount.gmailApiConnected && (
+          <MenuItem onClick={handleConnectGoogle} disabled={actionLoading}>
+            <GoogleIcon sx={{ mr: 1.5, fontSize: 20, color: '#1a73e8' }} />
+            Connect Google
           </MenuItem>
         )}
         <MenuItem onClick={handleDelete} disabled={actionLoading}>
