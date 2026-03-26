@@ -28,6 +28,7 @@ import {
 } from '@mui/icons-material';
 import API_CONFIG from '../../config/api';
 import LabelActions from './LabelActions';
+import { pickEmailBodyFields } from './emailService';
 
 const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onRestore, onPermanentDelete, onClose, onReply, onRefresh, refreshingEmail, emailAccountId, folder, emailAccounts = [] }) => {
   const [refreshKey, setRefreshKey] = useState(0);
@@ -285,8 +286,9 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onRestore, onPerma
   
   // Content not loaded yet: body/html empty (DB had headers only). User can click "Load content" to call API with refresh=true.
   const hasNoContent = messagesToDisplay.some((m) => {
-    const body = m.body || m.content || m.text || '';
-    const html = m.html || m.htmlBody || m.htmlContent || '';
+    const p = pickEmailBodyFields(m);
+    const body = p.body || m.body || m.content || m.text || '';
+    const html = p.html || m.html || m.htmlBody || m.htmlContent || '';
     return !(body && body.trim()) && !(html && html.trim());
   });
   
@@ -653,7 +655,8 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onRestore, onPerma
             return { newContent: full, quotedHeader: '', quotedBody: '' };
           };
           
-          const rawBody = message.body || message.content || '';
+          const pickedFields = pickEmailBodyFields(message);
+          const rawBody = pickedFields.body || message.body || message.content || '';
           const { newContent: messageContent, quotedHeader, quotedBody } = splitNewAndQuoted(rawBody);
           const hasQuotedContent = !!(quotedHeader && quotedBody);
           
@@ -730,8 +733,15 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onRestore, onPerma
                 mb: 1.5
               }}>
                 {(() => {
-                  const htmlContent = message.html || message.htmlBody || message.htmlContent || '';
-                  const bodyContent = messageContent || message.body || message.content || message.text || '';
+                  const htmlContent =
+                    pickedFields.html || message.html || message.htmlBody || message.htmlContent || '';
+                  const bodyContent =
+                    messageContent ||
+                    pickedFields.body ||
+                    message.body ||
+                    message.content ||
+                    message.text ||
+                    '';
                   
                   // Debug: Log what we're rendering
                   if (!htmlContent && !bodyContent) {
@@ -826,7 +836,13 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onRestore, onPerma
                     >
                       {(() => {
                         // Use extracted message content (without quoted parts)
-                        const bodyText = messageContent || message.body || message.content || message.text || '';
+                        const bodyText =
+                          messageContent ||
+                          pickedFields.body ||
+                          message.body ||
+                          message.content ||
+                          message.text ||
+                          '';
                         if (!bodyText || bodyText.trim() === '') {
                           console.warn('⚠️ Empty body for message:', message.uid, message);
                           return <Typography variant="body2" sx={{ color: '#80868b', fontStyle: 'italic' }}>No content available</Typography>;
@@ -843,7 +859,9 @@ const EmailViewer = ({ selectedEmail, onToggleStar, onDelete, onRestore, onPerma
               </Box>
               
               {/* Quoted message block - Gmail style: "On [date], <sender> wrote:" then indented quote */}
-              {!(message.html || message.htmlBody || message.htmlContent) && hasQuotedContent && quotedHeader && (
+              {!(pickedFields.html || message.html || message.htmlBody || message.htmlContent) &&
+                hasQuotedContent &&
+                quotedHeader && (
                 <Box
                   sx={{
                     mt: 1.5,

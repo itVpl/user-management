@@ -1,9 +1,14 @@
 import React, { useState } from 'react';
-import { X, Edit, Trash2, Download, Loader, Briefcase, FileText, DollarSign, Receipt, Mail } from 'lucide-react';
+import { X, Edit, Trash2, Download, Loader, Briefcase, FileText, DollarSign, Receipt, Mail, UserCheck } from 'lucide-react';
 
 const DocumentDetail = ({ document, onClose, onUpdate, onDelete, onGeneratePDF, onSendPDF }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
+  const normalizedDocumentType = (document?.documentType || '').toString().trim().toLowerCase();
+  const relieving = document?.relievingLetterData && typeof document.relievingLetterData === 'object'
+    ? document.relievingLetterData
+    : {};
+  const relField = (key) => document?.[key] ?? relieving?.[key];
 
   // Helper function to format dates safely
   const formatDate = (dateValue) => {
@@ -65,7 +70,7 @@ const DocumentDetail = ({ document, onClose, onUpdate, onDelete, onGeneratePDF, 
   };
 
   const getDocumentIcon = () => {
-    switch (document.documentType) {
+    switch (normalizedDocumentType) {
       case 'offer_letter':
         return <Briefcase className="w-6 h-6 text-blue-600" />;
       case 'letter_of_intent':
@@ -74,13 +79,16 @@ const DocumentDetail = ({ document, onClose, onUpdate, onDelete, onGeneratePDF, 
         return <DollarSign className="w-6 h-6 text-yellow-600" />;
       case 'fnf':
         return <Receipt className="w-6 h-6 text-red-600" />;
+      case 'experience_cum_relieving_letter':
+      case 'relieving_letter':
+        return <UserCheck className="w-6 h-6 text-indigo-600" />;
       default:
         return <FileText className="w-6 h-6" />;
     }
   };
 
   const getDocumentTypeLabel = () => {
-    switch (document.documentType) {
+    switch (normalizedDocumentType) {
       case 'offer_letter':
         return 'Offer Letter';
       case 'letter_of_intent':
@@ -89,6 +97,10 @@ const DocumentDetail = ({ document, onClose, onUpdate, onDelete, onGeneratePDF, 
         return 'Salary Slip';
       case 'fnf':
         return 'Full and Final Settlement';
+      case 'experience_cum_relieving_letter':
+        return 'Experience Cum Relieving Letter';
+      case 'relieving_letter':
+        return 'Relieving Letter';
       default:
         return document.documentType;
     }
@@ -183,7 +195,7 @@ const DocumentDetail = ({ document, onClose, onUpdate, onDelete, onGeneratePDF, 
           </div>
 
           {/* Document Type Specific Details */}
-          {document.documentType === 'offer_letter' && (
+          {normalizedDocumentType === 'offer_letter' && (
             <>
               <div className="border-t border-gray-200 pt-4">
                 <h4 className="text-lg font-semibold text-gray-900 mb-4">Offer Details</h4>
@@ -244,7 +256,7 @@ const DocumentDetail = ({ document, onClose, onUpdate, onDelete, onGeneratePDF, 
             </>
           )}
 
-          {document.documentType === 'letter_of_intent' && (
+          {normalizedDocumentType === 'letter_of_intent' && (
             <>
               <div className="border-t border-gray-200 pt-4">
                 <h4 className="text-lg font-semibold text-gray-900 mb-4">LOI Details</h4>
@@ -278,53 +290,103 @@ const DocumentDetail = ({ document, onClose, onUpdate, onDelete, onGeneratePDF, 
             </>
           )}
 
-          {document.documentType === 'salary_slip' && (
+          {normalizedDocumentType === 'salary_slip' && (() => {
+            const slip =
+              document.salarySlipData && typeof document.salarySlipData === 'object'
+                ? document.salarySlipData
+                : {};
+            const month = document.month ?? slip.month;
+            const workingDays = document.workingDays ?? slip.workingDays;
+            const presentDays = document.presentDays ?? slip.presentDays;
+            const leaveDays = document.leaveDays ?? slip.leaveDays;
+            const vplPolicy = slip.vplSalaryPolicy === true || document.vplSalaryPolicy === true;
+            const profileBasic = slip.profileBasicSalary ?? document.profileBasicSalary;
+            const dojSnap = slip.dojSnapshot ?? slip.dateOfJoining ?? document.dateOfJoining;
+            const salaryDetails = document.salaryDetails || slip.salaryDetails;
+            return (
             <>
               <div className="border-t border-gray-200 pt-4">
-                <h4 className="text-lg font-semibold text-gray-900 mb-4">Salary Details</h4>
+                <h4 className="text-lg font-semibold text-gray-900 mb-4 flex flex-wrap items-center gap-2">
+                  Salary Details
+                  {vplPolicy && (
+                    <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
+                      VPL policy
+                    </span>
+                  )}
+                </h4>
+                {vplPolicy && (profileBasic != null || dojSnap) && (
+                  <div className="mb-4 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm space-y-1">
+                    {profileBasic != null && profileBasic !== '' && (
+                      <p>
+                        <span className="text-gray-500">Profile basic: </span>
+                        <span className="font-medium text-gray-900">
+                          {typeof profileBasic === 'number' ? profileBasic.toLocaleString() : profileBasic}
+                        </span>
+                      </p>
+                    )}
+                    {dojSnap && (
+                      <p>
+                        <span className="text-gray-500">DOJ snapshot: </span>
+                        <span className="font-medium text-gray-900">{formatDate(dojSnap)}</span>
+                      </p>
+                    )}
+                  </div>
+                )}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-500 mb-1">Month</label>
-                    <p className="text-gray-900">{document.month}</p>
+                    <p className="text-gray-900">{month ?? '—'}</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-500 mb-1">Working Days</label>
-                    <p className="text-gray-900">{document.workingDays}</p>
+                    <p className="text-gray-900">{workingDays ?? '—'}</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-500 mb-1">Present Days</label>
-                    <p className="text-gray-900">{document.presentDays}</p>
+                    <p className="text-gray-900">{presentDays ?? '—'}</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-500 mb-1">Leave Days</label>
-                    <p className="text-gray-900">{document.leaveDays || 0}</p>
+                    <p className="text-gray-900">{leaveDays ?? 0}</p>
                   </div>
                 </div>
-                {document.salaryDetails && (
+                {salaryDetails && (
                   <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                       <h5 className="font-semibold text-gray-900 mb-3">Earnings</h5>
                       <div className="space-y-2">
                         <div className="flex justify-between">
                           <span className="text-gray-600">Basic Salary</span>
-                          <span className="font-medium">{document.salaryDetails.basicSalary?.toLocaleString()}</span>
+                          <span className="font-medium">{salaryDetails.basicSalary?.toLocaleString?.() ?? salaryDetails.basicSalary}</span>
                         </div>
-                        {document.salaryDetails.allowances?.housing && (
+                        {salaryDetails.allowances?.housing != null && salaryDetails.allowances?.housing !== '' && (
                           <div className="flex justify-between">
-                            <span className="text-gray-600">Housing Allowance</span>
-                            <span className="font-medium">{document.salaryDetails.allowances.housing?.toLocaleString()}</span>
+                            <span className="text-gray-600">HRA (housing)</span>
+                            <span className="font-medium">{salaryDetails.allowances.housing?.toLocaleString?.() ?? salaryDetails.allowances.housing}</span>
                           </div>
                         )}
-                        {document.salaryDetails.allowances?.transport && (
+                        {salaryDetails.allowances?.cca != null && salaryDetails.allowances?.cca !== '' && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">CCA</span>
+                            <span className="font-medium">{salaryDetails.allowances.cca?.toLocaleString?.() ?? salaryDetails.allowances.cca}</span>
+                          </div>
+                        )}
+                        {salaryDetails.allowances?.transport != null && salaryDetails.allowances?.transport !== '' && (
                           <div className="flex justify-between">
                             <span className="text-gray-600">Transport Allowance</span>
-                            <span className="font-medium">{document.salaryDetails.allowances.transport?.toLocaleString()}</span>
+                            <span className="font-medium">{salaryDetails.allowances.transport?.toLocaleString?.() ?? salaryDetails.allowances.transport}</span>
                           </div>
                         )}
-                        {document.salaryDetails.allowances?.medical && (
+                        {salaryDetails.allowances?.medical != null && salaryDetails.allowances?.medical !== '' && (
                           <div className="flex justify-between">
                             <span className="text-gray-600">Medical Allowance</span>
-                            <span className="font-medium">{document.salaryDetails.allowances.medical?.toLocaleString()}</span>
+                            <span className="font-medium">{salaryDetails.allowances.medical?.toLocaleString?.() ?? salaryDetails.allowances.medical}</span>
+                          </div>
+                        )}
+                        {salaryDetails.allowances?.other != null && salaryDetails.allowances?.other !== '' && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Other allowances</span>
+                            <span className="font-medium">{salaryDetails.allowances.other?.toLocaleString?.() ?? salaryDetails.allowances.other}</span>
                           </div>
                         )}
                       </div>
@@ -332,23 +394,35 @@ const DocumentDetail = ({ document, onClose, onUpdate, onDelete, onGeneratePDF, 
                     <div>
                       <h5 className="font-semibold text-gray-900 mb-3">Deductions</h5>
                       <div className="space-y-2">
-                        {document.salaryDetails.deductions?.tax && (
+                        {salaryDetails.deductions?.tax != null && salaryDetails.deductions?.tax !== '' && (
                           <div className="flex justify-between">
                             <span className="text-gray-600">Tax</span>
-                            <span className="font-medium text-red-600">-{document.salaryDetails.deductions.tax?.toLocaleString()}</span>
+                            <span className="font-medium text-red-600">-{salaryDetails.deductions.tax?.toLocaleString?.() ?? salaryDetails.deductions.tax}</span>
                           </div>
                         )}
-                        {document.salaryDetails.deductions?.insurance && (
+                        {salaryDetails.deductions?.insurance != null && salaryDetails.deductions?.insurance !== '' && (
                           <div className="flex justify-between">
                             <span className="text-gray-600">Insurance</span>
-                            <span className="font-medium text-red-600">-{document.salaryDetails.deductions.insurance?.toLocaleString()}</span>
+                            <span className="font-medium text-red-600">-{salaryDetails.deductions.insurance?.toLocaleString?.() ?? salaryDetails.deductions.insurance}</span>
+                          </div>
+                        )}
+                        {salaryDetails.deductions?.meal != null && salaryDetails.deductions?.meal !== '' && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Meal</span>
+                            <span className="font-medium text-red-600">-{salaryDetails.deductions.meal?.toLocaleString?.() ?? salaryDetails.deductions.meal}</span>
+                          </div>
+                        )}
+                        {salaryDetails.deductions?.other != null && salaryDetails.deductions?.other !== '' && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Other</span>
+                            <span className="font-medium text-red-600">-{salaryDetails.deductions.other?.toLocaleString?.() ?? salaryDetails.deductions.other}</span>
                           </div>
                         )}
                       </div>
                       <div className="mt-4 pt-4 border-t border-gray-200">
                         <div className="flex justify-between">
                           <span className="font-semibold text-gray-900">Net Salary</span>
-                          <span className="font-bold text-lg text-green-600">{document.salaryDetails.netSalary?.toLocaleString()}</span>
+                          <span className="font-bold text-lg text-green-600">{salaryDetails.netSalary?.toLocaleString?.() ?? salaryDetails.netSalary}</span>
                         </div>
                       </div>
                     </div>
@@ -356,9 +430,10 @@ const DocumentDetail = ({ document, onClose, onUpdate, onDelete, onGeneratePDF, 
                 )}
               </div>
             </>
-          )}
+            );
+          })()}
 
-          {document.documentType === 'fnf' && (
+          {normalizedDocumentType === 'fnf' && (
             <>
               <div className="border-t border-gray-200 pt-4">
                 <h4 className="text-lg font-semibold text-gray-900 mb-4">Settlement Details</h4>
@@ -430,6 +505,75 @@ const DocumentDetail = ({ document, onClose, onUpdate, onDelete, onGeneratePDF, 
                 )}
               </div>
             </>
+          )}
+
+          {(normalizedDocumentType === 'experience_cum_relieving_letter' || normalizedDocumentType === 'relieving_letter') && (
+            <div className="border-t border-gray-200 pt-4">
+              <h4 className="text-lg font-semibold text-gray-900 mb-4">Relieving Details</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-500 mb-1">Designation</label>
+                  <p className="text-gray-900">
+                    {relField('designation') || document.position || relieving.position || 'Not specified'}
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-500 mb-1">Department</label>
+                  <p className="text-gray-900">{relField('department') || 'Not specified'}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-500 mb-1">Company</label>
+                  <p className="text-gray-900">{relField('companyName') || 'Not specified'}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-500 mb-1">Company Address</label>
+                  <p className="text-gray-900">{relField('companyAddress') || '—'}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-500 mb-1">Date of Joining</label>
+                  <p className="text-gray-900">{formatDate(relField('dateOfJoining'))}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-500 mb-1">Resignation Date</label>
+                  <p className="text-gray-900">{formatDate(relField('resignationDate'))}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-500 mb-1">Last Working Date</label>
+                  <p className="text-gray-900">{formatDate(relField('lastWorkingDate'))}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-500 mb-1">Relieving Date</label>
+                  <p className="text-gray-900">{formatDate(relField('relievingDate'))}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-500 mb-1">Issue Date</label>
+                  <p className="text-gray-900">{formatDate(relField('issueDate'))}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-500 mb-1">Signatory</label>
+                  <p className="text-gray-900">
+                    {relField('signatoryName') || '—'}
+                    {relField('signatoryDesignation') ? ` — ${relField('signatoryDesignation')}` : ''}
+                  </p>
+                </div>
+              </div>
+              {(relField('remarks') || document.remarks) && (
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-gray-500 mb-2">Remarks</label>
+                  <p className="text-gray-900 whitespace-pre-wrap">{relField('remarks') || document.remarks}</p>
+                </div>
+              )}
+              {Array.isArray(relieving.customParagraphs) && relieving.customParagraphs.length > 0 && (
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-gray-500 mb-2">Custom paragraphs</label>
+                  <ul className="list-disc list-inside text-gray-900 space-y-1">
+                    {relieving.customParagraphs.map((p, i) => (
+                      <li key={i} className="whitespace-pre-wrap">{p}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
           )}
 
           {/* Signature */}
