@@ -3,6 +3,7 @@ import axios from "axios";
 import * as XLSX from "xlsx";
 import { toast } from "react-toastify";
 import API_CONFIG from "../../config/api";
+import { CMT_CUSTOM_EDIT_DISPOSITION } from "../../constants/cmtCallDispositionLabels";
 
 const REPORT_BASE = `${API_CONFIG.BASE_URL}/api/v1/analytics/8x8`;
 /**
@@ -224,11 +225,28 @@ const CallDataReports = () => {
 
   const fetchCategoryOptions = async () => {
     try {
+      let storedUser = null;
+      try {
+        const raw =
+          sessionStorage.getItem("user") || localStorage.getItem("user");
+        if (raw) storedUser = JSON.parse(raw);
+      } catch {
+        /* ignore */
+      }
+      const isCmt =
+        String(storedUser?.department || "")
+          .trim()
+          .toLowerCase() === "cmt";
+
       const res = await axios.get(`${REPORT_BASE}/call-records/category-options`, getAuthConfig());
-      const options = res?.data?.data || res?.data?.options || [];
+      let options = res?.data?.data || res?.data?.options || [];
+      if (!Array.isArray(options)) options = [];
+      if (isCmt && options.length > 0 && !options.includes(CMT_CUSTOM_EDIT_DISPOSITION)) {
+        options = [...options, CMT_CUSTOM_EDIT_DISPOSITION];
+      }
       setState((prev) => ({
         ...prev,
-        categoryOptions: Array.isArray(options) ? options : [],
+        categoryOptions: options,
       }));
     } catch (error) {
       console.error("Category options fetch failed:", error);

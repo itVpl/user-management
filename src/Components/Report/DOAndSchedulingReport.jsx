@@ -230,6 +230,8 @@ export default function DOAndSchedulingReport() {
       const loadNo = norm(cust0.loadNo);
       const dispatcherName = norm(cust0.dispatcherName);
       const carrierName = norm(order.carrier?.carrierName || order.carrierId?.compName);
+      const carrierNumber = norm(order.carrier?.carrierNumber);
+      const carrierEmail = norm(order.carrierId?.email || order.carrier?.email);
       const loadType = norm(order.loadType);
       const createdBy = norm(
         order.createdBySalesUser?.employeeName ||
@@ -254,6 +256,8 @@ export default function DOAndSchedulingReport() {
         loadNo.includes(q) ||
         dispatcherName.includes(q) ||
         carrierName.includes(q) ||
+        carrierNumber.includes(q) ||
+        carrierEmail.includes(q) ||
         loadType.includes(q) ||
         createdBy.includes(q) ||
         assignedTo.includes(q) ||
@@ -336,12 +340,14 @@ export default function DOAndSchedulingReport() {
       alertify.error('No data to export');
       return;
     }
-    const headers = ['Load No', 'Dispatcher Name', 'Carrier Name', 'Load Type', 'Created By (Sales)', 'Assigned To (CMT)', 'Assigned At', 'Status', 'Important Date History'];
+    const headers = ['Load No', 'Dispatcher Name', 'Carrier Name', 'Carrier Email', 'Carrier Number', 'Load Type', 'Created By (Sales)', 'Assigned To (CMT)', 'Assigned At', 'Status', 'Important Date History'];
     const rows = dataToExport.map((order) => {
       const cust0 = order.customers?.[0] || {};
       const loadNo = cust0.loadNo || 'N/A';
       const dispatcherName = cust0.dispatcherName || 'N/A';
       const carrierName = order.carrier?.carrierName || 'N/A';
+      const carrierEmail = order.carrierId?.email || order.carrier?.email || 'N/A';
+      const carrierNumber = order.carrier?.carrierNumber || 'N/A';
       const loadType = order.loadType || 'N/A';
       const createdBy = order.createdBySalesUser?.employeeName || 'N/A';
       const assignedTo = order.assignedToCMT?.employeeName || 'N/A';
@@ -356,6 +362,8 @@ export default function DOAndSchedulingReport() {
         `"${String(loadNo).replace(/"/g, '""')}"`,
         `"${String(dispatcherName).replace(/"/g, '""')}"`,
         `"${String(carrierName).replace(/"/g, '""')}"`,
+        `"${String(carrierEmail).replace(/"/g, '""')}"`,
+        `"${String(carrierNumber).replace(/"/g, '""')}"`,
         `"${String(loadType).replace(/"/g, '""')}"`,
         `"${String(createdBy).replace(/"/g, '""')}"`,
         `"${String(assignedTo).replace(/"/g, '""')}"`,
@@ -676,6 +684,8 @@ export default function DOAndSchedulingReport() {
                   <th className="text-left py-4 px-4 text-gray-500 font-medium text-base">Load No</th>
                   <th className="text-left py-4 px-4 text-gray-500 font-medium text-base">Dispatcher Name</th>
                   <th className="text-left py-4 px-4 text-gray-500 font-medium text-base">Carrier Name</th>
+                  <th className="text-left py-4 px-4 text-gray-500 font-medium text-base">Carrier Email</th>
+                  <th className="text-left py-4 px-4 text-gray-500 font-medium text-base">Carrier Number</th>
                   <th className="text-left py-4 px-4 text-gray-500 font-medium text-base">Load Type</th>
                   <th className="text-left py-4 px-4 text-gray-500 font-medium text-base">Created By (Sales)</th>
                   <th className="text-left py-4 px-4 text-gray-500 font-medium text-base">Assigned To (CMT)</th>
@@ -692,6 +702,8 @@ export default function DOAndSchedulingReport() {
                     ? format(new Date(order.assignedToCMT.assignedAt), 'MMM dd, yyyy HH:mm')
                     : 'N/A';
                   const carrierName = order.carrier?.carrierName || 'N/A';
+                  const carrierEmail = order.carrierId?.email || order.carrier?.email || 'N/A';
+                  const carrierNumber = order.carrier?.carrierNumber || 'N/A';
                   const cust0 = order.customers?.[0] || {};
                   const loadNo = cust0.loadNo || 'N/A';
                   const dispatcherName = cust0.dispatcherName || 'N/A';
@@ -732,6 +744,27 @@ export default function DOAndSchedulingReport() {
 
   </div>
 </td>
+                      <td className="py-4 px-4">
+                        <div className="relative group max-w-[220px]">
+                          <span className="font-medium text-gray-700 block truncate">
+                            {carrierEmail || 'N/A'}
+                          </span>
+                          {carrierEmail && carrierEmail !== 'N/A' && (
+                            <div className="absolute left-0 top-full mt-2 hidden group-hover:block
+                                            bg-gray-900 text-white text-sm
+                                            px-3 py-2.5
+                                            rounded-lg shadow-xl
+                                            max-w-[280px]
+                                            break-words
+                                            z-50">
+                              {carrierEmail}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-4 px-4">
+                        <span className="font-medium text-gray-700">{carrierNumber}</span>
+                      </td>
                       <td className="py-4 px-4"><span className="font-medium text-gray-700">{order.loadType || 'N/A'}</span></td>
                       <td className="py-4 px-4"><span className="font-medium text-gray-700">{createdBy}</span></td>
                       <td className="py-4 px-4"><span className="font-medium text-gray-700">{assignedTo}</span></td>
