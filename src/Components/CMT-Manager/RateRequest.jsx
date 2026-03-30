@@ -50,6 +50,112 @@ const fullLoadId = (value, fallback = "N/A") => {
   return String(value);
 };
 
+/** Human-readable load ref for UI (prefer API `loadRef` / nested `loadReference`). */
+const extractLoadRefFromLoadDoc = (ld) => {
+  if (!ld || typeof ld !== "object") return "";
+  const direct =
+    ld.loadRef ??
+    ld.referenceNumber ??
+    ld.reference ??
+    (typeof ld.loadReference === "string" ? ld.loadReference : null);
+  if (direct != null && String(direct).trim() !== "") return String(direct).trim();
+  const lr = ld.loadReference;
+  if (lr && typeof lr === "object") {
+    const nested =
+      lr.referenceNumber ??
+      lr.loadRef ??
+      lr.refNumber ??
+      lr.loadNumber ??
+      lr.shipmentNumber;
+    if (nested != null && String(nested).trim() !== "")
+      return String(nested).trim();
+  }
+  return "";
+};
+
+/** Normalize row for tables: prefer stored `loadRef`, else parse embedded load doc, else Mongo id. */
+const displayLoadRefForRow = (item) => {
+  if (item?.loadRef != null && String(item.loadRef).trim() !== "")
+    return String(item.loadRef).trim();
+  const fromEmbedded = extractLoadRefFromLoadDoc(item?.loadData);
+  if (fromEmbedded) return fromEmbedded;
+  return fullLoadId(item?.loadId || item?.actualLoadId || item?._id, "N/A");
+};
+
+/** Normalize a raw load object (e.g. pickup/dest search, bid modal). */
+const displayLoadRefFromLoad = (load) => {
+  if (!load) return "N/A";
+  const r = extractLoadRefFromLoadDoc(load);
+  return r || fullLoadId(load._id || load.loadId, "N/A");
+};
+
+/** Normalize 8x8-style offset e.g. ...-0400 → ...-04:00 for reliable Date parsing. */
+const normalizeIsoOffset = (str) =>
+  typeof str === "string"
+    ? str.replace(/([+-]\d{2})(\d{2})$/, "$1:$2")
+    : str;
+
+/** Prefer UTC epoch ms from 8x8; else parse startTime string → local display via toLocaleString(). */
+const getEightEightStartMs = (rec) => {
+  if (typeof rec?.startTimeUTC === "number" && rec.startTimeUTC > 0) {
+    return rec.startTimeUTC;
+  }
+  if (rec?.startTime && String(rec.startTime) !== "0") {
+    const raw = normalizeIsoOffset(String(rec.startTime));
+    const t = Date.parse(raw);
+    const d = Number.isNaN(t) ? new Date(rec.startTime) : new Date(t);
+    if (!Number.isNaN(d.getTime())) return d.getTime();
+  }
+  return null;
+};
+
+const getEightEightEndMs = (rec) => {
+  if (
+    typeof rec?.disconnectedTimeUTC === "number" &&
+    rec.disconnectedTimeUTC > 0
+  ) {
+    return rec.disconnectedTimeUTC;
+  }
+  const disc = rec?.disconnectedTime;
+  if (disc && String(disc) !== "0" && String(disc).trim() !== "") {
+    const raw = normalizeIsoOffset(String(disc));
+    const t = Date.parse(raw);
+    const d = Number.isNaN(t) ? new Date(disc) : new Date(t);
+    if (!Number.isNaN(d.getTime())) return d.getTime();
+  }
+  return null;
+};
+
+/** System (browser) local timezone + locale. */
+const formatLocalDateTime = (ms) => {
+  if (ms == null || Number.isNaN(Number(ms))) return "—";
+  const d = new Date(Number(ms));
+  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleString();
+};
+
+const formatDurationFromMs = (totalMs) => {
+  if (totalMs == null || totalMs < 0) return "00:00:00";
+  const sec = Math.floor(totalMs / 1000);
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+};
+
+const aggregateEightEightRecords = (records) => {
+  const list = Array.isArray(records) ? records : [];
+  let incoming = 0;
+  let outgoing = 0;
+  let totalTalkMs = 0;
+  for (const rec of list) {
+    const d = String(rec?.direction || "").trim().toLowerCase();
+    if (d.includes("incoming")) incoming++;
+    else if (d.includes("outgoing")) outgoing++;
+    totalTalkMs += Number(rec?.talkTimeMS) || 0;
+  }
+  return { incoming, outgoing, totalTalkMs, total: list.length };
+};
+
 function readLS(key) {
   try {
     return JSON.parse(localStorage.getItem(key) || "{}");
@@ -113,6 +219,15 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
   const [callsStatsData, setCallsStatsData] = useState(null);
   const [callsStatsLoading, setCallsStatsLoading] = useState(false);
   const [callsStatsLoadId, setCallsStatsLoadId] = useState("");
+
+  const eightEightAgg = useMemo(
+    () =>
+      aggregateEightEightRecords(
+        callsStatsData?.callStats?.eightEight?.records,
+      ),
+    [callsStatsData],
+  );
+
   const [approvalModal, setApprovalModal] = useState({
     visible: false,
     type: null,
@@ -445,6 +560,7 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
           return {
             _id: approval._id,
             loadId,
+            loadRef: "N/A",
             shipmentNumber: null,
             weight: 0,
             origin: { address: "", city: "N/A", state: "N/A", zipcode: "N/A" },
@@ -554,6 +670,9 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
           _id: approval._id, // approval id
           loadId, // real load id for timers
             loadData: approval.loadId || null,
+          loadRef:
+            extractLoadRefFromLoadDoc(approval.loadId) ||
+            fullLoadId(loadId, "N/A"),
           actualLoadId: loadId, // Store actual MongoDB load ID for chat API calls
           shipmentNumber: approval.loadId.shipmentNumber || null,
           weight: approval.loadId.weight || 0,
@@ -671,6 +790,7 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
           return {
             _id: approval._id,
             loadId,
+            loadRef: "N/A",
             shipmentNumber: null,
             weight: 0,
             origin: { address: "", city: "N/A", state: "N/A", zipcode: "N/A" },
@@ -789,6 +909,9 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
           _id: approval._id, // approval id
           loadId, // real load id for timers
           actualLoadId: loadId, // Store actual MongoDB load ID for chat API calls
+          loadRef:
+            extractLoadRefFromLoadDoc(approval.loadId) ||
+            fullLoadId(loadId, "N/A"),
           shipmentNumber: approval.loadId.shipmentNumber || null,
           weight: approval.loadId.weight || 0,
           origin: originData,
@@ -958,11 +1081,7 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
     }
     try {
       setCallsStatsLoading(true);
-      const token =
-        sessionStorage.getItem("authToken") ||
-        localStorage.getItem("authToken") ||
-        sessionStorage.getItem("token") ||
-        localStorage.getItem("token");
+      const token = getAuthToken();
 
       if (!token) {
         toast.error("Authentication required. Please login again.");
@@ -972,6 +1091,7 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
       const response = await axios.get(
         `${API_CONFIG.BASE_URL}/api/v1/cmt-assignments/sla-call-stats/${loadId}`,
         {
+          params: { include8x8: 1 },
           headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
@@ -1933,6 +2053,7 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
       const parts = [
         item._id,
         item.loadId,
+        item.loadRef,
         item.shipmentNumber,
         item.shipper?.compName,
         item.shipper?.email,
@@ -2031,7 +2152,7 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
     try {
       const dataToExport = filteredRequests.map((item, index) => ({
         "S.No": index + 1,
-        "Load ID": fullLoadId(item.loadId || item.actualLoadId || item._id),
+        "Load ref": displayLoadRefForRow(item),
         "Shipment Number": item.shipmentNumber || "N/A",
         "Weight (lbs)": item.weight || 0,
         "Pickup City": item.origin?.city || "N/A",
@@ -2642,7 +2763,7 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
                 <thead className="bg-gray-100">
                   <tr>
                     <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">
-                      Load ID
+                      Load ref
                     </th>
                     <th className="px-4 py-3 text-gray-800 font-bold text-sm uppercase tracking-wide">
                       Weight (lbs)
@@ -2678,7 +2799,7 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
                     >
                       <td className="px-4 py-3">
                         <span className="font-medium text-gray-700">
-                          {fullLoadId(item.loadId || item.actualLoadId || item._id)}
+                          {displayLoadRefForRow(item)}
                         </span>
                       </td>
                       <td className="px-4 py-3">
@@ -2969,7 +3090,7 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
                   <thead>
                     <tr className="bg-gray-100">
                       <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y first:border-l border-gray-200 rounded-l-lg whitespace-nowrap">
-                        Load ID
+                        Load ref
                       </th>
                       <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200">
                         Weight (lbs)
@@ -3011,7 +3132,7 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
                       >
                         <td className="px-4 py-4 border-y first:border-l border-gray-200 first:rounded-l-lg">
                           <span className="font-medium text-gray-700">
-                            {fullLoadId(item.loadId || item.actualLoadId || item._id)}
+                            {displayLoadRefForRow(item)}
                           </span>
                         </td>
                         <td className="px-4 py-4 border-y border-gray-200">
@@ -4506,13 +4627,10 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                     <div className="space-y-1">
                       <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                        Load ID
+                        Load ref
                       </div>
                       <div className="text-sm font-semibold text-gray-800">
-                        {fullLoadId(
-                          bidDetailsModal.load._id ||
-                            bidDetailsModal.load.loadId,
-                        )}
+                        {displayLoadRefFromLoad(bidDetailsModal.load)}
                       </div>
                     </div>
                     <div className="space-y-1">
@@ -4964,11 +5082,8 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
                     );
                     const nextOpen = !callsSectionOpen;
                     setCallsSectionOpen(nextOpen);
-                    if (
-                      nextOpen &&
-                      modalLoadId &&
-                      (callsStatsLoadId !== modalLoadId || !callsStatsData)
-                    ) {
+                    // Har baar "View" se section open karte hi fresh SLA / 8x8 stats
+                    if (nextOpen && modalLoadId) {
                       fetchSlaCallStats(modalLoadId);
                     }
                   }}
@@ -4986,7 +5101,7 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
                 </button>
 
                 {callsSectionOpen && (
-                  <div className="p-6">
+                  <div className="p-6 space-y-6">
                     {callsStatsLoading ? (
                       <div className="text-sm text-gray-600">Loading call stats...</div>
                     ) : !callsStatsData ? (
@@ -4994,45 +5109,254 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
                         No call stats available for this load.
                       </div>
                     ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-1">
-                          <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                            Source
+                      <>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                          <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                            <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                              Assigned CMT
+                            </div>
+                            <div className="text-sm font-semibold text-gray-900 mt-1">
+                              {callsStatsData.assignedCMTUser?.empName || "N/A"}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-0.5">
+                              {callsStatsData.assignedCMTUser?.empId || ""}
+                              {callsStatsData.assignedCMTUser?.department
+                                ? ` · ${callsStatsData.assignedCMTUser.department}`
+                                : ""}
+                            </div>
+                            {callsStatsData.assignedCMTUser?.assignedAt && (
+                              <div className="text-xs text-gray-400 mt-1">
+                                Assigned:{" "}
+                                {new Date(
+                                  callsStatsData.assignedCMTUser.assignedAt,
+                                ).toLocaleString()}
+                              </div>
+                            )}
                           </div>
-                          <div className="text-sm font-semibold text-gray-800">
-                            {callsStatsData.selectedSource || "N/A"}
+                          <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                            <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                              Bid SLA
+                            </div>
+                            <div className="text-sm font-semibold text-gray-900 mt-1 capitalize">
+                              {callsStatsData.cmtBidSla?.status || "N/A"}
+                            </div>
+                            <div className="text-xs text-gray-600 mt-1">
+                              Bids: {callsStatsData.cmtBidSla?.bidCount ?? 0} /{" "}
+                              {callsStatsData.cmtBidSla?.requiredBids ?? "—"}
+                            </div>
+                            {callsStatsData.cmtBidSla?.message && (
+                              <div className="text-xs text-gray-500 mt-2 leading-relaxed">
+                                {callsStatsData.cmtBidSla.message}
+                              </div>
+                            )}
+                          </div>
+                          <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                            <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                              Call window
+                            </div>
+                            <div className="text-xs text-gray-700 mt-1">
+                              {callsStatsData.callStats?.windowStart
+                                ? new Date(
+                                    callsStatsData.callStats.windowStart,
+                                  ).toLocaleString()
+                                : "N/A"}
+                            </div>
+                            <div className="text-xs text-gray-700">
+                              →{" "}
+                              {callsStatsData.callStats?.windowEnd
+                                ? new Date(
+                                    callsStatsData.callStats.windowEnd,
+                                  ).toLocaleString()
+                                : "N/A"}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-1">
+                              Closed by:{" "}
+                              {callsStatsData.callStats?.windowClosedBy || "—"}
+                            </div>
                           </div>
                         </div>
-                        <div className="space-y-1">
-                          <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                            Assigned CMT
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          <div className="rounded-lg border border-gray-100 p-3 text-center">
+                            <div className="text-2xl font-bold text-gray-900">
+                              {eightEightAgg.total > 0
+                                ? eightEightAgg.total
+                                : callsStatsData.callStats?.eightEight
+                                      ?.totalCalls ?? 0}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              Total calls (8x8)
+                            </div>
                           </div>
-                          <div className="text-sm font-semibold text-gray-800">
-                            {callsStatsData.assignedCMTUser?.empName || "N/A"}
+                          <div className="rounded-lg border border-gray-100 p-3 text-center">
+                            <div className="text-2xl font-bold text-gray-900">
+                              {eightEightAgg.incoming}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              Incoming (from records)
+                            </div>
                           </div>
-                          <div className="text-xs text-gray-500">
-                            {callsStatsData.assignedCMTUser?.empId || ""}
+                          <div className="rounded-lg border border-gray-100 p-3 text-center">
+                            <div className="text-2xl font-bold text-gray-900">
+                              {eightEightAgg.outgoing}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              Outgoing (from records)
+                            </div>
+                          </div>
+                          <div className="rounded-lg border border-gray-100 p-3 text-center">
+                            <div className="text-lg sm:text-2xl font-bold text-gray-900 tabular-nums">
+                              {formatDurationFromMs(eightEightAgg.totalTalkMs)}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              Total talk (sum of talk time)
+                            </div>
                           </div>
                         </div>
-                        <div className="space-y-1">
-                          <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                            SLA Status
+
+                        {Array.isArray(callsStatsData.callStats?.calls) &&
+                          callsStatsData.callStats.calls.length > 0 && (
+                            <div>
+                              <h4 className="text-sm font-semibold text-gray-800 mb-2">
+                                System call log
+                              </h4>
+                              <div className="overflow-x-auto rounded-xl border border-gray-200">
+                                <table className="min-w-full text-sm">
+                                  <thead className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase">
+                                    <tr>
+                                      <th className="px-3 py-2">Direction</th>
+                                      <th className="px-3 py-2">When</th>
+                                      <th className="px-3 py-2">Duration</th>
+                                      <th className="px-3 py-2">Details</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-gray-100">
+                                    {callsStatsData.callStats.calls.map(
+                                      (row, idx) => (
+                                        <tr key={row?.id || row?._id || idx}>
+                                          <td className="px-3 py-2 text-gray-800">
+                                            {row?.direction || row?.type || "—"}
+                                          </td>
+                                          <td className="px-3 py-2 text-gray-600 whitespace-nowrap">
+                                            {row?.startedAt || row?.startTime
+                                              ? new Date(
+                                                  row.startedAt || row.startTime,
+                                                ).toLocaleString()
+                                              : "—"}
+                                          </td>
+                                          <td className="px-3 py-2 text-gray-600">
+                                            {row?.durationSeconds != null
+                                              ? `${row.durationSeconds}s`
+                                              : row?.duration || "—"}
+                                          </td>
+                                          <td className="px-3 py-2 text-gray-500 max-w-md text-xs">
+                                            {typeof row === "object" && row
+                                              ? [
+                                                  row.from,
+                                                  row.to,
+                                                  row.phone,
+                                                  row.phoneNumber,
+                                                  row.number,
+                                                  row.status,
+                                                  row.disposition,
+                                                ]
+                                                  .filter(Boolean)
+                                                  .join(" · ") ||
+                                                JSON.stringify(row)
+                                              : String(row)}
+                                          </td>
+                                        </tr>
+                                      ),
+                                    )}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          )}
+
+                        {callsStatsData.callStats?.eightEight?.error && (
+                          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                            8x8: {callsStatsData.callStats.eightEight.error}
                           </div>
-                          <div className="text-sm font-semibold text-gray-800">
-                            {callsStatsData.cmtBidSla?.status || "N/A"}
-                          </div>
-                        </div>
-                        <div className="space-y-1">
-                          <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                            Call Stats
-                          </div>
-                          <div className="text-sm font-semibold text-gray-800">
-                            {callsStatsData.callStats
-                              ? JSON.stringify(callsStatsData.callStats)
-                              : "N/A"}
-                          </div>
-                        </div>
-                      </div>
+                        )}
+
+                        {Array.isArray(
+                          callsStatsData.callStats?.eightEight?.records,
+                        ) &&
+                          callsStatsData.callStats.eightEight.records.length >
+                            0 && (
+                            <div>
+                              <h4 className="text-sm font-semibold text-gray-800 mb-2">
+                                8x8 call records
+                              </h4>
+                              <div className="overflow-x-auto rounded-xl border border-gray-200 max-h-80 overflow-y-auto">
+                                <table className="min-w-full text-sm">
+                                  <thead className="sticky top-0 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase z-10">
+                                    <tr>
+                                      <th className="px-3 py-2">Direction</th>
+                                      <th className="px-3 py-2">Start</th>
+                                      <th className="px-3 py-2">End</th>
+                                      <th className="px-3 py-2">Talk</th>
+                                      <th className="px-3 py-2">From</th>
+                                      <th className="px-3 py-2">To</th>
+                                      <th className="px-3 py-2">Answered</th>
+                                      <th className="px-3 py-2">Disposition</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-gray-100">
+                                    {callsStatsData.callStats.eightEight.records.map(
+                                      (rec, idx) => (
+                                        <tr key={rec?.callId || idx}>
+                                          <td className="px-3 py-2 text-gray-800 whitespace-nowrap">
+                                            {rec?.direction || "—"}
+                                          </td>
+                                          <td className="px-3 py-2 text-gray-600 whitespace-nowrap text-xs">
+                                            {formatLocalDateTime(
+                                              getEightEightStartMs(rec),
+                                            )}
+                                          </td>
+                                          <td className="px-3 py-2 text-gray-600 whitespace-nowrap text-xs">
+                                            {formatLocalDateTime(
+                                              getEightEightEndMs(rec),
+                                            )}
+                                          </td>
+                                          <td className="px-3 py-2 text-gray-700 whitespace-nowrap">
+                                            {rec?.talkTime || "—"}
+                                          </td>
+                                          <td className="px-3 py-2 text-gray-600 text-xs max-w-[140px] truncate" title={rec?.callerName || rec?.callerNumber}>
+                                            {rec?.callerName || rec?.callerNumber || "—"}
+                                          </td>
+                                          <td className="px-3 py-2 text-gray-600 text-xs max-w-[140px] truncate" title={rec?.calleeNumber || rec?.receiverNumber}>
+                                            {rec?.calleeNumber ||
+                                              rec?.receiverNumber ||
+                                              "—"}
+                                          </td>
+                                          <td className="px-3 py-2 text-gray-600 whitespace-nowrap text-xs">
+                                            {rec?.answered || "—"}
+                                          </td>
+                                          <td className="px-3 py-2 text-gray-500 text-xs max-w-[120px] truncate">
+                                            {rec?.lastLegDisposition || "—"}
+                                          </td>
+                                        </tr>
+                                      ),
+                                    )}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          )}
+
+                        {(!callsStatsData.callStats?.calls ||
+                          callsStatsData.callStats.calls.length === 0) &&
+                          (!callsStatsData.callStats?.eightEight?.records ||
+                            callsStatsData.callStats.eightEight.records
+                              .length === 0) && (
+                            <div className="text-sm text-gray-500">
+                              No individual call rows in this window (totals may
+                              still show above).
+                            </div>
+                          )}
+                      </>
                     )}
                   </div>
                 )}
@@ -5255,7 +5579,7 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
                   <thead>
                     <tr className="bg-gray-100">
                       <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y first:border-l border-gray-200 rounded-l-lg whitespace-nowrap">
-                        Load ID
+                        Load ref
                       </th>
                       <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200 whitespace-nowrap">
                         Weight (lbs)
@@ -5297,7 +5621,7 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
                       >
                         <td className="px-4 py-4 border-y first:border-l border-gray-200 first:rounded-l-lg">
                           <span className="font-medium text-gray-700">
-                            {fullLoadId(item.loadId || item.actualLoadId || item._id)}
+                            {displayLoadRefForRow(item)}
                           </span>
                         </td>
                         <td className="px-4 py-4 border-y border-gray-200">
@@ -5810,7 +6134,7 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
                       <thead>
                         <tr className="bg-gray-100">
                           <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y first:border-l border-gray-200 rounded-l-lg whitespace-nowrap">
-                            Load ID
+                            Load ref
                           </th>
                           <th className="px-4 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wide border-y border-gray-200 whitespace-nowrap">
                             Weight (lbs)
@@ -5852,7 +6176,7 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
                             >
                               <td className="px-4 py-4 border-y first:border-l border-gray-200 first:rounded-l-lg">
                                 <span className="font-medium text-gray-700">
-                                  {fullLoadId(load?._id || load?.loadId)}
+                                  {displayLoadRefFromLoad(load)}
                                 </span>
                               </td>
                               <td className="px-4 py-4 border-y border-gray-200">

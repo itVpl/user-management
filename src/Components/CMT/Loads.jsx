@@ -36,6 +36,43 @@ import alertify from "alertifyjs";
 
 import "alertifyjs/build/css/alertify.css";
 
+const fullLoadId = (value, fallback = "N/A") => {
+  if (!value) return fallback;
+  if (typeof value === "object") return value._id || value.id || fallback;
+  return String(value);
+};
+
+/** Human-readable load ref from API (prefer over Mongo _id in UI). */
+const extractLoadRefFromLoadDoc = (ld) => {
+  if (!ld || typeof ld !== "object") return "";
+  const direct =
+    ld.loadRef ??
+    ld.referenceNumber ??
+    ld.reference ??
+    (typeof ld.loadReference === "string" ? ld.loadReference : null);
+  if (direct != null && String(direct).trim() !== "") return String(direct).trim();
+  const lr = ld.loadReference;
+  if (lr && typeof lr === "object") {
+    const nested =
+      lr.referenceNumber ??
+      lr.loadRef ??
+      lr.refNumber ??
+      lr.loadNumber ??
+      lr.shipmentNumber;
+    if (nested != null && String(nested).trim() !== "")
+      return String(nested).trim();
+  }
+  return "";
+};
+
+/** Row object: show stored loadRef, else Mongo id fallback. */
+const displayLoadIdColumnValue = (row) => {
+  if (!row) return "N/A";
+  if (row.loadRef != null && String(row.loadRef).trim() !== "")
+    return String(row.loadRef).trim();
+  return fullLoadId(row.id || row.loadNum, "N/A");
+};
+
 // Searchable Dropdown Component
 const SearchableDropdown = ({
   value,
@@ -3020,6 +3057,10 @@ export default function Loads() {
 
             loadNum: load._id || "N/A",
 
+            loadRef:
+              extractLoadRefFromLoadDoc(load) ||
+              fullLoadId(load._id, "N/A"),
+
             shipmentNumber: load.shipmentNumber || "N/A",
 
             origin: originText,
@@ -3137,6 +3178,8 @@ export default function Loads() {
             id: `LD-ERROR-${index}`,
 
             loadNum: "Error",
+
+            loadRef: "Error",
 
             shipmentNumber: "Error",
 
@@ -3394,7 +3437,12 @@ export default function Loads() {
     // Then filter by search term
 
     const matchesSearch =
-      load.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      String(load.id || "")
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase()) ||
+      String(load.loadRef || "")
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase()) ||
       load.shipmentNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
       load.origin.toLowerCase().includes(searchTerm.toLowerCase()) ||
       load.destination.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -3498,6 +3546,10 @@ export default function Loads() {
           id: response.data.data._id || "N/A",
 
           loadNum: response.data.data._id,
+
+          loadRef:
+            extractLoadRefFromLoadDoc(response.data.data) ||
+            fullLoadId(response.data.data._id, "N/A"),
 
           shipmentNumber: response.data.data.shipmentNumber,
 
@@ -4620,7 +4672,8 @@ export default function Loads() {
 
               <div className="flex items-center gap-2 text-gray-700">
                 <FileText size={16} />{" "}
-                <span className="font-medium">Load ID:</span> {selectedLoad.id}
+                <span className="font-medium">Load ID:</span>{" "}
+                {displayLoadIdColumnValue(selectedLoad)}
               </div>
 
               <div className="flex items-center gap-2 text-gray-700">
@@ -4735,7 +4788,7 @@ export default function Loads() {
                   >
                     <td className="py-4 px-4 align-middle">
                       <span className="text-gray-600 text-sm font-medium whitespace-nowrap">
-                        {load.id}
+                        {displayLoadIdColumnValue(load)}
                       </span>
                     </td>
 
@@ -7341,7 +7394,7 @@ export default function Loads() {
                       <span className="text-gray-600">Load ID:</span>
 
                       <span className="font-medium">
-                        {selectedLoadForAction.id}
+                        {displayLoadIdColumnValue(selectedLoadForAction)}
                       </span>
                     </div>
 
@@ -10228,7 +10281,7 @@ export default function Loads() {
                 <p className="text-gray-500">
                   You are about to delete load{" "}
                   <span className="font-semibold">
-                    {selectedLoadForAction.id}
+                    {displayLoadIdColumnValue(selectedLoadForAction)}
                   </span>
                   . This action cannot be undone.
                 </p>

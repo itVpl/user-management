@@ -43,7 +43,10 @@ export default function TruckerReport() {
   const [eSignName, setESignName] = useState('');
   const [exportLoading, setExportLoading] = useState(false);
   const [cmtUsers, setCmtUsers] = useState([]);
+  const [activeCmtCount, setActiveCmtCount] = useState(null);
   const [cmtUsersLoading, setCmtUsersLoading] = useState(false);
+  const [reportTab, setReportTab] = useState('detailed'); // 'summary' | 'detailed'
+  const [summarySearch, setSummarySearch] = useState('');
   const [selectedCmtEmpId, setSelectedCmtEmpId] = useState('');
   const [showCmtFilter, setShowCmtFilter] = useState(false);
   const [cmtFilterSearch, setCmtFilterSearch] = useState('');
@@ -64,16 +67,26 @@ export default function TruckerReport() {
     setShowPresetMenu(false);
   };
 
-  // Fetch CMT users from GET /api/v1/inhouseUser/department/CMT
+  // Active CMT users (Carrier Summary + Detailed tab filter dropdown)
   useEffect(() => {
     setCmtUsersLoading(true);
     const token = sessionStorage.getItem('token') || localStorage.getItem('token');
-    axios.get(`${API_CONFIG.BASE_URL}/api/v1/inhouseUser/department/CMT`, {
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
-    }).then((res) => {
-      const list = res.data?.employees || res.data?.data || (Array.isArray(res.data) ? res.data : []);
-      setCmtUsers(Array.isArray(list) ? list : []);
-    }).catch(() => setCmtUsers([])).finally(() => setCmtUsersLoading(false));
+    axios
+      .get(`${API_CONFIG.BASE_URL}/api/v1/inhouseUser/active`, {
+        params: { department: 'CMT' },
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+      })
+      .then((res) => {
+        const d = res.data?.data ?? res.data ?? {};
+        const list = d?.employees ?? res.data?.employees ?? (Array.isArray(d) ? d : []);
+        setCmtUsers(Array.isArray(list) ? list : []);
+        setActiveCmtCount(typeof d?.count === 'number' ? d.count : Array.isArray(list) ? list.length : 0);
+      })
+      .catch(() => {
+        setCmtUsers([]);
+        setActiveCmtCount(0);
+      })
+      .finally(() => setCmtUsersLoading(false));
   }, []);
 
   const filteredCmtUsers = useMemo(() => {
@@ -85,6 +98,18 @@ export default function TruckerReport() {
       return name.includes(q) || empIdStr.includes(q);
     });
   }, [cmtUsers, cmtFilterSearch]);
+
+  const filteredSummaryEmployees = useMemo(() => {
+    const q = (summarySearch || '').trim().toLowerCase();
+    if (!q) return cmtUsers;
+    return cmtUsers.filter((u) => {
+      const name = (u.employeeName || u.empName || u.aliasName || '').toLowerCase();
+      const empIdStr = String(u.empId || u._id || '').toLowerCase();
+      const email = String(u.email || '').toLowerCase();
+      const desig = String(u.designation || '').toLowerCase();
+      return name.includes(q) || empIdStr.includes(q) || email.includes(q) || desig.includes(q);
+    });
+  }, [cmtUsers, summarySearch]);
 
   const selectedCmtUser = useMemo(
     () => (selectedCmtEmpId ? cmtUsers.find((u) => (u.empId || u._id) === selectedCmtEmpId) : null),
@@ -121,11 +146,12 @@ export default function TruckerReport() {
     }
   };
 
-  // Fetch truckers when filters or page changes
+  // Fetch truckers only on Detailed Carrier tab
   useEffect(() => {
+    if (reportTab !== 'detailed') return;
     const searchParams = buildSearchParams();
     dispatch(fetchTruckers(searchParams));
-  }, [dispatch, buildSearchParams]);
+  }, [dispatch, buildSearchParams, reportTab]);
 
   // Show error messages
   useEffect(() => {
@@ -339,8 +365,8 @@ export default function TruckerReport() {
   const formatCurrency = (amount) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount || 0);
 
-  // Initial loading state (only when no truckers)
-  if (loading && truckers.length === 0) {
+  // Initial loading state (Detailed tab only)
+  if (reportTab === 'detailed' && loading && truckers.length === 0) {
     return (
       <div className="p-6 bg-white min-h-screen">
         <div className="flex items-center justify-center h-64">
@@ -353,8 +379,7 @@ export default function TruckerReport() {
     );
   }
 
-  // Loading overlay for pagination (no blur)
-  const showLoadingOverlay = loading && truckers.length > 0;
+  const showLoadingOverlay = reportTab === 'detailed' && loading && truckers.length > 0;
 
   if (previewImg) {
     return (
@@ -423,6 +448,106 @@ export default function TruckerReport() {
         </div>
       )}
 
+      {/* Carrier Summary | Detailed Carrier */}
+      <div className="flex gap-1 p-1 mb-6 bg-gray-100 rounded-xl border border-gray-200 w-full max-w-md">
+        <button
+          type="button"
+          onClick={() => setReportTab('summary')}
+          className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-colors ${
+            reportTab === 'summary'
+              ? 'bg-white text-blue-700 shadow-sm border border-gray-200'
+              : 'text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          Carrier Summary
+        </button>
+        <button
+          type="button"
+          onClick={() => setReportTab('detailed')}
+          className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-colors ${
+            reportTab === 'detailed'
+              ? 'bg-white text-blue-700 shadow-sm border border-gray-200'
+              : 'text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          Detailed Carrier
+        </button>
+      </div>
+
+      {reportTab === 'summary' && (
+        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 border-b border-gray-100 bg-gray-50/80">
+            <div>
+              <h2 className="text-lg font-bold text-gray-800">Active CMT users</h2>
+              <p className="text-sm text-gray-500 mt-0.5">
+                {activeCmtCount != null ? `${activeCmtCount} active` : '—'} · from department CMT
+              </p>
+            </div>
+            <div className="relative w-full sm:max-w-xs">
+              <input
+                type="text"
+                placeholder="Search name, ID, email, designation..."
+                value={summarySearch}
+                onChange={(e) => setSummarySearch(e.target.value)}
+                className="w-full pl-4 pr-10 py-2.5 border border-gray-200 rounded-xl bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
+              />
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            {cmtUsersLoading ? (
+              <div className="flex justify-center py-16">
+                <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
+              </div>
+            ) : filteredSummaryEmployees.length === 0 ? (
+              <div className="text-center py-12 text-gray-500">
+                <User className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                <p className="font-medium">No active CMT users found</p>
+                <p className="text-sm text-gray-400 mt-1">Try adjusting search or check API access</p>
+              </div>
+            ) : (
+              <table className="w-full min-w-[720px]">
+                <thead className="bg-white border-b border-gray-200">
+                  <tr>
+                    <th className="text-left py-3 px-4 text-gray-700 font-medium text-sm">Emp ID</th>
+                    <th className="text-left py-3 px-4 text-gray-700 font-medium text-sm">Name</th>
+                    <th className="text-left py-3 px-4 text-gray-700 font-medium text-sm">Alias</th>
+                    <th className="text-left py-3 px-4 text-gray-700 font-medium text-sm">Email</th>
+                    <th className="text-left py-3 px-4 text-gray-700 font-medium text-sm">Designation</th>
+                    <th className="text-left py-3 px-4 text-gray-700 font-medium text-sm">Date of joining</th>
+                    <th className="text-left py-3 px-4 text-gray-700 font-medium text-sm">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredSummaryEmployees.map((u) => {
+                    const id = u.empId || u._id || '—';
+                    const join = u.dateOfJoining ? new Date(u.dateOfJoining).toLocaleDateString() : '—';
+                    const st = (u.status || 'active').toLowerCase();
+                    return (
+                      <tr key={u._id || id} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="py-3 px-4 text-sm font-medium text-gray-800">{id}</td>
+                        <td className="py-3 px-4 text-sm text-gray-800">{u.employeeName || u.empName || '—'}</td>
+                        <td className="py-3 px-4 text-sm text-gray-600">{u.aliasName || '—'}</td>
+                        <td className="py-3 px-4 text-sm text-gray-700 break-all">{u.email || '—'}</td>
+                        <td className="py-3 px-4 text-sm text-gray-600">{u.designation || '—'}</td>
+                        <td className="py-3 px-4 text-sm text-gray-600">{join}</td>
+                        <td className="py-3 px-4">
+                          <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${statusColor(st)}`}>
+                            {st}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
+
+      {reportTab === 'detailed' && (
+      <>
       {/* Top Section - same as DeliveryOrder */}
       <div className="flex flex-col gap-6 mb-6 border border-gray-200 rounded-xl p-6 bg-white">
         {/* Row 1: Stats & Actions */}
@@ -764,6 +889,8 @@ export default function TruckerReport() {
             </button>
           </div>
         </div>
+      )}
+      </>
       )}
 
       {/* E-Sign modal for CSV export */}

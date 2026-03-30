@@ -13,6 +13,58 @@ const alphaNum = /^[A-Za-z0-9\s-]+$/;        // letters, numbers, space, dash
 // Sanitizers
 const sanitizeAlphaNum = (v) => (v || '').replace(/[^a-zA-Z0-9]/g, ''); // A-Z a-z 0-9 only
 const sanitizeAlpha = (v) => (v || '').replace(/[^a-zA-Z\s]/g, '').replace(/\s{2,}/g, ' '); // alphabets + single spaces
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const getWithRetry = async (url, config = {}, options = {}) => {
+  const { retries = 1, retryDelayMs = 700 } = options;
+  try {
+    return await axios.get(url, config);
+  } catch (error) {
+    const isTimeout = error?.code === 'ECONNABORTED' || /timeout/i.test(error?.message || '');
+    if (isTimeout && retries > 0) {
+      await sleep(retryDelayMs);
+      return getWithRetry(url, config, { retries: retries - 1, retryDelayMs });
+    }
+    throw error;
+  }
+};
+
+const extractLoadRefFromLoadDoc = (ld) => {
+  if (!ld || typeof ld !== 'object') return '';
+  const direct =
+    ld.loadRef ??
+    ld.referenceNumber ??
+    ld.reference ??
+    (typeof ld.loadReference === 'string' ? ld.loadReference : null);
+  if (direct != null && String(direct).trim() !== '') return String(direct).trim();
+  const lr = ld.loadReference;
+  if (lr && typeof lr === 'object') {
+    const nested =
+      lr.referenceNumber ??
+      lr.loadRef ??
+      lr.refNumber ??
+      lr.loadNumber ??
+      lr.shipmentNumber;
+    if (nested != null && String(nested).trim() !== '') return String(nested).trim();
+  }
+  return '';
+};
+
+/** UI: prefer API loadRef; else legacy L-xxxxx from loadId. */
+const displayLoadRefForRow = (row) => {
+  if (!row) return 'N/A';
+  if (row.loadRef != null && String(row.loadRef).trim() !== '') return String(row.loadRef).trim();
+  if (row.loadId != null && String(row.loadId).trim() !== '' && row.loadId !== 'N/A') return String(row.loadId);
+  return 'N/A';
+};
+
+const buildLoadRefFromBid = (bid) => {
+  const ld = bid?.load;
+  if (!ld) return 'N/A';
+  const ref = extractLoadRefFromLoadDoc(ld);
+  if (ref) return ref;
+  return ld._id ? `L-${String(ld._id).slice(-5)}` : 'N/A';
+};
 
 export default function RateApproved() {
   const [pendingRates, setPendingRates] = useState([]);
@@ -216,6 +268,8 @@ export default function RateApproved() {
           id: `BID-${bid._id.slice(-6)}`,
           rateNum: bid._id,
           loadId: bid.load?._id ? `L-${bid.load._id.slice(-5)}` : 'N/A',
+          loadRef: buildLoadRefFromBid(bid),
+          actualLoadId: bid.load?._id || null,
           shipmentNumber: bid.load?.shipmentNumber || 'N/A',
           origin: bid.load ? (() => {
             if (bid.load.origin && bid.load.origin.city) {
@@ -326,6 +380,8 @@ export default function RateApproved() {
           id: `BID-${bid._id.slice(-6)}`,
           rateNum: bid._id,
           loadId: bid.load?._id ? `L-${bid.load._id.slice(-5)}` : 'N/A',
+          loadRef: buildLoadRefFromBid(bid),
+          actualLoadId: bid.load?._id || null,
           shipmentNumber: bid.load?.shipmentNumber || 'N/A',
           origin: bid.origins && bid.origins.length > 0 
             ? `${bid.origins[0].city || bid.origins[0].extractedCity || 'N/A'}, ${bid.origins[0].state || 'N/A'}`
@@ -424,6 +480,8 @@ export default function RateApproved() {
           id: `BID-${bid._id.slice(-6)}`,
           rateNum: bid._id,
           loadId: bid.load?._id ? `L-${bid.load._id.slice(-5)}` : 'N/A',
+          loadRef: buildLoadRefFromBid(bid),
+          actualLoadId: bid.load?._id || null,
           shipmentNumber: bid.load?.shipmentNumber || 'N/A',
           origin: bid.load ? (() => {
             if (bid.load.origin && bid.load.origin.city) {
@@ -615,6 +673,8 @@ export default function RateApproved() {
           id: `BID-${bid._id.slice(-6)}`,
           rateNum: bid._id,
           loadId: bid.load?._id ? `L-${bid.load._id.slice(-5)}` : 'N/A',
+          loadRef: buildLoadRefFromBid(bid),
+          actualLoadId: bid.load?._id || null,
           shipmentNumber: bid.load?.shipmentNumber || 'N/A',
           origin: getOrigin(),
           destination: getDestination(),
@@ -774,6 +834,8 @@ export default function RateApproved() {
   const filteredRates = activeTabRates.filter(rate => {
     const searchLower = searchTerm.toLowerCase();
     const matches = (rate.id || '').toLowerCase().includes(searchLower) ||
+      (rate.loadRef || '').toLowerCase().includes(searchLower) ||
+      (rate.loadId || '').toLowerCase().includes(searchLower) ||
       (rate.shipmentNumber || '').toLowerCase().includes(searchLower) ||
       (rate.origin || '').toLowerCase().includes(searchLower) ||
       (rate.destination || '').toLowerCase().includes(searchLower) ||
@@ -790,10 +852,10 @@ export default function RateApproved() {
   const fetchPendingApprovals = async () => {
     try {
 
-      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/bid/pending-intermediate-approval`, {
-        timeout: 10000,
+      const response = await getWithRetry(`${API_CONFIG.BASE_URL}/api/v1/bid/pending-intermediate-approval`, {
+        timeout: 20000,
         headers: API_CONFIG.getAuthHeaders()
-      });
+      }, { retries: 1, retryDelayMs: 900 });
 
 
       if (response.data && response.data.success) {
@@ -812,6 +874,8 @@ export default function RateApproved() {
           id: `RA-${bid._id.slice(-6)}`,
           rateNum: bid._id,
           loadId: bid.load?._id ? `L-${bid.load._id.slice(-5)}` : 'N/A',
+          loadRef: buildLoadRefFromBid(bid),
+          actualLoadId: bid.load?._id || null,
           shipmentNumber: bid.load?.shipmentNumber || 'N/A',
           origin: bid.load ? (() => {
             if (bid.load.origin && bid.load.origin.city) {
@@ -864,11 +928,15 @@ export default function RateApproved() {
   const fetchPendingBidsBySalesUser = async (userId = null) => {
     try {
       const userEmpId = userId || salesUserId || sessionStorage.getItem('empId') || localStorage.getItem('empId');
+      if (!userEmpId) {
+        console.warn('Sales user ID not found. Skipping pending bids by sales user fetch.');
+        return [];
+      }
 
-      const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/bid/pending-by-sales-user/${userEmpId}`, {
-        timeout: 10000,
+      const response = await getWithRetry(`${API_CONFIG.BASE_URL}/api/v1/bid/pending-by-sales-user/${userEmpId}`, {
+        timeout: 20000,
         headers: API_CONFIG.getAuthHeaders()
-      });
+      }, { retries: 1, retryDelayMs: 900 });
 
 
       if (response.data && response.data.success) {
@@ -876,6 +944,7 @@ export default function RateApproved() {
           id: `BID-${bid._id.slice(-6)}`,
           rateNum: bid._id,
           loadId: bid.load?._id ? `L-${bid.load._id.slice(-5)}` : 'N/A',
+          loadRef: buildLoadRefFromBid(bid),
           actualLoadId: bid.load?._id || null, // Store actual MongoDB load ID for API calls
           shipmentNumber: bid.load?.shipmentNumber || 'N/A',
           origin: bid.load ? (() => {
@@ -1131,6 +1200,7 @@ export default function RateApproved() {
       // Define CSV headers
       const headers = [
         'Bid ID',
+        'Load ref',
         'Origin',
         'Destination', 
         'Original Rate',
@@ -1149,6 +1219,7 @@ export default function RateApproved() {
         headers.join(','),
         ...dataToExport.map(rate => [
           rate.id || '',
+          `"${displayLoadRefForRow(rate).replace(/"/g, '""')}"`,
           `"${rate.origin || ''}"`,
           `"${rate.destination || ''}"`,
           rate.originalRate || 0,
@@ -1200,8 +1271,9 @@ export default function RateApproved() {
   // Replace the existing useEffect
   useEffect(() => {
     const prefetchAllTabs = async () => {
+      // Stage prefetch to reduce initial burst that can cause backend timeout.
+      await fetchAllData({ withLoading: true });
       await Promise.allSettled([
-        fetchAllData({ withLoading: true }),
         fetchCompletedRates({ withLoading: false }),
         fetchAcceptedBids({ withLoading: false }),
         fetchManagerApprovedBids(),
@@ -2686,7 +2758,7 @@ export default function RateApproved() {
                 <table className="w-full text-sm border-separate border-spacing-y-3 border-spacing-x-0">
                   <thead>
                     <tr className="bg-gray-100 text-xs uppercase text-gray-600">
-                      <th className="text-left text-gray-800 py-3 px-4 font-bold whitespace-nowrap tracking-wide rounded-l-xl">Bid ID / Load ID</th>
+                      <th className="text-left text-gray-800 py-3 px-4 font-bold whitespace-nowrap tracking-wide rounded-l-xl">Bid ID / Load ref</th>
                       <th className="text-left text-gray-800 py-3 px-4 font-bold tracking-wide">Origin</th>
                       <th className="text-left text-gray-800 py-3 px-4 font-bold tracking-wide">Destination</th>
                       <th className="text-left text-gray-800 py-3 px-4 font-bold tracking-wide">Rate</th>
@@ -2702,7 +2774,7 @@ export default function RateApproved() {
                       <tr key={rate.id} className="bg-white hover:bg-gray-50/60 transition-colors">
                         <td className="py-3 px-4 border-y border-l border-gray-200 rounded-l-xl">
                           <div className="text-sm font-semibold text-gray-800">{rate.id}</div>
-                          <div className="text-xs text-gray-400">{rate.loadId}</div>
+                          <div className="text-xs text-gray-400">{displayLoadRefForRow(rate)}</div>
                         </td>
                         <td className="py-3 px-4 border-y border-gray-200">
                           <div className="text-sm text-gray-800">{rate.origin}</div>
@@ -2743,7 +2815,7 @@ export default function RateApproved() {
                           <div className="flex gap-2">
                           <button
   onClick={() => {
-    const loadId = rate.actualLoadId || rate.loadId?.replace(/^L-/, '') || rate.loadId || rate.rateNum;
+    const loadId = rate.actualLoadId || null;
     const receiverEmpId = rate.salesUserInfo?.empId || rate.load?.createdBySalesUser?.empId;
     const receiverName =
       rate.salesUserInfo?.empName ||
@@ -2907,7 +2979,7 @@ export default function RateApproved() {
               <table className="w-full text-sm border-separate border-spacing-y-3 border-spacing-x-0">
                 <thead>
                   <tr className="bg-gray-100 text-xs uppercase text-gray-600">
-                    <th className="text-left text-gray-800 py-3 px-4 font-bold whitespace-nowrap tracking-wide rounded-l-xl">Bid ID / Load ID</th>
+                    <th className="text-left text-gray-800 py-3 px-4 font-bold whitespace-nowrap tracking-wide rounded-l-xl">Bid ID / Load ref</th>
                     <th className="text-left text-gray-800 py-3 px-4 font-bold tracking-wide w-48">Origin</th>
                     <th className="text-left text-gray-800 py-3 px-4 font-bold tracking-wide w-48">Destination</th>
                     <th className="text-left text-gray-800 py-3 px-4 font-bold whitespace-nowrap tracking-wide">Original Rate</th>
@@ -2923,7 +2995,7 @@ export default function RateApproved() {
                     <tr key={rate.id} className="bg-white hover:bg-gray-50/60 transition-colors">
                       <td className="py-3 px-4 border-y border-l border-gray-200 rounded-l-xl">
                         <div className="text-sm font-semibold text-gray-800">{rate.id}</div>
-                        <div className="text-xs text-gray-400">{rate.loadId}</div>
+                        <div className="text-xs text-gray-400">{displayLoadRefForRow(rate)}</div>
                       </td>
                       <td className="py-3 px-4 border-y border-gray-200">
                         <div>
@@ -3076,7 +3148,7 @@ export default function RateApproved() {
               <table className="w-full text-sm border-separate border-spacing-y-3 border-spacing-x-0">
                 <thead>
                   <tr className="bg-gray-100 text-xs uppercase text-gray-600">
-                    <th className="text-left whitespace-nowrap text-gray-800 py-3 px-4 font-bold tracking-wide rounded-l-xl">Bid ID / Load ID</th>
+                    <th className="text-left whitespace-nowrap text-gray-800 py-3 px-4 font-bold tracking-wide rounded-l-xl">Bid ID / Load ref</th>
                     <th className="text-left text-gray-800 py-3 px-4 font-bold tracking-wide w-48">Origin</th>
                     <th className="text-left text-gray-800 py-3 px-4 font-bold tracking-wide w-48">Destination</th>
                     <th className="text-left whitespace-nowrap text-gray-800 py-3 px-4 font-bold tracking-wide">Original Rate</th>
@@ -3091,7 +3163,7 @@ export default function RateApproved() {
                     <tr key={rate.id} className="bg-white hover:bg-gray-50/60 transition-colors">
                       <td className="py-3 px-4 border-y border-l border-gray-200 rounded-l-xl">
                         <div className="text-sm font-semibold text-gray-800">{rate.id}</div>
-                        <div className="text-xs text-gray-400">{rate.loadId}</div>
+                        <div className="text-xs text-gray-400">{displayLoadRefForRow(rate)}</div>
                       </td>
                       <td className="py-3 px-4 border-y border-gray-200">
                         <div>
@@ -3179,7 +3251,7 @@ export default function RateApproved() {
               <table className="w-full text-sm border-separate border-spacing-y-3 border-spacing-x-0">
                 <thead>
                   <tr className="bg-gray-100 text-xs uppercase text-gray-600">
-                    <th className="text-left text-gray-800 py-3 px-4 font-bold whitespace-nowrap tracking-wide rounded-l-xl">Bid ID / Load ID</th>
+                    <th className="text-left text-gray-800 py-3 px-4 font-bold whitespace-nowrap tracking-wide rounded-l-xl">Bid ID / Load ref</th>
                     <th className="text-left text-gray-800 py-3 px-4 font-bold tracking-wide w-48">Origin</th>
                     <th className="text-left text-gray-800 py-3 px-4 font-bold tracking-wide w-48">Destination</th>
                     <th className="text-left text-gray-800 py-3 px-4 font-bold whitespace-nowrap tracking-wide">Original Rate</th>
@@ -3217,7 +3289,7 @@ export default function RateApproved() {
                         <tr key={bid.id} className="bg-white hover:bg-gray-50/60 transition-colors">
                           <td className="py-3 px-4 border-y border-l border-gray-200 rounded-l-xl">
                             <div className="text-sm font-semibold text-gray-800">{bid.id}</div>
-                            <div className="text-xs text-gray-400">{bid.loadId}</div>
+                            <div className="text-xs text-gray-400">{displayLoadRefForRow(bid)}</div>
                           </td>
                           <td className="py-3 px-4 border-y border-gray-200">
                             <div>
@@ -3292,7 +3364,7 @@ export default function RateApproved() {
               <table className="w-full text-sm border-separate border-spacing-y-3 border-spacing-x-0">
                 <thead>
                   <tr className="bg-gray-100 text-xs uppercase text-gray-600">
-                    <th className="text-left text-gray-800 py-3 px-4 font-bold whitespace-nowrap tracking-wide rounded-l-xl">Bid ID / Load ID</th>
+                    <th className="text-left text-gray-800 py-3 px-4 font-bold whitespace-nowrap tracking-wide rounded-l-xl">Bid ID / Load ref</th>
                     <th className="text-left text-gray-800 py-3 px-4 font-bold tracking-wide w-48">Origin</th>
                     <th className="text-left text-gray-800 py-3 px-4 font-bold tracking-wide w-48">Destination</th>
                     <th className="text-left text-gray-800 py-3 px-4 font-bold whitespace-nowrap tracking-wide">Original Rate</th>
@@ -3330,7 +3402,7 @@ export default function RateApproved() {
                         <tr key={bid.id} className="bg-white hover:bg-gray-50/60 transition-colors">
                           <td className="py-3 px-4 border-y border-l border-gray-200 rounded-l-xl">
                             <div className="text-sm font-semibold text-gray-800">{bid.id}</div>
-                            <div className="text-xs text-gray-400">{bid.loadId}</div>
+                            <div className="text-xs text-gray-400">{displayLoadRefForRow(bid)}</div>
                           </td>
                           <td className="py-3 px-4 border-y border-gray-200">
                             <div>

@@ -4,6 +4,8 @@ import { Download, Search, Upload, FileSpreadsheet, Loader2, ChevronLeft, Chevro
 import { toast } from 'react-toastify';
 import API_CONFIG from '../../config/api.js';
 
+const PAGE_LIMIT_OPTIONS = [25, 50, 100, 200];
+
 const getToken = () =>
   sessionStorage.getItem('token') ||
   localStorage.getItem('token') ||
@@ -23,10 +25,38 @@ export default function ImportCarrierEmails() {
   const [totalCount, setTotalCount] = useState(0);
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(1);
-  const limit = 50;
+  const [limit, setLimit] = useState(50);
 
   const token = useMemo(() => getToken(), []);
+
+  const totalPages = useMemo(
+    () => Math.max(1, totalCount > 0 ? Math.ceil(totalCount / limit) : 1),
+    [totalCount, limit]
+  );
+
+  /** Page numbers + ellipsis for compact numbered pagination */
+  const visiblePageItems = useMemo(() => {
+    const t = totalPages;
+    if (t <= 0) return [];
+    if (t <= 9) {
+      return Array.from({ length: t }, (_, i) => i + 1);
+    }
+    const set = new Set([1, t]);
+    for (let i = page - 2; i <= page + 2; i++) {
+      if (i >= 1 && i <= t) set.add(i);
+    }
+    const sorted = [...set].sort((a, b) => a - b);
+    const out = [];
+    let prev = 0;
+    for (const n of sorted) {
+      if (prev && n - prev > 1) out.push('ellipsis');
+      out.push(n);
+      prev = n;
+    }
+    return out;
+  }, [page, totalPages]);
 
   const authHeaders = useMemo(() => {
     if (!token) return {};
@@ -56,13 +86,14 @@ export default function ImportCarrierEmails() {
     }
   }, [authHeaders, token]);
 
-  const fetchRecords = useCallback(async () => {
+  const fetchRecords = useCallback(async (overridePage) => {
     try {
       if (!token) return;
       setRecordsLoading(true);
 
-      const params = { page, limit };
-      if (searchTerm.trim()) params.search = searchTerm.trim();
+      const effectivePage = typeof overridePage === 'number' ? overridePage : page;
+      const params = { page: effectivePage, limit };
+      if (debouncedSearch.trim()) params.search = debouncedSearch.trim();
 
       const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/email-city-import/records`, {
         headers: authHeaders,
@@ -70,25 +101,32 @@ export default function ImportCarrierEmails() {
         withCredentials: true
       });
 
-      const data = res?.data?.data ?? res?.data ?? {};
+      const root = res?.data ?? {};
+      const data = root?.data ?? root;
+      const pagination = data?.pagination ?? data?.meta?.pagination ?? root?.pagination ?? {};
+
       const items =
         data?.records ??
         data?.items ??
-        data?.data ??
-        res?.data?.records ??
-        res?.data?.items ??
+        (Array.isArray(data?.data) ? data.data : null) ??
+        root?.records ??
+        root?.items ??
         [];
 
       const count =
-        typeof data?.count === 'number'
-          ? data.count
+        typeof pagination?.total === 'number'
+          ? pagination.total
           : typeof data?.total === 'number'
             ? data.total
-            : typeof data?.totalRecords === 'number'
-              ? data.totalRecords
-              : Array.isArray(items)
-                ? items.length
-                : 0;
+            : typeof data?.count === 'number'
+              ? data.count
+              : typeof data?.totalRecords === 'number'
+                ? data.totalRecords
+                : typeof root?.total === 'number'
+                  ? root.total
+                  : Array.isArray(items)
+                    ? items.length
+                    : 0;
 
       setRecords(Array.isArray(items) ? items : []);
       setTotalCount(count);
@@ -97,15 +135,20 @@ export default function ImportCarrierEmails() {
     } finally {
       setRecordsLoading(false);
     }
-  }, [authHeaders, page, searchTerm, token]);
+  }, [authHeaders, debouncedSearch, limit, page, token]);
 
   useEffect(() => {
     fetchBatches();
   }, [fetchBatches]);
 
   useEffect(() => {
-    setPage(1);
+    const id = setTimeout(() => setDebouncedSearch(searchTerm.trim()), 400);
+    return () => clearTimeout(id);
   }, [searchTerm]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch]);
 
   useEffect(() => {
     fetchRecords();
@@ -171,7 +214,11 @@ export default function ImportCarrierEmails() {
       if (res?.data?.success || data?.success) {
         toast.success('Excel import completed');
         await fetchBatches();
-        await fetchRecords();
+        if (page !== 1) {
+          setPage(1);
+        } else {
+          await fetchRecords(1);
+        }
       } else {
         toast.error(data?.message || 'Import failed');
       }
@@ -367,30 +414,85 @@ export default function ImportCarrierEmails() {
               </table>
             </div>
 
-            {/* Pagination */}
-            <div className="flex justify-between items-center mt-6 bg-white rounded-2xl border border-gray-200 p-4">
-              <div className="text-sm text-gray-600">
-                Showing {records.length ? (page - 1) * limit + 1 : 0} to {Math.min(page * limit, totalCount)} of {totalCount}
-              </div>
-              <div className="flex gap-1 items-center">
-                <button
-                  type="button"
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
-                >
-                  <ChevronLeft size={18} />
-                  <span>Previous</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPage((p) => p + 1)}
-                  disabled={(page * limit) >= totalCount}
-                  className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
-                >
-                  <span>Next</span>
-                  <ChevronRight size={18} />
-                </button>
+            {/* Pagination — single row: summary | rows per page | prev/next */}
+            <div className="mt-6 bg-white rounded-2xl border border-gray-200 p-3 sm:p-4">
+              <div className="flex w-full min-w-0 flex-nowrap items-center justify-between gap-2 sm:gap-4 overflow-x-auto">
+                <div className="shrink-0 text-sm text-gray-600 whitespace-nowrap">
+                  Showing{' '}
+                  {records.length ? (page - 1) * limit + 1 : 0} to {Math.min(page * limit, totalCount)} of {totalCount}
+                  {totalCount > 0 && (
+                    <span className="text-gray-500"> · Page {page} of {totalPages}</span>
+                  )}
+                </div>
+                <div className="flex shrink-0 items-center gap-2 text-sm text-gray-700 whitespace-nowrap">
+                  <label htmlFor="email-import-page-limit" className="font-medium">
+                    Rows per page
+                  </label>
+                  <select
+                    id="email-import-page-limit"
+                    value={limit}
+                    onChange={(e) => {
+                      const n = Number(e.target.value);
+                      setLimit(n);
+                      setPage(1);
+                    }}
+                    disabled={recordsLoading}
+                    className="h-9 min-w-[88px] rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {PAGE_LIMIT_OPTIONS.map((n) => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex shrink-0 flex-nowrap items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page <= 1 || recordsLoading}
+                    className="flex items-center gap-1 px-2 sm:px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium whitespace-nowrap"
+                  >
+                    <ChevronLeft size={18} />
+                    <span>Previous</span>
+                  </button>
+                  <div className="flex flex-nowrap items-center gap-1">
+                    {visiblePageItems.map((item, idx) =>
+                      item === 'ellipsis' ? (
+                        <span
+                          key={`ellipsis-${idx}`}
+                          className="min-w-[28px] h-9 flex items-center justify-center text-gray-400 text-sm select-none"
+                          aria-hidden
+                        >
+                          …
+                        </span>
+                      ) : (
+                        <button
+                          key={item}
+                          type="button"
+                          onClick={() => setPage(item)}
+                          disabled={recordsLoading || totalCount === 0}
+                          className={`min-w-[36px] h-9 px-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                            page === item
+                              ? 'bg-blue-600 text-white shadow-sm'
+                              : 'text-gray-700 hover:bg-gray-100 border border-gray-200 bg-white'
+                          }`}
+                        >
+                          {item}
+                        </button>
+                      )
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setPage((p) => p + 1)}
+                    disabled={page >= totalPages || totalCount === 0 || recordsLoading}
+                    className="flex items-center gap-1 px-2 sm:px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium whitespace-nowrap"
+                  >
+                    <span>Next</span>
+                    <ChevronRight size={18} />
+                  </button>
+                </div>
               </div>
             </div>
           </>

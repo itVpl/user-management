@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { toast } from "react-toastify";
 import axios from "axios";
 import API_CONFIG from "../../config/api.js";
@@ -18,6 +18,7 @@ import {
   Building,
   User,
   Phone,
+  MessageCircle,
 } from "lucide-react";
 import { DateRange } from "react-date-range";
 import { addDays, format } from "date-fns";
@@ -161,6 +162,82 @@ const SearchableDropdown = ({
   );
 };
 
+const fullLoadId = (value, fallback = "N/A") => {
+  if (!value) return fallback;
+  if (typeof value === "object") return value._id || value.id || fallback;
+  return String(value);
+};
+
+const normalizeIsoOffset = (str) =>
+  typeof str === "string"
+    ? str.replace(/([+-]\d{2})(\d{2})$/, "$1:$2")
+    : str;
+
+const getEightEightStartMs = (rec) => {
+  if (typeof rec?.startTimeUTC === "number" && rec.startTimeUTC > 0) {
+    return rec.startTimeUTC;
+  }
+  if (rec?.startTime && String(rec.startTime) !== "0") {
+    const raw = normalizeIsoOffset(String(rec.startTime));
+    const t = Date.parse(raw);
+    const d = Number.isNaN(t) ? new Date(rec.startTime) : new Date(t);
+    if (!Number.isNaN(d.getTime())) return d.getTime();
+  }
+  return null;
+};
+
+const getEightEightEndMs = (rec) => {
+  if (
+    typeof rec?.disconnectedTimeUTC === "number" &&
+    rec.disconnectedTimeUTC > 0
+  ) {
+    return rec.disconnectedTimeUTC;
+  }
+  const disc = rec?.disconnectedTime;
+  if (disc && String(disc) !== "0" && String(disc).trim() !== "") {
+    const raw = normalizeIsoOffset(String(disc));
+    const t = Date.parse(raw);
+    const d = Number.isNaN(t) ? new Date(disc) : new Date(t);
+    if (!Number.isNaN(d.getTime())) return d.getTime();
+  }
+  return null;
+};
+
+const formatLocalDateTime = (ms) => {
+  if (ms == null || Number.isNaN(Number(ms))) return "—";
+  const d = new Date(Number(ms));
+  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleString();
+};
+
+const formatDurationFromMs = (totalMs) => {
+  if (totalMs == null || totalMs < 0) return "00:00:00";
+  const sec = Math.floor(totalMs / 1000);
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+};
+
+const aggregateEightEightRecords = (records) => {
+  const list = Array.isArray(records) ? records : [];
+  let incoming = 0;
+  let outgoing = 0;
+  let totalTalkMs = 0;
+  for (const rec of list) {
+    const d = String(rec?.direction || "").trim().toLowerCase();
+    if (d.includes("incoming")) incoming++;
+    else if (d.includes("outgoing")) outgoing++;
+    totalTalkMs += Number(rec?.talkTimeMS) || 0;
+  }
+  return { incoming, outgoing, totalTalkMs, total: list.length };
+};
+
+const getReportAuthToken = () =>
+  sessionStorage.getItem("authToken") ||
+  localStorage.getItem("authToken") ||
+  sessionStorage.getItem("token") ||
+  localStorage.getItem("token");
+
 /**
  * Rate Request Report Component for CMT Users (Similar to EmptyTruckLocation Design)
  */
@@ -210,6 +287,17 @@ const RateRequestReport = () => {
   });
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedLoad, setSelectedLoad] = useState(null);
+  const [callsSectionOpen, setCallsSectionOpen] = useState(false);
+  const [callsStatsData, setCallsStatsData] = useState(null);
+  const [callsStatsLoading, setCallsStatsLoading] = useState(false);
+
+  const eightEightAgg = useMemo(
+    () =>
+      aggregateEightEightRecords(
+        callsStatsData?.callStats?.eightEight?.records,
+      ),
+    [callsStatsData],
+  );
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
@@ -343,9 +431,61 @@ const RateRequestReport = () => {
     });
   };
 
+  const closeDetailsModal = () => {
+    setShowDetailsModal(false);
+    setSelectedLoad(null);
+    setCallsSectionOpen(false);
+    setCallsStatsData(null);
+    setCallsStatsLoading(false);
+  };
+
   const handleViewDetails = (load) => {
     setSelectedLoad(load);
     setShowDetailsModal(true);
+    setCallsSectionOpen(false);
+    setCallsStatsData(null);
+    setCallsStatsLoading(false);
+  };
+
+  const fetchSlaCallStats = async (loadId) => {
+    if (!loadId) {
+      toast.error("Load ID not found for call stats");
+      return;
+    }
+    try {
+      setCallsStatsLoading(true);
+      const token = getReportAuthToken();
+      if (!token) {
+        toast.error("Authentication required. Please login again.");
+        return;
+      }
+      const response = await axios.get(
+        `${API_CONFIG.BASE_URL}/api/v1/cmt-assignments/sla-call-stats/${loadId}`,
+        {
+          params: { include8x8: 1 },
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+      if (response.data?.success) {
+        setCallsStatsData(response.data?.data || null);
+      } else {
+        setCallsStatsData(null);
+        toast.error(response.data?.message || "Failed to fetch call stats");
+      }
+    } catch (error) {
+      console.error("Error fetching SLA call stats:", error);
+      setCallsStatsData(null);
+      if (error.response?.data?.message) {
+        toast.error(error.response.data.message);
+      } else {
+        toast.error("Failed to fetch call stats");
+      }
+    } finally {
+      setCallsStatsLoading(false);
+    }
   };
 
   /** startedAt → completedAt: HH:MM:SS only */
@@ -1024,7 +1164,7 @@ const RateRequestReport = () => {
       {showDetailsModal && selectedLoad && (
         <div
           className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
-          onClick={() => setShowDetailsModal(false)}
+          onClick={closeDetailsModal}
         >
           <div
             className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
@@ -1044,7 +1184,7 @@ const RateRequestReport = () => {
                   </div>
                 </div>
                 <button
-                  onClick={() => setShowDetailsModal(false)}
+                  onClick={closeDetailsModal}
                   className="text-white hover:text-gray-200 text-2xl font-bold"
                 >
                   ×
@@ -1533,6 +1673,312 @@ const RateRequestReport = () => {
                     </div>
                   </div>
                 )}
+
+              {/* Calls — same SLA / 8x8 flow as CMT-Manager RateRequest (Load Information & Bid Details) */}
+              <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden mt-8">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const modalLoadId = fullLoadId(
+                      selectedLoad?._id || selectedLoad?.loadId,
+                      "",
+                    );
+                    const nextOpen = !callsSectionOpen;
+                    setCallsSectionOpen(nextOpen);
+                    if (nextOpen && modalLoadId) {
+                      fetchSlaCallStats(modalLoadId);
+                    }
+                  }}
+                  className="w-full px-6 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between hover:bg-gray-100 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                      <MessageCircle className="w-4 h-4 text-purple-600" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-800">Calls</h3>
+                  </div>
+                  <span className="text-gray-500 text-sm">
+                    {callsSectionOpen ? "Hide" : "View"}
+                  </span>
+                </button>
+
+                {callsSectionOpen && (
+                  <div className="p-6 space-y-6">
+                    {callsStatsLoading ? (
+                      <div className="text-sm text-gray-600">
+                        Loading call stats...
+                      </div>
+                    ) : !callsStatsData ? (
+                      <div className="text-sm text-gray-500">
+                        No call stats available for this load.
+                      </div>
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                          <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                            <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                              Assigned CMT
+                            </div>
+                            <div className="text-sm font-semibold text-gray-900 mt-1">
+                              {callsStatsData.assignedCMTUser?.empName || "N/A"}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-0.5">
+                              {callsStatsData.assignedCMTUser?.empId || ""}
+                              {callsStatsData.assignedCMTUser?.department
+                                ? ` · ${callsStatsData.assignedCMTUser.department}`
+                                : ""}
+                            </div>
+                            {callsStatsData.assignedCMTUser?.assignedAt && (
+                              <div className="text-xs text-gray-400 mt-1">
+                                Assigned:{" "}
+                                {new Date(
+                                  callsStatsData.assignedCMTUser.assignedAt,
+                                ).toLocaleString()}
+                              </div>
+                            )}
+                          </div>
+                          <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                            <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                              Bid SLA
+                            </div>
+                            <div className="text-sm font-semibold text-gray-900 mt-1 capitalize">
+                              {callsStatsData.cmtBidSla?.status || "N/A"}
+                            </div>
+                            <div className="text-xs text-gray-600 mt-1">
+                              Bids: {callsStatsData.cmtBidSla?.bidCount ?? 0} /{" "}
+                              {callsStatsData.cmtBidSla?.requiredBids ?? "—"}
+                            </div>
+                            {callsStatsData.cmtBidSla?.message && (
+                              <div className="text-xs text-gray-500 mt-2 leading-relaxed">
+                                {callsStatsData.cmtBidSla.message}
+                              </div>
+                            )}
+                          </div>
+                          <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                            <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                              Call window
+                            </div>
+                            <div className="text-xs text-gray-700 mt-1">
+                              {callsStatsData.callStats?.windowStart
+                                ? new Date(
+                                    callsStatsData.callStats.windowStart,
+                                  ).toLocaleString()
+                                : "N/A"}
+                            </div>
+                            <div className="text-xs text-gray-700">
+                              →{" "}
+                              {callsStatsData.callStats?.windowEnd
+                                ? new Date(
+                                    callsStatsData.callStats.windowEnd,
+                                  ).toLocaleString()
+                                : "N/A"}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-1">
+                              Closed by:{" "}
+                              {callsStatsData.callStats?.windowClosedBy || "—"}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          <div className="rounded-lg border border-gray-100 p-3 text-center">
+                            <div className="text-2xl font-bold text-gray-900">
+                              {eightEightAgg.total > 0
+                                ? eightEightAgg.total
+                                : callsStatsData.callStats?.eightEight
+                                      ?.totalCalls ?? 0}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              Total calls (8x8)
+                            </div>
+                          </div>
+                          <div className="rounded-lg border border-gray-100 p-3 text-center">
+                            <div className="text-2xl font-bold text-gray-900">
+                              {eightEightAgg.incoming}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              Incoming (from records)
+                            </div>
+                          </div>
+                          <div className="rounded-lg border border-gray-100 p-3 text-center">
+                            <div className="text-2xl font-bold text-gray-900">
+                              {eightEightAgg.outgoing}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              Outgoing (from records)
+                            </div>
+                          </div>
+                          <div className="rounded-lg border border-gray-100 p-3 text-center">
+                            <div className="text-lg sm:text-2xl font-bold text-gray-900 tabular-nums">
+                              {formatDurationFromMs(eightEightAgg.totalTalkMs)}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              Total talk (sum of talk time)
+                            </div>
+                          </div>
+                        </div>
+
+                        {Array.isArray(callsStatsData.callStats?.calls) &&
+                          callsStatsData.callStats.calls.length > 0 && (
+                            <div>
+                              <h4 className="text-sm font-semibold text-gray-800 mb-2">
+                                System call log
+                              </h4>
+                              <div className="overflow-x-auto rounded-xl border border-gray-200">
+                                <table className="min-w-full text-sm">
+                                  <thead className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase">
+                                    <tr>
+                                      <th className="px-3 py-2">Direction</th>
+                                      <th className="px-3 py-2">When</th>
+                                      <th className="px-3 py-2">Duration</th>
+                                      <th className="px-3 py-2">Details</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-gray-100">
+                                    {callsStatsData.callStats.calls.map(
+                                      (row, idx) => (
+                                        <tr key={row?.id || row?._id || idx}>
+                                          <td className="px-3 py-2 text-gray-800">
+                                            {row?.direction || row?.type || "—"}
+                                          </td>
+                                          <td className="px-3 py-2 text-gray-600 whitespace-nowrap">
+                                            {row?.startedAt || row?.startTime
+                                              ? new Date(
+                                                  row.startedAt || row.startTime,
+                                                ).toLocaleString()
+                                              : "—"}
+                                          </td>
+                                          <td className="px-3 py-2 text-gray-600">
+                                            {row?.durationSeconds != null
+                                              ? `${row.durationSeconds}s`
+                                              : row?.duration || "—"}
+                                          </td>
+                                          <td className="px-3 py-2 text-gray-500 max-w-md text-xs">
+                                            {typeof row === "object" && row
+                                              ? [
+                                                  row.from,
+                                                  row.to,
+                                                  row.phone,
+                                                  row.phoneNumber,
+                                                  row.number,
+                                                  row.status,
+                                                  row.disposition,
+                                                ]
+                                                  .filter(Boolean)
+                                                  .join(" · ") ||
+                                                JSON.stringify(row)
+                                              : String(row)}
+                                          </td>
+                                        </tr>
+                                      ),
+                                    )}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          )}
+
+                        {callsStatsData.callStats?.eightEight?.error && (
+                          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                            8x8: {callsStatsData.callStats.eightEight.error}
+                          </div>
+                        )}
+
+                        {Array.isArray(
+                          callsStatsData.callStats?.eightEight?.records,
+                        ) &&
+                          callsStatsData.callStats.eightEight.records.length >
+                            0 && (
+                            <div>
+                              <h4 className="text-sm font-semibold text-gray-800 mb-2">
+                                8x8 call records
+                              </h4>
+                              <div className="overflow-x-auto rounded-xl border border-gray-200 max-h-80 overflow-y-auto">
+                                <table className="min-w-full text-sm">
+                                  <thead className="sticky top-0 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase z-10">
+                                    <tr>
+                                      <th className="px-3 py-2">Direction</th>
+                                      <th className="px-3 py-2">Start</th>
+                                      <th className="px-3 py-2">End</th>
+                                      <th className="px-3 py-2">Talk</th>
+                                      <th className="px-3 py-2">From</th>
+                                      <th className="px-3 py-2">To</th>
+                                      <th className="px-3 py-2">Answered</th>
+                                      <th className="px-3 py-2">Disposition</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-gray-100">
+                                    {callsStatsData.callStats.eightEight.records.map(
+                                      (rec, idx) => (
+                                        <tr key={rec?.callId || idx}>
+                                          <td className="px-3 py-2 text-gray-800 whitespace-nowrap">
+                                            {rec?.direction || "—"}
+                                          </td>
+                                          <td className="px-3 py-2 text-gray-600 whitespace-nowrap text-xs">
+                                            {formatLocalDateTime(
+                                              getEightEightStartMs(rec),
+                                            )}
+                                          </td>
+                                          <td className="px-3 py-2 text-gray-600 whitespace-nowrap text-xs">
+                                            {formatLocalDateTime(
+                                              getEightEightEndMs(rec),
+                                            )}
+                                          </td>
+                                          <td className="px-3 py-2 text-gray-700 whitespace-nowrap">
+                                            {rec?.talkTime || "—"}
+                                          </td>
+                                          <td
+                                            className="px-3 py-2 text-gray-600 text-xs max-w-[140px] truncate"
+                                            title={
+                                              rec?.callerName ||
+                                              rec?.callerNumber
+                                            }
+                                          >
+                                            {rec?.callerName ||
+                                              rec?.callerNumber ||
+                                              "—"}
+                                          </td>
+                                          <td
+                                            className="px-3 py-2 text-gray-600 text-xs max-w-[140px] truncate"
+                                            title={
+                                              rec?.calleeNumber ||
+                                              rec?.receiverNumber
+                                            }
+                                          >
+                                            {rec?.calleeNumber ||
+                                              rec?.receiverNumber ||
+                                              "—"}
+                                          </td>
+                                          <td className="px-3 py-2 text-gray-600 whitespace-nowrap text-xs">
+                                            {rec?.answered || "—"}
+                                          </td>
+                                          <td className="px-3 py-2 text-gray-500 text-xs max-w-[120px] truncate">
+                                            {rec?.lastLegDisposition || "—"}
+                                          </td>
+                                        </tr>
+                                      ),
+                                    )}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          )}
+
+                        {(!callsStatsData.callStats?.calls ||
+                          callsStatsData.callStats.calls.length === 0) &&
+                          (!callsStatsData.callStats?.eightEight?.records ||
+                            callsStatsData.callStats.eightEight.records
+                              .length === 0) && (
+                            <div className="text-sm text-gray-500">
+                              No individual call rows in this window (totals may
+                              still show above).
+                            </div>
+                          )}
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
