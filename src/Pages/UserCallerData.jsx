@@ -4,17 +4,25 @@ import axios from "axios";
 import * as XLSX from "xlsx";
 import { Phone, CheckCircle, XCircle, BarChart3, Clock, FileText, Users, MessageSquare, Download, ChevronLeft, ChevronRight, AlertTriangle, X, Info } from "lucide-react";
 import API_CONFIG from "../config/api";
+import { CMT_CUSTOM_EDIT_DISPOSITION } from "../constants/cmtCallDispositionLabels";
 import { format } from "date-fns";
 
 const BASE_8X8 = `${API_CONFIG.BASE_URL}/api/v1/analytics/8x8`;
-const getAuthHeaders = () => API_CONFIG.getAuthHeaders();
+const getAuthHeaders = () => {
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const base = API_CONFIG.getAuthHeaders();
+  return tz ? { ...base, "X-Time-Zone": tz } : base;
+};
 
 // Fallback category options if API fails (“Follow up” opens a modal, not a dropdown option)
 const CATEGORY_OPTIONS_FALLBACK = [
   "No answer", "Voice mail", "Call drop", "RPC Not Available", "Call back",
   "Not interested", "Introduction/email", "RPC", "MAIL/Email price list",
-  "Rate follow up", "Prospect", "Lead"
+  "Rate follow up", "Prospect", "Lead", "DNC", "Existing customer", "Other",
 ];
+
+const isVoiceMailDisposition = (category) =>
+  String(category || "").trim().toLowerCase() === "voice mail";
 
 const formatDateTime = (date) => {
   const d = new Date(date);
@@ -111,12 +119,27 @@ const formatNextFollowUpForExport = (remark) => {
 
 const emptyFollowUpDetails = () => ({
   customerName: "",
+  contactNumber: "",
   emailAddress: "",
   address: "",
   contactPerson: "",
   followUpNotes: "",
   remark: "",
 });
+
+/** Map axios/API errors to user-visible strings (matches backend validation messages). */
+const formatCategorySaveError = (err) => {
+  const d = err?.response?.data;
+  if (!d) return err?.message || "Save failed";
+  if (typeof d.message === "string" && d.message.trim()) return d.message.trim();
+  if (Array.isArray(d.errors)) return d.errors.map(String).join(" ");
+  if (d.errors && typeof d.errors === "object") {
+    const vals = Object.values(d.errors).flat().filter(Boolean);
+    if (vals.length) return vals.map(String).join(" ");
+  }
+  if (d.error != null) return String(d.error);
+  return "Save failed";
+};
 
 function FollowUpModal({ open, onClose, initialDetails, onSave, saving, modalError }) {
   const [form, setForm] = useState(emptyFollowUpDetails());
@@ -139,13 +162,25 @@ function FollowUpModal({ open, onClose, initialDetails, onSave, saving, modalErr
   const submit = (e) => {
     e.preventDefault();
     const errs = {};
-    if (!String(form.emailAddress || "").trim()) errs.emailAddress = "Email Address is required";
-    if (!String(form.contactPerson || "").trim()) errs.contactPerson = "Contact Person is required";
+    if (!String(form.emailAddress || "").trim()) errs.emailAddress = "Email Address is required for follow up";
+    if (!String(form.contactPerson || "").trim()) errs.contactPerson = "Contact Person is required for follow up";
+    const remark = String(form.remark || "").trim();
+    if (!remark) {
+      errs.remark = "Next follow up date & time is required";
+    } else {
+      const dt = new Date(remark);
+      if (Number.isNaN(dt.getTime())) {
+        errs.remark = "Invalid next follow up date & time format";
+      } else if (dt.getTime() <= Date.now()) {
+        errs.remark = "Next follow up date & time must be in the future";
+      }
+    }
     setFieldErrors(errs);
     if (Object.keys(errs).length) return;
 
     onSave({
       customerName: String(form.customerName || "").trim(),
+      contactNumber: String(form.contactNumber || "").trim(),
       emailAddress: String(form.emailAddress || "").trim(),
       address: String(form.address || "").trim(),
       contactPerson: String(form.contactPerson || "").trim(),
@@ -195,6 +230,15 @@ function FollowUpModal({ open, onClose, initialDetails, onSave, saving, modalErr
             <input type="text" value={form.customerName} onChange={setField("customerName")} className={inputClass} />
           </div>
           <div>
+            <label className={labelClass}>Contact Number</label>
+            <input
+              type="text"
+              value={form.contactNumber}
+              onChange={setField("contactNumber")}
+              className={inputClass}
+            />
+          </div>
+          <div>
             <label className={labelClass}>
               Email Address <span className="text-red-500">*</span>
             </label>
@@ -237,8 +281,11 @@ function FollowUpModal({ open, onClose, initialDetails, onSave, saving, modalErr
               step="1"
               value={form.remark}
               onChange={setField("remark")}
-              className={inputClass}
+              className={`${inputClass} ${fieldErrors.remark ? "border-red-400" : ""}`}
             />
+            {fieldErrors.remark ? (
+              <p className="mt-1 text-xs text-red-600">{fieldErrors.remark}</p>
+            ) : null}
           </div>
 
           <div className="flex justify-end gap-3 pt-2">
@@ -278,8 +325,9 @@ const UserCallDashboard = () => {
     totalTalkTime: "00:00:00",
   });
 
-  // Category dropdown options (from API or fallback) and per-row saved category / followUp / followUpDetails
+  // Category dropdown options from GET category-options (CMT lists come from API; unresolved CMT team → 400)
   const [categoryOptions, setCategoryOptions] = useState(CATEGORY_OPTIONS_FALLBACK);
+  const [categoryOptionsError, setCategoryOptionsError] = useState("");
   const [categories, setCategories] = useState({}); // callId -> { category, followUp, followUpDetails }
 
   const [modalCallId, setModalCallId] = useState(null);
@@ -418,19 +466,59 @@ const UserCallDashboard = () => {
     }
   };
 
-  // Fetch category options once on load
+  // Dispositions: always from GET category-options (backend: Sales / CMT team list + Custom Edit / default).
+  // Shared exact label: src/constants/cmtCallDispositionLabels.js → CMT_CUSTOM_EDIT_DISPOSITION
   useEffect(() => {
     const loadCategoryOptions = async () => {
+      setCategoryOptionsError("");
+      let storedUser = null;
+      try {
+        const raw = sessionStorage.getItem("user") || localStorage.getItem("user");
+        if (raw) storedUser = JSON.parse(raw);
+      } catch {
+        /* ignore */
+      }
+      const isCmt =
+        String(storedUser?.department || "")
+          .trim()
+          .toLowerCase() === "cmt";
+
       try {
         const res = await axios.get(
           `${BASE_8X8}/call-records/category-options`,
           { headers: getAuthHeaders() }
         );
-        if (res.data?.success && Array.isArray(res.data?.options)) {
-          setCategoryOptions(res.data.options);
+        const opts = res.data?.options ?? res.data?.data;
+        if (res.data?.success && Array.isArray(opts) && opts.length > 0) {
+          let next = opts;
+          if (isCmt && !next.includes(CMT_CUSTOM_EDIT_DISPOSITION)) {
+            next = [...next, CMT_CUSTOM_EDIT_DISPOSITION];
+          }
+          setCategoryOptions(next);
         }
       } catch (err) {
+        const status = err?.response?.status;
+        const body = err?.response?.data;
+        const msg =
+          (typeof body?.message === "string" && body.message.trim()) ||
+          (typeof body?.error === "string" && body.error.trim()) ||
+          err?.message ||
+          "Could not load category options.";
+
+        if (isCmt && status === 400) {
+          setCategoryOptions([]);
+          setCategoryOptionsError(msg);
+          setNotification({
+            show: true,
+            message: msg,
+            type: "warning",
+          });
+          setTimeout(() => setNotification({ show: false, message: "", type: "info" }), 10000);
+          return;
+        }
+
         console.warn("Category options fetch failed, using fallback:", err);
+        setCategoryOptions(CATEGORY_OPTIONS_FALLBACK);
       }
     };
     loadCategoryOptions();
@@ -457,6 +545,10 @@ const UserCallDashboard = () => {
                 d.followUpDetails !== undefined
                   ? d.followUpDetails || {}
                   : prevRow.followUpDetails || {},
+              nextFollowUpAt:
+                d.nextFollowUpAt !== undefined ? d.nextFollowUpAt : prevRow.nextFollowUpAt,
+              followUpTimeZone:
+                d.followUpTimeZone !== undefined ? d.followUpTimeZone : prevRow.followUpTimeZone,
             },
           };
         });
@@ -464,11 +556,7 @@ const UserCallDashboard = () => {
       }
       return { success: false, error: res.data?.message || "Save failed" };
     } catch (e) {
-      const msg =
-        e.response?.data?.message ||
-        e.response?.data?.error ||
-        e.message ||
-        "Save failed";
+      const msg = formatCategorySaveError(e);
       console.error("Failed to update category:", e);
       return { success: false, error: msg };
     }
@@ -482,19 +570,37 @@ const UserCallDashboard = () => {
       [callId]: {
         ...current,
         category: newCategory,
-        ...(newCategory === "Voice mail"
+        ...(isVoiceMailDisposition(newCategory)
           ? { followUp: false, followUpDetails: {} }
           : {}),
       },
     }));
     await updateCategory(callId, { category: newCategory });
-    if (newCategory === "Voice mail") {
+    if (isVoiceMailDisposition(newCategory)) {
       await updateCategory(callId, { followUp: false });
     }
   };
 
   const openFollowUpModal = (callId) => {
     setModalError("");
+    const current = categories[callId] || {};
+    const existingDetails =
+      current.followUpDetails && typeof current.followUpDetails === "object"
+        ? current.followUpDetails
+        : {};
+    const row = records.find((r) => String(r.callId) === String(callId));
+    if (!existingDetails.contactNumber && row?.callee) {
+      setCategories((prev) => ({
+        ...prev,
+        [callId]: {
+          ...current,
+          followUpDetails: {
+            ...existingDetails,
+            contactNumber: String(row.callee),
+          },
+        },
+      }));
+    }
     setModalCallId(callId);
   };
 
@@ -515,6 +621,17 @@ const UserCallDashboard = () => {
     });
     setSavingModal(false);
     if (result.success) {
+      try {
+        window.dispatchEvent(new CustomEvent("call-follow-ups-refresh"));
+      } catch (_) {
+        /* ignore */
+      }
+      setNotification({
+        show: true,
+        message: "Follow-up scheduled successfully.",
+        type: "success",
+      });
+      setTimeout(() => setNotification({ show: false, message: "", type: "info" }), 3000);
       closeFollowUpModal();
     } else {
       setModalError(result.error || "Could not save");
@@ -586,21 +703,24 @@ const UserCallDashboard = () => {
   const handlePageChange = (page) => setCurrentPage(page);
 
   const focusCallIdParam = searchParams.get("focusCallId");
+  const openFollowUpParam = searchParams.get("openFollowUp");
 
   useEffect(() => {
     setCurrentPage(1);
   }, [selectedDate]);
 
-  /** Deep link from dashboard: /call-dashboard?focusCallId=… */
+  /** Deep link: /call-dashboard?focusCallId=…&openFollowUp=1 */
   useEffect(() => {
     const raw = focusCallIdParam;
     if (!raw || records.length === 0) return;
+    const shouldOpenFollowUp = String(openFollowUpParam || "") === "1";
 
     const clearParam = () => {
       setSearchParams(
         (prev) => {
           const next = new URLSearchParams(prev);
           next.delete("focusCallId");
+          next.delete("openFollowUp");
           return next;
         },
         { replace: true }
@@ -623,6 +743,14 @@ const UserCallDashboard = () => {
     const page = Math.floor(idx / itemsPerPage) + 1;
     setCurrentPage(page);
     setHighlightCallId(raw);
+
+    if (shouldOpenFollowUp) {
+      const callId = records[idx]?.callId;
+      if (callId) {
+        openFollowUpModal(callId);
+      }
+    }
+
     clearParam();
 
     const scrollTimer = setTimeout(() => {
@@ -637,7 +765,7 @@ const UserCallDashboard = () => {
       clearTimeout(scrollTimer);
       clearTimeout(unhighlightTimer);
     };
-  }, [records, focusCallIdParam, setSearchParams, itemsPerPage]);
+  }, [records, focusCallIdParam, openFollowUpParam, setSearchParams, itemsPerPage]);
 
   useEffect(() => {
     const storedUser = sessionStorage.getItem("user");
@@ -808,6 +936,21 @@ const UserCallDashboard = () => {
                 max={new Date().toISOString().split("T")[0]}
             />
         </div>
+        {categoryOptionsError ? (
+          <div
+            className="mb-4 p-3 rounded-lg border border-amber-200 bg-amber-50 text-amber-900 text-sm"
+            role="alert"
+          >
+            <p>{categoryOptionsError}</p>
+            <p className="mt-2 text-xs text-amber-800/90">
+              CMT Call Data needs a resolved team. HR can set{" "}
+              <code className="px-1 rounded bg-amber-100 text-[11px]">cmtTeam</code> to{" "}
+              <code className="px-1 rounded bg-amber-100 text-[11px]">rate_request</code> or{" "}
+              <code className="px-1 rounded bg-amber-100 text-[11px]">scheduling</code> on your employee
+              record (or ensure your designation matches the scheduling / rate-request rules), then refresh.
+            </p>
+          </div>
+        ) : null}
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
@@ -826,7 +969,7 @@ const UserCallDashboard = () => {
               {currentRecords.length > 0 ? (
                 currentRecords.map((r) => {
                   const cat = categories[r.callId] || {};
-                  const showFollowUpBtn = cat.category !== "Voice mail";
+                  const showFollowUpBtn = !isVoiceMailDisposition(cat.category);
                   return (
                     <tr
                       key={r.callId ?? r.date + r.callee + r.callTime}

@@ -245,6 +245,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
     // Only use dlvyDate from importantDates
     deliveryDate: getDateValue(apiImportantDates.dlvyDate)
   });
+  const [carrierNumberInput, setCarrierNumberInput] = useState((raw?.carrier?.carrierNumber || '').trim());
   const [updatingDates, setUpdatingDates] = useState(false);
   const MAX_IMPORTANT_DATE_ATTACHMENTS = 5;
   const [importantDateAttachments, setImportantDateAttachments] = useState([]); // { id, file, previewUrl }[]
@@ -290,6 +291,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
         // Only use dlvyDate from importantDates
         deliveryDate: getDateValue(apiImportantDates.dlvyDate)
       });
+      setCarrierNumberInput((raw?.carrier?.carrierNumber || '').trim());
       setShipperEmailSchedule({
         enabled: false,
         timeZone: 'America/New_York',
@@ -1692,6 +1694,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
           payloadForForm[k] = typeof v === 'string' && v.includes('T') ? v.split('T')[0] : v;
         });
         formData.append('importantDates', JSON.stringify(payloadForForm));
+        formData.append('carrierNumber', (carrierNumberInput || '').trim());
         if (schedulePayload) {
           formData.append('shipperEmailSchedule', JSON.stringify(schedulePayload));
         }
@@ -1700,7 +1703,10 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
           headers: { Authorization: `Bearer ${token}` }
         });
       } else {
-        const bodyPayload = { importantDates: importantDatesPayload };
+        const bodyPayload = {
+          importantDates: importantDatesPayload,
+          carrierNumber: (carrierNumberInput || '').trim()
+        };
         if (schedulePayload) {
           bodyPayload.shipperEmailSchedule = schedulePayload;
         }
@@ -1782,6 +1788,17 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
                 readyToReturnDate: pickImpDate(apiImportantDates.readyToReturnDate, prev.readyToReturnDate),
                 deliveryDate: pickImpDate(apiImportantDates.dlvyDate, prev.deliveryDate)
               }));
+            }
+            const carrierNumberFromResponse =
+              updatedData?.carrier?.carrierNumber ??
+              updatedData?.load?.carrier?.carrierNumber ??
+              updatedData?.loadReference?.carrier?.carrierNumber;
+            if (!order.raw.carrier) order.raw.carrier = {};
+            if (carrierNumberFromResponse !== undefined) {
+              order.raw.carrier.carrierNumber = carrierNumberFromResponse;
+              setCarrierNumberInput(String(carrierNumberFromResponse || ''));
+            } else {
+              order.raw.carrier.carrierNumber = (carrierNumberInput || '').trim();
             }
 
             onLoadReferenceUpdate?.();
@@ -2152,6 +2169,50 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
 
         {/* Content */}
         <div className="modal-content overflow-y-auto flex-1 p-6 space-y-6">
+          {!reportView && (
+            <div className="rounded-lg border border-gray-200 bg-white p-3">
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-sm font-medium text-gray-700">Schedule shipper email</label>
+                <input
+                  type="checkbox"
+                  checked={shipperEmailSchedule.enabled}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setShipperEmailSchedule((prev) => ({
+                      ...prev,
+                      enabled: checked
+                    }));
+                  }}
+                  className="h-4 w-4"
+                />
+              </div>
+              {shipperEmailSchedule.enabled && (
+                <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">USA Timezone</label>
+                    <select
+                      value={shipperEmailSchedule.timeZone}
+                      onChange={(e) => setShipperEmailSchedule((prev) => ({ ...prev, timeZone: e.target.value }))}
+                      className="w-full text-sm px-3 py-2 border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      {ALLOWED_USA_TIMEZONES.map((tz) => (
+                        <option key={tz} value={tz}>{tz}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Send At Local (optional)</label>
+                    <input
+                      type="datetime-local"
+                      value={shipperEmailSchedule.sendAtLocal}
+                      onChange={(e) => setShipperEmailSchedule((prev) => ({ ...prev, sendAtLocal: e.target.value }))}
+                      className="w-full text-sm px-3 py-2 border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           {/* Customer Information - Hidden per user request  dfg */}
           {false && customers.length > 0 && (
             <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6">
@@ -3288,6 +3349,16 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
                 </div>
               </div>
             </div>
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Carrier Number</label>
+              <input
+                type="text"
+                value={carrierNumberInput}
+                onChange={(e) => setCarrierNumberInput(e.target.value)}
+                placeholder="Enter carrier number"
+                className="w-full text-sm px-3 py-2 border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
             {/* Attachments (optional, max 5) */}
             {!reportView && (
               <div className="mt-4">
@@ -3313,50 +3384,6 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
                       </li>
                     ))}
                   </ul>
-                )}
-              </div>
-            )}
-            {!reportView && (
-              <div className="mt-4 rounded-lg border border-gray-200 bg-white p-3">
-                <div className="flex items-center justify-between gap-3">
-                  <label className="text-sm font-medium text-gray-700">Schedule shipper email</label>
-                  <input
-                    type="checkbox"
-                    checked={shipperEmailSchedule.enabled}
-                    onChange={(e) => {
-                      const checked = e.target.checked;
-                      setShipperEmailSchedule((prev) => ({
-                        ...prev,
-                        enabled: checked
-                      }));
-                    }}
-                    className="h-4 w-4"
-                  />
-                </div>
-                {shipperEmailSchedule.enabled && (
-                  <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1">USA Timezone</label>
-                      <select
-                        value={shipperEmailSchedule.timeZone}
-                        onChange={(e) => setShipperEmailSchedule((prev) => ({ ...prev, timeZone: e.target.value }))}
-                        className="w-full text-sm px-3 py-2 border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        {ALLOWED_USA_TIMEZONES.map((tz) => (
-                          <option key={tz} value={tz}>{tz}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1">Send At Local (optional)</label>
-                      <input
-                        type="datetime-local"
-                        value={shipperEmailSchedule.sendAtLocal}
-                        onChange={(e) => setShipperEmailSchedule((prev) => ({ ...prev, sendAtLocal: e.target.value }))}
-                        className="w-full text-sm px-3 py-2 border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                  </div>
                 )}
               </div>
             )}
