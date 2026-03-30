@@ -575,50 +575,6 @@ const Dashboard = () => {
             </div>
           </div> */}
 
-          {/* Pending Load */}
-<div className="bg-white border border-[#C8C8C8] rounded-[17.59px] p-6 mb-3"
-     style={{
-       boxShadow: '7.54px 7.54px 67.85px 0px rgba(0, 0, 0, 0.05)',
-       borderWidth: '1.31px'
-     }}>
-  <div className="flex items-center justify-between mb-6">
-    <h3 className="text-xl font-bold text-gray-800">Pending Loads</h3>
-  </div>
-
-  <div className="overflow-x-auto">
-    <table className="w-full">
-      <thead>
-        <tr className="bg-gray-50 border-b border-gray-200">
-          <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Shipper ID</th>
-          <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Load ID</th>
-          <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Weight</th>
-          <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Vehicle</th>
-        </tr>
-      </thead>
-      <tbody>
-        {pendingLoads.length > 0 ? (
-          pendingLoads.slice(0, 6).map((load, index) => (
-            <tr key={index} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-              <td className="py-4 px-6 text-gray-800 font-medium">{load.shipperId || 'N/A'}</td>
-              <td className="py-4 px-6 text-gray-800">{load.loadId || 'N/A'}</td>
-              <td className="py-4 px-6 text-gray-800">{load.weight || 'N/A'}</td>
-              <td className="py-4 px-6 text-gray-800">{load.vehicle || 'N/A'}</td>
-            </tr>
-          ))
-        ) : (
-          <tr>
-            <td colSpan="4" className="py-8 px-6 text-center text-gray-500">
-              <div className="flex flex-col items-center">
-                <Truck className="w-8 h-8 text-gray-300 mb-2" />
-                <p>No pending loads available</p>
-              </div>
-            </td>
-          </tr>
-        )}
-      </tbody>
-    </table>
-  </div>
-</div>
           {/* Main Content Grid - Daily Call Target and Call Performance */}
           <div className="grid lg:grid-cols-2 gap-8 mb-3">
 
@@ -835,45 +791,10 @@ const Dashboard = () => {
 </div>
           
 
-          {/* Upcoming Birthdays and Recent Carrier */}
+          {/* Upcoming Birthdays and Call follow-ups */}
           <div className="grid lg:grid-cols-2 gap-8 mb-3">
             <UpcomingBirthdays limit={3} />
-            
-            {/* Recent Carrier Section */}
-            <div className="bg-white border border-[#C8C8C8] rounded-[17.59px] p-6">
-              <h3 className="text-xl font-bold text-gray-800 mb-4">Recent Carrier</h3>
-              <div className="space-y-3">
-                {recentCarriers.map((carrier, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 border border-gray-200 rounded-full bg-gray-50 hover:bg-gray-100 transition-colors">
-                    <div className="flex items-center gap-2">
-                      <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-200 flex items-center justify-center">
-                        <div className="w-full h-full bg-green-500 text-white text-sm font-semibold flex items-center justify-center">
-                          {carrier.carrierId.slice(-2)}
-                        </div>
-                      </div>
-                      <div>
-                        <p className="font-semibold text-gray-900 text-sm">{carrier.name}</p>
-                        <p className="text-xs text-gray-500">MC: {carrier.mc}</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-bold text-gray-900">
-                        {carrier.addedAt}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-                {recentCarriers.length === 0 && (
-                  <div className="text-center py-6">
-                    <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                      <Truck className="w-6 h-6 text-gray-400" size={20} />
-                    </div>
-                    <p className="text-gray-500 text-sm">No recent carriers</p>
-                    <p className="text-gray-400 text-xs">Carrier data will appear here</p>
-                  </div>
-                )}
-              </div>
-            </div>
+            <CallFollowUpsDashboardCard variant="sidebar" limit={15} />
           </div>
 
 

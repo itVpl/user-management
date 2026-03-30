@@ -714,36 +714,46 @@ export default function TruckerReport() {
 
       {/* Custom Range Modal - larger calendar */}
       {showCustomRange && (
-        <div className="fixed inset-0 z-[60] bg-black/30 flex items-center justify-center p-4" onClick={() => setShowCustomRange(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-[90vw]" onClick={(e) => e.stopPropagation()}>
-            <div className="scale-110 origin-top" style={{ minWidth: 520 }}>
-              <DateRange
-                ranges={[range.startDate && range.endDate ? range : { startDate: new Date(), endDate: new Date(), key: 'selection' }]}
-                onChange={(item) => {
-                  if (item.selection.startDate && item.selection.endDate) {
-                    setRange(item.selection);
-                  }
-                }}
-                moveRangeOnFirstSelection={false}
-                months={2}
-                direction="horizontal"
-              />
+        <div className="fixed inset-0 z-[60] bg-black/35 flex items-center justify-center p-3 sm:p-4" onClick={() => setShowCustomRange(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[760px] max-h-[90vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="px-4 sm:px-5 pt-3.5 sm:pt-4 pb-2.5 border-b border-gray-100">
+              <h3 className="text-lg font-semibold text-gray-800">Custom Date Range</h3>
+              <p className="text-sm text-gray-500 mt-1">
+                {range.startDate && range.endDate
+                  ? `${format(range.startDate, 'MMM dd, yyyy')} - ${format(range.endDate, 'MMM dd, yyyy')}`
+                  : 'Select start and end date'}
+              </p>
             </div>
-            <div className="flex justify-end gap-3 mt-4">
+            <div className="px-3 sm:px-4 py-3 overflow-auto max-h-[calc(90vh-130px)]">
+              <div className="rounded-xl border border-gray-100 inline-block align-top">
+                <DateRange
+                  ranges={[range.startDate && range.endDate ? range : { startDate: new Date(), endDate: new Date(), key: 'selection' }]}
+                  onChange={(item) => {
+                    if (item.selection.startDate && item.selection.endDate) {
+                      setRange(item.selection);
+                    }
+                  }}
+                  moveRangeOnFirstSelection={false}
+                  months={2}
+                  direction="horizontal"
+                />
+              </div>
+            </div>
+            <div className="px-4 sm:px-5 py-3 border-t border-gray-100 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
               <button
                 type="button"
                 onClick={() => {
                   setRange({ startDate: null, endDate: null, key: 'selection' });
                   setShowCustomRange(false);
                 }}
-                className="px-5 py-2.5 border rounded-xl hover:bg-gray-50 text-base font-medium"
+                className="h-[40px] px-4 border rounded-xl hover:bg-gray-50 text-sm font-medium cursor-pointer"
               >
                 Clear
               </button>
               <button
                 type="button"
                 onClick={() => setShowCustomRange(false)}
-                className="px-5 py-2.5 border rounded-xl hover:bg-gray-50 text-base font-medium"
+                className="h-[40px] px-4 border rounded-xl hover:bg-gray-50 text-sm font-medium cursor-pointer"
               >
                 Cancel
               </button>
@@ -754,14 +764,14 @@ export default function TruckerReport() {
                     setShowCustomRange(false);
                   }
                 }}
-                className={`px-5 py-2.5 rounded-xl text-base font-medium ${
+                className={`h-[40px] px-4 rounded-xl text-sm font-medium cursor-pointer ${
                   range.startDate && range.endDate
                     ? 'bg-blue-600 text-white hover:bg-blue-700'
                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 }`}
                 disabled={!range.startDate || !range.endDate}
               >
-                OK
+                Apply
               </button>
             </div>
           </div>

@@ -3,6 +3,7 @@ import axios from "axios";
 import * as XLSX from "xlsx";
 import { toast } from "react-toastify";
 import API_CONFIG from "../../config/api";
+import { CMT_CUSTOM_EDIT_DISPOSITION } from "../../constants/cmtCallDispositionLabels";
 
 const REPORT_BASE = `${API_CONFIG.BASE_URL}/api/v1/analytics/8x8`;
 /**
@@ -53,12 +54,84 @@ const EMPTY_DETAILS = {
   remark: "",
 };
 
+const toDateInputValue = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const toMonthInputValue = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  return `${year}-${month}`;
+};
+
 const getTodayRange = () => {
-  const now = new Date().toISOString().slice(0, 10);
+  const now = toDateInputValue(new Date());
   return {
     from: now,
     to: now,
   };
+};
+
+const getMonthRange = (year, monthIndex) => {
+  const firstDay = new Date(year, monthIndex, 1);
+  const lastDay = new Date(year, monthIndex + 1, 0);
+  return {
+    from: toDateInputValue(firstDay),
+    to: toDateInputValue(lastDay),
+  };
+};
+
+const DATE_PRESETS = [
+  { value: "today", label: "Today" },
+  { value: "yesterday", label: "Yesterday" },
+  { value: "last7Days", label: "Last 7 Days" },
+  { value: "last30Days", label: "Last 30 Days" },
+  { value: "thisMonth", label: "This Month" },
+  { value: "lastMonth", label: "Last Month" },
+];
+
+const getDateRangeFromPreset = (preset, customMonthValue) => {
+  const today = new Date();
+
+  if (preset === "yesterday") {
+    const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+    const value = toDateInputValue(yesterday);
+    return { from: value, to: value };
+  }
+
+  if (preset === "last7Days") {
+    const fromDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6);
+    return { from: toDateInputValue(fromDate), to: toDateInputValue(today) };
+  }
+
+  if (preset === "last30Days") {
+    const fromDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 29);
+    return { from: toDateInputValue(fromDate), to: toDateInputValue(today) };
+  }
+
+  if (preset === "thisMonth") {
+    return getMonthRange(today.getFullYear(), today.getMonth());
+  }
+
+  if (preset === "lastMonth") {
+    const monthDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    return getMonthRange(monthDate.getFullYear(), monthDate.getMonth());
+  }
+
+  if (preset === "customMonth") {
+    const [yearStr, monthStr] = String(customMonthValue || "").split("-");
+    const parsedYear = Number(yearStr);
+    const parsedMonth = Number(monthStr);
+    if (!Number.isNaN(parsedYear) && !Number.isNaN(parsedMonth) && parsedMonth >= 1 && parsedMonth <= 12) {
+      return getMonthRange(parsedYear, parsedMonth - 1);
+    }
+    return getMonthRange(today.getFullYear(), today.getMonth());
+  }
+
+  return getTodayRange();
 };
 
 const getAuthConfig = () => {
@@ -121,9 +194,14 @@ const CallDataReports = () => {
   /** Full object from GET /one-on-one-feedback/:id — shown in modal */
   const [oneOnOneServerData, setOneOnOneServerData] = useState(null);
   const [activeSectionTab, setActiveSectionTab] = useState("employeeSummary");
+  const [datePreset, setDatePreset] = useState("today");
+  const [dateDropdownOpen, setDateDropdownOpen] = useState(false);
+  const [customMonthValue, setCustomMonthValue] = useState(() => toMonthInputValue(new Date()));
   const [callerDropdownOpen, setCallerDropdownOpen] = useState(false);
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
   const [callerSearchText, setCallerSearchText] = useState("");
+  const [tableSearchText, setTableSearchText] = useState("");
+  const dateDropdownRef = useRef(null);
   const callerDropdownRef = useRef(null);
   const categoryDropdownRef = useRef(null);
 
@@ -147,11 +225,28 @@ const CallDataReports = () => {
 
   const fetchCategoryOptions = async () => {
     try {
+      let storedUser = null;
+      try {
+        const raw =
+          sessionStorage.getItem("user") || localStorage.getItem("user");
+        if (raw) storedUser = JSON.parse(raw);
+      } catch {
+        /* ignore */
+      }
+      const isCmt =
+        String(storedUser?.department || "")
+          .trim()
+          .toLowerCase() === "cmt";
+
       const res = await axios.get(`${REPORT_BASE}/call-records/category-options`, getAuthConfig());
-      const options = res?.data?.data || res?.data?.options || [];
+      let options = res?.data?.data || res?.data?.options || [];
+      if (!Array.isArray(options)) options = [];
+      if (isCmt && options.length > 0 && !options.includes(CMT_CUSTOM_EDIT_DISPOSITION)) {
+        options = [...options, CMT_CUSTOM_EDIT_DISPOSITION];
+      }
       setState((prev) => ({
         ...prev,
-        categoryOptions: Array.isArray(options) ? options : [],
+        categoryOptions: options,
       }));
     } catch (error) {
       console.error("Category options fetch failed:", error);
@@ -386,6 +481,9 @@ const CallDataReports = () => {
 
   useEffect(() => {
     const onMouseDown = (event) => {
+      if (dateDropdownRef.current && !dateDropdownRef.current.contains(event.target)) {
+        setDateDropdownOpen(false);
+      }
       if (callerDropdownRef.current && !callerDropdownRef.current.contains(event.target)) {
         setCallerDropdownOpen(false);
       }
@@ -396,6 +494,21 @@ const CallDataReports = () => {
     document.addEventListener("mousedown", onMouseDown);
     return () => document.removeEventListener("mousedown", onMouseDown);
   }, []);
+
+  const applyDatePreset = (preset, monthValue = customMonthValue) => {
+    const dateRange = getDateRangeFromPreset(preset, monthValue);
+    const next = {
+      ...state.filters,
+      ...dateRange,
+      page: 1,
+    };
+    setDatePreset(preset);
+    setState((prev) => ({
+      ...prev,
+      filters: next,
+    }));
+    fetchReport(next);
+  };
 
   const updateFilter = (key, value) => {
     const next = {
@@ -436,6 +549,9 @@ const CallDataReports = () => {
 
   const handleReset = async () => {
     const defaults = { ...getTodayRange(), callerName: "", category: "", page: 1, limit: 10 };
+    setDatePreset("today");
+    setCustomMonthValue(toMonthInputValue(new Date()));
+    setTableSearchText("");
     setState((prev) => ({ ...prev, filters: defaults }));
     await fetchReport(defaults);
   };
@@ -444,14 +560,60 @@ const CallDataReports = () => {
   const filteredCallerOptions = employeeOptions.filter((option) =>
     option.label.toLowerCase().includes(callerSearchText.trim().toLowerCase())
   );
-  const activeRows = activeSectionTab === "employeeSummary" ? state.employeeSummary : state.records;
+  const normalizedTableSearch = tableSearchText.trim().toLowerCase();
+  const filteredEmployeeSummary = normalizedTableSearch
+    ? state.employeeSummary.filter((emp) => (
+      [
+        emp.employeeName,
+        emp.empId,
+        emp.mobileNo,
+        emp.totalCalls,
+        emp.answeredCalls,
+        emp.missedCalls,
+        emp.totalTalkTimeMinutes,
+        emp.categorizedCalls,
+        emp.followUpCount,
+      ]
+        .map((value) => String(value ?? "").toLowerCase())
+        .join(" ")
+        .includes(normalizedTableSearch)
+    ))
+    : state.employeeSummary;
+  const filteredDetailedCalls = normalizedTableSearch
+    ? state.records.filter((record) => {
+      const merged = mergeDraft(record);
+      const calleeReceiver = getCalleeReceiverNumber(merged);
+      const callNoLine = getCallNoFromCallee(merged);
+      return [
+        record.startTime ? new Date(record.startTime).toLocaleString() : "",
+        record.callId,
+        record.callerName,
+        record.direction,
+        record.answered,
+        toMinutes(record.talkTimeMS),
+        merged.category,
+        toBool(merged.followUp) ? "yes true follow up" : "no false",
+        record.employee?.empId,
+        record.employee?.aliasName,
+        record.employee?.mobileNo,
+        merged.calleeName,
+        merged.callee?.name,
+        calleeReceiver,
+        callNoLine,
+      ]
+        .map((value) => String(value ?? "").toLowerCase())
+        .join(" ")
+        .includes(normalizedTableSearch);
+    })
+    : state.records;
+  const activeRows = activeSectionTab === "employeeSummary" ? filteredEmployeeSummary : filteredDetailedCalls;
   const totalRecords = activeRows.length;
   const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
   const currentPage = Math.min(Math.max(1, Number(state.filters.page || 1)), totalPages);
   const showingFrom = totalRecords === 0 ? 0 : (currentPage - 1) * pageSize + 1;
   const showingTo = totalRecords === 0 ? 0 : Math.min(currentPage * pageSize, totalRecords);
-  const employeeSummaryPageRows = state.employeeSummary.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-  const detailedCallsPageRows = state.records.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const employeeSummaryPageRows = filteredEmployeeSummary.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const detailedCallsPageRows = filteredDetailedCalls.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   const getVisiblePages = () => {
     const pages = [];
     if (totalPages <= 5) {
@@ -775,42 +937,119 @@ const CallDataReports = () => {
 
 
 
-{state.summary && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {summaryCards.map((card) => (
-            <div key={card.key} className="rounded-2xl border border-gray-200 bg-white px-5 py-4 min-h-[116px] flex items-center justify-between">
-              <div className="min-w-0">
-                <p className="text-lg leading-tight font-semibold text-gray-600 truncate">{card.title}</p>
-                <p className="text-2xl leading-none font-bold text-gray-800 mt-4">{card.value}</p>
+      <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-4">
+        {state.summary && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {summaryCards.map((card) => (
+              <div key={card.key} className="rounded-2xl border border-gray-200 bg-white px-5 py-4 min-h-[116px] flex items-center justify-between">
+                <div className="min-w-0">
+                  <p className="text-lg leading-tight font-semibold text-gray-600 truncate">{card.title}</p>
+                  <p className="text-2xl leading-none font-bold text-gray-800 mt-4">{card.value}</p>
+                </div>
+                <div className={`h-12 w-12 rounded-full flex items-center justify-center ${card.iconBg} ${card.iconColor}`}>
+                  {card.icon}
+                </div>
               </div>
-              <div className={`h-12 w-12 rounded-full flex items-center justify-center ${card.iconBg} ${card.iconColor}`}>
-                {card.icon}
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
+        )}
+        <div className="flex flex-col md:flex-row gap-3">
+          <div className="relative w-full">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+              <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5">
+                <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
+                <path d="M20 20L17 17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            </span>
+            <input
+              type="text"
+              value={tableSearchText}
+              onChange={(e) => {
+                setTableSearchText(e.target.value);
+                setState((prev) => ({
+                  ...prev,
+                  filters: {
+                    ...prev.filters,
+                    page: 1,
+                  },
+                }));
+              }}
+              disabled={state.loading}
+              placeholder="Search records in Employee Summary and Detailed Calls"
+              className="h-[42px] w-full rounded-lg border border-gray-300 pl-11 pr-3 text-gray-800 disabled:opacity-50 disabled:cursor-wait"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={exportRows}
+            disabled={state.loading}
+            className="h-[42px] w-full md:w-[160px] shrink-0 px-4 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 cursor-pointer disabled:opacity-50 disabled:cursor-wait"
+          >
+            Export
+          </button>
         </div>
-      )}
+      </div>
 
 
 
 
       <div className="bg-white rounded-xl border border-gray-200 p-4">
-        <div className="flex items-center gap-3 flex-nowrap overflow-visible pb-1">
-          <input
-            type="date"
-            value={state.filters.from}
-            onChange={(e) => updateFilter("from", e.target.value)}
-            disabled={state.loading}
-            className="w-[240px] shrink-0 px-3 py-2 border border-gray-300 rounded-lg cursor-pointer disabled:opacity-50 disabled:cursor-wait"
-          />
-          <input
-            type="date"
-            value={state.filters.to}
-            onChange={(e) => updateFilter("to", e.target.value)}
-            disabled={state.loading}
-            className="w-[240px] shrink-0 px-3 py-2 border border-gray-300 rounded-lg cursor-pointer disabled:opacity-50 disabled:cursor-wait"
-          />
-          <div className={`relative w-[250px] shrink-0 ${callerDropdownOpen ? "z-40" : "z-10"}`} ref={callerDropdownRef}>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 overflow-visible pb-1">
+          <div className={`relative w-full min-w-0 ${dateDropdownOpen ? "z-40" : "z-10"}`} ref={dateDropdownRef}>
+            <button
+              type="button"
+              onClick={() => {
+                if (state.loading) return;
+                setDateDropdownOpen((prev) => !prev);
+              }}
+              disabled={state.loading}
+              className="h-[42px] w-full px-3 border border-gray-300 rounded-lg text-left bg-white flex items-center justify-between cursor-pointer disabled:opacity-50 disabled:cursor-wait"
+            >
+              <span className="truncate text-gray-800">
+                {DATE_PRESETS.find((item) => item.value === datePreset)?.label || "Date Range"}
+              </span>
+              <span className="text-gray-500">▾</span>
+            </button>
+            {dateDropdownOpen && (
+              <div className="absolute z-30 top-full mt-2 left-0 right-0 rounded-xl border border-gray-200 bg-white shadow-xl p-2">
+                {DATE_PRESETS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => {
+                      applyDatePreset(option.value);
+                      setDateDropdownOpen(false);
+                    }}
+                    className={`w-full h-10 px-3 rounded-lg text-left ${
+                      datePreset === option.value
+                        ? "bg-indigo-600 text-white"
+                        : "hover:bg-gray-100 text-gray-800"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+                <div className="mt-2">
+                  <p className="mb-2 px-1 text-xs font-medium text-gray-600">Custom Month</p>
+                  <input
+                    type="month"
+                    value={customMonthValue}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setCustomMonthValue(value);
+                      applyDatePreset("customMonth", value);
+                    }}
+                    disabled={state.loading}
+                    className="h-10 w-full rounded-lg border border-gray-300 px-3 text-sm cursor-pointer disabled:opacity-50 disabled:cursor-wait"
+                  />
+                </div>
+                <p className="mt-2 text-xs text-gray-500">
+                  Range: {state.filters.from} to {state.filters.to}
+                </p>
+              </div>
+            )}
+          </div>
+          <div className={`relative w-full min-w-0 ${callerDropdownOpen ? "z-40" : "z-10"}`} ref={callerDropdownRef}>
             <button
               type="button"
               onClick={() => {
@@ -870,7 +1109,7 @@ const CallDataReports = () => {
               </div>
             )}
           </div>
-          <div className={`relative w-[250px] shrink-0 ${categoryDropdownOpen ? "z-40" : "z-10"}`} ref={categoryDropdownRef}>
+          <div className={`relative w-full min-w-0 ${categoryDropdownOpen ? "z-40" : "z-10"}`} ref={categoryDropdownRef}>
             <button
               type="button"
               onClick={() => {
@@ -919,39 +1158,22 @@ const CallDataReports = () => {
               </div>
             )}
           </div>
-          <div className="flex gap-2 shrink-0">
-            {/* <select
-              value={state.filters.limit}
-              onChange={(e) => {
-                const next = {
-                  ...state.filters,
-                  page: 1,
-                  limit: 10,
-                };
-                setState((prev) => ({ ...prev, filters: next }));
-                fetchReport(next);
-              }}
-              className="px-3 py-2 border border-gray-300 rounded-lg"
-            >
-              <option value={10}>10 / page</option>
-            </select> */}
+          <div className="w-full min-w-0">
             <button
               type="button"
               onClick={handleReset}
               disabled={state.loading}
-              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer disabled:opacity-50 disabled:cursor-wait"
+              className="h-[42px] w-full px-4 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer disabled:opacity-50 disabled:cursor-wait inline-flex items-center justify-center gap-2"
             >
-              Reset
+              <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4">
+                <path d="M3 12a9 9 0 0 1 15.3-6.36L21 8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M21 3v5h-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M21 12a9 9 0 0 1-15.3 6.36L3 16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M8 16H3v5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              Clear Filter
             </button>
           </div>
-          <button
-            type="button"
-            onClick={exportRows}
-            disabled={state.loading}
-            className="ml-auto shrink-0 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 cursor-pointer disabled:opacity-50 disabled:cursor-wait"
-          >
-            Export
-          </button>
         </div>
         {state.reportFilters?.resolvedEmployee && (
           <p className="mt-3 text-sm text-gray-600">
@@ -1063,7 +1285,7 @@ const CallDataReports = () => {
                 <div>Date/Time</div>
                 <div>Call ID</div>
                 <div>Caller</div>
-                <div>Callee</div>
+                <div>Phone No.</div>
                 <div>Direction</div>
                 <div>Answered</div>
                 <div>Talk Time (min)</div>

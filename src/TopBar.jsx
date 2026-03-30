@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Notification from "./assets/Icons super admin/Nav Bar/Blue/Notification.png";
 import ProfileIcon from "./assets/Icons super admin/ProfileIcon.png";
 import axios from "axios";
@@ -6,9 +6,12 @@ import { useNavigate } from "react-router-dom";
 import API_CONFIG from "./config/api.js";
 import { useEnhancedNotifications } from "./hooks/useEnhancedNotifications";
 import LoadChatModalCMT from "./Components/CMT/LoadChatModalCMT";
+import sharedSocketService from "./services/sharedSocketService";
+import { X } from "lucide-react";
 
 const Topbar = () => {
   const navigate = useNavigate();
+  const BASE_8X8 = `${API_CONFIG.BASE_URL}/api/v1/analytics/8x8`;
 
   const [profileOpen, setProfileOpen] = useState(false);
 
@@ -20,6 +23,11 @@ const Topbar = () => {
     clearNotification, 
     clearAllNotifications 
   } = useEnhancedNotifications();
+  const [followUpNotifications, setFollowUpNotifications] = useState([]);
+  const [followUpToast, setFollowUpToast] = useState(null);
+  /** Full follow-up payload (notification item) for read-only details modal */
+  const [followUpDetailModal, setFollowUpDetailModal] = useState(null);
+  const seenFollowUpIdsRef = useRef(new Set());
 
   const [chatModalState, setChatModalState] = useState({
     isOpen: false,
@@ -320,6 +328,181 @@ const Topbar = () => {
     return () => clearInterval(interval);
   }, [userDepartment]);
 
+  const getAuthHeadersWithTimeZone = () => {
+    const token =
+      sessionStorage.getItem("authToken") ||
+      localStorage.getItem("authToken") ||
+      sessionStorage.getItem("token") ||
+      localStorage.getItem("token");
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const headers = {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    };
+    if (tz) headers["X-Time-Zone"] = tz;
+    return headers;
+  };
+
+  const fetchFollowUpNotifications = async () => {
+    try {
+      const token =
+        sessionStorage.getItem("authToken") ||
+        localStorage.getItem("authToken") ||
+        sessionStorage.getItem("token") ||
+        localStorage.getItem("token");
+      if (!token) return;
+
+      const res = await axios.get(
+        `${BASE_8X8}/call-follow-up-notifications`,
+        {
+          params: { unreadOnly: true },
+          headers: getAuthHeadersWithTimeZone(),
+        }
+      );
+      const items = Array.isArray(res.data?.data) ? res.data.data : [];
+      const dueItems = items.filter((n) => n?.type === "call_follow_up_due" && !n?.read);
+      setFollowUpNotifications(dueItems);
+
+      // Global in-app toast for newly seen follow-up reminders.
+      const newItem = dueItems.find((n) => {
+        const nid = n?.id || n?._id;
+        return nid && !seenFollowUpIdsRef.current.has(nid);
+      });
+      if (newItem) {
+        dueItems.forEach((n) => {
+          const nid = n?.id || n?._id;
+          if (nid) seenFollowUpIdsRef.current.add(nid);
+        });
+        setFollowUpToast(newItem);
+      }
+    } catch (error) {
+      console.warn("Follow-up notifications fetch failed:", error);
+    }
+  };
+
+  const markFollowUpNotificationRead = async (item) => {
+    const notifId = item?.id || item?._id;
+    if (!notifId) return;
+    try {
+      await axios.patch(
+        `${BASE_8X8}/call-follow-up-notifications/${encodeURIComponent(notifId)}/read`,
+        {},
+        { headers: getAuthHeadersWithTimeZone() }
+      );
+    } catch (error) {
+      console.warn("Mark follow-up notification read failed:", error);
+    } finally {
+      setFollowUpNotifications((prev) =>
+        prev.filter((n) => (n?.id || n?._id) !== notifId)
+      );
+    }
+  };
+
+  const openFollowUpDetailsModal = async (item) => {
+    if (!item || typeof item !== "object") return;
+    setNotificationOpen(false);
+    setFollowUpToast(null);
+    setFollowUpDetailModal({ ...item });
+    await markFollowUpNotificationRead(item);
+  };
+
+  useEffect(() => {
+    fetchFollowUpNotifications();
+    const interval = setInterval(fetchFollowUpNotifications, 90 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  /** Realtime follow-up due (room user_<empId>); polling remains fallback. */
+  useEffect(() => {
+    const handler = (payload) => {
+      const p = payload && typeof payload === "object" ? payload : {};
+      if (p.type && p.type !== "call_follow_up_due") return;
+      const nid = p.id || p._id;
+      if (nid) {
+        if (seenFollowUpIdsRef.current.has(nid)) return;
+        seenFollowUpIdsRef.current.add(nid);
+      }
+      setFollowUpToast(p);
+      setFollowUpNotifications((prev) => {
+        if (nid && prev.some((n) => (n?.id || n?._id) === nid)) return prev;
+        return [...prev, { ...p, read: false }];
+      });
+    };
+    let cleanup = () => {};
+    const attach = () => {
+      const socket = sharedSocketService.getSocket();
+      if (!socket) return false;
+      socket.on("call_follow_up_due", handler);
+      cleanup = () => socket.off("call_follow_up_due", handler);
+      return true;
+    };
+    let pollId;
+    if (!attach()) {
+      pollId = setInterval(() => {
+        if (attach()) clearInterval(pollId);
+      }, 400);
+    }
+    return () => {
+      if (pollId) clearInterval(pollId);
+      cleanup();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!followUpToast) return;
+    const timer = setTimeout(() => setFollowUpToast(null), 6000);
+    return () => clearTimeout(timer);
+  }, [followUpToast]);
+
+  /**
+   * Notification payloads often omit `meta.address` (email/notes are included server-side).
+   * Load saved follow-up row via categories API so the details modal can show address.
+   */
+  useEffect(() => {
+    const modal = followUpDetailModal;
+    const callId = modal?.callId;
+    if (!callId) return;
+
+    const meta = modal?.meta && typeof modal.meta === "object" ? modal.meta : {};
+    const hasAddress = String(meta.address ?? "").trim() !== "";
+    if (hasAddress) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await axios.get(`${BASE_8X8}/call-records/categories`, {
+          params: { callIds: String(callId) },
+          headers: getAuthHeadersWithTimeZone(),
+        });
+        if (cancelled || !res.data?.success || !res.data?.data) return;
+        const bucket = res.data.data;
+        const row =
+          bucket[callId] ?? bucket[String(callId)] ?? bucket[Number(callId)];
+        const fd = row?.followUpDetails && typeof row.followUpDetails === "object"
+          ? row.followUpDetails
+          : {};
+        const addr = fd.address;
+        if (addr == null || String(addr).trim() === "") return;
+
+        setFollowUpDetailModal((prev) => {
+          if (!prev || String(prev.callId) !== String(callId)) return prev;
+          const pm = prev.meta && typeof prev.meta === "object" ? prev.meta : {};
+          if (String(pm.address ?? "").trim() !== "") return prev;
+          return {
+            ...prev,
+            meta: { ...pm, address: String(addr).trim() },
+          };
+        });
+      } catch (e) {
+        console.warn("Follow-up modal: could not load address from call record:", e);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [followUpDetailModal]);
+
   // Listen for notification events
   useEffect(() => {
     const handleOpenChat = (e) => {
@@ -496,11 +679,11 @@ const Topbar = () => {
               <img
                 src={Notification}
                 alt="Notifications"
-                className="w-6 h-6 cursor-pointer hover:scale-110 transition-transform duration-200"
+                className="w-9 h-9 cursor-pointer hover:scale-110 transition-transform duration-200"
               />
-              {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-blue-500 rounded-full text-white text-[10px] flex items-center justify-center">
-                  {unreadCount > 99 ? '99+' : unreadCount}
+              {(unreadCount + followUpNotifications.length) > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[1.125rem] h-[1.125rem] px-0.5 bg-blue-500 rounded-full text-white text-[10px] flex items-center justify-center">
+                  {(unreadCount + followUpNotifications.length) > 99 ? '99+' : (unreadCount + followUpNotifications.length)}
                 </span>
               )}
             </div>
@@ -519,58 +702,85 @@ const Topbar = () => {
                   )}
                 </div>
                 
-                {notifications.length === 0 ? (
+                {(notifications.length === 0 && followUpNotifications.length === 0) ? (
                   <div className="px-4 py-8 text-center text-gray-500 text-sm">
                     No new notifications
                   </div>
                 ) : (
-                  notifications.map((notif, idx) => (
-                    <div 
-                      key={`${notif.type}-${notif._id}-${idx}`}
-                      className="px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-50 last:border-0 transition-colors"
-                      onClick={() => {
-                        if (notif.type === 'chat') {
-                          setChatModalState({
-                            isOpen: true,
-                            loadId: notif.loadId,
-                            receiverEmpId: notif.sender?.empId,
-                            receiverName: notif.sender?.employeeName
-                          });
-                        } else if (notif.type === 'negotiation') {
-                          setChatModalState({
-                            isOpen: true,
-                            loadId: notif.loadId,
-                            receiverEmpId: 'shipper',
-                            receiverName: 'Shipper'
-                          });
-                        }
-                        setNotificationOpen(false);
-                        clearNotification(notif._id, notif.type);
-                      }}
-                    >
-                      <div className="flex justify-between items-start mb-1">
-                        <div className="flex items-center gap-2">
-                          {notif.type === 'chat' ? (
-                            <span className="text-blue-500 text-xs">💬</span>
-                          ) : (
-                            <span className="text-green-500 text-xs">💰</span>
-                          )}
-                          <span className="font-medium text-blue-600 text-sm">
-                            Load #{notif.loadId}
-                            {notif.type === 'negotiation' && ` - ${notif.rate?.toLocaleString()}`}
+                  <>
+                    {followUpNotifications.map((item, idx) => (
+                      <div
+                        key={`followup-${item.id || item._id || idx}`}
+                        className="px-4 py-3 hover:bg-blue-50 cursor-pointer border-b border-gray-50 transition-colors"
+                        onClick={() => openFollowUpDetailsModal(item)}
+                      >
+                        <div className="flex justify-between items-start mb-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-orange-500 text-xs">⏰</span>
+                            <span className="font-medium text-orange-700 text-sm">
+                              {item?.title || "Follow up due"}
+                            </span>
+                          </div>
+                          <span className="text-xs text-gray-400">
+                            {new Date(item.createdAt || Date.now()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                           </span>
                         </div>
-                        <span className="text-xs text-gray-400">
-                          {new Date(notif.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                        </span>
+                        <p className="text-sm text-gray-800 font-medium truncate">
+                          {item?.meta?.customerName || item?.meta?.contactPerson || "Customer"}
+                        </p>
+                        <p className="text-xs text-gray-500 line-clamp-2">
+                          {item?.body || "A scheduled follow-up reminder is due now."}
+                        </p>
                       </div>
-                      <p className="text-sm text-gray-800 font-medium truncate">
-                        {notif.sender?.employeeName || 'User'}
-                        {notif.type === 'negotiation' && ' (Negotiation)'}
-                      </p>
-                      <p className="text-xs text-gray-500 line-clamp-2">{notif.message}</p>
-                    </div>
-                  ))
+                    ))}
+                    {notifications.map((notif, idx) => (
+                      <div 
+                        key={`${notif.type}-${notif._id}-${idx}`}
+                        className="px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-50 last:border-0 transition-colors"
+                        onClick={() => {
+                          if (notif.type === 'chat') {
+                            setChatModalState({
+                              isOpen: true,
+                              loadId: notif.loadId,
+                              receiverEmpId: notif.sender?.empId,
+                              receiverName: notif.sender?.employeeName
+                            });
+                          } else if (notif.type === 'negotiation') {
+                            setChatModalState({
+                              isOpen: true,
+                              loadId: notif.loadId,
+                              receiverEmpId: 'shipper',
+                              receiverName: 'Shipper'
+                            });
+                          }
+                          setNotificationOpen(false);
+                          clearNotification(notif._id, notif.type);
+                        }}
+                      >
+                        <div className="flex justify-between items-start mb-1">
+                          <div className="flex items-center gap-2">
+                            {notif.type === 'chat' ? (
+                              <span className="text-blue-500 text-xs">💬</span>
+                            ) : (
+                              <span className="text-green-500 text-xs">💰</span>
+                            )}
+                            <span className="font-medium text-blue-600 text-sm">
+                              Load #{notif.loadId}
+                              {notif.type === 'negotiation' && ` - ${notif.rate?.toLocaleString()}`}
+                            </span>
+                          </div>
+                          <span className="text-xs text-gray-400">
+                            {new Date(notif.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-800 font-medium truncate">
+                          {notif.sender?.employeeName || 'User'}
+                          {notif.type === 'negotiation' && ' (Negotiation)'}
+                        </p>
+                        <p className="text-xs text-gray-500 line-clamp-2">{notif.message}</p>
+                      </div>
+                    ))}
+                  </>
                 )}
               </div>
             )}
@@ -646,6 +856,120 @@ const Topbar = () => {
           receiverName={chatModalState.receiverName}
         />
       )}
+
+      {followUpToast && (
+        <div className="fixed top-4 right-4 z-[1200]">
+          <div className="max-w-sm p-3 rounded-lg shadow-lg border bg-blue-50 border-blue-200 text-blue-800">
+            <div className="flex items-start gap-2">
+              <span className="text-base leading-none mt-0.5">⏰</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold">
+                  {followUpToast?.title || "Follow up due"}
+                </p>
+                <p className="text-xs truncate">
+                  {followUpToast?.body || followUpToast?.meta?.customerName || followUpToast?.meta?.contactPerson || "A scheduled follow-up reminder is due."}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setFollowUpToast(null)}
+                className="text-blue-700 hover:text-blue-900 text-sm font-semibold"
+              >
+                x
+              </button>
+            </div>
+            <div className="mt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => openFollowUpDetailsModal(followUpToast)}
+                className="text-xs px-2 py-1 rounded border border-blue-300 hover:bg-blue-100"
+              >
+                View details
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {followUpDetailModal ? (
+        <div
+          className="fixed inset-0 z-[1300] flex items-center justify-center p-4 bg-black/45"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="follow-up-detail-title"
+          onClick={() => setFollowUpDetailModal(null)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto border border-gray-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="sticky top-0 bg-white border-b border-gray-100 px-5 py-4 flex items-center justify-between rounded-t-xl">
+              <h2 id="follow-up-detail-title" className="text-lg font-semibold text-gray-900 pr-2">
+                {followUpDetailModal?.title || "Follow up due"}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setFollowUpDetailModal(null)}
+                className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 shrink-0"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="px-5 py-4 space-y-3 text-sm text-gray-800">
+              {followUpDetailModal?.body ? (
+                <p className="text-gray-600 border-b border-gray-100 pb-3">{followUpDetailModal.body}</p>
+              ) : null}
+              {(() => {
+                const m = followUpDetailModal?.meta && typeof followUpDetailModal.meta === "object"
+                  ? followUpDetailModal.meta
+                  : {};
+                const scheduled = m.scheduledAt
+                  ? new Date(m.scheduledAt).toLocaleString()
+                  : null;
+                const show = (v) => {
+                  if (v == null) return "—";
+                  const s = String(v).trim();
+                  return s === "" ? "—" : s;
+                };
+                const row = (label, value) => (
+                  <p className="break-words">
+                    <span className="font-medium text-gray-700">{label}: </span>
+                    <span className="text-gray-900">{show(value)}</span>
+                  </p>
+                );
+                return (
+                  <>
+                    {row("Customer", m.customerName)}
+                    {row("Phone", m.contactNumber || m.phone)}
+                    {row("Email", m.emailAddress || m.email)}
+                    {row("Contact person", m.contactPerson)}
+                    {row("Address", m.address)}
+                    {row("Follow-up notes", m.followUpNotes)}
+                    {row("Scheduled for", scheduled)}
+                    {row("Call ID", followUpDetailModal?.callId != null ? String(followUpDetailModal.callId) : null)}
+                    {row(
+                      "Notified at",
+                      followUpDetailModal?.createdAt
+                        ? new Date(followUpDetailModal.createdAt).toLocaleString()
+                        : null
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+            <div className="px-5 py-4 border-t border-gray-100 flex justify-end rounded-b-xl">
+              <button
+                type="button"
+                onClick={() => setFollowUpDetailModal(null)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 };

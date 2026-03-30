@@ -45,10 +45,6 @@ import SidebarFlyout from "./SidebarFlyout";
 const DEPARTMENT_MODULE_CATEGORIES = {
   "HR": {
     "User Management": ["Manage Users", "Users Permissions"],
-    "Communication": [
-      "Chat",
-      "Email"
-    ],
     "Reports": [
       "Break Report",
       "Target Reports",
@@ -109,8 +105,6 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Assign Agent"
     ],
     "Communication": [
-      "Chat",
-      "Email",
       "Import Carrier Emails"
     ],
     "Documents": [
@@ -169,10 +163,6 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "DO Report",
       "Finance Dashboard"
     ],
-    "Communication": [
-      "Chat",
-      "Email"
-    ],
     "Accounting": [
       "Check Invoice"
     ],
@@ -201,10 +191,6 @@ const DEPARTMENT_MODULE_CATEGORIES = {
     ],
     "Company Management": [
       "Sub Company"
-    ],
-    "Communication": [
-      "Chat",
-      "Email"
     ],
     "Documents": [
       "Trukers",
@@ -267,8 +253,6 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Tracking"
     ],
     "Common Modules": [
-      "Chat",
-      "Email",
       "Dinner Status"
     ],
     "CMT Reports": [
@@ -304,10 +288,6 @@ const DEPARTMENT_MODULE_CATEGORIES = {
     "Company Management": [
       "Sub Company"
     ],
-    "Common Modules": [
-      "Chat",
-      "Email"
-    ],
     "Sales Reports": [
       "Sales Dept Report",
       "Follow Up Report",
@@ -330,8 +310,6 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Employee Hygiene"
     ],
     "Common Modules": [
-      "Chat",
-      "Email",
       "Dinner Status"
     ],
     "Finance Reports": [
@@ -348,10 +326,6 @@ const DEPARTMENT_MODULE_CATEGORIES = {
     ]
   },
   "QA": {
-    "Communication": [
-      "Chat",
-      "Email"
-    ],
     "Reports": [
       "Break Report",
       "Target Reports",

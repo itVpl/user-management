@@ -224,6 +224,136 @@ class EmployeeDocumentsService {
   }
 
   /**
+   * Create a document using generic create endpoint
+   * @param {Object} data - Request body with employeeId, documentType, payload
+   */
+  async createDocument(data) {
+    try {
+      const url = `${this.baseURL}/api/v1/employee-documents/create`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify(data),
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Failed to create document: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error creating document:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get available document types from backend
+   */
+  async getDocumentTypes() {
+    try {
+      const url = `${this.baseURL}/api/v1/employee-documents/document-types`;
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: this.getAuthHeaders(),
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch document types: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching document types:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Prefill relieving-letter form fields from employee master by empId
+   * @param {string} empId - Employee ID (URL-encoded in path)
+   * @param {Object} [options] - { signal?: AbortSignal }
+   */
+  async prefillEmployee(empId, options = {}) {
+    try {
+      const enc = encodeURIComponent(empId.trim());
+      const url = `${this.baseURL}/api/v1/employee-documents/employee/${enc}/prefill`;
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: this.getAuthHeaders(),
+        credentials: 'include',
+        signal: options.signal,
+      });
+
+      const body = await response.json().catch(() => ({}));
+
+      if (response.status === 404) {
+        const err = new Error(body.message || 'Employee not found for this Employee ID');
+        err.status = 404;
+        throw err;
+      }
+
+      if (!response.ok) {
+        throw new Error(body.message || `Failed to load employee prefill: ${response.status}`);
+      }
+
+      return body;
+    } catch (error) {
+      if (error.name === 'AbortError') throw error;
+      console.error('Error fetching employee prefill:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Prefill salary slip (VPL policy) from employee profile by empId
+   * @param {string} empId
+   * @param {Object} [options] - { signal?: AbortSignal }
+   */
+  async salarySlipPrefill(empId, options = {}) {
+    try {
+      const enc = encodeURIComponent(empId.trim());
+      const url = `${this.baseURL}/api/v1/employee-documents/employee/${enc}/salary-slip-prefill`;
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: this.getAuthHeaders(),
+        credentials: 'include',
+        signal: options.signal,
+      });
+
+      const body = await response.json().catch(() => ({}));
+
+      if (response.status === 400) {
+        const err = new Error(
+          body.message ||
+            'Set basic salary on the employee profile first, or use manual salary slip entry.'
+        );
+        err.status = 400;
+        throw err;
+      }
+
+      if (response.status === 404) {
+        const err = new Error(body.message || 'Employee not found for this Employee ID');
+        err.status = 404;
+        throw err;
+      }
+
+      if (!response.ok) {
+        throw new Error(body.message || `Failed to load salary slip prefill: ${response.status}`);
+      }
+
+      return body;
+    } catch (error) {
+      if (error.name === 'AbortError') throw error;
+      console.error('Error fetching salary slip prefill:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get all documents with optional filters
    * @param {Object} filters - Filter options (documentType, employeeId, status, page, limit)
    */
@@ -349,9 +479,24 @@ class EmployeeDocumentsService {
         credentials: 'include',
       });
 
+      const ct = (response.headers.get('Content-Type') || '').toLowerCase();
       if (!response.ok) {
-        const errorData = await response.text().catch(() => '');
+        const errorData = ct.includes('application/json')
+          ? JSON.stringify(await response.json().catch(() => ({})))
+          : await response.text().catch(() => '');
         throw new Error(`Failed to generate PDF: ${response.status} - ${errorData}`);
+      }
+
+      if (
+        ct &&
+        !ct.includes('application/pdf') &&
+        !ct.includes('octet-stream') &&
+        !ct.includes('binary')
+      ) {
+        const text = await response.text().catch(() => '');
+        throw new Error(
+          text?.slice(0, 200) || `Expected PDF but got: ${ct}`
+        );
       }
 
       return await response.blob();
@@ -375,11 +520,14 @@ class EmployeeDocumentsService {
         credentials: 'include',
       });
 
-      const result = await response.json();
+      const result = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        const errorMsg = result.message || `Failed to send PDF: ${response.status}`;
-        throw new Error(errorMsg);
+        const parts = [result.message, result.error].filter(Boolean);
+        const errorMsg = parts.length ? parts.join(' — ') : `Failed to send PDF: ${response.status}`;
+        const err = new Error(errorMsg);
+        err.api = result;
+        throw err;
       }
 
       return result;

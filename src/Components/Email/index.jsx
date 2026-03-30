@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -24,6 +25,7 @@ import {
   ListItem,
   ListItemText,
   CircularProgress,
+  Snackbar,
 } from '@mui/material';
 import {
   FilterList as FilterListIcon,
@@ -62,7 +64,8 @@ import {
   fetchEmailByUid, 
   fetchEmailsByLabel,
   searchEmails,
-  transformEmail, 
+  transformEmail,
+  mapApiMessagesForThreadDisplay,
   sendEmail, 
   sendEmailWithAttachments, 
   replyToEmailWithFiles, 
@@ -77,14 +80,25 @@ import {
   listTrash,
   moveToTrash,
   restoreFromTrash,
-  permanentDeleteFromTrash
+  permanentDeleteFromTrash,
+  getGoogleAuthUrl,
 } from './emailService';
 import { groupEmailsByThread } from './threadUtils';
 import API_CONFIG from '../../config/api';
 
+const GMAIL_OAUTH_ERROR_MESSAGES = {
+  no_refresh_token:
+    'Google did not return a refresh token. Try again and ensure you grant all requested access, or add this account as a test user in Google Cloud.',
+  missing_code_or_state: 'Sign-in was interrupted. Close this message and try Connect Google again.',
+  account_not_found: 'That mailbox account was not found. Refresh the page or create the account again.',
+  server_config: 'Gmail sign-in is not configured on the server. Ask an administrator to check Google OAuth environment variables.',
+};
+
 const Email = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const navigate = useNavigate();
+  const location = useLocation();
 
   // State management
   const [selectedTab, setSelectedTab] = useState(0);
@@ -170,6 +184,12 @@ const Email = () => {
   const [searchPage, setSearchPage] = useState(1);
   const [searchPageToken, setSearchPageToken] = useState(null);
   const [searchSource, setSearchSource] = useState(null); // 'gmail-api' | 'db'
+
+  const [oauthSnackbar, setOauthSnackbar] = useState({
+    open: false,
+    message: '',
+    severity: 'success',
+  });
 
   // Tab configuration
   const tabs = [
@@ -259,6 +279,38 @@ const Email = () => {
     }
   };
 
+  // After Gmail OAuth redirect: ?connected=gmail or ?error=...
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const connected = params.get('connected');
+    const oauthError = params.get('error');
+    if (connected !== 'gmail' && !oauthError) return;
+
+    if (connected === 'gmail') {
+      setOauthSnackbar({
+        open: true,
+        message: 'Gmail connected successfully. This account will use the Gmail API when available.',
+        severity: 'success',
+      });
+      loadEmailAccounts();
+    } else if (oauthError) {
+      setOauthSnackbar({
+        open: true,
+        message:
+          GMAIL_OAUTH_ERROR_MESSAGES[oauthError] ||
+          `Google sign-in failed (${oauthError}). Try again or use an app password.`,
+        severity: 'error',
+      });
+    }
+
+    params.delete('connected');
+    params.delete('error');
+    const qs = params.toString();
+    navigate(`${location.pathname}${qs ? `?${qs}` : ''}`, { replace: true });
+    // loadEmailAccounts intentionally omitted — it is not stable; this effect should only react to URL
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname, location.search, navigate]);
+
   // Handle account switching
   const handleAccountChange = (accountId) => {
     setSelectedAccountId(accountId);
@@ -297,6 +349,15 @@ const Email = () => {
       console.error('Error deleting account:', err);
       throw err;
     }
+  };
+
+  const handleConnectGoogle = async (accountId) => {
+    const data = await getGoogleAuthUrl(accountId);
+    const url = data?.url;
+    if (!url || typeof url !== 'string') {
+      throw new Error('Server did not return a Google sign-in URL');
+    }
+    window.location.href = url;
   };
 
   // Helper function to deduplicate threads by UID
@@ -1284,12 +1345,13 @@ const Email = () => {
       
       // Use the latest message as the base, but include all messages for thread view
       const latestMessage = email.latestMessage || email.messages[email.messages.length - 1];
-      
-      // Set selected email with thread data
+      const listThreadDisplay = mapApiMessagesForThreadDisplay(email.messages);
+
+      // Set selected email with thread data (normalize list rows so snippet/preview shows until detail returns)
       setSelectedEmail({
         ...latestMessage,
-        threadMessages: email.messages,
-        messages: email.messages,
+        threadMessages: listThreadDisplay,
+        messages: listThreadDisplay,
         messageCount: email.messageCount,
         threadId: email.threadId,
         subject: email.subject,
@@ -1308,11 +1370,12 @@ const Email = () => {
           const response = await fetchEmailByUid(latestMessage.uid, selectedAccountId, folder, true, shouldMarkAsRead, false);
           
           if (response.success && response.email && response.email.messages) {
-            // Update with full thread data from backend
+            const mapped = mapApiMessagesForThreadDisplay(response.email.messages);
+            // Update with full thread data from backend (map bodies — raw API uses textPlain/textHtml etc.)
             setSelectedEmail(prev => ({
               ...prev,
-              threadMessages: response.email.messages,
-              messages: response.email.messages,
+              threadMessages: mapped,
+              messages: mapped,
               messageCount: response.email.messageCount || response.email.messages.length,
               seen: response.email.seen !== undefined ? response.email.seen : prev.seen,
               isRead: response.email.seen !== undefined ? response.email.seen : prev.isRead
@@ -2832,12 +2895,29 @@ const Email = () => {
         accounts={emailAccounts}
         onSetDefault={handleSetDefaultAccount}
         onDelete={handleDeleteAccount}
+        onConnectGoogle={handleConnectGoogle}
         onManageSignatures={(account) => {
           setSignatureManagerAccount(account);
           setAccountManagementOpen(false);
         }}
         loading={accountsLoading}
       />
+
+      <Snackbar
+        open={oauthSnackbar.open}
+        autoHideDuration={8000}
+        onClose={() => setOauthSnackbar((s) => ({ ...s, open: false }))}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={() => setOauthSnackbar((s) => ({ ...s, open: false }))}
+          severity={oauthSnackbar.severity}
+          variant="filled"
+          sx={{ width: '100%' }}
+        >
+          {oauthSnackbar.message}
+        </Alert>
+      </Snackbar>
 
       <SignatureManagerDialog
         open={!!signatureManagerAccount}
