@@ -584,6 +584,7 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
             userApprovalStatus: approval.userApprovalStatus,
             userAction: approval.userAction,
             userActionAt: approval.userActionAt,
+            assignedCompany: approval.loadId?.assignedCompany || "",
           };
         }
 
@@ -708,6 +709,7 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
             approval.createdBy ||
             approval.salesUser ||
             null,
+          assignedCompany: approval.loadId?.assignedCompany || "",
         };
       });
 
@@ -823,6 +825,7 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
             // Add bid count
             bidCount: approval.loadId?.bidCount || 0,
             cmtBidSlaCurrent: approval.cmtBidSlaCurrent || null,
+            assignedCompany: approval.loadId?.assignedCompany || "",
           };
         }
 
@@ -955,6 +958,7 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
             approval.loadId?.cmtBidSlaCurrent ||
             approval.cmtBidSlaCurrent ||
             null,
+          assignedCompany: approval.loadId?.assignedCompany || "",
           rawApproval: approval,
         };
       });
@@ -4748,6 +4752,16 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
                       </div>
                       <div className="text-sm font-semibold text-gray-800">
                         {bidDetailsModal.load.status || "N/A"}
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                        Assigned Company
+                      </div>
+                      <div className="text-sm font-semibold text-gray-800">
+                        {bidDetailsModal.load?.assignedCompany ||
+                          bidDetailsData?.load?.assignedCompany ||
+                          "N/A"}
                       </div>
                     </div>
                     <div className="space-y-1">

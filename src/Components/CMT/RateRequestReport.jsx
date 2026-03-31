@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
+import { useSearchParams, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
 import axios from "axios";
 import API_CONFIG from "../../config/api.js";
@@ -242,6 +243,8 @@ const getReportAuthToken = () =>
  * Rate Request Report Component for CMT Users (Similar to EmptyTruckLocation Design)
  */
 const RateRequestReport = () => {
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
   const [loads, setLoads] = useState([]);
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -284,6 +287,7 @@ const RateRequestReport = () => {
     userId: "",
     loadType: "",
     assignedCompany: "",
+    cmtEmpId: "",
   });
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedLoad, setSelectedLoad] = useState(null);
@@ -306,6 +310,33 @@ const RateRequestReport = () => {
   useEffect(() => {
     fetchSalesUsers();
   }, []);
+
+  // Deep link from CMT Dept Report: ?cmtEmpId=&startDate=&endDate= (employee name via location.state only)
+  useEffect(() => {
+    const cmtEmpId = searchParams.get("cmtEmpId")?.trim() || "";
+    const start = searchParams.get("startDate")?.trim() || "";
+    const end = searchParams.get("endDate")?.trim() || "";
+    const ymdOk = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s);
+
+    setFilters((prev) => ({ ...prev, cmtEmpId }));
+
+    const st = location.state;
+    const nameFromNav =
+      st && typeof st.cmtRateReportEmployeeName === "string"
+        ? st.cmtRateReportEmployeeName.trim()
+        : "";
+    if (nameFromNav) {
+      setSearchTerm(nameFromNav);
+    }
+
+    if (start && end && ymdOk(start) && ymdOk(end)) {
+      const ds = new Date(`${start}T12:00:00`);
+      const de = new Date(`${end}T12:00:00`);
+      if (!Number.isNaN(ds.getTime()) && !Number.isNaN(de.getTime())) {
+        setRange({ startDate: ds, endDate: de, key: "selection" });
+      }
+    }
+  }, [searchParams, location.key, location.state]);
 
   useEffect(() => {
     fetchLoadsWithBids();
@@ -423,6 +454,7 @@ const RateRequestReport = () => {
       userId: "",
       loadType: "",
       assignedCompany: "",
+      cmtEmpId: "",
     });
     setRange({
       startDate: addDays(new Date(), -29),
@@ -547,6 +579,14 @@ const RateRequestReport = () => {
       load.assignedCompany !== filters.assignedCompany
     )
       return false;
+    if (filters.cmtEmpId && filters.cmtEmpId.trim()) {
+      const id = filters.cmtEmpId.trim();
+      const assignedMatch = load.assignedCMTUser?.empId === id;
+      const bidMatch = (load.cmtUsersWhoBid || []).some(
+        (u) => String(u?.empId || "") === id || String(u?._id || "") === id,
+      );
+      if (!assignedMatch && !bidMatch) return false;
+    }
     if (searchTerm && searchTerm.trim() !== "") {
       const q = searchTerm.toLowerCase();
       const hay = [
@@ -632,10 +672,27 @@ const RateRequestReport = () => {
   // Reset to first page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [filters.userId, filters.loadType, filters.assignedCompany, range]);
+  }, [filters.userId, filters.loadType, filters.assignedCompany, filters.cmtEmpId, range]);
+
+  const cmtDeepLinkLabel = useMemo(() => {
+    const id = (filters.cmtEmpId || "").trim();
+    if (!id) return null;
+    const st = location.state;
+    const name =
+      st && typeof st.cmtRateReportEmployeeName === "string"
+        ? st.cmtRateReportEmployeeName.trim()
+        : "";
+    return name ? `${name} (${id})` : id;
+  }, [filters.cmtEmpId, location.state]);
 
   return (
     <div className="p-6">
+      {cmtDeepLinkLabel && (
+        <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm text-blue-900">
+          Filtered for CMT user: <span className="font-semibold">{cmtDeepLinkLabel}</span>
+          <span className="text-blue-700"> — date range from CMT summary</span>
+        </div>
+      )}
       <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-white rounded-xl p-5 h-30 border border-gray-200">
