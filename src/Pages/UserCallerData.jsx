@@ -4,7 +4,11 @@ import axios from "axios";
 import * as XLSX from "xlsx";
 import { Phone, CheckCircle, XCircle, BarChart3, Clock, FileText, Users, MessageSquare, Download, ChevronLeft, ChevronRight, AlertTriangle, X, Info } from "lucide-react";
 import API_CONFIG from "../config/api";
-import { CMT_CUSTOM_EDIT_DISPOSITION } from "../constants/cmtCallDispositionLabels";
+import {
+  CMT_CUSTOM_EDIT_DISPOSITION,
+  CMT_ADD_LOAD_REFERENCE_DISPOSITION,
+  cmtLoadReferenceCategoryPrefix,
+} from "../constants/cmtCallDispositionLabels";
 import { format } from "date-fns";
 
 const BASE_8X8 = `${API_CONFIG.BASE_URL}/api/v1/analytics/8x8`;
@@ -23,6 +27,24 @@ const CATEGORY_OPTIONS_FALLBACK = [
 
 const isVoiceMailDisposition = (category) =>
   String(category || "").trim().toLowerCase() === "voice mail";
+
+const loadRefPrefix = cmtLoadReferenceCategoryPrefix();
+
+/** True when the row should show a free-text disposition field (Custom Edit, Add Load Reference No., or typed value not in list). */
+const isCustomDispositionCategory = (category, options) => {
+  const c = String(category ?? "").trim();
+  if (!c) return false;
+  if (c === CMT_CUSTOM_EDIT_DISPOSITION) return true;
+  if (c === CMT_ADD_LOAD_REFERENCE_DISPOSITION) return true;
+  if (c.startsWith(loadRefPrefix)) return true;
+  if (!Array.isArray(options) || options.length === 0) return false;
+  return !options.includes(c);
+};
+
+const isLoadReferenceDispositionCategory = (category) => {
+  const c = String(category ?? "").trim();
+  return c === CMT_ADD_LOAD_REFERENCE_DISPOSITION || c.startsWith(loadRefPrefix);
+};
 
 const formatDateTime = (date) => {
   const d = new Date(date);
@@ -329,6 +351,9 @@ const UserCallDashboard = () => {
   const [categoryOptions, setCategoryOptions] = useState(CATEGORY_OPTIONS_FALLBACK);
   const [categoryOptionsError, setCategoryOptionsError] = useState("");
   const [categories, setCategories] = useState({}); // callId -> { category, followUp, followUpDetails }
+  /** Draft text while editing custom disposition (callId -> string); cleared after successful save. */
+  const [customCategoryDraft, setCustomCategoryDraft] = useState({});
+  const [savingCustomCategoryId, setSavingCustomCategoryId] = useState(null);
 
   const [modalCallId, setModalCallId] = useState(null);
   const [modalError, setModalError] = useState("");
@@ -491,8 +516,13 @@ const UserCallDashboard = () => {
         const opts = res.data?.options ?? res.data?.data;
         if (res.data?.success && Array.isArray(opts) && opts.length > 0) {
           let next = opts;
-          if (isCmt && !next.includes(CMT_CUSTOM_EDIT_DISPOSITION)) {
-            next = [...next, CMT_CUSTOM_EDIT_DISPOSITION];
+          if (isCmt) {
+            if (!next.includes(CMT_ADD_LOAD_REFERENCE_DISPOSITION)) {
+              next = [...next, CMT_ADD_LOAD_REFERENCE_DISPOSITION];
+            }
+            if (!next.includes(CMT_CUSTOM_EDIT_DISPOSITION)) {
+              next = [...next, CMT_CUSTOM_EDIT_DISPOSITION];
+            }
           }
           setCategoryOptions(next);
         }
@@ -563,12 +593,11 @@ const UserCallDashboard = () => {
   }, []);
 
   const onCategoryChange = async (callId, value) => {
-    const current = categories[callId] || {};
     const newCategory = value || null;
     setCategories((prev) => ({
       ...prev,
       [callId]: {
-        ...current,
+        ...(prev[callId] || {}),
         category: newCategory,
         ...(isVoiceMailDisposition(newCategory)
           ? { followUp: false, followUpDetails: {} }
@@ -579,7 +608,82 @@ const UserCallDashboard = () => {
     if (isVoiceMailDisposition(newCategory)) {
       await updateCategory(callId, { followUp: false });
     }
+    setCustomCategoryDraft((prev) => {
+      const next = { ...prev };
+      delete next[callId];
+      return next;
+    });
   };
+
+  const saveCustomDisposition = useCallback(
+    async (callId, valueFromInput) => {
+      const row = categories[callId] || {};
+      const currentCat = String(row.category ?? "").trim();
+      const isLoadRef = isLoadReferenceDispositionCategory(currentCat);
+
+      const raw = String(valueFromInput ?? "").trim();
+      const categoryToSave = isLoadRef
+        ? raw === ""
+          ? null
+          : `${loadRefPrefix}${raw}`
+        : raw;
+
+      setSavingCustomCategoryId(callId);
+      try {
+        setCustomCategoryDraft((p) => {
+          const n = { ...p };
+          delete n[callId];
+          return n;
+        });
+        if (categoryToSave === null || categoryToSave === "") {
+          const cleared = await updateCategory(callId, { category: null });
+          if (!cleared.success) {
+            setNotification({
+              show: true,
+              message: cleared.error || "Could not clear disposition.",
+              type: "warning",
+            });
+            setTimeout(() => setNotification({ show: false, message: "", type: "info" }), 5000);
+          }
+          return;
+        }
+        const result = await updateCategory(callId, { category: categoryToSave });
+        if (!result.success) {
+          setNotification({
+            show: true,
+            message: result.error || "Could not save disposition. The server may only allow listed categories.",
+            type: "warning",
+          });
+          setTimeout(() => setNotification({ show: false, message: "", type: "info" }), 6000);
+          return;
+        }
+        if (isVoiceMailDisposition(categoryToSave)) {
+          await updateCategory(callId, { followUp: false });
+        }
+        setNotification({
+          show: true,
+          message: "Disposition saved.",
+          type: "success",
+        });
+        setTimeout(() => setNotification({ show: false, message: "", type: "info" }), 2500);
+      } finally {
+        setSavingCustomCategoryId(null);
+      }
+    },
+    [categories, updateCategory]
+  );
+
+  const switchCustomDispositionToList = useCallback(
+    async (callId) => {
+      setCustomCategoryDraft((p) => {
+        const n = { ...p };
+        delete n[callId];
+        return n;
+      });
+      await updateCategory(callId, { category: null });
+    },
+    [updateCategory]
+  );
 
   const openFollowUpModal = (callId) => {
     setModalError("");
@@ -999,16 +1103,109 @@ const UserCallDashboard = () => {
                         </span>
                       </td> */}
                       <td className="py-4 px-6">
-                        <select
-                          value={cat.category ?? ""}
-                          onChange={(e) => onCategoryChange(r.callId, e.target.value || null)}
-                          className="w-full max-w-[180px] px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-transparent"
-                        >
-                          <option value="">Select...</option>
-                          {categoryOptions.map((opt) => (
-                            <option key={opt} value={opt}>{opt}</option>
-                          ))}
-                        </select>
+                        {isCustomDispositionCategory(cat.category, categoryOptions) ? (
+                          (() => {
+                            const catStr = String(cat.category ?? "");
+                            const isLoadRefRow = isLoadReferenceDispositionCategory(catStr);
+                            const loadRefValue =
+                              catStr === CMT_ADD_LOAD_REFERENCE_DISPOSITION
+                                ? ""
+                                : catStr.startsWith(loadRefPrefix)
+                                  ? catStr.slice(loadRefPrefix.length)
+                                  : "";
+                            const customValue =
+                              customCategoryDraft[r.callId] !== undefined
+                                ? customCategoryDraft[r.callId]
+                                : catStr === CMT_CUSTOM_EDIT_DISPOSITION
+                                  ? ""
+                                  : isLoadRefRow
+                                    ? loadRefValue
+                                    : catStr;
+                            const savingCustom = savingCustomCategoryId === r.callId;
+                            return (
+                          <div className="flex flex-col gap-1.5 max-w-[min(100%,280px)]">
+                            <input
+                              type="text"
+                              value={customValue}
+                              onChange={(e) =>
+                                setCustomCategoryDraft((prev) => ({
+                                  ...prev,
+                                  [r.callId]: e.target.value,
+                                }))
+                              }
+                              onBlur={(e) =>
+                                saveCustomDisposition(r.callId, e.target.value)
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  saveCustomDisposition(r.callId, e.currentTarget.value);
+                                }
+                              }}
+                              placeholder={
+                                isLoadRefRow ? "Enter load reference no…" : "Enter disposition…"
+                              }
+                              disabled={savingCustom}
+                              className="w-full px-3 py-1.5 border border-teal-300 bg-white rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 disabled:opacity-60"
+                              aria-label={isLoadRefRow ? "Load reference number" : "Custom disposition"}
+                            />
+                            <div className="flex flex-wrap items-center gap-2">
+                              <button
+                                type="button"
+                                disabled={savingCustom}
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => saveCustomDisposition(r.callId, customValue)}
+                                className="px-2.5 py-1 rounded-lg text-xs font-medium text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {savingCustom ? "Saving…" : "Save"}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={savingCustom}
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => switchCustomDispositionToList(r.callId)}
+                                className="text-xs text-teal-600 hover:text-teal-800 underline disabled:opacity-50"
+                              >
+                                Use list instead
+                              </button>
+                            </div>
+                            <p className="text-[11px] text-gray-500 leading-snug">
+                              {isLoadRefRow ? (
+                                <>
+                                  Saved as{" "}
+                                  <strong className="font-medium text-gray-600">
+                                    Add Load Reference No.: &lt;your text&gt;
+                                  </strong>{" "}
+                                  on the call record. Use <strong className="font-medium text-gray-600">Save</strong>,{" "}
+                                  <strong className="font-medium text-gray-600">Enter</strong>, or blur the field.
+                                </>
+                              ) : (
+                                <>
+                                  Saves to the server as this call&apos;s category (same as the list options). Use{" "}
+                                  <strong className="font-medium text-gray-600">Save</strong>,{" "}
+                                  <strong className="font-medium text-gray-600">Enter</strong>, or click out of the field.
+                                </>
+                              )}
+                            </p>
+                          </div>
+                            );
+                          })()
+                        ) : (
+                          <select
+                            value={cat.category ?? ""}
+                            onChange={(e) =>
+                              onCategoryChange(r.callId, e.target.value || null)
+                            }
+                            className="w-full max-w-[180px] px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-transparent"
+                          >
+                            <option value="">Select...</option>
+                            {categoryOptions.map((opt) => (
+                              <option key={opt} value={opt}>
+                                {opt}
+                              </option>
+                            ))}
+                          </select>
+                        )}
                       </td>
                       <td className="py-4 px-6">
                         {showFollowUpBtn ? (

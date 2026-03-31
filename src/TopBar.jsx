@@ -455,8 +455,8 @@ const Topbar = () => {
   }, [followUpToast]);
 
   /**
-   * Notification payloads often omit `meta.address` (email/notes are included server-side).
-   * Load saved follow-up row via categories API so the details modal can show address.
+   * Notification payloads may omit `meta.address` and/or phone (`contactNumber` / `phone`).
+   * Load saved follow-up row via categories API so the details modal can fill gaps.
    */
   useEffect(() => {
     const modal = followUpDetailModal;
@@ -465,7 +465,9 @@ const Topbar = () => {
 
     const meta = modal?.meta && typeof modal.meta === "object" ? modal.meta : {};
     const hasAddress = String(meta.address ?? "").trim() !== "";
-    if (hasAddress) return;
+    const hasPhone =
+      String(meta.contactNumber ?? meta.phone ?? meta.phoneNumber ?? "").trim() !== "";
+    if (hasAddress && hasPhone) return;
 
     let cancelled = false;
     (async () => {
@@ -481,20 +483,28 @@ const Topbar = () => {
         const fd = row?.followUpDetails && typeof row.followUpDetails === "object"
           ? row.followUpDetails
           : {};
-        const addr = fd.address;
-        if (addr == null || String(addr).trim() === "") return;
+        const fdPhone = fd.contactNumber ?? fd.phone ?? fd.phoneNumber;
+        const fdAddr = fd.address;
 
         setFollowUpDetailModal((prev) => {
           if (!prev || String(prev.callId) !== String(callId)) return prev;
           const pm = prev.meta && typeof prev.meta === "object" ? prev.meta : {};
-          if (String(pm.address ?? "").trim() !== "") return prev;
-          return {
-            ...prev,
-            meta: { ...pm, address: String(addr).trim() },
-          };
+          let changed = false;
+          const nextMeta = { ...pm };
+
+          if (!hasAddress && fdAddr != null && String(fdAddr).trim() !== "") {
+            nextMeta.address = String(fdAddr).trim();
+            changed = true;
+          }
+          if (!hasPhone && fdPhone != null && String(fdPhone).trim() !== "") {
+            nextMeta.contactNumber = String(fdPhone).trim();
+            changed = true;
+          }
+          if (!changed) return prev;
+          return { ...prev, meta: nextMeta };
         });
       } catch (e) {
-        console.warn("Follow-up modal: could not load address from call record:", e);
+        console.warn("Follow-up modal: could not load follow-up details from call record:", e);
       }
     })();
 
@@ -941,7 +951,10 @@ const Topbar = () => {
                 return (
                   <>
                     {row("Customer", m.customerName)}
-                    {row("Phone", m.contactNumber || m.phone)}
+                    {row(
+                      "Phone",
+                      m.contactNumber || m.phone || m.phoneNumber || m.mobile
+                    )}
                     {row("Email", m.emailAddress || m.email)}
                     {row("Contact person", m.contactPerson)}
                     {row("Address", m.address)}

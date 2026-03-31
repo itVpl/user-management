@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import axios from "axios";
 import { CalendarClock, ChevronRight, Loader2, X } from "lucide-react";
 import API_CONFIG from "../../config/api";
@@ -104,7 +104,6 @@ const formatNextFollowUp = (iso, timeZone) => {
  * @param {number} [props.limit=20] — API page size.
  */
 export default function CallFollowUpsDashboardCard({ variant = "full", limit = 20 }) {
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [windowFilter, setWindowFilter] = useState("upcoming");
   const [items, setItems] = useState([]);
@@ -200,10 +199,6 @@ export default function CallFollowUpsDashboardCard({ variant = "full", limit = 2
       return next;
     }, { replace: true });
   }, [items, searchParams, setSearchParams]);
-
-  const goToCallData = (callId) => {
-    navigate(`/call-dashboard?focusCallId=${encodeURIComponent(String(callId))}`);
-  };
 
   const closeDetails = () => {
     setSelectedRow(null);
@@ -515,19 +510,8 @@ export default function CallFollowUpsDashboardCard({ variant = "full", limit = 2
                 </div>
               </div>
 
-              <div className="px-5 py-4 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const id = selectedRow?.callId;
-                    closeDetails();
-                    if (id != null) goToCallData(id);
-                  }}
-                  className="text-sm text-teal-700 hover:text-teal-900 font-medium text-left"
-                >
-                  Open in Call Data
-                </button>
-                <div className="flex items-center justify-end gap-2">
+              <div className="px-5 py-4 border-t border-gray-100 flex justify-end">
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={closeDetails}
