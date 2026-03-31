@@ -868,7 +868,6 @@ const Dashboard = () => {
           <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Shipper Name</th>
           <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Carrier Name</th>
           <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Date-Time</th>
-          <th className="text-left py-4 px-6 text-gray-600 font-medium text-base">Carrier Fees</th>
         </tr>
       </thead>
       <tbody>
@@ -896,14 +895,6 @@ const Dashboard = () => {
               minute: '2-digit',
               hour12: true
             });
-            
-            // Calculate total amount from lineHaul, fsc, and other charges
-            const lineHaul = Number(deliveryOrder.lineHaul) || 0;
-            const fsc = Number(deliveryOrder.fsc) || 0;
-            const otherTotal = Array.isArray(deliveryOrder.other) 
-              ? deliveryOrder.other.reduce((sum, item) => sum + (Number(item.total) || 0), 0)
-              : 0;
-            const totalAmount = lineHaul + fsc + otherTotal;
             
             // Status styling
             const status = deliveryOrder.status || 'pending';
@@ -939,13 +930,12 @@ const Dashboard = () => {
                 <td className="py-4 px-6 text-gray-600">{shipperName}</td>
                 <td className="py-4 px-6 text-gray-600">{carrierName}</td>
                 <td className="py-4 px-6 text-gray-600">{formattedDateTime}</td>
-                <td className="py-4 px-6 text-gray-800 font-semibold">${totalAmount.toLocaleString()}</td>
               </tr>
             );
           })
         ) : (
           <tr>
-            <td colSpan="6" className="py-8 px-6 text-center text-gray-500">
+            <td colSpan="5" className="py-8 px-6 text-center text-gray-500">
               <div className="flex flex-col items-center">
                 <Truck className="w-8 h-8 text-gray-300 mb-2" />
                 <p>No recent delivery orders available</p>

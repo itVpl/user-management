@@ -3,7 +3,10 @@ import axios from "axios";
 import * as XLSX from "xlsx";
 import { toast } from "react-toastify";
 import API_CONFIG from "../../config/api";
-import { CMT_CUSTOM_EDIT_DISPOSITION } from "../../constants/cmtCallDispositionLabels";
+import {
+  CMT_CUSTOM_EDIT_DISPOSITION,
+  CMT_ADD_LOAD_REFERENCE_DISPOSITION,
+} from "../../constants/cmtCallDispositionLabels";
 
 const REPORT_BASE = `${API_CONFIG.BASE_URL}/api/v1/analytics/8x8`;
 /**
@@ -61,12 +64,6 @@ const toDateInputValue = (date) => {
   return `${year}-${month}-${day}`;
 };
 
-const toMonthInputValue = (date) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  return `${year}-${month}`;
-};
-
 const getTodayRange = () => {
   const now = toDateInputValue(new Date());
   return {
@@ -91,9 +88,10 @@ const DATE_PRESETS = [
   { value: "last30Days", label: "Last 30 Days" },
   { value: "thisMonth", label: "This Month" },
   { value: "lastMonth", label: "Last Month" },
+  { value: "customRange", label: "Custom" },
 ];
 
-const getDateRangeFromPreset = (preset, customMonthValue) => {
+const getDateRangeFromPreset = (preset, customRangeValue) => {
   const today = new Date();
 
   if (preset === "yesterday") {
@@ -121,14 +119,13 @@ const getDateRangeFromPreset = (preset, customMonthValue) => {
     return getMonthRange(monthDate.getFullYear(), monthDate.getMonth());
   }
 
-  if (preset === "customMonth") {
-    const [yearStr, monthStr] = String(customMonthValue || "").split("-");
-    const parsedYear = Number(yearStr);
-    const parsedMonth = Number(monthStr);
-    if (!Number.isNaN(parsedYear) && !Number.isNaN(parsedMonth) && parsedMonth >= 1 && parsedMonth <= 12) {
-      return getMonthRange(parsedYear, parsedMonth - 1);
+  if (preset === "customRange") {
+    const from = String(customRangeValue?.from || "").trim();
+    const to = String(customRangeValue?.to || "").trim();
+    if (from && to) {
+      return from <= to ? { from, to } : { from: to, to: from };
     }
-    return getMonthRange(today.getFullYear(), today.getMonth());
+    return getTodayRange();
   }
 
   return getTodayRange();
@@ -196,7 +193,7 @@ const CallDataReports = () => {
   const [activeSectionTab, setActiveSectionTab] = useState("employeeSummary");
   const [datePreset, setDatePreset] = useState("today");
   const [dateDropdownOpen, setDateDropdownOpen] = useState(false);
-  const [customMonthValue, setCustomMonthValue] = useState(() => toMonthInputValue(new Date()));
+  const [customDateRange, setCustomDateRange] = useState(() => getTodayRange());
   const [callerDropdownOpen, setCallerDropdownOpen] = useState(false);
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
   const [callerSearchText, setCallerSearchText] = useState("");
@@ -241,8 +238,13 @@ const CallDataReports = () => {
       const res = await axios.get(`${REPORT_BASE}/call-records/category-options`, getAuthConfig());
       let options = res?.data?.data || res?.data?.options || [];
       if (!Array.isArray(options)) options = [];
-      if (isCmt && options.length > 0 && !options.includes(CMT_CUSTOM_EDIT_DISPOSITION)) {
-        options = [...options, CMT_CUSTOM_EDIT_DISPOSITION];
+      if (isCmt && options.length > 0) {
+        if (!options.includes(CMT_ADD_LOAD_REFERENCE_DISPOSITION)) {
+          options = [...options, CMT_ADD_LOAD_REFERENCE_DISPOSITION];
+        }
+        if (!options.includes(CMT_CUSTOM_EDIT_DISPOSITION)) {
+          options = [...options, CMT_CUSTOM_EDIT_DISPOSITION];
+        }
       }
       setState((prev) => ({
         ...prev,
@@ -495,8 +497,8 @@ const CallDataReports = () => {
     return () => document.removeEventListener("mousedown", onMouseDown);
   }, []);
 
-  const applyDatePreset = (preset, monthValue = customMonthValue) => {
-    const dateRange = getDateRangeFromPreset(preset, monthValue);
+  const applyDatePreset = (preset, customValue = customDateRange) => {
+    const dateRange = getDateRangeFromPreset(preset, customValue);
     const next = {
       ...state.filters,
       ...dateRange,
@@ -1029,19 +1031,34 @@ const CallDataReports = () => {
                     {option.label}
                   </button>
                 ))}
-                <div className="mt-2">
-                  <p className="mb-2 px-1 text-xs font-medium text-gray-600">Custom Month</p>
-                  <input
-                    type="month"
-                    value={customMonthValue}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      setCustomMonthValue(value);
-                      applyDatePreset("customMonth", value);
-                    }}
-                    disabled={state.loading}
-                    className="h-10 w-full rounded-lg border border-gray-300 px-3 text-sm cursor-pointer disabled:opacity-50 disabled:cursor-wait"
-                  />
+                <div className="mt-2 border-t border-gray-100 pt-2">
+                  <p className="mb-2 px-1 text-xs font-medium text-gray-600">Custom Date Range</p>
+                  <div className="grid grid-cols-1 gap-2">
+                    <input
+                      type="date"
+                      value={customDateRange.from}
+                      onChange={(e) => {
+                        const from = e.target.value;
+                        const next = { ...customDateRange, from };
+                        setCustomDateRange(next);
+                        if (next.from && next.to) applyDatePreset("customRange", next);
+                      }}
+                      disabled={state.loading}
+                      className="h-10 w-full rounded-lg border border-gray-300 px-3 text-sm cursor-pointer disabled:opacity-50 disabled:cursor-wait"
+                    />
+                    <input
+                      type="date"
+                      value={customDateRange.to}
+                      onChange={(e) => {
+                        const to = e.target.value;
+                        const next = { ...customDateRange, to };
+                        setCustomDateRange(next);
+                        if (next.from && next.to) applyDatePreset("customRange", next);
+                      }}
+                      disabled={state.loading}
+                      className="h-10 w-full rounded-lg border border-gray-300 px-3 text-sm cursor-pointer disabled:opacity-50 disabled:cursor-wait"
+                    />
+                  </div>
                 </div>
                 <p className="mt-2 text-xs text-gray-500">
                   Range: {state.filters.from} to {state.filters.to}
