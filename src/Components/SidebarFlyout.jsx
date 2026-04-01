@@ -12,7 +12,8 @@ import {
   Target,
   Award,
   Package,
-  TrendingUp
+  TrendingUp,
+  Timer
 } from 'lucide-react';
 
 // Icon mapping for different menu items
@@ -37,6 +38,7 @@ const getMenuIcon = (itemName) => {
     'Trucker Report': BarChart3,
     'Rate Request Report': BarChart3,
     'Break Report': Clock,
+    'Hourly Performance Report': Timer,
     'Target Reports': Target,
     'Employee Target Report': Target,
     'Attendance Leave': Calendar,
