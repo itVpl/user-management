@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import TermsAndConditions from '../../../Components/TermsAndConditions';
 import { ArrowLeft } from 'lucide-react';
 import API_CONFIG from '../../../config/api.js';
+import { persistAssignedTruckersFromLogin } from '../../../utils/truckerAssignmentStorage';
 
 // Simple inline icons (no extra libs)
 const Eye = (props) => (
@@ -73,7 +74,12 @@ function Login({ setIsAuthenticated }) {
         sessionStorage.setItem('empId', user.empId);
         sessionStorage.setItem('user', JSON.stringify(user));
         sessionStorage.setItem('authToken', token);
-        
+
+        persistAssignedTruckersFromLogin({
+          assignedTruckers: res.data.assignedTruckers,
+          truckerAssignmentWindows: res.data.truckerAssignmentWindows,
+        });
+
         // Store emailAccountId if present in login response
         if (user.emailAccountId) {
           sessionStorage.setItem('emailAccountId', user.emailAccountId);

@@ -128,6 +128,9 @@ const DEPARTMENT_MODULE_CATEGORIES = {
     "Revenue": [
       "Revenue & Satatistics"
     ],
+    "CMT coordination": [
+      "Trucker Assign"
+    ],
     "Tasks": [
       "Daily Task",
       "Weekly Target Setup",
@@ -188,7 +191,8 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "LoadBoard",
       "Assign Load",
       "DO Reassign",
-      "Trucker Reassign"
+      "Trucker Reassign",
+      "Trucker Assign"
     ],
     "Company Management": [
       "Sub Company"
@@ -250,6 +254,7 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "DO Details",
       "Rate Request",
       "Trukers",
+      "Trucker Assign",
       "Daily Task",
       "Tracking"
     ],
@@ -281,6 +286,7 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Delivery Order",
       "Add Customer",
       "All Customers",
+      "Trucker Assign",
       "Daily Task",
       "Tracking",
       "Load By Location",
@@ -515,6 +521,7 @@ const menuItems = [
   { name: "Assign Load", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/AssignLoad" },
   { name: "DO Reassign", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/assigndo" },
   { name: "Trucker Reassign", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/trucker-reassign" },
+  { name: "Trucker Assign", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/trucker-assign" },
   { name: "Finance Dashboard", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/finance-dashboard" },
   { name: "Call Records (Id)", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/CallingReport" },
   { name: "Add Fleet", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/AddFleet" },
