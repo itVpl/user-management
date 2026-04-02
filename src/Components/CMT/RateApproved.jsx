@@ -15,6 +15,10 @@ const sanitizeAlphaNum = (v) => (v || '').replace(/[^a-zA-Z0-9]/g, ''); // A-Z a
 const sanitizeAlpha = (v) => (v || '').replace(/[^a-zA-Z\s]/g, '').replace(/\s{2,}/g, ' '); // alphabets + single spaces
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** Heavy bid list APIs often exceed 20s; keep client wait aligned with slow DB/aggregation. */
+const PENDING_BIDS_REQUEST_TIMEOUT_MS = 90000;
+const PENDING_BIDS_RETRY = { retries: 2, retryDelayMs: 2000 };
+
 const getWithRetry = async (url, config = {}, options = {}) => {
   const { retries = 1, retryDelayMs = 700 } = options;
   try {
@@ -853,9 +857,9 @@ export default function RateApproved() {
     try {
 
       const response = await getWithRetry(`${API_CONFIG.BASE_URL}/api/v1/bid/pending-intermediate-approval`, {
-        timeout: 20000,
+        timeout: PENDING_BIDS_REQUEST_TIMEOUT_MS,
         headers: API_CONFIG.getAuthHeaders()
-      }, { retries: 1, retryDelayMs: 900 });
+      }, PENDING_BIDS_RETRY);
 
 
       if (response.data && response.data.success) {
@@ -934,9 +938,9 @@ export default function RateApproved() {
       }
 
       const response = await getWithRetry(`${API_CONFIG.BASE_URL}/api/v1/bid/pending-by-sales-user/${userEmpId}`, {
-        timeout: 20000,
+        timeout: PENDING_BIDS_REQUEST_TIMEOUT_MS,
         headers: API_CONFIG.getAuthHeaders()
-      }, { retries: 1, retryDelayMs: 900 });
+      }, PENDING_BIDS_RETRY);
 
 
       if (response.data && response.data.success) {
