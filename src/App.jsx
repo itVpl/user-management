@@ -104,6 +104,7 @@ const EmpLeaves = lazy(() => import("./Components/HRDashboard/EmpLeaves.jsx"));
 const AddTruckerDriver = lazy(() => import("./Components/CMT/AddTruckerDriver.jsx"));
 const AssignDo = lazy(() => import("./Components/CMT-Manager/AssignDo.jsx"));
 const TruckerReassign = lazy(() => import("./Components/CMT-Manager/TruckerReassign.jsx"));
+const TruckerAssign = lazy(() => import("./Components/CMT-Manager/TruckerAssign.jsx"));
 const CompanyList = lazy(() => import("./Components/Accountant/Company/CompanyList.jsx"));
 const TallyManagement = lazy(() => import("./Components/Finance/TallyManagement.jsx"));
 const LedgerManagement = lazy(() => import("./Components/Finance/LedgerManagement.jsx"));
@@ -765,6 +766,7 @@ function App() {
           <Route path="reviews/submit/:reviewId" element={<ReviewSubmissionForm />} />
           <Route path="reviews/details/:reviewId" element={<DirectorReviewDetails />} />
           <Route path="trucker-reassign" element={<TruckerReassign />} />
+          <Route path="trucker-assign" element={<TruckerAssign />} />
           <Route path="followUpReport" element={<FollowUpReport />} />
           <Route path="RateRequestReport" element={<RateRequestReport />} />
           <Route path="todo-list" element={<TodoList />} />

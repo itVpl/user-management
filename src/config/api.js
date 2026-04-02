@@ -80,6 +80,10 @@ const API_CONFIG = {
     // Weekly Target endpoints
     WEEKLY_TARGET_BASE: '/api/v1/weekly-target',
     WEEKLY_TARGET_MY: '/api/v1/weekly-target/my',
+
+    TRUCKER_ASSIGNMENTS: '/api/v1/trucker-assignments',
+    TRUCKER_ASSIGNMENTS_MY_TRUCKERS: '/api/v1/trucker-assignments/my-truckers',
+    TRUCKER_ASSIGNMENTS_CMT_EMPLOYEES: '/api/v1/trucker-assignments/cmt-employees',
   },
   
   // Helper function to get full URL
