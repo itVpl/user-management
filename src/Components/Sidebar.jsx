@@ -47,6 +47,7 @@ const DEPARTMENT_MODULE_CATEGORIES = {
     "User Management": ["Manage Users", "Users Permissions"],
     "Reports": [
       "Break Report",
+      "Hourly Performance Report",
       "Target Reports",
       "CMT Dept Report",
       "Sales Dept Report",
@@ -328,6 +329,7 @@ const DEPARTMENT_MODULE_CATEGORIES = {
   "QA": {
     "Reports": [
       "Break Report",
+      "Hourly Performance Report",
       "Target Reports",
       "CMT Dept Report",
       "Sales Dept Report",
@@ -504,6 +506,7 @@ const menuItems = [
   { name: "CMT Dept Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/CmtDeptReport" },
   { name: "Sales Dept Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/SalesDeptReport" },
   { name: "Break Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/break-report" },
+  { name: "Hourly Performance Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/hourly-performance-report" },
   { name: "Accounts Receivable", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/Invoices" },
   { name: "Accounts Payable", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/acountent-payable" },
   { name: "Receivable Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/invoices-report" },
@@ -678,6 +681,7 @@ const REPORT_NAMES = [
   "Report Analysis",
   "Emp Login Report",
   "Break Report",
+  "Hourly Performance Report",
   "Receivable Report",
   "Payable Report",
   "Rate Request Report",
@@ -718,6 +722,7 @@ const DEPARTMENT_REPORTS = {
     "Attendance Leave",
     "Leave Approval",
     "Break Report",
+    "Hourly Performance Report",
     "Target Reports",
     "Employee Target Report",
     "Emp Login Report",
@@ -1369,7 +1374,7 @@ const Sidebar = () => {
                 modNameDept === itemNameDept || normalizeDept(modLabel) === itemNameDept;
             })
           ).map(m => ({ name: m.name, label: m.label, id: m._id })));
-          
+            
           // Company menu item - only show if user has access (in matchedMenus)
           const companyMenuItem = menuItems.find(item => item.name === 'Company');
           

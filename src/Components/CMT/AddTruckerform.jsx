@@ -175,6 +175,34 @@ const US_STATES_CITIES = {
   "Wyoming": ["Cheyenne", "Casper", "Laramie", "Gillette", "Rock Springs", "Sheridan", "Green River", "Evanston", "Riverton", "Jackson"]
 };
 
+/** Map API stateCode → full name used in {@link US_STATES_CITIES} keys */
+const US_STATE_CODE_TO_NAME = {
+  AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas", CA: "California",
+  CO: "Colorado", CT: "Connecticut", DE: "Delaware", FL: "Florida", GA: "Georgia",
+  HI: "Hawaii", ID: "Idaho", IL: "Illinois", IN: "Indiana", IA: "Iowa",
+  KS: "Kansas", KY: "Kentucky", LA: "Louisiana", ME: "Maine", MD: "Maryland",
+  MA: "Massachusetts", MI: "Michigan", MN: "Minnesota", MS: "Mississippi", MO: "Missouri",
+  MT: "Montana", NE: "Nebraska", NV: "Nevada", NH: "New Hampshire", NJ: "New Jersey",
+  NM: "New Mexico", NY: "New York", NC: "North Carolina", ND: "North Dakota", OH: "Ohio",
+  OK: "Oklahoma", OR: "Oregon", PA: "Pennsylvania", RI: "Rhode Island", SC: "South Carolina",
+  SD: "South Dakota", TN: "Tennessee", TX: "Texas", UT: "Utah", VT: "Vermont",
+  VA: "Virginia", WA: "Washington", WV: "West Virginia", WI: "Wisconsin", WY: "Wyoming",
+};
+
+function resolveUsStateNameForZip(stateRaw, stateCodeRaw) {
+  const state = (stateRaw || "").trim();
+  if (state && US_STATES_CITIES[state]) return state;
+  const code = (stateCodeRaw || "").trim().toUpperCase();
+  if (code && US_STATE_CODE_TO_NAME[code]) return US_STATE_CODE_TO_NAME[code];
+  if (state) {
+    const found = Object.keys(US_STATES_CITIES).find(
+      (k) => k.toLowerCase() === state.toLowerCase(),
+    );
+    if (found) return found;
+  }
+  return "";
+}
+
 // Countries (returns [{label,value}])
 async function fetchCountriesAPI() {
   // Simple return - only US for now
@@ -291,6 +319,14 @@ const [workingAddressRefresh, setWorkingAddressRefresh] = React.useState(0); // 
 
 const statesCacheRef = React.useRef({});  // { [country]: [{label,value}] }
 const citiesCacheRef = React.useRef({});  // { [`${country}|${state}`]: [{label,value}] }
+const formDataRef = React.useRef(formData);
+const zipLookupTimerRef = React.useRef(null);
+
+React.useEffect(() => {
+  formDataRef.current = formData;
+}, [formData]);
+
+React.useEffect(() => () => clearTimeout(zipLookupTimerRef.current), []);
 
 // Countries load (mount)
 React.useEffect(() => {
@@ -533,6 +569,61 @@ React.useEffect(() => {
     return newErrors;
   };
 
+  const applyZipSampleToForm = React.useCallback(async (zip5) => {
+    const country = (formDataRef.current?.country || "").trim();
+    if (country !== "United States") return;
+    try {
+      const token =
+        sessionStorage.getItem("token") || localStorage.getItem("token");
+      const res = await axios.get(
+        `${API_CONFIG.BASE_URL}/api/v1/load/zipcode/${zip5}/samples`,
+        { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+      );
+      const samples = Array.isArray(res?.data?.data?.sampleAddresses)
+        ? res.data.data.sampleAddresses
+        : [];
+      const item = samples[0];
+      if (!item) return;
+      const stateName = resolveUsStateNameForZip(item.state, item.stateCode);
+      const cityName = (item.city || "").trim();
+      if (!stateName) return;
+      const ctry = "United States";
+      const key = `${ctry}|${stateName}`;
+      let list = citiesCacheRef.current[key];
+      if (!list) {
+        list = await fetchCitiesAPI(ctry, stateName);
+        citiesCacheRef.current[key] = list;
+      }
+      setCityOptions(list);
+      setFormData((prev) => ({
+        ...prev,
+        state: stateName,
+        city: cityName || prev.city,
+      }));
+      setErrors((prev) => {
+        const n = { ...prev };
+        delete n.state;
+        delete n.city;
+        return n;
+      });
+    } catch (e) {
+      console.warn("ZIP lookup failed:", e?.response?.data || e.message);
+    }
+  }, []);
+
+  const scheduleZipLookupFromInput = (zipFieldValue) => {
+    clearTimeout(zipLookupTimerRef.current);
+    const c = (formDataRef.current?.country || "").trim();
+    if (c !== "United States") return;
+    const digits = zipFieldValue.replace(/\D/g, "");
+    if (digits.length === 6 && !zipFieldValue.includes("-")) return;
+    const zip5 = digits.slice(0, 5);
+    if (!/^\d{5}$/.test(zip5)) return;
+    zipLookupTimerRef.current = setTimeout(() => {
+      applyZipSampleToForm(zip5);
+    }, 450);
+  };
+
   // ---------- Handlers ----------
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -547,6 +638,9 @@ React.useEffect(() => {
       // Only digits; no spaces
       newValue = value.replace(/\D+/g, "").slice(0, 10);
     }
+    if (name === "zipcode") {
+      newValue = value.replace(/[^\d-]/g, "").slice(0, 10);
+    }
 
     setFormData((prev) => ({ ...prev, [name]: newValue }));
 
@@ -555,6 +649,10 @@ React.useEffect(() => {
       ...prev,
       [name]: validateField(name, newValue) || undefined,
     }));
+
+    if (name === "zipcode") {
+      scheduleZipLookupFromInput(newValue);
+    }
   };
 
   const handleFileChange = (e) => {
