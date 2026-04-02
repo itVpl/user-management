@@ -1,5 +1,5 @@
 // Hourly Performance Report — GET /api/v1/hourly-checkin/report (requires "Hourly Performance Report" module)
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, Fragment } from 'react';
 import { toast } from 'react-toastify';
 import * as XLSX from 'xlsx';
 import {
@@ -20,6 +20,7 @@ import {
   BarChart3,
   Eye,
   X,
+  Paperclip,
 } from 'lucide-react';
 
 /** Same surface as Sales Dept Report / Agent dashboard sections */
@@ -91,7 +92,7 @@ function extractMetaFromReportResponse(res) {
   return null;
 }
 
-/** Hidden everywhere: main table, View modal, Excel */
+/** Hidden everywhere: main table, View modal, Excel — rejection paths only in View modal UI strip */
 const EXCLUDED_COLUMN_KEYS = new Set([
   'employeeId',
   'employee_id',
@@ -102,6 +103,18 @@ const EXCLUDED_COLUMN_KEYS = new Set([
   'hourBucketEnd',
   'hour_bucket_end',
   'employee',
+  'rejectionAttachment',
+  'rejection_attachment',
+  'rejectionAttachments',
+  'rejection_attachment_url',
+  'rejectionAttachmentUrl',
+  'rejectionFile',
+  'rejection_file',
+  'rejectionAttachmentPath',
+  'rejectAttachment',
+  'reject_attachment',
+  'metrics',
+  'metric',
 ]);
 
 /** Hidden only in the View (hourly breakdown) modal — still shown in main listing & Excel */
@@ -111,6 +124,207 @@ const EXCLUDED_DETAIL_MODAL_KEYS = new Set([
   'employee_name',
   'department',
 ]);
+
+/** Keys that may hold one path, comma-separated paths, or an array */
+const REJECTION_ATTACHMENT_KEYS = [
+  'rejectionAttachment',
+  'rejection_attachment',
+  'rejectionAttachments',
+  'rejectionAttachmentUrl',
+  'rejection_attachment_url',
+  'rejectionFile',
+  'rejection_file',
+  'rejectionAttachmentPath',
+  'rejectAttachment',
+  'reject_attachment',
+];
+
+function pushAttachmentValueIntoList(v, out) {
+  if (v == null || v === '') return;
+  if (Array.isArray(v)) {
+    v.forEach((item) => {
+      if (typeof item === 'string' && item.trim()) out.push(item.trim());
+      else if (item && typeof item === 'object') {
+        const u = item.url ?? item.path ?? item.filename ?? item.file;
+        if (u) out.push(String(u).trim());
+      }
+    });
+    return;
+  }
+  if (typeof v === 'string') {
+    const t = v.trim();
+    if (t.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(t);
+        if (Array.isArray(parsed)) {
+          parsed.forEach((p) => {
+            if (typeof p === 'string' && p.trim()) out.push(p.trim());
+          });
+          return;
+        }
+      } catch {
+        /* treat as plain string */
+      }
+    }
+    if (t.includes(',')) {
+      t.split(',').forEach((s) => {
+        const u = s.trim();
+        if (u) out.push(u);
+      });
+    } else {
+      out.push(t);
+    }
+  }
+}
+
+function collectRejectionAttachmentPaths(row) {
+  if (!row || typeof row !== 'object') return [];
+  const out = [];
+  for (const key of REJECTION_ATTACHMENT_KEYS) {
+    const v = row[key];
+    if (v == null || v === '') continue;
+    pushAttachmentValueIntoList(v, out);
+  }
+  for (const key of Object.keys(row)) {
+    if (REJECTION_ATTACHMENT_KEYS.includes(key)) continue;
+    if (!/rejection|reject/i.test(key) || !/attach|file/i.test(key)) continue;
+    pushAttachmentValueIntoList(row[key], out);
+  }
+  return [...new Set(out)];
+}
+
+function hourBucketTime(row) {
+  const h = row?.hourBucketStart ?? row?.hour_bucket_start;
+  if (h == null) return NaN;
+  return new Date(h).getTime();
+}
+
+/** Employee drill-down may omit rejection fields that exist on the main report — copy from list row */
+function mergeRejectionFieldsFromMain(detailRow, mainRows, clickedRow) {
+  if (!detailRow || typeof detailRow !== 'object') return detailRow;
+  if (collectRejectionAttachmentPaths(detailRow).length > 0) return detailRow;
+  const emp = getEmpIdFromRow(detailRow);
+  const hb = hourBucketTime(detailRow);
+  const did = detailRow._id ?? detailRow.id;
+  const pickFrom = (src) => {
+    if (!src || typeof src !== 'object') return null;
+    if (getEmpIdFromRow(src) !== emp) return null;
+    if (did != null && (src._id ?? src.id) != null && String(src._id ?? src.id) === String(did)) return src;
+    if (!Number.isNaN(hb) && hourBucketTime(src) === hb) return src;
+    return null;
+  };
+  const fromClicked = pickFrom(clickedRow);
+  if (fromClicked) {
+    const merged = { ...detailRow };
+    for (const key of Object.keys(fromClicked)) {
+      if (!/rejection|reject/i.test(key) || !/attach|file/i.test(key)) continue;
+      if (merged[key] == null || merged[key] === '') merged[key] = fromClicked[key];
+    }
+    return merged;
+  }
+  if (!Array.isArray(mainRows)) return detailRow;
+  const fromList = mainRows.find((r) => pickFrom(r));
+  if (!fromList) return detailRow;
+  const merged = { ...detailRow };
+  for (const key of Object.keys(fromList)) {
+    if (!/rejection|reject/i.test(key) || !/attach|file/i.test(key)) continue;
+    if (merged[key] == null || merged[key] === '') merged[key] = fromList[key];
+  }
+  return merged;
+}
+
+function isNonWebFilePath(s) {
+  const t = String(s ?? '').trim();
+  return /^[a-zA-Z]:[\\/]/.test(t) || t.startsWith('\\\\');
+}
+
+/**
+ * Where Express/static serves hourly rejection files. DB often stores
+ * `hourlyCheckinRejections/...` but the server mounts uploads at `/uploads/...`
+ * (root `/hourlyCheckinRejections/...` returns "Route not found" JSON).
+ * Override if your API differs: VITE_HOURLY_REJECTION_FILES_PREFIX=/uploads
+ */
+function hourlyRejectionFilesPublicPrefix() {
+  const p = import.meta.env?.VITE_HOURLY_REJECTION_FILES_PREFIX;
+  if (p === '') return '';
+  const norm = (typeof p === 'string' ? p : '/uploads').replace(/\/$/, '');
+  return norm || '/uploads';
+}
+
+/** Build a browser URL for uploads / relative API paths; local dev paths return null */
+function resolveHourlyAttachmentUrl(raw) {
+  if (raw == null || raw === '') return null;
+  const s = String(raw).trim();
+  if (!s || s === '—' || s === '-') return null;
+  if (/^https?:\/\//i.test(s)) return s;
+  if (isNonWebFilePath(s)) return null;
+  let path = s.startsWith('/') ? s : `/${s.replace(/^\/+/, '')}`;
+  const lower = path.toLowerCase();
+  /** Already includes a common static mount */
+  if (
+    lower.startsWith('/uploads/') ||
+    lower.startsWith('/public/') ||
+    lower.startsWith('/api/')
+  ) {
+    return `${API_CONFIG.BASE_URL}${path}`;
+  }
+  /** Typical stored relative path → served under /uploads/... on API host */
+  if (/hourlyCheckinRejections/i.test(path)) {
+    const prefix = hourlyRejectionFilesPublicPrefix();
+    return `${API_CONFIG.BASE_URL}${prefix}${path}`;
+  }
+  return `${API_CONFIG.BASE_URL}${path}`;
+}
+
+function isProbablyImagePath(url) {
+  if (!url) return false;
+  return /\.(jpe?g|png|gif|webp|bmp|svg)(\?|#|$)/i.test(url);
+}
+
+/**
+ * Full `https://` URLs (e.g. S3) are passed through unchanged from `resolveHourlyAttachmentUrl`.
+ * S3 may block embeds when a Referer is sent — use no-referrer on img.
+ */
+function HourlyRejectionAttachmentBlock({ resolved, pathsLength, ai }) {
+  const [imgFailed, setImgFailed] = useState(false);
+  const showImg = isProbablyImagePath(resolved);
+  return (
+    <div className="flex flex-col gap-2 min-w-0 max-w-[280px] rounded-lg border border-gray-200 bg-white p-2 shadow-sm">
+      {showImg && !imgFailed && (
+        <a
+          href={resolved}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block overflow-hidden rounded-md bg-gray-100 min-h-[72px]"
+        >
+          <img
+            src={resolved}
+            alt="Rejection attachment"
+            referrerPolicy="no-referrer"
+            loading="lazy"
+            decoding="async"
+            className="max-h-48 w-full object-contain"
+            onError={() => setImgFailed(true)}
+          />
+        </a>
+      )}
+      {showImg && imgFailed && (
+        <p className="text-xs text-amber-900 bg-amber-50 px-2 py-1.5 rounded border border-amber-200">
+          Preview did not load (blocked or private file). Use &quot;Open attachment&quot; below.
+        </p>
+      )}
+      <a
+        href={resolved}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#0078D4] hover:underline break-all"
+      >
+        <Paperclip className="h-3.5 w-3.5 shrink-0" />
+        {pathsLength > 1 ? `Open attachment ${ai + 1}` : 'Open attachment'}
+      </a>
+    </div>
+  );
+}
 
 /** Column keys that hold ISO / date values — show friendly local date & time in UI & Excel */
 const DATETIME_KEYS = new Set([
@@ -412,12 +626,22 @@ export default function HourlyPerformanceReport() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailRows, setDetailRows] = useState([]);
+  /** Main-table row that opened View — used to merge rejection paths if drill-down API omits them */
+  const [detailClickedRow, setDetailClickedRow] = useState(null);
   const [detailSubject, setDetailSubject] = useState({ empId: '', name: '' });
   const [detailDeptMismatch, setDetailDeptMismatch] = useState(false);
 
+  const detailRowsEnriched = useMemo(
+    () =>
+      detailRows.map((drow) =>
+        mergeRejectionFieldsFromMain(drow, rows, detailClickedRow)
+      ),
+    [detailRows, rows, detailClickedRow]
+  );
+
   const detailColumns = useMemo(
-    () => buildColumnKeysFromRows(detailRows, { detailModal: true }),
-    [detailRows]
+    () => buildColumnKeysFromRows(detailRowsEnriched, { detailModal: true }),
+    [detailRowsEnriched]
   );
 
   const openEmployeeHourlyDetail = useCallback(
@@ -431,6 +655,7 @@ export default function HourlyPerformanceReport() {
         empId: emp,
         name: getEmployeeNameFromRow(row) || '—',
       });
+      setDetailClickedRow(row);
       setDetailOpen(true);
       setDetailLoading(true);
       setDetailRows([]);
@@ -813,6 +1038,7 @@ export default function HourlyPerformanceReport() {
           onClick={() => {
             setDetailOpen(false);
             setDetailDeptMismatch(false);
+            setDetailClickedRow(null);
           }}
         >
           <div
@@ -841,6 +1067,7 @@ export default function HourlyPerformanceReport() {
                 onClick={() => {
                   setDetailOpen(false);
                   setDetailDeptMismatch(false);
+                  setDetailClickedRow(null);
                 }}
                 className="shrink-0 p-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-600"
                 aria-label="Close"
@@ -880,23 +1107,79 @@ export default function HourlyPerformanceReport() {
                       </tr>
                     </thead>
                     <tbody>
-                      {detailRows.map((drow, dIdx) => (
-                        <tr
-                          key={drow._id ?? drow.id ?? dIdx}
-                          className="border-b border-gray-100 hover:bg-blue-50/40"
-                        >
-                          {detailColumns.map((col) => (
-                            <td
-                              key={col}
-                              className="px-3 py-2 text-gray-800 whitespace-nowrap max-w-[min(280px,40vw)] truncate"
-                            >
-                              {drow[col] !== undefined
-                                ? formatCellForColumn(drow[col], col)
-                                : '—'}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
+                      {detailRowsEnriched.map((drow, dIdx) => {
+                        const rowKey = drow._id ?? drow.id ?? dIdx;
+                        const paths = collectRejectionAttachmentPaths(drow);
+                        return (
+                          <Fragment key={rowKey}>
+                            <tr className="border-b border-gray-100 hover:bg-blue-50/40">
+                              {detailColumns.map((col) => (
+                                <td
+                                  key={col}
+                                  className="px-3 py-2 text-gray-800 whitespace-nowrap max-w-[min(280px,40vw)] truncate"
+                                >
+                                  {drow[col] !== undefined
+                                    ? formatCellForColumn(drow[col], col)
+                                    : '—'}
+                                </td>
+                              ))}
+                            </tr>
+                            {paths.length > 0 && (
+                              <tr className="bg-slate-50/90 border-b border-gray-100">
+                                <td
+                                  colSpan={detailColumns.length}
+                                  className="px-3 py-3 align-top"
+                                >
+                                  <div className="flex flex-wrap items-start gap-2">
+                                    <span className="inline-flex items-center gap-1 text-xs font-bold text-slate-600 uppercase tracking-wide shrink-0 mt-0.5">
+                                      <Paperclip className="h-3.5 w-3.5" />
+                                      Rejection attachments
+                                    </span>
+                                    <div className="flex flex-wrap gap-4 min-w-0 flex-1">
+                                      {paths.map((raw, ai) => {
+                                        const resolved = resolveHourlyAttachmentUrl(raw);
+                                        if (isNonWebFilePath(raw)) {
+                                          return (
+                                            <div
+                                              key={`${rowKey}-p-${ai}`}
+                                              className="text-xs text-amber-900 bg-amber-50 rounded-lg px-3 py-2 border border-amber-200 max-w-lg"
+                                            >
+                                              <span className="font-semibold block mb-1">
+                                                Path not previewable in browser
+                                              </span>
+                                              <code className="break-all text-[11px] leading-snug">
+                                                {raw}
+                                              </code>
+                                            </div>
+                                          );
+                                        }
+                                        if (!resolved) {
+                                          return (
+                                            <span
+                                              key={`${rowKey}-p-${ai}`}
+                                              className="text-xs text-gray-600 break-all"
+                                            >
+                                              {raw}
+                                            </span>
+                                          );
+                                        }
+                                        return (
+                                          <HourlyRejectionAttachmentBlock
+                                            key={`${rowKey}-p-${ai}`}
+                                            resolved={resolved}
+                                            pathsLength={paths.length}
+                                            ai={ai}
+                                          />
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
