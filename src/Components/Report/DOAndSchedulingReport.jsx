@@ -461,9 +461,15 @@ export default function DOAndSchedulingReport() {
 
   const showLoadingOverlay = loading && assignedDOs.length > 0;
 
+  const displayCell = (value, { empty = '—' } = {}) => {
+    if (value == null) return empty;
+    const s = String(value).trim();
+    return s === '' ? empty : s;
+  };
+
   if (loading && assignedDOs.length === 0) {
     return (
-      <div className="p-6 bg-white min-h-screen">
+      <div className="p-6 bg-white min-h-screen w-full min-w-0 max-w-full">
         <div className="flex justify-center items-center h-64">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4" />
@@ -475,7 +481,7 @@ export default function DOAndSchedulingReport() {
   }
 
   return (
-    <div className="p-6 bg-white min-h-screen">
+    <div className="p-6 bg-white min-h-screen w-full min-w-0 max-w-full">
       {showLoadingOverlay && (
         <div className="fixed inset-0 bg-black/20 z-40 flex items-center justify-center">
           <div className="bg-white rounded-2xl shadow-2xl p-8">
@@ -665,8 +671,8 @@ export default function DOAndSchedulingReport() {
         </div>
       )}
 
-      <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+        <div className="do-report-scroll-x scrollbar-show max-w-full rounded-xl [scrollbar-gutter:stable]">
           {currentOrders.length === 0 && !loading ? (
             <div className="text-center py-12">
               <Truck className="w-16 h-16 text-gray-300 mx-auto mb-4" />
@@ -678,138 +684,102 @@ export default function DOAndSchedulingReport() {
               </p>
             </div>
           ) : (
-            <table className="w-full">
-              <thead className="bg-white border-b border-gray-200">
-                <tr className="bg-gray-100">
-                  <th className="text-left py-4 px-4 text-gray-500 font-medium text-base">Load No</th>
-                  <th className="text-left py-4 px-4 text-gray-500 font-medium text-base">Dispatcher Name</th>
-                  <th className="text-left py-4 px-4 text-gray-500 font-medium text-base">Carrier Name</th>
-                  <th className="text-left py-4 px-4 text-gray-500 font-medium text-base">Carrier Email</th>
-                  <th className="text-left py-4 px-4 text-gray-500 font-medium text-base">Carrier Number</th>
-                  <th className="text-left py-4 px-4 text-gray-500 font-medium text-base">Load Type</th>
-                  <th className="text-left py-4 px-4 text-gray-500 font-medium text-base">Created By (Sales)</th>
-                  <th className="text-left py-4 px-4 text-gray-500 font-medium text-base">Assigned To (CMT)</th>
-                  <th className="text-left py-4 px-4 text-gray-500 font-medium text-base">Assigned At</th>
-                  <th className="text-left py-4 px-4 text-gray-500 font-medium text-base">Status</th>
-                  <th className="text-center py-4 px-4 text-gray-500 font-medium text-base">Action</th>
+            <table className="w-max min-w-[2000px] max-w-none text-sm">
+              <thead>
+                <tr className="bg-gray-100 border-b border-gray-200">
+                  <th className="text-left py-3 px-4 text-gray-800 font-semibold whitespace-nowrap">Load No</th>
+                  <th className="text-left py-3 px-4 text-gray-800 font-semibold whitespace-nowrap">Dispatcher</th>
+                  <th className="text-left py-3 px-4 text-gray-800 font-semibold whitespace-nowrap">Carrier</th>
+                  <th className="text-left py-3 px-4 text-gray-800 font-semibold whitespace-nowrap">Carrier email</th>
+                  <th className="text-left py-3 px-4 text-gray-800 font-semibold whitespace-nowrap">Carrier #</th>
+                  <th className="text-left py-3 px-4 text-gray-800 font-semibold whitespace-nowrap">Load type</th>
+                  <th className="text-left py-3 px-4 text-gray-800 font-semibold whitespace-nowrap">Created by (sales)</th>
+                  <th className="text-left py-3 px-4 text-gray-800 font-semibold whitespace-nowrap">Assigned (CMT)</th>
+                  <th className="text-left py-3 px-4 text-gray-800 font-semibold whitespace-nowrap">Assigned at</th>
+                  <th className="text-left py-3 px-4 text-gray-800 font-semibold whitespace-nowrap">Status</th>
+                  <th className="text-center py-3 px-4 text-gray-800 font-semibold whitespace-nowrap">Action</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="bg-white divide-y divide-gray-100">
                 {currentOrders.map((order) => {
-                  const createdBy = order.createdBySalesUser?.employeeName || 'N/A';
-                  const assignedTo = order.assignedToCMT?.employeeName || 'N/A';
+                  const createdBy = displayCell(order.createdBySalesUser?.employeeName);
+                  const assignedTo = displayCell(order.assignedToCMT?.employeeName);
                   const assignedAt = order.assignedToCMT?.assignedAt
                     ? format(new Date(order.assignedToCMT.assignedAt), 'MMM dd, yyyy HH:mm')
-                    : 'N/A';
-                  const carrierName = order.carrier?.carrierName || 'N/A';
-                  const carrierEmail = order.carrierId?.email || order.carrier?.email || 'N/A';
-                  const carrierNumber = order.carrier?.carrierNumber || 'N/A';
-                  const cust0 = order.customers?.[0] || {};
-                  const loadNo = cust0.loadNo || 'N/A';
-                  const dispatcherName = cust0.dispatcherName || 'N/A';
-                  const loadStatus = order.loadReference?.status
-                    ? (order.loadReference.status[0].toUpperCase() + order.loadReference.status.slice(1).toLowerCase().replace(/-|_/g, ' '))
                     : '—';
+                  const carrierName = displayCell(order.carrier?.carrierName);
+                  const carrierEmail = displayCell(order.carrierId?.email || order.carrier?.email);
+                  const carrierNumber = displayCell(order.carrier?.carrierNumber);
+                  const cust0 = order.customers?.[0] || {};
+                  const loadNo = displayCell(cust0.loadNo);
+                  const dispatcherName = displayCell(cust0.dispatcherName);
+                  const loadStatusRaw = order.loadReference?.status
+                    ? (order.loadReference.status[0].toUpperCase() + order.loadReference.status.slice(1).toLowerCase().replace(/-|_/g, ' '))
+                    : '';
+                  const loadStatus = displayCell(loadStatusRaw);
+                  const statusLower = String(loadStatusRaw).toLowerCase();
+                  const isAssignedStatus =
+                    statusLower === 'assigned' ||
+                    (statusLower.includes('assigned') && !statusLower.includes('unassigned'));
                   const orderForModal = {
                     id: order._id,
                     doId: `DO-${String(order._id || '').slice(-6) || '—'}`,
-                    loadNo,
+                    loadNo: cust0.loadNo || 'N/A',
                     billTo: cust0.billTo || order.customerName || 'N/A',
                     raw: order
                   };
                   return (
-                    <tr key={order._id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                      <td className="py-4 px-4"><span className="text-gray-700 font-medium">{loadNo}</span></td>
-                      <td className="py-4 px-4"><span className="font-medium text-gray-700">{dispatcherName}</span></td>
-                    <td className="py-4 px-4">
-  <div className="relative group max-w-[140px]">
-
-    {/* Truncated Text */}
-    <span className="font-medium text-gray-700 block truncate">
-      {carrierName || "-"}
-    </span>
-
-    {/* Tooltip */}
-    {carrierName && (
-      <div className="absolute left-0 top-full mt-2 hidden group-hover:block
-                      bg-gray-900 text-white text-sm
-                      px-3 py-2.5
-                      rounded-lg shadow-xl
-                      max-w-[180px]
-                      break-words
-                      z-50">
-        {carrierName}
-      </div>
-    )}
-
-  </div>
-</td>
-                      <td className="py-4 px-4">
-                        <div className="relative group max-w-[220px]">
-                          <span className="font-medium text-gray-700 block truncate">
-                            {carrierEmail || 'N/A'}
-                          </span>
-                          {carrierEmail && carrierEmail !== 'N/A' && (
-                            <div className="absolute left-0 top-full mt-2 hidden group-hover:block
-                                            bg-gray-900 text-white text-sm
-                                            px-3 py-2.5
-                                            rounded-lg shadow-xl
-                                            max-w-[280px]
-                                            break-words
-                                            z-50">
+                    <tr key={order._id} className="hover:bg-gray-50/90 transition-colors">
+                      <td className="py-3 px-4 text-gray-800 font-medium whitespace-nowrap">{loadNo}</td>
+                      <td className="py-3 px-4 text-gray-800">{dispatcherName}</td>
+                      <td className="py-3 px-4">
+                        <div className="relative group max-w-[160px]">
+                          <span className="text-gray-800 block truncate">{carrierName}</span>
+                          {carrierName !== '—' && (
+                            <div className="absolute left-0 top-full mt-2 hidden group-hover:block z-50 bg-gray-900 text-white text-xs px-3 py-2 rounded-lg shadow-xl max-w-[220px] break-words">
+                              {carrierName}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="relative group max-w-[200px]">
+                          <span className="text-gray-800 block truncate">{carrierEmail}</span>
+                          {carrierEmail !== '—' && (
+                            <div className="absolute left-0 top-full mt-2 hidden group-hover:block z-50 bg-gray-900 text-white text-xs px-3 py-2 rounded-lg shadow-xl max-w-[280px] break-words">
                               {carrierEmail}
                             </div>
                           )}
                         </div>
                       </td>
-                      <td className="py-4 px-4">
-                        <span className="font-medium text-gray-700">{carrierNumber}</span>
-                      </td>
-                      <td className="py-4 px-4"><span className="font-medium text-gray-700">{order.loadType || 'N/A'}</span></td>
-                      <td className="py-4 px-4"><span className="font-medium text-gray-700">{createdBy}</span></td>
-                      <td className="py-4 px-4"><span className="font-medium text-gray-700">{assignedTo}</span></td>
-                      <td className="py-4 px-4"><span className="text-gray-700 font-medium">{assignedAt}</span></td>
-                      <td className="py-4 px-4">
-  <div className="relative group max-w-[100px]">
-    
-    {/* Status Badge */}
-    <span
-      className={`inline-flex px-2.5 py-1 rounded-md font-medium 
-                  max-w-full truncate
-                  ${
-                    (loadStatus || '').toLowerCase() === 'delivered'
-                      ? 'bg-green-100 text-green-700'
-                      : (loadStatus || '').toLowerCase().includes('transit')
-                      ? 'bg-amber-100 text-amber-700'
-                      : 'bg-gray-100 text-gray-700'
-                  }`}
-    >
-      <span className="truncate">
-        {loadStatus || "-"}
-      </span>
-    </span>
-
-    {/* Tooltip */}
-    {loadStatus && (
-      <div className="absolute left-0 top-full mt-2 hidden group-hover:block
-                      bg-gray-900 text-white text-sm
-                      px-3 py-2.5
-                      rounded-lg shadow-xl
-                      max-w-[160px]
-                      break-words
-                      z-50">
-        {loadStatus}
-      </div>
-    )}
-
-  </div>
-</td>
-                      <td className="py-4 px-4">
-                        <button
-                          onClick={() => setViewingOrder(orderForModal)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-base cursor-pointer font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                      <td className="py-3 px-4 text-gray-800 whitespace-nowrap">{carrierNumber}</td>
+                      <td className="py-3 px-4 text-gray-800">{displayCell(order.loadType)}</td>
+                      <td className="py-3 px-4 text-gray-800">{createdBy}</td>
+                      <td className="py-3 px-4 text-gray-800">{assignedTo}</td>
+                      <td className="py-3 px-4 text-gray-800 whitespace-nowrap">{assignedAt}</td>
+                      <td className="py-3 px-4">
+                        <span
+                          className={`inline-flex items-center max-w-full truncate rounded-full px-3 py-1 text-xs font-medium ${
+                            statusLower === 'delivered'
+                              ? 'bg-emerald-50 text-emerald-800'
+                              : statusLower.includes('transit')
+                              ? 'bg-amber-50 text-amber-800'
+                              : isAssignedStatus
+                              ? 'bg-sky-100 text-sky-800 border border-sky-200/80'
+                              : 'bg-gray-100 text-gray-800'
+                          }`}
+                          title={loadStatus !== '—' ? loadStatus : undefined}
                         >
-                           View
+                          <span className="truncate">{loadStatus}</span>
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <button
+                          type="button"
+                          onClick={() => setViewingOrder(orderForModal)}
+                          className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 transition-colors cursor-pointer"
+                        >
+                          View
                         </button>
                       </td>
                     </tr>
@@ -822,29 +792,40 @@ export default function DOAndSchedulingReport() {
       </div>
 
       {totalItems > 0 && (
-        <div className="flex flex-wrap justify-between items-center gap-4 mt-6 bg-white rounded-2xl border border-gray-200 p-4">
+        <div className="flex flex-wrap justify-between items-center gap-4 mt-4 bg-white rounded-xl border border-gray-200 px-4 py-3 shadow-sm">
           <div className="text-sm text-gray-600">
-            Showing {startIndex + 1} to {startIndex + currentOrders.length} of {totalItems} orders
-            {searchTerm && ` (searching: "${searchTerm}")`}
+            Showing <span className="font-medium text-gray-800">{startIndex + 1}</span> to{' '}
+            <span className="font-medium text-gray-800">{startIndex + currentOrders.length}</span> of{' '}
+            <span className="font-medium text-gray-800">{totalItems}</span> entries
+            {searchTerm ? (
+              <span className="text-gray-500"> (filtered by &quot;{searchTerm}&quot;)</span>
+            ) : null}
           </div>
-          <div className="flex gap-1 items-center">
+          <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={() => handlePageChange(currentPage - 1)}
               disabled={currentPage === 1}
-              className="cursor-pointer flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-base font-medium"
+              className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white cursor-pointer transition-colors"
             >
-              <ChevronLeft size={18} /><span>Previous</span>
+              <ChevronLeft size={16} />
+              Previous
             </button>
-            <div className="flex items-center gap-1 mx-4">
+            <div className="flex items-center gap-1 px-1">
               {getPaginationPages().map((page, index) =>
                 page === 'ellipsis' ? (
-                  <span key={`ellipsis-${index}`} className="px-2 text-gray-400">...</span>
+                  <span key={`ellipsis-${index}`} className="px-2 text-gray-400 text-sm">
+                    …
+                  </span>
                 ) : (
                   <button
                     key={page}
+                    type="button"
                     onClick={() => handlePageChange(page)}
-                    className={`cursor-pointer w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-all ${
-                      currentPage === page ? 'bg-white border border-black shadow-sm text-black' : 'text-gray-600 hover:bg-gray-50'
+                    className={`inline-flex min-w-[2.25rem] items-center justify-center rounded-md px-2 py-1.5 text-sm font-semibold transition-colors cursor-pointer ${
+                      currentPage === page
+                        ? 'border border-gray-300 bg-white text-gray-900 shadow-sm'
+                        : 'border border-transparent text-gray-600 hover:bg-gray-50'
                     }`}
                   >
                     {page}
@@ -853,11 +834,13 @@ export default function DOAndSchedulingReport() {
               )}
             </div>
             <button
+              type="button"
               onClick={() => handlePageChange(currentPage + 1)}
               disabled={currentPage === totalPages}
-              className="cursor-pointer flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-base font-medium"
+              className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white cursor-pointer transition-colors"
             >
-              <span>Next</span><ChevronRight size={18} />
+              Next
+              <ChevronRight size={16} />
             </button>
           </div>
         </div>
