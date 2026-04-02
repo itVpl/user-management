@@ -10,7 +10,7 @@ import UpcomingBirthdays from '../UpcomingBirthdays';
 import { IoCall } from "react-icons/io5";
 import CallFollowUpsDashboardCard from './CallFollowUpsDashboardCard';
 import API_CONFIG from '../../config/api';
-import MyAssignedTruckersWidget from '../Dashboard/MyAssignedTruckersWidget';
+// import MyAssignedTruckersWidget from '../Dashboard/MyAssignedTruckersWidget';
 // import firstIcon from "../../assets/Icon.svg"
 
 const Dashboard = () => {
@@ -540,7 +540,7 @@ const Dashboard = () => {
             />
           </div>
 
-          <MyAssignedTruckersWidget />
+          {/* <MyAssignedTruckersWidget /> */}
 
           {/* New Section - Add your content here */}
           {/* <div className="bg-white rounded-2xl p-6 mb-3 border border-gray-100">
