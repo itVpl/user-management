@@ -212,6 +212,18 @@ export default function RateApproved() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 9;
 
+  /** Server pagination for GET /bid/pending-by-sales-user/:empId */
+  const SALES_USER_BIDS_PAGE_LIMIT = 10;
+  const [salesUserListPage, setSalesUserListPage] = useState(1);
+  const [salesUserPagination, setSalesUserPagination] = useState({
+    total: 0,
+    totalPages: 1,
+    currentPage: 1,
+    limit: 10,
+  });
+  const [salesUserSummary, setSalesUserSummary] = useState(null);
+  const [pendingIntermediateRates, setPendingIntermediateRates] = useState([]);
+
   // Fetch data from API - REMOVED DEFAULT API CALL
   const fetchApprovedRates = async () => {
     // This function is no longer used for the default API call
@@ -928,128 +940,165 @@ export default function RateApproved() {
     }
   };
 
-  // Add after fetchPendingApprovals function
-  const fetchPendingBidsBySalesUser = async (userId = null) => {
+  const fetchPendingBidsBySalesUser = async (
+    userId = null,
+    { page = 1, limit = SALES_USER_BIDS_PAGE_LIMIT } = {},
+  ) => {
+    const empty = {
+      bids: [],
+      summary: null,
+      pagination: null,
+    };
     try {
       const userEmpId = userId || salesUserId || sessionStorage.getItem('empId') || localStorage.getItem('empId');
       if (!userEmpId) {
         console.warn('Sales user ID not found. Skipping pending bids by sales user fetch.');
-        return [];
+        return empty;
       }
 
-      const response = await getWithRetry(`${API_CONFIG.BASE_URL}/api/v1/bid/pending-by-sales-user/${userEmpId}`, {
-        timeout: PENDING_BIDS_REQUEST_TIMEOUT_MS,
-        headers: API_CONFIG.getAuthHeaders()
-      }, PENDING_BIDS_RETRY);
+      const response = await getWithRetry(
+        `${API_CONFIG.BASE_URL}/api/v1/bid/pending-by-sales-user/${userEmpId}`,
+        {
+          timeout: PENDING_BIDS_REQUEST_TIMEOUT_MS,
+          headers: API_CONFIG.getAuthHeaders(),
+          params: { page, limit },
+        },
+        PENDING_BIDS_RETRY,
+      );
 
+      const data = response.data || {};
+      const rawBids = Array.isArray(data.bids) ? data.bids : [];
+      const summary = data.summary ?? null;
+      const pagination = data.pagination ?? null;
 
-      if (response.data && response.data.success) {
-        const transformedBids = response.data.bids.map(bid => ({
-          id: `BID-${bid._id.slice(-6)}`,
-          rateNum: bid._id,
-          loadId: bid.load?._id ? `L-${bid.load._id.slice(-5)}` : 'N/A',
-          loadRef: buildLoadRefFromBid(bid),
-          actualLoadId: bid.load?._id || null, // Store actual MongoDB load ID for API calls
-          shipmentNumber: bid.load?.shipmentNumber || 'N/A',
-          origin: bid.load ? (() => {
-            if (bid.load.origin && bid.load.origin.city) {
-              return `${bid.load.origin.city}, ${bid.load.origin.state || 'N/A'}`;
-            }
-            if (bid.load.origins && bid.load.origins.length > 0) {
-              return `${bid.load.origins[0].city}, ${bid.load.origins[0].state || 'N/A'}`;
-            }
-            return 'N/A, N/A';
-          })() : 'N/A, N/A',
-          destination: bid.load ? (() => {
-            if (bid.load.destination && bid.load.destination.city) {
-              return `${bid.load.destination.city}, ${bid.load.destination.state || 'N/A'}`;
-            }
-            if (bid.load.destinations && bid.load.destinations.length > 0) {
-              return `${bid.load.destinations[0].city}, ${bid.load.destinations[0].state || 'N/A'}`;
-            }
-            return 'N/A, N/A';
-          })() : 'N/A, N/A',
-          rate: bid.rate,
-          rates: bid.rates || null, // Add rates array
-          totalrates: bid.totalrates || null, // Add totalrates
-          // Add return address fields
-          returnAddress: bid.load?.returnAddress || bid.returnAddress || null,
-          returnCity: bid.load?.returnCity || bid.returnCity || null,
-          returnState: bid.load?.returnState || bid.returnState || null,
-          returnZip: bid.load?.returnZip || bid.returnZip || null,
-          truckerName: bid.carrier?.compName || 'N/A',
-          status: 'pending',
-          createdAt: new Date(bid.createdAt).toISOString().split('T')[0],
-          createdBy: `Sales User ${bid.load?.createdBySalesUser?.empName || 'Unknown'} (${bid.load?.createdBySalesUser?.empId || 'N/A'})`,
-          docUpload: bid.doDocument || 'sample-doc.jpg',
-          remarks: bid.message || '',
-          // Additional fields from the new API
-          carrierInfo: {
-            mcDotNo: bid.carrier?.mc_dot_no || 'N/A',
-            email: bid.carrier?.email || 'N/A',
-            phone: bid.carrier?.phoneNo || 'N/A',
-            fleetSize: bid.carrier?.fleetsize || 'N/A',
-            state: bid.carrier?.state || 'N/A',
-            city: bid.carrier?.city || 'N/A'
-          },
-          // Add shipper info for the new column
-          shipperInfo: bid.load?.shipper || null,
-          shipperName: bid.load?.shipper?.compName || 'N/A',
-          loadInfo: {
-            weight: bid.load?.weight || 0,
-            commodity: bid.load?.commodity || 'N/A',
-            vehicleType: bid.load?.vehicleType || 'N/A',
-            pickupDate: bid.load?.pickupDate || 'N/A',
-            deliveryDate: bid.load?.deliveryDate || 'N/A',
-            originalRate: bid.load?.rate || 0
-          },
-          estimatedPickup: new Date(bid.estimatedPickupDate).toLocaleDateString(),
-          estimatedDelivery: new Date(bid.estimatedDeliveryDate).toLocaleDateString(),
-          placedByInhouseUser: bid.placedByInhouseUser,
-          salesUserInfo: bid.load?.createdBySalesUser,
-          // Add placedByCMTUser data for the new column
-          placedByCMTUser: bid.placedByCMTUser || null,
-          // Add attachment field for popup display
-          attachment: bid.attachment || null
-        }));
-
-        return transformedBids;
+      if (data.success === false && rawBids.length === 0) {
+        return { ...empty, summary, pagination };
       }
-      return [];
+
+      const transformedBids = rawBids.map((bid) => ({
+        id: `BID-${bid._id.slice(-6)}`,
+        rateNum: bid._id,
+        loadId: bid.load?._id ? `L-${bid.load._id.slice(-5)}` : 'N/A',
+        loadRef: buildLoadRefFromBid(bid),
+        actualLoadId: bid.load?._id || null,
+        shipmentNumber: bid.load?.shipmentNumber || 'N/A',
+        origin: bid.load
+          ? (() => {
+              if (bid.load.origin && bid.load.origin.city) {
+                return `${bid.load.origin.city}, ${bid.load.origin.state || 'N/A'}`;
+              }
+              if (bid.load.origins && bid.load.origins.length > 0) {
+                return `${bid.load.origins[0].city}, ${bid.load.origins[0].state || 'N/A'}`;
+              }
+              return 'N/A, N/A';
+            })()
+          : 'N/A, N/A',
+        destination: bid.load
+          ? (() => {
+              if (bid.load.destination && bid.load.destination.city) {
+                return `${bid.load.destination.city}, ${bid.load.destination.state || 'N/A'}`;
+              }
+              if (bid.load.destinations && bid.load.destinations.length > 0) {
+                return `${bid.load.destinations[0].city}, ${bid.load.destinations[0].state || 'N/A'}`;
+              }
+              return 'N/A, N/A';
+            })()
+          : 'N/A, N/A',
+        rate: bid.rate,
+        rates: bid.rates || null,
+        totalrates: bid.totalrates || null,
+        returnAddress: bid.load?.returnAddress || bid.returnAddress || null,
+        returnCity: bid.load?.returnCity || bid.returnCity || null,
+        returnState: bid.load?.returnState || bid.returnState || null,
+        returnZip: bid.load?.returnZip || bid.returnZip || null,
+        truckerName: bid.carrier?.compName || 'N/A',
+        status: 'pending',
+        createdAt: new Date(bid.createdAt).toISOString().split('T')[0],
+        createdBy: `Sales User ${bid.load?.createdBySalesUser?.empName || 'Unknown'} (${bid.load?.createdBySalesUser?.empId || 'N/A'})`,
+        docUpload: bid.doDocument || 'sample-doc.jpg',
+        remarks: bid.message || '',
+        carrierInfo: {
+          mcDotNo: bid.carrier?.mc_dot_no || 'N/A',
+          email: bid.carrier?.email || 'N/A',
+          phone: bid.carrier?.phoneNo || 'N/A',
+          fleetSize: bid.carrier?.fleetsize || 'N/A',
+          state: bid.carrier?.state || 'N/A',
+          city: bid.carrier?.city || 'N/A',
+        },
+        shipperInfo: bid.load?.shipper || null,
+        shipperName: bid.load?.shipper?.compName || 'N/A',
+        loadInfo: {
+          weight: bid.load?.weight || 0,
+          commodity: bid.load?.commodity || 'N/A',
+          vehicleType: bid.load?.vehicleType || 'N/A',
+          pickupDate: bid.load?.pickupDate || 'N/A',
+          deliveryDate: bid.load?.deliveryDate || 'N/A',
+          originalRate: bid.load?.rate || 0,
+        },
+        estimatedPickup: bid.estimatedPickupDate
+          ? new Date(bid.estimatedPickupDate).toLocaleDateString()
+          : 'N/A',
+        estimatedDelivery: bid.estimatedDeliveryDate
+          ? new Date(bid.estimatedDeliveryDate).toLocaleDateString()
+          : 'N/A',
+        placedByInhouseUser: bid.placedByInhouseUser,
+        salesUserInfo: bid.load?.createdBySalesUser,
+        placedByCMTUser: bid.placedByCMTUser || null,
+        attachment: bid.attachment || null,
+      }));
+
+      return { bids: transformedBids, summary, pagination };
     } catch (error) {
       console.error('Error fetching pending bids by sales user:', error);
-      return [];
+      return empty;
     }
   };
 
-  // Define fetchAllData at the component level
-  const fetchAllData = async ({ withLoading = true } = {}) => {
+  const fetchAllData = async ({ withLoading = true, salesListPage } = {}) => {
     if (withLoading) {
       setLoading(true);
     }
+    const pageForSales =
+      salesListPage !== undefined && salesListPage !== null ? salesListPage : salesUserListPage;
     try {
-      const [approvedData, pendingData, salesUserBids] = await Promise.all([
+      const [approvedData, pendingData, salesResult] = await Promise.all([
         fetchApprovedRates(),
         fetchPendingApprovals(),
-        fetchPendingBidsBySalesUser(salesUserId) // Use state variable
+        fetchPendingBidsBySalesUser(salesUserId, {
+          page: pageForSales,
+          limit: SALES_USER_BIDS_PAGE_LIMIT,
+        }),
       ]);
 
-      // Combine all datasets
-      const combinedRates = [
-        ...(approvedData || []),
-        ...(pendingData || []),
-        ...(salesUserBids || [])
-      ];
+      setPendingIntermediateRates(pendingData || []);
+      const salesUserBids = salesResult.bids || [];
+      const pag = salesResult.pagination;
+      const summary = salesResult.summary;
 
-      // Remove duplicates based on bid ID (rateNum)
-      const uniqueRates = combinedRates.filter((rate, index, self) =>
-        index === self.findIndex(r => r.rateNum === rate.rateNum)
+      setSalesUserSummary(summary);
+      setSalesUserPagination({
+        total: pag?.total ?? salesUserBids.length,
+        totalPages: Math.max(1, pag?.totalPages ?? 1),
+        currentPage: pag?.currentPage ?? pageForSales,
+        limit: pag?.limit ?? SALES_USER_BIDS_PAGE_LIMIT,
+      });
+      if (pag?.currentPage != null) {
+        setSalesUserListPage(pag.currentPage);
+      } else {
+        setSalesUserListPage(pageForSales);
+      }
+
+      const combinedRates = [...(approvedData || []), ...(pendingData || []), ...salesUserBids];
+      const uniqueRates = combinedRates.filter(
+        (rate, index, self) => index === self.findIndex((r) => r.rateNum === rate.rateNum),
       );
 
-
       setPendingRates(uniqueRates);
-      const pendingTotal = uniqueRates.filter(rate => rate.status === 'pending').length;
-      setTabCounts(prev => ({ ...prev, pending: pendingTotal }));
+
+      const salesTotal =
+        summary?.totalBids ?? pag?.total ?? salesUserBids.length;
+      const pendingTotal = (pendingData?.length || 0) + (typeof salesTotal === 'number' ? salesTotal : 0);
+      setTabCounts((prev) => ({ ...prev, pending: pendingTotal }));
     } catch (error) {
       console.error('Error fetching data:', error);
       alertify.error('Error refreshing data');
@@ -1173,11 +1222,18 @@ export default function RateApproved() {
       setActionLoading(prev => ({ ...prev, [bidId]: null }));
     }
   };
-  // Pagination calculations
-  const totalPages = Math.ceil(filteredRates.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentRates = filteredRates.slice(startIndex, endIndex);
+  const isPendingTab = activeTab === 'pending';
+  const pendingServerPage = salesUserPagination.currentPage ?? salesUserListPage;
+  const pendingServerTotalPages = Math.max(1, salesUserPagination.totalPages || 1);
+
+  const clientStartIndex = (currentPage - 1) * itemsPerPage;
+  const clientEndIndex = clientStartIndex + itemsPerPage;
+  const clientTotalPages = Math.max(1, Math.ceil(filteredRates.length / itemsPerPage) || 1);
+
+  const totalPages = isPendingTab ? pendingServerTotalPages : clientTotalPages;
+  const startIndex = isPendingTab ? 0 : clientStartIndex;
+  const endIndex = isPendingTab ? filteredRates.length : clientEndIndex;
+  const currentRates = isPendingTab ? filteredRates : filteredRates.slice(clientStartIndex, clientEndIndex);
 
   const pendingCount = tabCounts.pending;
   const approvedCount = tabCounts.approved;
@@ -1185,9 +1241,14 @@ export default function RateApproved() {
   const managerApprovedCount = tabCounts.managerApproved;
   const managerRejectedCount = tabCounts.managerRejected;
 
-  // Handle page change
   const handlePageChange = (page) => {
     setCurrentPage(page);
+  };
+
+  const handlePendingSalesPageChange = (page) => {
+    const max = Math.max(1, salesUserPagination.totalPages || 1);
+    if (page < 1 || page > max) return;
+    fetchAllData({ withLoading: true, salesListPage: page });
   };
 
   // Export to CSV function
@@ -2438,6 +2499,22 @@ export default function RateApproved() {
                 </span>
               </div>
             </div>
+            {salesUserSummary && (
+              <div className="flex flex-wrap gap-3 text-xs text-gray-600 px-1">
+                <span className="rounded-lg bg-gray-50 border border-gray-100 px-3 py-2">
+                  Loads created by you:{' '}
+                  <strong className="text-gray-900">{salesUserSummary.loadsCreatedByUser ?? '—'}</strong>
+                </span>
+                <span className="rounded-lg bg-gray-50 border border-gray-100 px-3 py-2">
+                  Sales-user pending bids (total):{' '}
+                  <strong className="text-gray-900">{salesUserSummary.totalBids ?? salesUserPagination.total ?? '—'}</strong>
+                </span>
+                <span className="rounded-lg bg-gray-50 border border-gray-100 px-3 py-2">
+                  Shippers added by you:{' '}
+                  <strong className="text-gray-900">{salesUserSummary.shippersAddedByUser ?? '—'}</strong>
+                </span>
+              </div>
+            )}
           </div>
         )}
         {activeTab === 'completed' && (
@@ -2889,18 +2966,29 @@ export default function RateApproved() {
             </div>
           )}
 
-          {/* Enhanced Pagination */}
-          {totalPages > 1 && filteredRates.length > 0 && (
-            <div className="flex justify-between items-center mt-6 bg-white rounded-2xl p-4 border border-gray-200">
+          {/* Server pagination: pending-by-sales-user (intermediate rows shown in full on every page) */}
+          {pendingServerTotalPages > 1 && filteredRates.length > 0 && (
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-6 bg-white rounded-2xl p-4 border border-gray-200">
               <div className="text-sm text-gray-600">
-                Showing {startIndex + 1} to {Math.min(endIndex, filteredRates.length)} of {filteredRates.length} pending bids
-                {searchTerm && ` (filtered from ${activeTabRates.length} total)`}
+                <div>
+                  Sales-user bids: page <strong>{pendingServerPage}</strong> of{' '}
+                  <strong>{pendingServerTotalPages}</strong> ({salesUserPagination.total} total)
+                </div>
+                {pendingIntermediateRates.length > 0 && (
+                  <div className="text-xs text-gray-500 mt-1">
+                    Includes all {pendingIntermediateRates.length} intermediate-approval row(s) on this screen.
+                  </div>
+                )}
+                {searchTerm && (
+                  <div className="text-xs text-gray-500 mt-1">Filtered view — search applies to rows below.</div>
+                )}
               </div>
 
               <div className="flex items-center gap-2 bg-white rounded-xl border border-gray-200 p-2">
                 <button
-                  onClick={() => handlePageChange(currentPage - 1)}
-                  disabled={currentPage === 1}
+                  type="button"
+                  onClick={() => handlePendingSalesPageChange(pendingServerPage - 1)}
+                  disabled={pendingServerPage <= 1}
                   className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2910,58 +2998,61 @@ export default function RateApproved() {
                 </button>
 
                 <div className="flex items-center gap-1">
-                  {currentPage > 3 && (
+                  {pendingServerPage > 3 && (
                     <>
                       <button
-                        onClick={() => handlePageChange(1)}
+                        type="button"
+                        onClick={() => handlePendingSalesPageChange(1)}
                         className="px-3 py-2 text-sm font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-all duration-200"
                       >
                         1
                       </button>
-                      {currentPage > 4 && (
-                        <span className="px-2 text-gray-400">...</span>
-                      )}
+                      {pendingServerPage > 4 && <span className="px-2 text-gray-400">...</span>}
                     </>
                   )}
 
-                  {Array.from({ length: totalPages }, (_, i) => i + 1)
-                    .filter(page => {
-                      if (totalPages <= 7) return true;
-                      if (currentPage <= 4) return page <= 5;
-                      if (currentPage >= totalPages - 3) return page >= totalPages - 4;
-                      return page >= currentPage - 2 && page <= currentPage + 2;
+                  {Array.from({ length: pendingServerTotalPages }, (_, i) => i + 1)
+                    .filter((page) => {
+                      if (pendingServerTotalPages <= 7) return true;
+                      if (pendingServerPage <= 4) return page <= 5;
+                      if (pendingServerPage >= pendingServerTotalPages - 3) return page >= pendingServerTotalPages - 4;
+                      return page >= pendingServerPage - 2 && page <= pendingServerPage + 2;
                     })
                     .map((page) => (
                       <button
+                        type="button"
                         key={page}
-                        onClick={() => handlePageChange(page)}
-                        className={`px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${currentPage === page
-                          ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white'
-                          : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'
-                          }`}
+                        onClick={() => handlePendingSalesPageChange(page)}
+                        className={`px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
+                          pendingServerPage === page
+                            ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white'
+                            : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'
+                        }`}
                       >
                         {page}
                       </button>
                     ))}
 
-                  {currentPage < totalPages - 2 && totalPages > 7 && (
+                  {pendingServerPage < pendingServerTotalPages - 2 && pendingServerTotalPages > 7 && (
                     <>
-                      {currentPage < totalPages - 3 && (
+                      {pendingServerPage < pendingServerTotalPages - 3 && (
                         <span className="px-2 text-gray-400">...</span>
                       )}
                       <button
-                        onClick={() => handlePageChange(totalPages)}
+                        type="button"
+                        onClick={() => handlePendingSalesPageChange(pendingServerTotalPages)}
                         className="px-3 py-2 text-sm font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-all duration-200"
                       >
-                        {totalPages}
+                        {pendingServerTotalPages}
                       </button>
                     </>
                   )}
                 </div>
 
                 <button
-                  onClick={() => handlePageChange(currentPage + 1)}
-                  disabled={currentPage === totalPages}
+                  type="button"
+                  onClick={() => handlePendingSalesPageChange(pendingServerPage + 1)}
+                  disabled={pendingServerPage >= pendingServerTotalPages}
                   className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
                 >
                   Next
