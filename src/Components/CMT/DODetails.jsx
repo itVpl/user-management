@@ -111,6 +111,11 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
   const assign = raw.assignedToCMT || order.assignedToCMT || null;
   const createdBy = raw.createdBySalesUser || {};
   const loadRef = raw.loadReference || {};
+  const importantDateUpdateHistory = Array.isArray(loadRef.importantDateUpdateHistory)
+    ? loadRef.importantDateUpdateHistory
+    : Array.isArray(raw.importantDateUpdateHistory)
+      ? raw.importantDateUpdateHistory
+      : [];
   const loadId = loadRef._id || loadRef.loadId || loadRef.id || order?.raw?.loadId || order?.raw?._id;
   const loadNo = cust0.loadNo || order.loadNo || loadRef.loadId; // Readable Load No (e.g. 1005)
 
@@ -3123,10 +3128,14 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
           </section>
           )}
 
-          {/* Important Dates - hidden in report view */}
-          {!reportView && (
+          {/* Important Dates (loadReference + importantDates); read-only in report view */}
           <section className="p-4 rounded-2xl border bg-[#F8FAFF] border-[#E0E7FF] md:col-span-2">
-            <h3 className="text-sm font-semibold text-gray-800 mb-3">Important Dates</h3>
+            <h3 className="text-sm font-semibold text-gray-800 mb-1">Important Dates</h3>
+            {reportView && (
+              <p className="text-xs text-gray-500 mb-3">
+                From <span className="font-medium">loadReference</span> / importantDates (read only)
+              </p>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Row 1 */}
               <div className="flex items-center gap-3">
@@ -3349,6 +3358,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
                 </div>
               </div>
             </div>
+            {!reportView && (
             <div className="mt-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">Carrier Number</label>
               <input
@@ -3359,6 +3369,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
                 className="w-full text-sm px-3 py-2 border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
+            )}
             {/* Attachments (optional, max 5) */}
             {!reportView && (
               <div className="mt-4">
@@ -3387,6 +3398,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
                 )}
               </div>
             )}
+            {!reportView && (
             <div className="mt-4 flex justify-end">
               {(() => {
                 const isDelivered = loadRef.status && loadRef.status.toLowerCase() === 'delivered';
@@ -3410,14 +3422,13 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
                 );
               })()}
             </div>
+            )}
           </section>
-          )}
 
-          {/* Important Date Update History - hidden in report view */}
-          {!reportView && Array.isArray(loadRef.importantDateUpdateHistory) && loadRef.importantDateUpdateHistory.length > 0 && (
+          {/* Important Date Update History (loadReference.importantDateUpdateHistory[]) */}
+          {importantDateUpdateHistory.length > 0 && (
             <section className="p-4 rounded-2xl border bg-[#F0FDF4] border-[#BBF7D0] md:col-span-2">
               <h3 className="text-sm font-semibold text-gray-800 mb-3">Important Date Update History</h3>
-              {/* <p className="text-xs text-gray-600 mb-2">Kon kon si important dates update hui hain (per entry)</p> */}
               <div className="overflow-x-auto max-h-64 overflow-y-auto rounded-lg border border-gray-200 bg-white">
                 <table className="w-full text-sm min-w-[400px]">
                   <thead className="bg-gray-50 border-b border-gray-200 sticky top-0">
@@ -3429,7 +3440,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
                     </tr>
                   </thead>
                   <tbody>
-                    {loadRef.importantDateUpdateHistory.map((entry, idx) => (
+                    {importantDateUpdateHistory.map((entry, idx) => (
                       <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50 last:border-b-0">
                         <td className="py-2.5 px-3 font-medium text-gray-800">{entry.employeeName || '—'}</td>
                         <td className="py-2.5 px-3 text-gray-600">{entry.empId || '—'}</td>
