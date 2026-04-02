@@ -1,7 +1,14 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import axios from "axios";
 import TermsAndConditions from "../Components/TermsAndConditions";
 import API_CONFIG from "../config/api";
+import { getHourlyCheckinMyHistory } from "../services/hourlyCheckinReportService";
 
 /* ---------- Helpers ---------- */
 const todayISO = () => new Date().toISOString().slice(0, 10); // YYYY-MM-DD
@@ -25,6 +32,21 @@ const formatTimeHM = (iso) => {
   const d = new Date(iso);
   if (isNaN(d)) return "--";
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+};
+
+/** Hourly check-in history cells — readable local date & time */
+const formatHourlyDateTime = (val) => {
+  if (val == null || val === "") return "—";
+  const d = new Date(val);
+  if (Number.isNaN(d.getTime())) return String(val);
+  return d.toLocaleString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
 };
 
 const inRange = (d, start, end) => d >= start && d <= end;
@@ -67,6 +89,23 @@ const ProfilePage = () => {
   const [attendanceRecord, setAttendanceRecord] = useState(null);
   const [attendanceSessionPage, setAttendanceSessionPage] = useState(1);
   const sessionsPerPage = 5;
+
+  // Hourly check-in history (GET /api/v1/hourly-checkin/my-history) — profile tab
+  const [hourlyDateMode, setHourlyDateMode] = useState("range"); // 'range' | 'single'
+  const [hourlySingleDate, setHourlySingleDate] = useState(() => todayISO());
+  const [hourlyStartDate, setHourlyStartDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    return d.toISOString().slice(0, 10);
+  });
+  const [hourlyEndDate, setHourlyEndDate] = useState(() => todayISO());
+  const [hourlyLimit, setHourlyLimit] = useState(50);
+  const [hourlyRows, setHourlyRows] = useState([]);
+  const [hourlyLoading, setHourlyLoading] = useState(false);
+  const [hourlyError, setHourlyError] = useState("");
+  const [hourlyCount, setHourlyCount] = useState(null);
+  const [hourlyPage, setHourlyPage] = useState(1);
+  const hourlyPerPage = 10;
 
   // HR Activity state (kept from your code)
   const [callLogs, setCallLogs] = useState([]);
@@ -498,6 +537,63 @@ const ProfilePage = () => {
       setAttendanceSessionPage(1); // Reset to first page when date changes
     }
   }, [attendanceDate, empId]);
+
+  const loadHourlyMyHistory = useCallback(async () => {
+    setHourlyLoading(true);
+    setHourlyError("");
+    try {
+      const lim = Math.min(500, Math.max(1, Number(hourlyLimit) || 50));
+      const params = { limit: lim };
+      if (hourlyDateMode === "single") {
+        params.date = hourlySingleDate;
+      } else if (hourlyStartDate && hourlyEndDate) {
+        if (hourlyStartDate > hourlyEndDate) {
+          setHourlyError("Start date must be on or before end date.");
+          setHourlyRows([]);
+          setHourlyCount(0);
+          return;
+        }
+        params.startDate = hourlyStartDate;
+        params.endDate = hourlyEndDate;
+      }
+      const res = await getHourlyCheckinMyHistory(params);
+      if (res && res.success === false) {
+        setHourlyRows([]);
+        setHourlyCount(0);
+        setHourlyError(
+          res.message || "Could not load hourly check-in history.",
+        );
+        return;
+      }
+      const rows = Array.isArray(res?.data) ? res.data : [];
+      setHourlyRows(rows);
+      setHourlyCount(res?.count != null ? res.count : rows.length);
+    } catch (e) {
+      setHourlyRows([]);
+      setHourlyCount(0);
+      setHourlyError(
+        e?.message || "Failed to load hourly check-in history.",
+      );
+    } finally {
+      setHourlyLoading(false);
+    }
+  }, [
+    hourlyDateMode,
+    hourlySingleDate,
+    hourlyStartDate,
+    hourlyEndDate,
+    hourlyLimit,
+  ]);
+
+  useLayoutEffect(() => {
+    if (activeTab === "hourlyCheckin") setHourlyLoading(true);
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab !== "hourlyCheckin") return;
+    setHourlyPage(1);
+    loadHourlyMyHistory();
+  }, [activeTab, loadHourlyMyHistory]);
 
   /* ========= Attendance computed fields ========= */
   // Helper function to parse DD-MM-YYYY HH:mm:ss format to Date
@@ -1395,6 +1491,12 @@ const ProfilePage = () => {
           >
             Terms and Conditions
           </button>
+          <button
+            onClick={() => setActiveTab("hourlyCheckin")}
+            className={`px-4 py-2 cursor-pointer rounded-md font-semibold ${activeTab === "hourlyCheckin" ? "bg-indigo-600 text-white" : "bg-white text-indigo-600 border border-indigo-300"}`}
+          >
+            Hourly Check-in
+          </button>
           {employee?.department === "HR" && (
             <button
               onClick={() => setActiveTab("hrActivity")}
@@ -1942,6 +2044,281 @@ const ProfilePage = () => {
                   user={employee}
                   viewOnly={termsAccepted}
                 />
+              </div>
+            </div>
+          )}
+
+          {/* ================= HOURLY CHECK-IN HISTORY (my submissions) ================= */}
+          {activeTab === "hourlyCheckin" && (
+            <div className="bg-gradient-to-br from-white to-indigo-50 p-5 rounded-2xl shadow-xl border border-indigo-200 hover:shadow-2xl transition-all duration-300">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between mb-4">
+                <h2 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600 flex items-center gap-3">
+                  <div className="bg-gradient-to-r from-indigo-500 to-purple-600 p-2 rounded-xl">
+                    <svg
+                      className="w-6 h-6 text-white"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </div>
+                  Hourly Check-in History
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => loadHourlyMyHistory()}
+                  disabled={hourlyLoading}
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                >
+                  {hourlyLoading ? (
+                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : null}
+                  Refresh
+                </button>
+              </div>
+
+              <p className="text-sm text-gray-600 mb-4 max-w-3xl">
+                Your own hourly check-in submissions (newest hour first). Use
+                filters to narrow by day or date range.
+              </p>
+
+              <div className="flex flex-wrap items-end gap-3 mb-6">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    Date mode
+                  </label>
+                  <select
+                    value={hourlyDateMode}
+                    onChange={(e) => setHourlyDateMode(e.target.value)}
+                    className="px-3 py-2 rounded-lg border border-indigo-200 bg-white text-sm text-gray-800 min-w-[160px]"
+                  >
+                    <option value="range">Date range</option>
+                    <option value="single">Single day</option>
+                  </select>
+                </div>
+                {hourlyDateMode === "single" ? (
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      Date
+                    </label>
+                    <input
+                      type="date"
+                      value={hourlySingleDate}
+                      onChange={(e) => setHourlySingleDate(e.target.value)}
+                      className="px-3 py-2 rounded-lg border border-indigo-200 bg-white text-sm"
+                    />
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">
+                        Start
+                      </label>
+                      <input
+                        type="date"
+                        value={hourlyStartDate}
+                        onChange={(e) => setHourlyStartDate(e.target.value)}
+                        className="px-3 py-2 rounded-lg border border-indigo-200 bg-white text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">
+                        End
+                      </label>
+                      <input
+                        type="date"
+                        value={hourlyEndDate}
+                        onChange={(e) => setHourlyEndDate(e.target.value)}
+                        className="px-3 py-2 rounded-lg border border-indigo-200 bg-white text-sm"
+                      />
+                    </div>
+                  </>
+                )}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    Limit (max 500)
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={500}
+                    value={hourlyLimit}
+                    onChange={(e) =>
+                      setHourlyLimit(
+                        Math.min(
+                          500,
+                          Math.max(1, Number(e.target.value) || 50),
+                        ),
+                      )
+                    }
+                    className="px-3 py-2 rounded-lg border border-indigo-200 bg-white text-sm w-24"
+                  />
+                </div>
+              </div>
+
+              {hourlyError && (
+                <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
+                  {hourlyError}
+                </div>
+              )}
+
+              <div className="bg-white rounded-2xl shadow-lg border border-indigo-100 overflow-hidden">
+                <div className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-lg font-semibold">Check-in rows</h3>
+                  {!hourlyLoading && (
+                    <span className="text-sm font-medium bg-white/20 px-3 py-0.5 rounded-full">
+                      {hourlyCount != null ? `${hourlyCount} loaded` : `${hourlyRows.length} loaded`}
+                    </span>
+                  )}
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gradient-to-r from-indigo-50 to-purple-50 text-indigo-700">
+                      <tr>
+                        <th className="py-3 px-4 font-semibold border-b border-indigo-200 text-left">
+                          Hour bucket
+                        </th>
+                        <th className="py-3 px-4 font-semibold border-b border-indigo-200 text-left">
+                          Response
+                        </th>
+                        <th className="py-3 px-4 font-semibold border-b border-indigo-200 text-left">
+                          Created
+                        </th>
+                        <th className="py-3 px-4 font-semibold border-b border-indigo-200 text-left">
+                          Submitted
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {hourlyLoading ? (
+                        <tr>
+                          <td
+                            colSpan={4}
+                            className="py-12 text-center text-gray-500"
+                          >
+                            <span className="inline-flex items-center gap-2">
+                              <span className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                              Loading…
+                            </span>
+                          </td>
+                        </tr>
+                      ) : hourlyRows.length ? (
+                        hourlyRows
+                          .slice(
+                            (hourlyPage - 1) * hourlyPerPage,
+                            hourlyPage * hourlyPerPage,
+                          )
+                          .map((row, idx) => {
+                            const hbs =
+                              row.hourBucketStart ?? row.hour_bucket_start;
+                            const created = row.createdAt ?? row.created_at;
+                            const submitted = row.submittedAt ?? row.submitted_at;
+                            const text =
+                              row.responseText ??
+                              row.response_text ??
+                              row.note ??
+                              "—";
+                            return (
+                              <tr
+                                key={row._id ?? row.id ?? `${hbs}-${idx}`}
+                                className={`${idx % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-indigo-50/50 transition-colors`}
+                              >
+                                <td className="py-3 px-4 text-gray-800 align-top whitespace-nowrap">
+                                  {formatHourlyDateTime(hbs)}
+                                </td>
+                                <td className="py-3 px-4 text-gray-800 align-top max-w-md">
+                                  <span className="line-clamp-3" title={String(text)}>
+                                    {String(text)}
+                                  </span>
+                                </td>
+                                <td className="py-3 px-4 text-gray-700 align-top whitespace-nowrap">
+                                  {formatHourlyDateTime(created)}
+                                </td>
+                                <td className="py-3 px-4 text-gray-700 align-top whitespace-nowrap">
+                                  {formatHourlyDateTime(submitted)}
+                                </td>
+                              </tr>
+                            );
+                          })
+                      ) : (
+                        <tr>
+                          <td
+                            colSpan={4}
+                            className="text-center text-gray-400 py-12"
+                          >
+                            <div className="flex flex-col items-center gap-2">
+                              <svg
+                                className="w-12 h-12 text-gray-300"
+                                fill="currentColor"
+                                viewBox="0 0 20 20"
+                              >
+                                <path
+                                  fillRule="evenodd"
+                                  d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                                  clipRule="evenodd"
+                                />
+                              </svg>
+                              <span className="text-sm font-medium">
+                                No hourly check-ins for these filters
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                {hourlyRows.length > hourlyPerPage && (
+                  <div className="flex flex-col sm:flex-row justify-between items-center gap-4 px-3 py-3 bg-gray-50 border-t border-gray-200">
+                    <div className="text-sm text-gray-600">
+                      Showing{" "}
+                      {(hourlyPage - 1) * hourlyPerPage + 1} to{" "}
+                      {Math.min(
+                        hourlyPage * hourlyPerPage,
+                        hourlyRows.length,
+                      )}{" "}
+                      of {hourlyRows.length}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 text-white text-sm font-medium disabled:opacity-50"
+                        onClick={() =>
+                          setHourlyPage((p) => Math.max(1, p - 1))
+                        }
+                        disabled={hourlyPage <= 1}
+                      >
+                        Previous
+                      </button>
+                      <span className="text-sm text-gray-600 tabular-nums">
+                        Page {hourlyPage} /{" "}
+                        {Math.ceil(hourlyRows.length / hourlyPerPage)}
+                      </span>
+                      <button
+                        type="button"
+                        className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 text-white text-sm font-medium disabled:opacity-50"
+                        onClick={() =>
+                          setHourlyPage((p) =>
+                            Math.min(
+                              Math.ceil(hourlyRows.length / hourlyPerPage),
+                              p + 1,
+                            ),
+                          )
+                        }
+                        disabled={
+                          hourlyPage >=
+                          Math.ceil(hourlyRows.length / hourlyPerPage)
+                        }
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}

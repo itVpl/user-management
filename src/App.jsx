@@ -116,6 +116,7 @@ const EmptyTruckLocation = lazy(() => import("./Components/CMT/EmptyTruckLocatio
 const RateRequestReport = lazy(() => import("./Components/CMT/RateRequestReport.jsx"));
 const TruckerEmptyLocation = lazy(() => import("./Components/Dashboard/TruckerEmptyLocation.jsx"));
 const BreakReport = lazy(() => import("./Components/HRDashboard/BreakReport.jsx"));
+const HourlyPerformanceReport = lazy(() => import("./Components/HRDashboard/HourlyPerformanceReport.jsx"));
 const HRCallReports = lazy(() => import("./Components/HRDashboard/HRCallReports.jsx"));
 const FollowUpReport = lazy(() => import("./Components/Sales/FollowUpReport.jsx"));
 const LandingPage = lazy(() => import("./Pages/LandingPage.jsx"));
@@ -751,6 +752,7 @@ function App() {
           <Route path="rate-request-report" element={<RateRequestReport />} />
           <Route path="trucker-empty-location" element={<TruckerEmptyLocation />} />
           <Route path="break-report" element={<BreakReport />} />
+          <Route path="hourly-performance-report" element={<HourlyPerformanceReport />} />
           <Route path="hr-call-reports" element={<HRCallReports />} />
           <Route path="allcustomer" element={<AllCustomer />} />
           <Route path="credit-limit-requests" element={<CreditLimitRequests />} />

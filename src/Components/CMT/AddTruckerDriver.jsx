@@ -304,49 +304,56 @@ const TruckerDriverModal = ({ isOpen, onClose, onDriverAdded }) => {
   
   // States for the new searchable Trucker ID dropdown
   const [truckerList, setTruckerList] = useState([]);
+  const [truckersLoading, setTruckersLoading] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
-  const GET_TRUCKERS_URL = `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/truckers`;
+  const TRUCKERS_LIST_PATH = `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/truckers`;
 
-  // --- Fetch Truckers Data ---
-  const fetchTruckers = useCallback(async () => {
-    try {
-      const response = await fetch(GET_TRUCKERS_URL);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const result = await response.json();
-      if (result.success && Array.isArray(result.data)) {
-        setTruckerList(result.data);
-      } else {
-        console.error("API response format is incorrect:", result);
-      }
-    } catch (error) {
-      console.error('Error fetching truckers:', error);
-      // setStatusMessage({ type: 'error', text: 'Failed to load trucker list.' }); // Optional: Show error
-    }
-  }, []);
-
+  // GET /api/v1/shipper_driver/truckers — full list when search is empty; ?search= when typed (server filter).
   useEffect(() => {
-    if (isOpen) {
-      fetchTruckers();
-    }
-  }, [isOpen, fetchTruckers]);
+    if (!isOpen) return;
 
+    const controller = new AbortController();
 
-  // --- Filter Truckers based on Debounced Search Term ---
-  const filteredTruckers = useMemo(() => {
-    if (!debouncedSearchTerm) {
-      return truckerList;
-    }
-    const lowerCaseSearch = debouncedSearchTerm.toLowerCase();
-    return truckerList.filter(trucker => 
-      trucker.compName?.toLowerCase().includes(lowerCaseSearch) ||
-      trucker._id?.toLowerCase().includes(lowerCaseSearch)
-    );
-  }, [truckerList, debouncedSearchTerm]);
+    (async () => {
+      setTruckersLoading(true);
+      try {
+        const token =
+          localStorage.getItem('authToken') ||
+          sessionStorage.getItem('authToken') ||
+          localStorage.getItem('token') ||
+          sessionStorage.getItem('token');
+        const url = new URL(TRUCKERS_LIST_PATH);
+        const q = debouncedSearchTerm.trim();
+        if (q) url.searchParams.set('search', q);
+
+        const response = await fetch(url.toString(), {
+          signal: controller.signal,
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const result = await response.json();
+        if (result.success && Array.isArray(result.data)) {
+          setTruckerList(result.data);
+        } else {
+          console.error('API response format is incorrect:', result);
+          setTruckerList([]);
+        }
+      } catch (error) {
+        if (error.name === 'AbortError') return;
+        console.error('Error fetching truckers:', error);
+        setTruckerList([]);
+      } finally {
+        if (!controller.signal.aborted) setTruckersLoading(false);
+      }
+    })();
+
+    return () => controller.abort();
+  }, [isOpen, debouncedSearchTerm]);
 
 
   // --- Handlers ---
@@ -560,13 +567,13 @@ const TruckerDriverModal = ({ isOpen, onClose, onDriverAdded }) => {
                           }
                         `}</style>
                         <div className="dropdown-scrollbar">
-                          {loading && (
+                          {truckersLoading && (
                             <div className="p-3 text-center text-sm text-blue-500">Loading truckers...</div>
                           )}
-                          {filteredTruckers.length === 0 && !loading && (
+                          {truckerList.length === 0 && !truckersLoading && (
                             <div className="p-3 text-center text-sm text-gray-500">No truckers found.</div>
                           )}
-                          {filteredTruckers.map((trucker) => (
+                          {truckerList.map((trucker) => (
                             <div
                               key={trucker._id}
                               onMouseDown={(e) => { // Use onMouseDown to capture click before onBlur fires

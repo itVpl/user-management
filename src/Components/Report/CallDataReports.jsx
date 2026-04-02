@@ -194,6 +194,7 @@ const CallDataReports = () => {
   const [datePreset, setDatePreset] = useState("today");
   const [dateDropdownOpen, setDateDropdownOpen] = useState(false);
   const [customDateRange, setCustomDateRange] = useState(() => getTodayRange());
+  const previousDatePresetRef = useRef("today");
   const [callerDropdownOpen, setCallerDropdownOpen] = useState(false);
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
   const [callerSearchText, setCallerSearchText] = useState("");
@@ -552,7 +553,6 @@ const CallDataReports = () => {
   const handleReset = async () => {
     const defaults = { ...getTodayRange(), callerName: "", category: "", page: 1, limit: 10 };
     setDatePreset("today");
-    setCustomMonthValue(toMonthInputValue(new Date()));
     setTableSearchText("");
     setState((prev) => ({ ...prev, filters: defaults }));
     await fetchReport(defaults);
@@ -1019,6 +1019,14 @@ const CallDataReports = () => {
                     key={option.value}
                     type="button"
                     onClick={() => {
+                      if (option.value === "customRange") {
+                        previousDatePresetRef.current = datePreset;
+                        setDatePreset("customRange");
+                        if (!customDateRange?.from || !customDateRange?.to) {
+                          setCustomDateRange({ from: state.filters.from, to: state.filters.to });
+                        }
+                        return;
+                      }
                       applyDatePreset(option.value);
                       setDateDropdownOpen(false);
                     }}
@@ -1031,35 +1039,65 @@ const CallDataReports = () => {
                     {option.label}
                   </button>
                 ))}
-                <div className="mt-2 border-t border-gray-100 pt-2">
-                  <p className="mb-2 px-1 text-xs font-medium text-gray-600">Custom Date Range</p>
-                  <div className="grid grid-cols-1 gap-2">
-                    <input
-                      type="date"
-                      value={customDateRange.from}
-                      onChange={(e) => {
-                        const from = e.target.value;
-                        const next = { ...customDateRange, from };
-                        setCustomDateRange(next);
-                        if (next.from && next.to) applyDatePreset("customRange", next);
-                      }}
-                      disabled={state.loading}
-                      className="h-10 w-full rounded-lg border border-gray-300 px-3 text-sm cursor-pointer disabled:opacity-50 disabled:cursor-wait"
-                    />
-                    <input
-                      type="date"
-                      value={customDateRange.to}
-                      onChange={(e) => {
-                        const to = e.target.value;
-                        const next = { ...customDateRange, to };
-                        setCustomDateRange(next);
-                        if (next.from && next.to) applyDatePreset("customRange", next);
-                      }}
-                      disabled={state.loading}
-                      className="h-10 w-full rounded-lg border border-gray-300 px-3 text-sm cursor-pointer disabled:opacity-50 disabled:cursor-wait"
-                    />
+                {datePreset === "customRange" && (
+                  <div className="mt-2 border-t border-gray-100 pt-2">
+                    <p className="mb-2 px-1 text-xs font-medium text-gray-600">Custom Date Range</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      <div className="w-full">
+                        <p className="mb-1 px-1 text-[11px] font-medium text-gray-500">From</p>
+                        <input
+                          type="date"
+                          value={customDateRange.from}
+                          onChange={(e) => {
+                            const from = e.target.value;
+                            setCustomDateRange((prev) => ({ ...prev, from }));
+                          }}
+                          disabled={state.loading}
+                          className="h-10 w-full rounded-lg border border-gray-300 px-3 text-sm cursor-pointer disabled:opacity-50 disabled:cursor-wait"
+                        />
+                      </div>
+                      <div className="w-full">
+                        <p className="mb-1 px-1 text-[11px] font-medium text-gray-500">To</p>
+                        <input
+                          type="date"
+                          value={customDateRange.to}
+                          onChange={(e) => {
+                            const to = e.target.value;
+                            setCustomDateRange((prev) => ({ ...prev, to }));
+                          }}
+                          disabled={state.loading}
+                          className="h-10 w-full rounded-lg border border-gray-300 px-3 text-sm cursor-pointer disabled:opacity-50 disabled:cursor-wait"
+                        />
+                      </div>
+                    </div>
+                    <div className="mt-2 flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!customDateRange.from || !customDateRange.to) return;
+                          applyDatePreset("customRange", customDateRange);
+                          setDateDropdownOpen(false);
+                        }}
+                        disabled={state.loading || !customDateRange.from || !customDateRange.to}
+                        className="h-10 px-4 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-wait"
+                      >
+                        Apply
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDatePreset(previousDatePresetRef.current || "today");
+                          setCustomDateRange({ from: state.filters.from, to: state.filters.to });
+                          setDateDropdownOpen(false);
+                        }}
+                        disabled={state.loading}
+                        className="h-10 px-4 rounded-lg border border-gray-300 bg-white text-gray-800 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-wait"
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )}
                 <p className="mt-2 text-xs text-gray-500">
                   Range: {state.filters.from} to {state.filters.to}
                 </p>
