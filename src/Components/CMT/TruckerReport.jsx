@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { FaArrowLeft, FaDownload, FaEye, FaFileAlt } from 'react-icons/fa';
 import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Eye, Search, BarChart3, ChevronLeft, ChevronRight, ChevronDown, Calendar } from 'lucide-react';
@@ -21,6 +22,7 @@ import {
 } from '../../store/slices/truckerReportSlice';
 
 export default function TruckerReport() {
+  const [searchParams] = useSearchParams();
   const dispatch = useAppDispatch();
   const truckers = useAppSelector(selectTruckers);
   const statistics = useAppSelector(selectStatistics);
@@ -52,6 +54,32 @@ export default function TruckerReport() {
   const [cmtFilterSearch, setCmtFilterSearch] = useState('');
   const dateRangeDropdownRef = React.useRef(null);
   const cmtFilterRef = React.useRef(null);
+  const lastTruckerReportQueryRef = React.useRef('');
+
+  // Deep link from CMT Dept Report: ?empId=&startDate=&endDate=
+  useEffect(() => {
+    const q = searchParams.toString();
+    if (q === lastTruckerReportQueryRef.current) return;
+    lastTruckerReportQueryRef.current = q;
+
+    const empId = searchParams.get('empId')?.trim() || '';
+    const start = searchParams.get('startDate')?.trim() || '';
+    const end = searchParams.get('endDate')?.trim() || '';
+    const ymdOk = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s);
+    if (start && end && ymdOk(start) && ymdOk(end)) {
+      const ds = new Date(`${start}T12:00:00`);
+      const de = new Date(`${end}T12:00:00`);
+      if (!Number.isNaN(ds.getTime()) && !Number.isNaN(de.getTime())) {
+        setRange({ startDate: ds, endDate: de, key: 'selection' });
+      }
+    }
+    if (empId) {
+      setSelectedCmtEmpId(empId);
+      setReportTab('detailed');
+    } else if (start && end && ymdOk(start) && ymdOk(end)) {
+      setReportTab('detailed');
+    }
+  }, [searchParams]);
 
   const presets = {
     'Today': [new Date(), new Date()],

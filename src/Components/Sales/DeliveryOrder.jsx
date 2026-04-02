@@ -1105,6 +1105,8 @@ export default function DeliveryOrder() {
       
       // Set load type for the form
       setSelectedLoadType(src.loadType || 'OTR');
+      setOcrExtractedText('');
+      setOcrLoading(false);
 
       setEditingOrder(null);
       setFormMode('duplicate');
@@ -1749,13 +1751,17 @@ export default function DeliveryOrder() {
     }
   };
 
+  const [ocrExtractedText, setOcrExtractedText] = useState('');
+  const [ocrLoading, setOcrLoading] = useState(false);
+
   // Handle file upload
-  // ⬇️ REPLACE your handleFileChange
-  const handleFileChange = (e) => {
+  // Testing mode: upload ke baad full OCR text show karo.
+  const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) {
       setFormData(prev => ({ ...prev, docs: null }));
       setErrors(prev => ({ ...prev, docs: 'Please upload a document.' }));
+      setOcrExtractedText('');
       return;
     }
 
@@ -1763,6 +1769,7 @@ export default function DeliveryOrder() {
       setFormData(prev => ({ ...prev, docs: null }));
       setErrors(prev => ({ ...prev, docs: 'Allowed types: PDF, DOC, DOCX, JPG, PNG.' }));
       alertify.error('Allowed types: PDF, DOC, DOCX, JPG, PNG');
+      setOcrExtractedText('');
       return;
     }
 
@@ -1771,11 +1778,41 @@ export default function DeliveryOrder() {
       setFormData(prev => ({ ...prev, docs: null }));
       setErrors(prev => ({ ...prev, docs: 'Please upload less than 10 MB.' }));
       alertify.error('Please upload less than 10 MB.');
+      setOcrExtractedText('');
       return;
     }
 
     setFormData(prev => ({ ...prev, docs: file }));
     setErrors(prev => ({ ...prev, docs: '' }));
+
+    try {
+      setOcrLoading(true);
+      setOcrExtractedText('');
+
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+      const fd = new FormData();
+      fd.append('document', file);
+
+      const response = await axios.post(
+        `${API_CONFIG.BASE_URL}/api/v1/textract/extract?multipage=1`,
+        fd,
+        {
+          headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          }
+        }
+      );
+
+      const extractedText = response?.data?.data?.text || '';
+      setOcrExtractedText(extractedText || 'No text extracted from this document.');
+      alertify.success('Document OCR text fetched');
+    } catch (error) {
+      console.error('Textract OCR failed:', error?.response?.data || error);
+      setOcrExtractedText('');
+      alertify.warning('Document uploaded, but OCR text fetch failed');
+    } finally {
+      setOcrLoading(false);
+    }
   };
 
 
@@ -2468,6 +2505,8 @@ export default function DeliveryOrder() {
         // Reset both customer and carrier charges
         setCustomerCharges([{ name: '', quantity: '', amt: '', total: 0 }]);
         setCarrierCharges([{ name: '', quantity: '', amt: '', total: 0 }]);
+        setOcrExtractedText('');
+        setOcrLoading(false);
 
         alertify.success('✅ Delivery order created successfully!');
       } else {
@@ -2743,6 +2782,8 @@ const validateForm = (mode = formMode) => {
     setShowChargesPopup(false);
     setChargesPopupType(null);
     setCurrentCustomerIndex(null);
+    setOcrExtractedText('');
+    setOcrLoading(false);
     setFormMode('add');
     setEditingOrder(null);
   };
@@ -6766,10 +6807,35 @@ const handleUpdateOrder = async (e) => {
                           </p>
                         </div>
                       </div>
-                      <button type="button" onClick={() => setFormData(prev => ({ ...prev, docs: null }))} className="text-red-500 hover:text-red-700 transition-colors">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFormData(prev => ({ ...prev, docs: null }));
+                          setOcrExtractedText('');
+                          setOcrLoading(false);
+                        }}
+                        className="text-red-500 hover:text-red-700 transition-colors"
+                      >
                         {/* X icon */}
                         Remove
                       </button>
+                    </div>
+                  )}
+
+                  {(ocrLoading || ocrExtractedText) && (
+                    <div className="bg-white border border-gray-200 rounded-lg p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-sm font-semibold text-gray-800">OCR Extracted Text (Testing)</p>
+                        {ocrLoading && (
+                          <span className="text-xs text-blue-600">Extracting...</span>
+                        )}
+                      </div>
+                      <textarea
+                        value={ocrLoading ? 'Extracting text from document...' : ocrExtractedText}
+                        onChange={(e) => !ocrLoading && setOcrExtractedText(e.target.value)}
+                        rows={10}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
                     </div>
                   )}
                 </div>

@@ -10,6 +10,7 @@ import Layout from "./Layout/Layout";
 import PrivateRoute from "./Components/Dashboard/Private.jsx";
 import ErrorBoundary from "./Components/ErrorBoundary";
 import PaymentNotificationPopup from "./Components/PaymentNotificationPopup.jsx";
+import HourlyCheckinPopup from "./Components/HourlyCheckin/HourlyCheckinPopup.jsx";
 import QADashboard from "./Components/QA/QADashboard.jsx";
 import CallRecordingReview from "./Components/QA/CallRecordingReview.jsx";
 import ManagerReview from "./Components/QA/ManagerReview.jsx";
@@ -132,6 +133,8 @@ const DirectorReviewDetails = lazy(() => import("./Components/EmployeeReview/Dir
 const DocsUpload = lazy(() => import("./Components/DocsUpload/DocsUpload.jsx"));
 const MonthlyPerformanceReviewDashboard = lazy(() => import("./Components/MonthlyPerformanceReview/MonthlyPerformanceReviewDashboard.jsx"));
 const VPL100Redirect = lazy(() => import("./Components/Dashboard/VPL100Redirect.jsx"));
+const MyHourlyCheckinHistory = lazy(() => import("./Pages/HourlyCheckin/MyHourlyCheckinHistory.jsx"));
+const HourlyCheckinReport = lazy(() => import("./Pages/HourlyCheckin/HourlyCheckinReport.jsx"));
 
 
 // Chat Message System Imports - keep as regular imports (needed globally)
@@ -604,6 +607,9 @@ function App() {
           });
         }}
       />
+
+      {/* Hourly check-in popup - only Sales/CMT/HR (component checks eligibility) */}
+      <HourlyCheckinPopup />
       
       <ToastContainer 
         position="top-right"
@@ -761,6 +767,8 @@ function App() {
           <Route path="RateRequestReport" element={<RateRequestReport />} />
           <Route path="todo-list" element={<TodoList />} />
           <Route path="docs-upload" element={<DocsUpload />} />
+          <Route path="hourly-checkin/my-history" element={<MyHourlyCheckinHistory />} />
+          <Route path="hourly-checkin/report" element={<HourlyCheckinReport />} />
           
           {/* QA (Quality Assurance) Routes */}
           <Route path="qa/dashboard" element={<QADashboard />} />
