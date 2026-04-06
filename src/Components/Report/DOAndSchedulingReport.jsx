@@ -598,7 +598,7 @@ export default function DOAndSchedulingReport() {
                 <span className="ml-3 text-gray-400">▼</span>
               </button>
               {showPresetMenu && (
-                <div className="absolute z-50 mt-2 w-full rounded-lg border border-gray-100 bg-white shadow-lg py-1 right-0">
+                <div className="absolute z-50 mt-2 w-full max-h-[min(60vh,320px)] overflow-y-auto rounded-lg border border-gray-100 bg-white shadow-lg py-1 right-0 scrollbar-show">
                   <button
                     onClick={() => {
                       setRange({ startDate: null, endDate: null, key: 'selection' });
@@ -674,7 +674,7 @@ export default function DOAndSchedulingReport() {
                     className="w-full px-3 py-2 text-base border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 placeholder-gray-400"
                   />
                 </div>
-                <div className="max-h-60 overflow-y-auto py-1">
+                <div className="max-h-60 overflow-y-auto py-1 scrollbar-show">
                   <button
                     type="button"
                     onClick={() => { setSelectedCmtEmpId(''); setShowCmtFilter(false); setCmtFilterSearch(''); }}
@@ -856,7 +856,6 @@ export default function DOAndSchedulingReport() {
               </tbody>
             </table>
           )}
-          </div>
         </div>
       </div>
 
