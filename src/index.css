@@ -137,6 +137,40 @@ body::-webkit-scrollbar {
   background: rgba(0, 0, 0, 0.35) !important;
 }
 
+/*
+ * Visible horizontal scroll for wide data tables (beats global * scrollbar hiding).
+ * Use class "do-report-scroll-x" on the overflow-x container.
+ */
+.do-report-scroll-x {
+  overflow-x: scroll !important;
+  overflow-y: hidden;
+  scrollbar-width: auto !important;
+  -ms-overflow-style: auto !important;
+}
+
+.do-report-scroll-x::-webkit-scrollbar {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  display: block !important;
+  height: 8px !important;
+  width: 8px !important;
+}
+
+.do-report-scroll-x::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.08) !important;
+  border-radius: 6px !important;
+}
+
+.do-report-scroll-x::-webkit-scrollbar-thumb {
+  background: rgba(59, 130, 246, 0.55) !important;
+  border-radius: 6px !important;
+  min-width: 40px !important;
+}
+
+.do-report-scroll-x::-webkit-scrollbar-thumb:hover {
+  background: rgba(37, 99, 235, 0.75) !important;
+}
+
 /* Notification Toast Animation */
 @keyframes slideUp {
   from {
