@@ -10,6 +10,15 @@ import 'react-date-range/dist/theme/default.css';
 import { DateRange } from 'react-date-range';
 import { addDays, format } from 'date-fns';
 
+/** Horizontal scroll only — keeps the bar visible (not trapped under a tall vertical scroll). */
+const TABLE_SCROLL_H =
+  'w-full min-w-0 max-w-full overflow-x-scroll overflow-y-visible overscroll-x-contain [scrollbar-gutter:stable] [scrollbar-width:thin] [scrollbar-color:rgb(148_163_184)_rgb(241_245_249)] [&::-webkit-scrollbar]:h-3 [&::-webkit-scrollbar]:w-3 [&::-webkit-scrollbar-track]:rounded-md [&::-webkit-scrollbar-track]:bg-slate-100 [&::-webkit-scrollbar-thumb]:rounded-md [&::-webkit-scrollbar-thumb]:bg-slate-400 hover:[&::-webkit-scrollbar-thumb]:bg-slate-500';
+/** Vertical scroll for tall tables; horizontal overflow is handled by TABLE_SCROLL_H parent. */
+const TABLE_SCROLL_V =
+  'max-h-[min(72vh,800px)] overflow-y-auto overflow-x-visible [scrollbar-width:thin] [scrollbar-color:rgb(148_163_184)_rgb(241_245_249)] [&::-webkit-scrollbar]:w-3 [&::-webkit-scrollbar-track]:rounded-md [&::-webkit-scrollbar-track]:bg-slate-100 [&::-webkit-scrollbar-thumb]:rounded-md [&::-webkit-scrollbar-thumb]:bg-slate-400 hover:[&::-webkit-scrollbar-thumb]:bg-slate-500';
+const CELL_SCROLL =
+  'max-h-56 overflow-y-auto overflow-x-hidden pr-1 [scrollbar-width:thin] [scrollbar-color:rgb(148_163_184)_rgb(248_250_252)] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:rounded [&::-webkit-scrollbar-track]:bg-slate-100 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-400';
+
 export default function DOAndSchedulingReport() {
   const [assignedDOs, setAssignedDOs] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -318,21 +327,65 @@ export default function DOAndSchedulingReport() {
     return pages;
   };
 
+  const getImportantDateHistoryList = (order) => {
+    const lr = order?.loadReference || {};
+    const h =
+      lr.importantDateUpdateHistory ??
+      order?.importantDateUpdateHistory ??
+      order?.raw?.loadReference?.importantDateUpdateHistory;
+    return Array.isArray(h) ? h : [];
+  };
+
+  /** loadReference + importantDates — same fields as DO details modal */
+  const buildImportantDateEntries = (order) => {
+    const lr = order?.loadReference || {};
+    const imp = lr.importantDates || order?.importantDates || {};
+    const pick = (a, b, c) => a ?? b ?? c ?? null;
+    const entries = [];
+    const add = (label, rawVal) => {
+      if (rawVal == null || rawVal === '') return;
+      try {
+        const dt = new Date(rawVal);
+        if (Number.isNaN(dt.getTime())) return;
+        entries.push({ label, value: format(dt, 'MMM dd, yyyy') });
+      } catch {
+        /* skip invalid */
+      }
+    };
+    add('Vessel ETA', pick(lr.vesselETA, imp.vesselETA, imp.vesselDate));
+    add('Last free', pick(lr.latfreeDate, imp.latfreeDate, imp.lastFreeDate));
+    add('Discharge', pick(lr.dischargeDate, imp.dischargeDate));
+    add('Outgate', pick(lr.outgateDate, imp.outgateDate));
+    add('Empty', pick(lr.emptyDate, imp.emptyDate));
+    add('Per diem free', pick(lr.perDiemFreeDay, imp.perDiemFreeDay, imp.perDiemFreeDate));
+    add('Ingate', pick(lr.ingateDate, imp.ingateDate));
+    add('Ready return', pick(lr.readyToReturnDate, imp.readyToReturnDate));
+    add('Delivery', imp.dlvyDate);
+    return entries;
+  };
+
+  const getImportantDatesSummaryForExport = (order) => {
+    const e = buildImportantDateEntries(order);
+    return e.length ? e.map((x) => `${x.label}: ${x.value}`).join('; ') : '';
+  };
+
   // Build Important Date Update History for Excel (same as View popup: Employee, Emp ID, Updated At, Updated Dates)
   const getImportantDateHistoryForExport = (order) => {
-    const history = order.loadReference?.importantDateUpdateHistory ?? order.raw?.loadReference?.importantDateUpdateHistory;
-    if (!Array.isArray(history) || history.length === 0) return '';
-    return history.map((entry) => {
-      const name = entry.employeeName || '—';
-      const empId = entry.empId || '—';
-      const updatedAt = entry.updatedAt
-        ? format(new Date(entry.updatedAt), 'MMM dd, yyyy HH:mm')
-        : '—';
-      const labels = Array.isArray(entry.updatedFieldLabels) && entry.updatedFieldLabels.length > 0
-        ? entry.updatedFieldLabels.join(', ')
-        : '—';
-      return `${name} (${empId}) - ${updatedAt} - ${labels}`;
-    }).join('; ');
+    const history = getImportantDateHistoryList(order);
+    if (history.length === 0) return '';
+    return history
+      .map((entry) => {
+        const name = entry.employeeName || '—';
+        const empId = entry.empId || '—';
+        const updatedAt = entry.updatedAt
+          ? format(new Date(entry.updatedAt), 'MMM dd, yyyy HH:mm')
+          : '—';
+        const labels = Array.isArray(entry.updatedFieldLabels) && entry.updatedFieldLabels.length > 0
+          ? entry.updatedFieldLabels.join(', ')
+          : '—';
+        return `${name} (${empId}) - ${updatedAt} - ${labels}`;
+      })
+      .join('; ');
   };
 
   const handleExportCSV = (dataToExport, signedByName = '') => {
@@ -340,7 +393,20 @@ export default function DOAndSchedulingReport() {
       alertify.error('No data to export');
       return;
     }
-    const headers = ['Load No', 'Dispatcher Name', 'Carrier Name', 'Carrier Email', 'Carrier Number', 'Load Type', 'Created By (Sales)', 'Assigned To (CMT)', 'Assigned At', 'Status', 'Important Date History'];
+    const headers = [
+      'Load No',
+      'Dispatcher Name',
+      'Carrier Name',
+      'Carrier Email',
+      'Carrier Number',
+      'Load Type',
+      'Created By (Sales)',
+      'Assigned To (CMT)',
+      'Assigned At',
+      'Status',
+      'Important Dates',
+      'Important Date History',
+    ];
     const rows = dataToExport.map((order) => {
       const cust0 = order.customers?.[0] || {};
       const loadNo = cust0.loadNo || 'N/A';
@@ -357,6 +423,7 @@ export default function DOAndSchedulingReport() {
       const status = order.loadReference?.status
         ? (order.loadReference.status[0].toUpperCase() + order.loadReference.status.slice(1).toLowerCase().replace(/-|_/g, ' '))
         : 'N/A';
+      const importantDatesSummary = getImportantDatesSummaryForExport(order);
       const importantDateHistory = getImportantDateHistoryForExport(order);
       return [
         `"${String(loadNo).replace(/"/g, '""')}"`,
@@ -369,7 +436,8 @@ export default function DOAndSchedulingReport() {
         `"${String(assignedTo).replace(/"/g, '""')}"`,
         `"${String(assignedAt).replace(/"/g, '""')}"`,
         `"${String(status).replace(/"/g, '""')}"`,
-        `"${String(importantDateHistory).replace(/"/g, '""')}"`
+        `"${String(importantDatesSummary).replace(/"/g, '""')}"`,
+        `"${String(importantDateHistory).replace(/"/g, '""')}"`,
       ];
     });
     let csvContent = [headers.join(','), ...rows.map((row) => row.join(','))].join('\n');
@@ -674,7 +742,7 @@ export default function DOAndSchedulingReport() {
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
         <div className="do-report-scroll-x scrollbar-show max-w-full rounded-xl [scrollbar-gutter:stable]">
           {currentOrders.length === 0 && !loading ? (
-            <div className="text-center py-12">
+            <div className="text-center py-12 min-w-0">
               <Truck className="w-16 h-16 text-gray-300 mx-auto mb-4" />
               <p className="text-gray-500 text-lg">
                 {searchTerm ? 'No orders found matching your search' : !ymd(range.startDate) || !ymd(range.endDate) ? 'Select a date range' : 'No DO assignments in this period'}
@@ -788,6 +856,7 @@ export default function DOAndSchedulingReport() {
               </tbody>
             </table>
           )}
+          </div>
         </div>
       </div>
 

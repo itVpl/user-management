@@ -3,7 +3,7 @@ import axios from 'axios';
 import API_CONFIG from '../../config/api.js';
 
 // Fetch truckers with pagination and caching
-// API: page, limit (default 10), search (compName/mc_dot_no/email), startDate, endDate, empId
+// API: GET /api/v1/shipper_driver/truckers?full=true&page&limit&search&startDate&endDate&empId
 export const fetchTruckers = createAsyncThunk(
   'truckerReport/fetchTruckers',
   async ({ 
@@ -33,7 +33,7 @@ export const fetchTruckers = createAsyncThunk(
     try {
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
       
-      const params = { page, limit };
+      const params = { page, limit, full: true };
       if (search && search.trim()) params.search = search.trim();
       if (startDate) {
         const d = startDate instanceof Date ? startDate.toISOString().split('T')[0] : startDate;
