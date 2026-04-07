@@ -9,6 +9,22 @@ import {
 } from "../../constants/cmtCallDispositionLabels";
 
 const REPORT_BASE = `${API_CONFIG.BASE_URL}/api/v1/analytics/8x8`;
+
+/** Caller names shown in “All caller aliases” even if not returned from active employees (e.g. Triton line). */
+const STATIC_REPORT_CALLER_ALIASES = [
+  { label: "Identifica LLC", value: "Identifica LLC", empId: "static-identifica-llc" },
+];
+
+const mergeStaticReportCallerAliases = (fromApi) => {
+  const byKey = new Map();
+  for (const o of fromApi) {
+    if (o?.value) byKey.set(String(o.value).toLowerCase(), o);
+  }
+  for (const s of STATIC_REPORT_CALLER_ALIASES) {
+    byKey.set(String(s.value).toLowerCase(), s);
+  }
+  return Array.from(byKey.values()).sort((a, b) => a.label.localeCompare(b.label));
+};
 /**
  * 1-1 feedback (not under 8x8 analytics base).
  * GET by document id: GET /api/v1/one-on-one-feedback/:id
@@ -310,7 +326,7 @@ const CallDataReports = () => {
         options = toEmployeeOptions(filteredActive);
       }
 
-      setEmployeeOptions(options);
+      setEmployeeOptions(mergeStaticReportCallerAliases(options));
     } catch (error) {
       console.error("Active employees fetch failed:", error);
       toast.error("Failed to load active employee aliases");
