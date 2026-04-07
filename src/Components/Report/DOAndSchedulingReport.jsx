@@ -393,44 +393,33 @@ export default function DOAndSchedulingReport() {
     }
     const headers = [
       'Load No',
-      'Dispatcher Name',
       'Carrier Name',
       'Carrier Email',
-      'Load Type',
       'Created By (Sales)',
       'Assigned To (CMT)',
       'Assigned At',
-      'Status',
       'Important Dates',
       'Important Date History',
     ];
     const rows = dataToExport.map((order) => {
       const cust0 = order.customers?.[0] || {};
       const loadNo = cust0.loadNo || 'N/A';
-      const dispatcherName = cust0.dispatcherName || 'N/A';
       const carrierName = order.carrier?.carrierName || 'N/A';
       const carrierEmail = order.carrierId?.email || order.carrier?.email || 'N/A';
-      const loadType = order.loadType || 'N/A';
       const createdBy = order.createdBySalesUser?.employeeName || 'N/A';
       const assignedTo = order.assignedToCMT?.employeeName || 'N/A';
       const assignedAt = order.assignedToCMT?.assignedAt
         ? format(new Date(order.assignedToCMT.assignedAt), 'MMM dd, yyyy HH:mm')
         : 'N/A';
-      const status = order.loadReference?.status
-        ? (order.loadReference.status[0].toUpperCase() + order.loadReference.status.slice(1).toLowerCase().replace(/-|_/g, ' '))
-        : 'N/A';
       const importantDatesSummary = getImportantDatesSummaryForExport(order);
       const importantDateHistory = getImportantDateHistoryForExport(order);
       return [
         `"${String(loadNo).replace(/"/g, '""')}"`,
-        `"${String(dispatcherName).replace(/"/g, '""')}"`,
         `"${String(carrierName).replace(/"/g, '""')}"`,
         `"${String(carrierEmail).replace(/"/g, '""')}"`,
-        `"${String(loadType).replace(/"/g, '""')}"`,
         `"${String(createdBy).replace(/"/g, '""')}"`,
         `"${String(assignedTo).replace(/"/g, '""')}"`,
         `"${String(assignedAt).replace(/"/g, '""')}"`,
-        `"${String(status).replace(/"/g, '""')}"`,
         `"${String(importantDatesSummary).replace(/"/g, '""')}"`,
         `"${String(importantDateHistory).replace(/"/g, '""')}"`,
       ];
@@ -768,22 +757,19 @@ export default function DOAndSchedulingReport() {
               </p>
             </div>
           ) : (
-            <table className="w-max min-w-[1540px]">
+            <table className="w-max min-w-[880px]">
               <thead className="bg-white border-b border-gray-200">
                 <tr className="bg-gray-100">
                   <th className="text-left py-4 px-4 text-gray-500 font-medium text-base whitespace-nowrap min-w-[7rem]">Load No</th>
-                  <th className="text-left py-4 px-4 text-gray-500 font-medium text-base whitespace-nowrap min-w-[9rem]">Dispatcher Name</th>
                   <th className="text-left py-4 px-4 text-gray-500 font-medium text-base whitespace-nowrap min-w-[8rem]">Carrier Name</th>
                   <th className="text-left py-4 px-4 text-gray-500 font-medium text-base whitespace-nowrap min-w-[12rem]">Carrier Email</th>
-                  <th className="text-left py-4 px-4 text-gray-500 font-medium text-base whitespace-nowrap min-w-[6rem]">Load Type</th>
                   <th className="text-left py-4 px-4 text-gray-500 font-medium text-base whitespace-nowrap min-w-[10rem]">Created By (Sales)</th>
                   <th className="text-left py-4 px-4 text-gray-500 font-medium text-base whitespace-nowrap min-w-[10rem]">Assigned To (CMT)</th>
                   <th className="text-left py-4 px-4 text-gray-500 font-medium text-base whitespace-nowrap min-w-[11rem]">Assigned At</th>
-                  <th className="text-left py-4 px-4 text-gray-500 font-medium text-base whitespace-nowrap min-w-[7rem]">Status</th>
-                  <th className="text-left py-4 px-4 text-gray-500 font-medium text-base whitespace-nowrap min-w-[380px] w-[400px]">
+                  <th className="text-left py-4 px-4 text-gray-500 font-medium text-base whitespace-nowrap min-w-[190px] w-[230px]">
                     Important Dates
                   </th>
-                  <th className="text-left py-4 px-4 text-gray-500 font-medium text-base whitespace-nowrap min-w-[440px] w-[460px]">
+                  <th className="text-left py-4 px-4 text-gray-500 font-medium text-base whitespace-nowrap min-w-[280px] w-[300px]">
                     Important Date Update History
                   </th>
                   <th className="text-center py-4 px-4 text-gray-500 font-medium text-base whitespace-nowrap min-w-[5.5rem]">Action</th>
@@ -800,10 +786,6 @@ export default function DOAndSchedulingReport() {
                   const carrierEmail = order.carrierId?.email || order.carrier?.email || 'N/A';
                   const cust0 = order.customers?.[0] || {};
                   const loadNo = cust0.loadNo || 'N/A';
-                  const dispatcherName = cust0.dispatcherName || 'N/A';
-                  const loadStatus = order.loadReference?.status
-                    ? (order.loadReference.status[0].toUpperCase() + order.loadReference.status.slice(1).toLowerCase().replace(/-|_/g, ' '))
-                    : '—';
                   const importantDateEntries = buildImportantDateEntries(order);
                   const importantDatesTitle = importantDateEntries.length
                     ? importantDateEntries.map((x) => `${x.label}: ${x.value}`).join('\n')
@@ -820,7 +802,6 @@ export default function DOAndSchedulingReport() {
                   return (
                     <tr key={order._id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                       <td className="py-4 px-4"><span className="text-gray-700 font-medium">{loadNo}</span></td>
-                      <td className="py-4 px-4"><span className="font-medium text-gray-700">{dispatcherName}</span></td>
                     <td className="py-4 px-4">
   <div className="relative group max-w-[140px]">
 
@@ -862,46 +843,10 @@ export default function DOAndSchedulingReport() {
                           )}
                         </div>
                       </td>
-                      <td className="py-4 px-4"><span className="font-medium text-gray-700">{order.loadType || 'N/A'}</span></td>
                       <td className="py-4 px-4"><span className="font-medium text-gray-700">{createdBy}</span></td>
                       <td className="py-4 px-4"><span className="font-medium text-gray-700">{assignedTo}</span></td>
                       <td className="py-4 px-4"><span className="text-gray-700 font-medium">{assignedAt}</span></td>
-                      <td className="py-4 px-4">
-  <div className="relative group max-w-[100px]">
-    
-    {/* Status Badge */}
-    <span
-      className={`inline-flex px-2.5 py-1 rounded-md font-medium 
-                  max-w-full truncate
-                  ${
-                    (loadStatus || '').toLowerCase() === 'delivered'
-                      ? 'bg-green-100 text-green-700'
-                      : (loadStatus || '').toLowerCase().includes('transit')
-                      ? 'bg-amber-100 text-amber-700'
-                      : 'bg-gray-100 text-gray-700'
-                  }`}
-    >
-      <span className="truncate">
-        {loadStatus || "-"}
-      </span>
-    </span>
-
-    {/* Tooltip */}
-    {loadStatus && (
-      <div className="absolute left-0 top-full mt-2 hidden group-hover:block
-                      bg-gray-900 text-white text-sm
-                      px-3 py-2.5
-                      rounded-lg shadow-xl
-                      max-w-[160px]
-                      break-words
-                      z-50">
-        {loadStatus}
-      </div>
-    )}
-
-  </div>
-</td>
-                      <td className="py-3 px-3 align-top min-w-[380px] w-[400px]">
+                      <td className="py-3 px-3 align-top min-w-[190px] w-[230px]">
                         {importantDateEntries.length === 0 ? (
                           <span className="text-gray-400 text-sm">—</span>
                         ) : (
@@ -918,7 +863,7 @@ export default function DOAndSchedulingReport() {
                           </div>
                         )}
                       </td>
-                      <td className="py-3 px-3 align-top min-w-[440px] w-[460px]">
+                      <td className="py-3 px-3 align-top min-w-[280px] w-[300px]">
                         {historyList.length === 0 ? (
                           <span className="text-gray-400 text-sm">—</span>
                         ) : (
