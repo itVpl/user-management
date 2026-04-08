@@ -1,12 +1,24 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
-import { Search, Eye, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Eye, ChevronLeft, ChevronRight, X, ChevronDown } from "lucide-react";
 import { toast } from "react-toastify";
 import API_CONFIG from "../../config/api";
 
-const DEFAULT_LIMIT = 20;
+const DEFAULT_LIMIT = 10;
 const LIMIT_OPTIONS = [10, 20, 50, 100];
+const STATUS_OPTIONS = [
+  { value: "", label: "All" },
+  { value: "pending", label: "Pending" },
+  { value: "approved", label: "Approved" },
+  { value: "rejected", label: "Rejected" },
+  { value: "blacklist", label: "Blacklist" },
+];
+const CREATED_BY_TYPE_OPTIONS = [
+  { value: "", label: "All" },
+  { value: "employee", label: "Employee" },
+  { value: "self_registered", label: "Self Registered" },
+];
 
 const getToken = () =>
   sessionStorage.getItem("authToken") ||
@@ -108,7 +120,7 @@ export default function AddCustomerReport() {
     createdByType: "",
     addedByEmpId: "",
   });
-  const [reportMeta, setReportMeta] = useState(null);
+  const [_reportMeta, setReportMeta] = useState(null);
   const [rows, setRows] = useState([]);
   const [employeeOptions, setEmployeeOptions] = useState([]);
   const [loadingEmployees, setLoadingEmployees] = useState(false);
@@ -121,6 +133,102 @@ export default function AddCustomerReport() {
     total: 0,
     totalPages: 1,
   });
+
+  const [statusDdOpen, setStatusDdOpen] = useState(false);
+  const [statusDdQuery, setStatusDdQuery] = useState("");
+  const statusDdRef = useRef(null);
+  const statusBtnRef = useRef(null);
+  const statusInputRef = useRef(null);
+  const [statusMenuPos, setStatusMenuPos] = useState({ top: 0, left: 0, width: 0 });
+
+  const [createdByDdOpen, setCreatedByDdOpen] = useState(false);
+  const [createdByDdQuery, setCreatedByDdQuery] = useState("");
+  const createdByDdRef = useRef(null);
+  const createdByBtnRef = useRef(null);
+  const createdByInputRef = useRef(null);
+  const [createdByMenuPos, setCreatedByMenuPos] = useState({ top: 0, left: 0, width: 0 });
+
+  const [addedByDdOpen, setAddedByDdOpen] = useState(false);
+  const [addedByDdQuery, setAddedByDdQuery] = useState("");
+  const addedByDdRef = useRef(null);
+  const addedByBtnRef = useRef(null);
+  const addedByInputRef = useRef(null);
+  const [addedByMenuPos, setAddedByMenuPos] = useState({ top: 0, left: 0, width: 0 });
+
+  const [limitDdOpen, setLimitDdOpen] = useState(false);
+  const [limitDdQuery, setLimitDdQuery] = useState("");
+  const limitDdRef = useRef(null);
+  const limitBtnRef = useRef(null);
+  const limitInputRef = useRef(null);
+  const [limitMenuPos, setLimitMenuPos] = useState({ top: 0, left: 0, width: 0 });
+
+  const calcMenuPos = useCallback((el) => {
+    const r = el.getBoundingClientRect();
+    const width = r.width;
+    const left = Math.min(r.left, Math.max(8, window.innerWidth - width - 8));
+    const top = r.bottom + 8;
+    return { top, left, width };
+  }, []);
+
+  useEffect(() => {
+    function onDocClick(e) {
+      if (statusDdRef.current && !statusDdRef.current.contains(e.target)) {
+        setStatusDdOpen(false);
+      }
+      if (createdByDdRef.current && !createdByDdRef.current.contains(e.target)) {
+        setCreatedByDdOpen(false);
+      }
+      if (addedByDdRef.current && !addedByDdRef.current.contains(e.target)) {
+        setAddedByDdOpen(false);
+      }
+      if (limitDdRef.current && !limitDdRef.current.contains(e.target)) {
+        setLimitDdOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, []);
+
+  useEffect(() => {
+    if (statusDdOpen && statusInputRef.current) statusInputRef.current.focus();
+  }, [statusDdOpen]);
+
+  useEffect(() => {
+    if (createdByDdOpen && createdByInputRef.current) createdByInputRef.current.focus();
+  }, [createdByDdOpen]);
+
+  useEffect(() => {
+    if (addedByDdOpen && addedByInputRef.current) addedByInputRef.current.focus();
+  }, [addedByDdOpen]);
+
+  useEffect(() => {
+    if (limitDdOpen && limitInputRef.current) limitInputRef.current.focus();
+  }, [limitDdOpen]);
+
+  useEffect(() => {
+    if (!statusDdOpen && !createdByDdOpen && !addedByDdOpen && !limitDdOpen) return;
+    function update() {
+      if (statusDdOpen && statusBtnRef.current) {
+        setStatusMenuPos(calcMenuPos(statusBtnRef.current));
+      }
+      if (createdByDdOpen && createdByBtnRef.current) {
+        setCreatedByMenuPos(calcMenuPos(createdByBtnRef.current));
+      }
+      if (addedByDdOpen && addedByBtnRef.current) {
+        setAddedByMenuPos(calcMenuPos(addedByBtnRef.current));
+      }
+      if (limitDdOpen && limitBtnRef.current) {
+        setLimitMenuPos(calcMenuPos(limitBtnRef.current));
+      }
+    }
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [addedByDdOpen, calcMenuPos, createdByDdOpen, limitDdOpen, statusDdOpen]);
 
   const handleApiError = useCallback(
     (error, fallbackMessage) => {
@@ -243,6 +351,14 @@ export default function AddCustomerReport() {
       createdByType: "",
       addedByEmpId: "",
     });
+    setStatusDdQuery("");
+    setStatusDdOpen(false);
+    setCreatedByDdQuery("");
+    setCreatedByDdOpen(false);
+    setAddedByDdQuery("");
+    setAddedByDdOpen(false);
+    setLimitDdQuery("");
+    setLimitDdOpen(false);
   };
 
   const openDetails = async (row) => {
@@ -263,7 +379,7 @@ export default function AddCustomerReport() {
     }
   };
 
-  const totalLabel = useMemo(
+  const _totalLabel = useMemo(
     () => `Page ${pagination.page} of ${pagination.totalPages} · ${pagination.total} total`,
     [pagination.page, pagination.total, pagination.totalPages]
   );
@@ -272,280 +388,788 @@ export default function AddCustomerReport() {
     [detailsModal.payload, detailsModal.row?.metrics]
   );
   const detailData = useMemo(() => toDetailsObject(detailsModal.payload), [detailsModal.payload]);
+  const statusSelectedLabel = useMemo(() => {
+    const found = STATUS_OPTIONS.find((o) => o.value === filters.status);
+    return found?.label || "All";
+  }, [filters.status]);
+  const statusFilteredOptions = useMemo(() => {
+    const q = statusDdQuery.trim().toLowerCase();
+    if (!q) return STATUS_OPTIONS;
+    return STATUS_OPTIONS.filter((opt) => opt.label.toLowerCase().includes(q));
+  }, [statusDdQuery]);
+  const createdBySelectedLabel = useMemo(() => {
+    const found = CREATED_BY_TYPE_OPTIONS.find((o) => o.value === filters.createdByType);
+    return found?.label || "All";
+  }, [filters.createdByType]);
+  const createdByFilteredOptions = useMemo(() => {
+    const q = createdByDdQuery.trim().toLowerCase();
+    if (!q) return CREATED_BY_TYPE_OPTIONS;
+    return CREATED_BY_TYPE_OPTIONS.filter((opt) => opt.label.toLowerCase().includes(q));
+  }, [createdByDdQuery]);
+  const addedBySelectedLabel = useMemo(() => {
+    if (!filters.addedByEmpId) return "All";
+    const found = employeeOptions.find((o) => String(o.value) === String(filters.addedByEmpId));
+    return found?.label || filters.addedByEmpId;
+  }, [employeeOptions, filters.addedByEmpId]);
+  const addedByFilteredOptions = useMemo(() => {
+    const q = addedByDdQuery.trim().toLowerCase();
+    if (!q) return employeeOptions;
+    return employeeOptions.filter((opt) => String(opt.label).toLowerCase().includes(q));
+  }, [addedByDdQuery, employeeOptions]);
+  const limitSelectedLabel = useMemo(() => {
+    const found = LIMIT_OPTIONS.find((n) => Number(n) === Number(pagination.limit));
+    return `${found ?? pagination.limit} / page`;
+  }, [pagination.limit]);
+  const limitFilteredOptions = useMemo(() => {
+    const q = limitDdQuery.trim().toLowerCase();
+    if (!q) return LIMIT_OPTIONS;
+    return LIMIT_OPTIONS.filter((n) => String(n).toLowerCase().includes(q));
+  }, [limitDdQuery]);
 
   return (
-    <div className="p-4 md:p-6 font-poppins max-w-[1920px] mx-auto w-full">
-      <div className="mb-4 rounded-xl border border-gray-200 bg-white p-4 md:p-5">
-        <div className="flex flex-col gap-3 md:flex-row md:items-end">
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              value={filters.search}
-              onChange={(e) => onFilterChange("search", e.target.value)}
-              placeholder="Search by company, email, phone, userId, mcDot"
-              className="w-full pl-9 pr-3 py-2.5 border border-gray-300 rounded-lg text-sm"
-            />
-          </div>
-          <select
-            value={filters.status}
-            onChange={(e) => onFilterChange("status", e.target.value)}
-            className="px-3 py-2.5 border border-gray-300 rounded-lg text-sm min-w-[140px]"
-          >
-            <option value="">All Status</option>
-            <option value="pending">Pending</option>
-            <option value="approved">Approved</option>
-            <option value="rejected">Rejected</option>
-            <option value="blacklist">Blacklist</option>
-          </select>
-          <select
-            value={filters.createdByType}
-            onChange={(e) => onFilterChange("createdByType", e.target.value)}
-            className="px-3 py-2.5 border border-gray-300 rounded-lg text-sm min-w-[160px]"
-          >
-            <option value="">Created By Type</option>
-            <option value="employee">Employee</option>
-            <option value="self_registered">Self Registered</option>
-          </select>
-          <select
-            value={filters.addedByEmpId}
-            onChange={(e) => onFilterChange("addedByEmpId", e.target.value)}
-            className="px-3 py-2.5 border border-gray-300 rounded-lg text-sm min-w-[190px]"
-            disabled={loadingEmployees}
-          >
-            <option value="">Added By Employee</option>
-            {employeeOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-          <button
-            onClick={() => fetchReport(1, pagination.limit)}
-            className="px-4 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-semibold"
-          >
-            Apply
-          </button>
-          <button
-            onClick={clearFilters}
-            className="px-4 py-2.5 rounded-lg border border-gray-300 text-sm font-semibold"
-          >
-            Clear
-          </button>
-        </div>
-      </div>
-
-      <div className="mb-4 rounded-xl border border-gray-200 bg-white p-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <p className="text-sm text-gray-700 font-semibold">
-            {reportMeta?.reportName || "Add Customer Report"}
-          </p>
-          {reportMeta?.module?.label ? (
-            <span className="inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">
-              {reportMeta.module.label}
-            </span>
-          ) : null}
-          {reportMeta?.module?.isActive === true ? (
-            <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
-              Active
-            </span>
-          ) : null}
-        </div>
-        <p className="text-xs text-gray-500 mt-1">{totalLabel}</p>
-      </div>
-
-      <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
-        <div className="overflow-auto max-h-[70vh]">
-          <table className="w-full min-w-[900px]">
-            <thead className="bg-gray-50 border-b border-gray-200 sticky top-0">
-              <tr>
-                {[
-                  "Company Name",
-                  "MC/DOT",
-                  "Email",
-                  "Phone",
-                  "Added By",
-                  "Total DOs",
-                  "Total RR",
-                  "Created Date",
-                  "Action",
-                ].map((h) => (
-                  <th key={h} className="text-left px-3 py-3 text-xs uppercase text-gray-600">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row, idx) => (
-                <tr key={`${row.shipperId || idx}`} className="border-b border-gray-100">
-                  <td className="px-3 py-2.5 text-sm">{row.companyName || "-"}</td>
-                  <td className="px-3 py-2.5 text-sm">{row.mcDotNo || "-"}</td>
-                  <td className="px-3 py-2.5 text-sm">{row.email || "-"}</td>
-                  <td className="px-3 py-2.5 text-sm">{row.phoneNo || "-"}</td>
-                  <td className="px-3 py-2.5 text-sm">{row?.addedBy?.employeeName || "-"}</td>
-                  <td className="px-3 py-2.5 text-sm">{row?.metrics?.totalDOs ?? "-"}</td>
-                  <td className="px-3 py-2.5 text-sm">{row?.metrics?.totalLoads ?? "-"}</td>
-                  <td className="px-3 py-2.5 text-sm">{formatDateTime(row.createdAt)}</td>
-                  <td className="px-3 py-2.5">
-                    <button
-                      onClick={() => openDetails(row)}
-                      disabled={!row?.shipperId}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs rounded-md bg-indigo-600 text-white disabled:opacity-50"
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                      {row?.actions?.viewLabel || "View"}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {!loading && rows.length === 0 && (
-            <div className="p-10 text-center text-sm text-gray-500">No records found.</div>
-          )}
-        </div>
-      </div>
-
-      <div className="mt-4 rounded-xl border border-gray-200 bg-white p-4 flex items-center justify-between">
-        <div className="text-sm text-gray-700">{totalLabel}</div>
-        <div className="flex items-center gap-2">
-          <select
-            value={pagination.limit}
-            onChange={(e) => setPagination((p) => ({ ...p, limit: Number(e.target.value) }))}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
-          >
-            {LIMIT_OPTIONS.map((opt) => (
-              <option key={opt} value={opt}>
-                {opt} / page
-              </option>
-            ))}
-          </select>
-          <button
-            onClick={() => fetchReport(Math.max(1, pagination.page - 1), pagination.limit)}
-            disabled={pagination.page <= 1 || loading}
-            className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() =>
-              fetchReport(
-                Math.min(pagination.totalPages, pagination.page + 1),
-                pagination.limit
-              )
-            }
-            disabled={pagination.page >= pagination.totalPages || loading}
-            className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-
-      {loading && (
-        <div className="fixed inset-0 z-40 bg-black/20 flex items-center justify-center">
-          <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
-        </div>
-      )}
-
-      {detailsModal.open && (
-        <div
-          className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
-          onClick={() => setDetailsModal({ open: false, payload: null, row: null })}
-        >
-          <div
-            className="w-full max-w-4xl max-h-[85vh] overflow-auto bg-white rounded-xl p-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-lg font-semibold text-gray-800">Shipper Details</h2>
-              <button
-                className="text-sm px-3 py-1.5 border border-gray-300 rounded-md"
-                onClick={() => setDetailsModal({ open: false, payload: null, row: null })}
-              >
-                Close
-              </button>
-            </div>
-            {detailsLoading ? (
-              <div className="text-sm text-gray-600">Loading details...</div>
-            ) : (
-              <div className="space-y-3">
-                <div className="rounded-lg border border-gray-200 bg-white p-3">
-                  <p className="text-sm font-semibold text-gray-800 mb-2">Customer Details</p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-                    <div>
-                      <span className="text-gray-500">Company:</span>{" "}
-                      <span className="text-gray-800">
-                        {readValue(detailData?.compName, detailData?.companyName, detailsModal.row?.companyName)}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">MC/DOT:</span>{" "}
-                      <span className="text-gray-800">
-                        {readValue(detailData?.mc_dot, detailData?.mcDotNo, detailsModal.row?.mcDotNo)}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Email:</span>{" "}
-                      <span className="text-gray-800">
-                        {readValue(detailData?.email, detailsModal.row?.email)}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Phone:</span>{" "}
-                      <span className="text-gray-800">
-                        {readValue(detailData?.phoneNo, detailData?.phone, detailsModal.row?.phoneNo)}
-                      </span>
-                    </div>
-                    {/* <div>
-                      <span className="text-gray-500">Status:</span>{" "}
-                      <span className="text-gray-800">
-                        {readValue(detailData?.status, detailsModal.row?.status)}
-                      </span>
-                    </div> */}  
-                    <div>
-                      <span className="text-gray-500">Added Date:</span>{" "}
-                      <span className="text-gray-800">
-                        {formatDateTime(readValue(detailData?.createdAt, detailsModal.row?.createdAt))}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Total DOs:</span>{" "}
-                      <span className="text-gray-800">
-                        {readValue(
-                          detailData?.metrics?.totalDOs,
-                          detailsModal.row?.metrics?.totalDOs
-                        )}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Total RR:</span>{" "}
-                      <span className="text-gray-800">
-                        {readValue(
-                          detailData?.metrics?.totalLoads,
-                          detailsModal.row?.metrics?.totalLoads
-                        )}
-                      </span>
-                    </div>
+    <div className="min-h-screen bg-gray-50 px-4 md:px-6 py-4 md:py-6 font-poppins">
+      <div className="max-w-[1920px] mx-auto w-full">
+        <div className="bg-white rounded-2xl border border-gray-200 p-5 mb-6">
+          <div className="space-y-4">
+            <div className="space-y-4">
+              <div className="w-full sm:w-72 bg-white rounded-xl border border-gray-200 px-4 py-3">
+                <div className="flex items-center gap-4">
+                  <div className="w-15 h-14 rounded-full bg-indigo-50 flex items-center justify-center flex-shrink-0">
+                    <span className="text-2xl font-bold text-indigo-700 tabular-nums">
+                      {pagination.total}
+                    </span>
                   </div>
-                </div>
-                <div className="rounded-lg border border-gray-200 bg-white p-3">
-                  <p className="text-sm font-semibold text-gray-800 mb-2">All RR Added Date/Time</p>
-                  {allLoadAddedDateTimes.length > 0 ? (
-                    <ul className="space-y-1 text-sm text-gray-700">
-                      {allLoadAddedDateTimes.map((dt, idx) => (
-                        <li key={`${dt}-${idx}`}>{dt}</li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-sm text-gray-500">No load added date/time found in details response.</p>
-                  )}
+                  <p className="text-lg font-semibold text-gray-700 flex-1 text-center">
+                    Total Customers
+                  </p>
                 </div>
               </div>
-            )}
+
+              <div className="bg-white rounded-xl w-full">
+                <div className="flex items-center gap-3">
+                  <div className="relative flex-1 min-w-0">
+                    <Search
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                      size={18}
+                    />
+                    <input
+                      value={filters.search}
+                      onChange={(e) => onFilterChange("search", e.target.value)}
+                      placeholder="Search by company, email, phone, userId, mcDot"
+                      className="w-full pl-10 pr-3 py-2.5 rounded-lg border border-gray-200 bg-gray-50 focus:bg-white focus:outline-none focus:ring-0 focus:border-indigo-500 text-sm"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* <div className="flex flex-wrap items-center gap-2">
+              <p className="text-lg font-semibold text-gray-700">
+                {reportMeta?.reportName || "Add Customer Report"}
+              </p>
+              {reportMeta?.module?.label ? (
+                <span className="inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">
+                  {reportMeta.module.label}
+                </span>
+              ) : null}
+              {reportMeta?.module?.isActive === true ? (
+                <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                  Active
+                </span>
+              ) : null}
+            </div> */}
+            {/* <p className="text-sm text-gray-600">{totalLabel}</p> */}
           </div>
         </div>
-      )}
+
+        <div className="bg-white rounded-2xl border border-gray-200 p-5 mb-6">
+          <div className="flex items-end justify-between gap-4">
+            <div
+              className="flex items-end gap-3 overflow-x-auto flex-nowrap w-full pb-1"
+              onScroll={() => {
+                setStatusDdOpen(false);
+                setCreatedByDdOpen(false);
+                setAddedByDdOpen(false);
+              }}
+            >
+              <div ref={statusDdRef} className="min-w-[170px] relative">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Status
+                </label>
+                <button
+                  ref={statusBtnRef}
+                  type="button"
+                  onClick={() =>
+                    setStatusDdOpen((v) => {
+                      const next = !v;
+                      if (next) {
+                        setCreatedByDdOpen(false);
+                        setAddedByDdOpen(false);
+                        setLimitDdOpen(false);
+                        if (statusBtnRef.current) {
+                          setStatusMenuPos(calcMenuPos(statusBtnRef.current));
+                        }
+                      } else {
+                        setStatusDdQuery("");
+                      }
+                      return next;
+                    })
+                  }
+                  aria-haspopup="listbox"
+                  aria-expanded={statusDdOpen}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 flex items-center justify-between gap-3 hover:bg-gray-50 transition-colors cursor-pointer"
+                >
+                  <span className="min-w-0 truncate text-gray-700">{statusSelectedLabel}</span>
+                  <ChevronDown
+                    className={`w-4 h-4 text-gray-400 shrink-0 transition-transform duration-200 ${statusDdOpen ? "rotate-180" : ""}`}
+                  />
+                </button>
+                <div
+                  style={{
+                    top: statusMenuPos.top,
+                    left: statusMenuPos.left,
+                    width: statusMenuPos.width || undefined,
+                  }}
+                  className={`fixed z-50 bg-white rounded-xl border border-gray-200 shadow-lg origin-top overflow-hidden transition-all duration-200 ${statusDdOpen ? "opacity-100 translate-y-0 scale-100 max-h-[420px]" : "pointer-events-none opacity-0 -translate-y-1 scale-95 max-h-0"}`}
+                  role="listbox"
+                >
+                  <div className="px-3 pt-3">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                      <input
+                        ref={statusInputRef}
+                        type="text"
+                        value={statusDdQuery}
+                        onChange={(e) => setStatusDdQuery(e.target.value)}
+                        placeholder="Search status…"
+                        className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-gray-200 bg-gray-50 focus:bg-white focus:outline-none focus:ring-0 focus:border-indigo-500 text-sm"
+                      />
+                    </div>
+                  </div>
+                  <div className="max-h-64 overflow-auto py-2">
+                    {statusFilteredOptions.map((opt) => {
+                      const selected = String(filters.status) === String(opt.value);
+                      return (
+                        <button
+                          key={opt.value || "all"}
+                          type="button"
+                          onClick={() => {
+                            onFilterChange("status", opt.value);
+                            setStatusDdOpen(false);
+                            setStatusDdQuery("");
+                          }}
+                          className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-50 cursor-pointer ${selected ? "bg-indigo-50/60 text-indigo-700" : "text-gray-700"}`}
+                          role="option"
+                          aria-selected={selected}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              <div ref={createdByDdRef} className="min-w-[210px] relative">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Created By Type
+                </label>
+                <button
+                  ref={createdByBtnRef}
+                  type="button"
+                  onClick={() =>
+                    setCreatedByDdOpen((v) => {
+                      const next = !v;
+                      if (next) {
+                        setStatusDdOpen(false);
+                        setAddedByDdOpen(false);
+                        setLimitDdOpen(false);
+                        if (createdByBtnRef.current) {
+                          setCreatedByMenuPos(calcMenuPos(createdByBtnRef.current));
+                        }
+                      } else {
+                        setCreatedByDdQuery("");
+                      }
+                      return next;
+                    })
+                  }
+                  aria-haspopup="listbox"
+                  aria-expanded={createdByDdOpen}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 flex items-center justify-between gap-3 hover:bg-gray-50 transition-colors cursor-pointer"
+                >
+                  <span className="min-w-0 truncate text-gray-700">{createdBySelectedLabel}</span>
+                  <ChevronDown
+                    className={`w-4 h-4 text-gray-400 shrink-0 transition-transform duration-200 ${createdByDdOpen ? "rotate-180" : ""}`}
+                  />
+                </button>
+                <div
+                  style={{
+                    top: createdByMenuPos.top,
+                    left: createdByMenuPos.left,
+                    width: createdByMenuPos.width || undefined,
+                  }}
+                  className={`fixed z-50 bg-white rounded-xl border border-gray-200 shadow-lg origin-top overflow-hidden transition-all duration-200 ${createdByDdOpen ? "opacity-100 translate-y-0 scale-100 max-h-[420px]" : "pointer-events-none opacity-0 -translate-y-1 scale-95 max-h-0"}`}
+                  role="listbox"
+                >
+                  <div className="px-3 pt-3">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                      <input
+                        ref={createdByInputRef}
+                        type="text"
+                        value={createdByDdQuery}
+                        onChange={(e) => setCreatedByDdQuery(e.target.value)}
+                        placeholder="Search type…"
+                        className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-gray-200 bg-gray-50 focus:bg-white focus:outline-none focus:ring-0 focus:border-indigo-500 text-sm"
+                      />
+                    </div>
+                  </div>
+                  <div className="max-h-64 overflow-auto py-2">
+                    {createdByFilteredOptions.map((opt) => {
+                      const selected =
+                        String(filters.createdByType) === String(opt.value);
+                      return (
+                        <button
+                          key={opt.value || "all"}
+                          type="button"
+                          onClick={() => {
+                            onFilterChange("createdByType", opt.value);
+                            setCreatedByDdOpen(false);
+                            setCreatedByDdQuery("");
+                          }}
+                          className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-50 cursor-pointer ${selected ? "bg-indigo-50/60 text-indigo-700" : "text-gray-700"}`}
+                          role="option"
+                          aria-selected={selected}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              <div ref={addedByDdRef} className="min-w-[280px] relative">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Added By Employee
+                </label>
+                <button
+                  ref={addedByBtnRef}
+                  type="button"
+                  onClick={() =>
+                    setAddedByDdOpen((v) => {
+                      const next = !v;
+                      if (next) {
+                        setStatusDdOpen(false);
+                        setCreatedByDdOpen(false);
+                        setLimitDdOpen(false);
+                        if (addedByBtnRef.current) {
+                          setAddedByMenuPos(calcMenuPos(addedByBtnRef.current));
+                        }
+                      }
+                      if (!next) setAddedByDdQuery("");
+                      return next;
+                    })
+                  }
+                  aria-haspopup="listbox"
+                  aria-expanded={addedByDdOpen}
+                  disabled={loadingEmployees}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 flex items-center justify-between gap-3 hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  <span className="min-w-0 truncate text-gray-700">{addedBySelectedLabel}</span>
+                  <ChevronDown
+                    className={`w-4 h-4 text-gray-400 shrink-0 transition-transform duration-200 ${addedByDdOpen ? "rotate-180" : ""}`}
+                  />
+                </button>
+                <div
+                  style={{
+                    top: addedByMenuPos.top,
+                    left: addedByMenuPos.left,
+                    width: addedByMenuPos.width || undefined,
+                  }}
+                  className={`fixed z-50 bg-white rounded-xl border border-gray-200 shadow-lg origin-top overflow-hidden transition-all duration-200 ${addedByDdOpen ? "opacity-100 translate-y-0 scale-100 max-h-[420px]" : "pointer-events-none opacity-0 -translate-y-1 scale-95 max-h-0"}`}
+                  role="listbox"
+                >
+                  <div className="px-3 pt-3">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                      <input
+                        ref={addedByInputRef}
+                        type="text"
+                        value={addedByDdQuery}
+                        onChange={(e) => setAddedByDdQuery(e.target.value)}
+                        placeholder="Search employee…"
+                        className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-gray-200 bg-gray-50 focus:bg-white focus:outline-none focus:ring-0 focus:border-indigo-500 text-sm"
+                      />
+                    </div>
+                  </div>
+                  <div className="max-h-64 overflow-auto py-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onFilterChange("addedByEmpId", "");
+                        setAddedByDdOpen(false);
+                        setAddedByDdQuery("");
+                      }}
+                      className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 text-gray-700 cursor-pointer"
+                      role="option"
+                      aria-selected={!filters.addedByEmpId}
+                    >
+                      All
+                    </button>
+                    {addedByFilteredOptions.map((opt) => {
+                      const selected =
+                        String(filters.addedByEmpId) === String(opt.value);
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => {
+                            onFilterChange("addedByEmpId", opt.value);
+                            setAddedByDdOpen(false);
+                            setAddedByDdQuery("");
+                          }}
+                          className={`w-full px-4 py-2 text-left text-sm flex items-center justify-between hover:bg-gray-50 cursor-pointer ${selected ? "bg-indigo-50/60 text-indigo-700" : "text-gray-700"}`}
+                          role="option"
+                          aria-selected={selected}
+                        >
+                          <span className="truncate">{opt.label}</span>
+                        </button>
+                      );
+                    })}
+                    {!loadingEmployees && employeeOptions.length === 0 && (
+                      <div className="px-4 py-3 text-sm text-gray-500">No employees</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="cursor-pointer shrink-0 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 text-sm font-semibold"
+            >
+              <X className="w-4 h-4" />
+              Clear Filters
+            </button>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+          {loading ? (
+            <div className="flex justify-center py-16 text-gray-500">
+              <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : rows.length === 0 ? (
+            <div className="text-center py-16 text-gray-500 text-sm">
+              No records found
+            </div>
+          ) : (
+            <div className="overflow-x-auto p-4">
+              <table className="min-w-full text-base text-gray-700 border-separate border-spacing-y-3">
+                <thead>
+                  <tr className="bg-gray-50">
+                    {[
+                      "Company Name",
+                      "MC/DOT",
+                      "Email",
+                      "Phone",
+                      "Added By",
+                      "Total DOs",
+                      "Total RR",
+                      "Created Date",
+                      "Action",
+                    ].map((h, idx, arr) => (
+                      <th
+                        key={h}
+                        className={[
+                          "py-3 px-4 text-left text-sm font-medium text-gray-600 uppercase tracking-wide border-y border-gray-200 whitespace-nowrap",
+                          idx === 0 ? "border-l rounded-l-xl" : "",
+                          idx === arr.length - 1 ? "border-r rounded-r-xl text-center" : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                      >
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row, idx) => (
+                    <tr key={`${row.shipperId || idx}`} className="group transition-colors">
+                      <td className="py-4 px-4 border-y border-l border-gray-200 rounded-l-xl bg-white group-hover:bg-gray-50 align-middle font-medium text-gray-700">
+  <div className="relative group/tooltip max-w-[150px]">
+
+    {/* Truncated Text */}
+    <span className="block truncate">
+      {row.companyName || "-"}
+    </span>
+
+    {/* Tooltip */}
+    {row.companyName && (
+      <div className="absolute left-0 top-full mt-2 hidden group-hover/tooltip:block pointer-events-none
+                      bg-gray-900 text-white text-sm
+                      px-3 py-2.5
+                      rounded-lg shadow-xl
+                      max-w-[180px]
+                      break-words
+                      z-50">
+        {row.companyName}
+      </div>
+    )}
+
+  </div>
+</td>
+                      <td className="py-4 px-4 border-y border-gray-200 bg-white group-hover:bg-gray-50 align-middle font-medium text-gray-700 whitespace-nowrap">
+                        {row.mcDotNo || "-"}
+                      </td>
+                      <td className="py-4 px-4 border-y border-gray-200 bg-white group-hover:bg-gray-50 align-middle font-medium text-gray-700">
+  <div className="relative group/tooltip max-w-[150px]">
+
+    {/* Truncated Text */}
+    <span className="block truncate">
+      {row.email || "-"}
+    </span>
+
+    {/* Tooltip */}
+    {row.email && (
+      <div className="absolute left-0 top-full mt-2 hidden group-hover/tooltip:block pointer-events-none
+                      bg-gray-900 text-white text-sm
+                      px-3 py-2.5
+                      rounded-lg shadow-xl
+                      max-w-[200px]
+                      break-words
+                      z-50">
+        {row.email}
+      </div>
+    )}
+
+  </div>
+</td>
+                      <td className="py-4 px-4 border-y border-gray-200 bg-white group-hover:bg-gray-50 align-middle font-medium text-gray-700 whitespace-nowrap">
+                        {row.phoneNo || "-"}
+                      </td>
+                      <td
+                        className="py-4 px-4 border-y border-gray-200 bg-white group-hover:bg-gray-50 align-middle font-medium text-gray-700 max-w-[220px] truncate"
+                        title={row?.addedBy?.employeeName}
+                      >
+                        {row?.addedBy?.employeeName || "-"}
+                      </td>
+                      <td className="py-4 px-4 border-y border-gray-200 bg-white group-hover:bg-gray-50 align-middle tabular-nums font-medium text-gray-700 whitespace-nowrap">
+                        {row?.metrics?.totalDOs ?? "-"}
+                      </td>
+                      <td className="py-4 px-4 border-y border-gray-200 bg-white group-hover:bg-gray-50 align-middle tabular-nums font-medium text-gray-700 whitespace-nowrap">
+                        {row?.metrics?.totalLoads ?? "-"}
+                      </td>
+                     <td className="py-4 px-4 border-y border-gray-200 bg-white group-hover:bg-gray-50 align-middle font-medium text-gray-700">
+  <div className="relative group/tooltip max-w-[110px]">
+    
+    {/* Truncated Text */}
+    <span className="block truncate whitespace-nowrap">
+      {formatDateTime(row.createdAt) || "-"}
+    </span>
+
+    {/* Tooltip */}
+    {row.createdAt && (
+      <div className="absolute left-0 top-full mt-2 hidden group-hover/tooltip:block pointer-events-none
+                      bg-gray-900 text-white text-sm
+                      px-3 py-2.5
+                      rounded-lg shadow-xl
+                      max-w-[160px]
+                      break-words
+                      z-50">
+        {formatDateTime(row.createdAt)}
+      </div>
+    )}
+
+  </div>
+</td>
+                      <td className="py-4 px-4 border-y border-r border-gray-200 rounded-r-xl bg-white group-hover:bg-gray-50 align-middle">
+                        <div className="flex items-center justify-center">
+                          <button
+                            type="button"
+                            onClick={() => openDetails(row)}
+                            disabled={!row?.shipperId}
+                            className="cursor-pointer inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg border border-indigo-600 text-indigo-600 hover:bg-indigo-800 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed disabled:border-gray-300 disabled:text-gray-400 transition-colors text-base font-medium"
+                          >
+                            {/* <Eye className="w-4 h-4" /> */}
+                            {row?.actions?.viewLabel || "View"}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {!loading && pagination.total > 0 && (
+          <div className="mt-6 bg-white rounded-2xl border border-gray-200 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="text-sm text-gray-600">
+              Showing{" "}
+              <span className="font-semibold text-gray-700 tabular-nums">
+                {pagination.total === 0 ? 0 : (pagination.page - 1) * pagination.limit + 1}
+              </span>{" "}
+              to{" "}
+              <span className="font-semibold text-gray-700 tabular-nums">
+                {Math.min(pagination.page * pagination.limit, pagination.total)}
+              </span>{" "}
+              of{" "}
+              <span className="font-semibold text-gray-700 tabular-nums">
+                {pagination.total}
+              </span>{" "}
+              customers
+            </div>
+
+            <div className="flex items-center justify-end gap-2">
+              <div ref={limitDdRef} className="relative">
+                <button
+                  ref={limitBtnRef}
+                  type="button"
+                  onClick={() =>
+                    setLimitDdOpen((v) => {
+                      const next = !v;
+                      if (next) {
+                        setStatusDdOpen(false);
+                        setCreatedByDdOpen(false);
+                        setAddedByDdOpen(false);
+                        if (limitBtnRef.current) {
+                          setLimitMenuPos(calcMenuPos(limitBtnRef.current));
+                        }
+                      } else {
+                        setLimitDdQuery("");
+                      }
+                      return next;
+                    })
+                  }
+                  aria-haspopup="listbox"
+                  aria-expanded={limitDdOpen}
+                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 flex items-center justify-between gap-2 hover:bg-gray-50 transition-colors cursor-pointer min-w-[130px]"
+                >
+                  <span className="min-w-0 truncate text-gray-700">{limitSelectedLabel}</span>
+                  <ChevronDown
+                    className={`w-4 h-4 text-gray-400 shrink-0 transition-transform duration-200 ${limitDdOpen ? "rotate-180" : ""}`}
+                  />
+                </button>
+
+                <div
+                  style={{
+                    top: limitMenuPos.top,
+                    left: limitMenuPos.left,
+                    width: limitMenuPos.width || undefined,
+                  }}
+                  className={`fixed z-50 bg-white rounded-xl border border-gray-200 shadow-lg origin-top overflow-hidden transition-all duration-200 ${limitDdOpen ? "opacity-100 translate-y-0 scale-100 max-h-[420px]" : "pointer-events-none opacity-0 -translate-y-1 scale-95 max-h-0"}`}
+                  role="listbox"
+                >
+                  <div className="px-3 pt-3">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                      <input
+                        ref={limitInputRef}
+                        type="text"
+                        value={limitDdQuery}
+                        onChange={(e) => setLimitDdQuery(e.target.value)}
+                        placeholder="Search limit…"
+                        className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-gray-200 bg-gray-50 focus:bg-white focus:outline-none focus:ring-0 focus:border-indigo-500 text-sm"
+                      />
+                    </div>
+                  </div>
+                  <div className="max-h-64 overflow-auto py-2">
+                    {limitFilteredOptions.map((opt) => {
+                      const selected = Number(pagination.limit) === Number(opt);
+                      return (
+                        <button
+                          key={opt}
+                          type="button"
+                          onClick={() => {
+                            setPagination((p) => ({ ...p, limit: Number(opt) }));
+                            setLimitDdOpen(false);
+                            setLimitDdQuery("");
+                          }}
+                          className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-50 cursor-pointer ${selected ? "bg-indigo-50/60 text-indigo-700" : "text-gray-700"}`}
+                          role="option"
+                          aria-selected={selected}
+                        >
+                          {opt} / page
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => fetchReport(Math.max(1, pagination.page - 1), pagination.limit)}
+                disabled={pagination.page <= 1 || loading}
+                className="cursor-pointer flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-semibold text-gray-600 hover:text-gray-900"
+              >
+                <ChevronLeft size={16} />
+                Previous
+              </button>
+
+              <span className="cursor-pointer w-8 h-8 flex items-center justify-center rounded-lg border border-gray-900 text-gray-900 bg-white text-base font-semibold tabular-nums">
+                {pagination.page}
+              </span>
+
+              <button
+                type="button"
+                onClick={() =>
+                  fetchReport(Math.min(pagination.totalPages, pagination.page + 1), pagination.limit)
+                }
+                disabled={pagination.page >= pagination.totalPages || loading}
+                className="cursor-pointer flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-semibold text-gray-600 hover:text-gray-900"
+              >
+                Next
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {detailsModal.open && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+            onClick={() => setDetailsModal({ open: false, payload: null, row: null })}
+          >
+            <div
+              className="bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[92vh] overflow-hidden flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="px-6 py-5 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <h2 className="text-xl md:text-2xl font-bold leading-tight truncate">
+                      Shipper Details
+                    </h2>
+                    <p className="text-sm text-white/80 truncate">
+                      {readValue(
+                        detailData?.compName,
+                        detailData?.companyName,
+                        detailsModal.row?.companyName,
+                      )}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setDetailsModal({ open: false, payload: null, row: null })}
+                    className="shrink-0 w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center"
+                    aria-label="Close"
+                  >
+                    <X className="w-5 h-5 text-white" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="overflow-y-auto p-6 space-y-5">
+                {detailsLoading ? (
+                  <div className="flex justify-center py-16 text-gray-500">
+                    <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                  </div>
+                ) : (
+                  <div className="space-y-5">
+                    <div className="bg-blue-50/70 rounded-2xl p-5 border border-blue-100">
+                      <div className="text-sm font-bold text-blue-700 mb-4">
+                        Customer Details
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                        <div className="flex gap-2">
+                          <span className="text-gray-500 shrink-0">Company:</span>
+                          <span className="text-gray-800 font-medium min-w-0 truncate">
+                            {readValue(
+                              detailData?.compName,
+                              detailData?.companyName,
+                              detailsModal.row?.companyName,
+                            )}
+                          </span>
+                        </div>
+                        <div className="flex gap-2">
+                          <span className="text-gray-500 shrink-0">MC/DOT:</span>
+                          <span className="text-gray-800 font-medium min-w-0 truncate">
+                            {readValue(
+                              detailData?.mc_dot,
+                              detailData?.mcDotNo,
+                              detailsModal.row?.mcDotNo,
+                            )}
+                          </span>
+                        </div>
+                        <div className="flex gap-2">
+                          <span className="text-gray-500 shrink-0">Email:</span>
+                          <span className="text-gray-800 font-medium min-w-0 truncate">
+                            {readValue(detailData?.email, detailsModal.row?.email)}
+                          </span>
+                        </div>
+                        <div className="flex gap-2">
+                          <span className="text-gray-500 shrink-0">Phone:</span>
+                          <span className="text-gray-800 font-medium min-w-0 truncate">
+                            {readValue(
+                              detailData?.phoneNo,
+                              detailData?.phone,
+                              detailsModal.row?.phoneNo,
+                            )}
+                          </span>
+                        </div>
+                        <div className="flex gap-2">
+                          <span className="text-gray-500 shrink-0">Added Date:</span>
+                          <span className="text-gray-800 font-medium min-w-0 truncate">
+                            {formatDateTime(
+                              readValue(detailData?.createdAt, detailsModal.row?.createdAt),
+                            )}
+                          </span>
+                        </div>
+                        <div className="flex gap-2">
+                          <span className="text-gray-500 shrink-0">Total DOs:</span>
+                          <span className="text-gray-800 font-medium tabular-nums">
+                            {readValue(
+                              detailData?.metrics?.totalDOs,
+                              detailsModal.row?.metrics?.totalDOs,
+                            )}
+                          </span>
+                        </div>
+                        <div className="flex gap-2">
+                          <span className="text-gray-500 shrink-0">Total RR:</span>
+                          <span className="text-gray-800 font-medium tabular-nums">
+                            {readValue(
+                              detailData?.metrics?.totalLoads,
+                              detailsModal.row?.metrics?.totalLoads,
+                            )}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-white rounded-2xl p-5 border border-gray-200">
+                      <div className="text-sm font-bold text-gray-700 mb-4">
+                        All RR Added Date/Time
+                      </div>
+                      {allLoadAddedDateTimes.length > 0 ? (
+                        <ul className="space-y-2 text-sm text-gray-700">
+                          {allLoadAddedDateTimes.map((dt, idx) => (
+                            <li
+                              key={`${dt}-${idx}`}
+                              className="px-3 py-2 rounded-lg bg-gray-50 border border-gray-200"
+                            >
+                              {dt}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-sm text-gray-500">
+                          No load added date/time found in details response.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
