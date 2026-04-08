@@ -1,7 +1,20 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
-import { Search, Eye, ChevronLeft, ChevronRight, X, ChevronDown } from "lucide-react";
+import {
+  Search,
+  Eye,
+  ChevronLeft,
+  ChevronRight,
+  X,
+  ChevronDown,
+} from "lucide-react";
 import { toast } from "react-toastify";
 import API_CONFIG from "../../config/api";
 
@@ -50,7 +63,8 @@ const toDetailsObject = (payload) => {
 const readValue = (...values) => {
   for (const value of values) {
     if (value === 0) return 0;
-    if (value !== null && value !== undefined && String(value).trim() !== "") return value;
+    if (value !== null && value !== undefined && String(value).trim() !== "")
+      return value;
   }
   return "-";
 };
@@ -126,7 +140,11 @@ export default function AddCustomerReport() {
   const [loadingEmployees, setLoadingEmployees] = useState(false);
   const [loading, setLoading] = useState(false);
   const [detailsLoading, setDetailsLoading] = useState(false);
-  const [detailsModal, setDetailsModal] = useState({ open: false, payload: null, row: null });
+  const [detailsModal, setDetailsModal] = useState({
+    open: false,
+    payload: null,
+    row: null,
+  });
   const [pagination, setPagination] = useState({
     page: 1,
     limit: DEFAULT_LIMIT,
@@ -139,28 +157,44 @@ export default function AddCustomerReport() {
   const statusDdRef = useRef(null);
   const statusBtnRef = useRef(null);
   const statusInputRef = useRef(null);
-  const [statusMenuPos, setStatusMenuPos] = useState({ top: 0, left: 0, width: 0 });
+  const [statusMenuPos, setStatusMenuPos] = useState({
+    top: 0,
+    left: 0,
+    width: 0,
+  });
 
   const [createdByDdOpen, setCreatedByDdOpen] = useState(false);
   const [createdByDdQuery, setCreatedByDdQuery] = useState("");
   const createdByDdRef = useRef(null);
   const createdByBtnRef = useRef(null);
   const createdByInputRef = useRef(null);
-  const [createdByMenuPos, setCreatedByMenuPos] = useState({ top: 0, left: 0, width: 0 });
+  const [createdByMenuPos, setCreatedByMenuPos] = useState({
+    top: 0,
+    left: 0,
+    width: 0,
+  });
 
   const [addedByDdOpen, setAddedByDdOpen] = useState(false);
   const [addedByDdQuery, setAddedByDdQuery] = useState("");
   const addedByDdRef = useRef(null);
   const addedByBtnRef = useRef(null);
   const addedByInputRef = useRef(null);
-  const [addedByMenuPos, setAddedByMenuPos] = useState({ top: 0, left: 0, width: 0 });
+  const [addedByMenuPos, setAddedByMenuPos] = useState({
+    top: 0,
+    left: 0,
+    width: 0,
+  });
 
   const [limitDdOpen, setLimitDdOpen] = useState(false);
   const [limitDdQuery, setLimitDdQuery] = useState("");
   const limitDdRef = useRef(null);
   const limitBtnRef = useRef(null);
   const limitInputRef = useRef(null);
-  const [limitMenuPos, setLimitMenuPos] = useState({ top: 0, left: 0, width: 0 });
+  const [limitMenuPos, setLimitMenuPos] = useState({
+    top: 0,
+    left: 0,
+    width: 0,
+  });
 
   const calcMenuPos = useCallback((el) => {
     const r = el.getBoundingClientRect();
@@ -175,7 +209,10 @@ export default function AddCustomerReport() {
       if (statusDdRef.current && !statusDdRef.current.contains(e.target)) {
         setStatusDdOpen(false);
       }
-      if (createdByDdRef.current && !createdByDdRef.current.contains(e.target)) {
+      if (
+        createdByDdRef.current &&
+        !createdByDdRef.current.contains(e.target)
+      ) {
         setCreatedByDdOpen(false);
       }
       if (addedByDdRef.current && !addedByDdRef.current.contains(e.target)) {
@@ -194,11 +231,13 @@ export default function AddCustomerReport() {
   }, [statusDdOpen]);
 
   useEffect(() => {
-    if (createdByDdOpen && createdByInputRef.current) createdByInputRef.current.focus();
+    if (createdByDdOpen && createdByInputRef.current)
+      createdByInputRef.current.focus();
   }, [createdByDdOpen]);
 
   useEffect(() => {
-    if (addedByDdOpen && addedByInputRef.current) addedByInputRef.current.focus();
+    if (addedByDdOpen && addedByInputRef.current)
+      addedByInputRef.current.focus();
   }, [addedByDdOpen]);
 
   useEffect(() => {
@@ -206,7 +245,8 @@ export default function AddCustomerReport() {
   }, [limitDdOpen]);
 
   useEffect(() => {
-    if (!statusDdOpen && !createdByDdOpen && !addedByDdOpen && !limitDdOpen) return;
+    if (!statusDdOpen && !createdByDdOpen && !addedByDdOpen && !limitDdOpen)
+      return;
     function update() {
       if (statusDdOpen && statusBtnRef.current) {
         setStatusMenuPos(calcMenuPos(statusBtnRef.current));
@@ -250,11 +290,11 @@ export default function AddCustomerReport() {
         error?.response?.data?.message ||
           error?.response?.data?.error ||
           error?.message ||
-          fallbackMessage
+          fallbackMessage,
       );
       return false;
     },
-    [navigate]
+    [navigate],
   );
 
   const loadEmployees = useCallback(async () => {
@@ -262,7 +302,7 @@ export default function AddCustomerReport() {
     try {
       const res = await axios.get(
         `${API_CONFIG.BASE_URL}/api/v1/inhouseUser/department/Sales`,
-        getAuthConfig()
+        getAuthConfig(),
       );
       const list =
         (Array.isArray(res?.data) && res.data) ||
@@ -304,7 +344,7 @@ export default function AddCustomerReport() {
           {
             ...getAuthConfig(),
             params,
-          }
+          },
         );
 
         const payload = res?.data;
@@ -329,7 +369,7 @@ export default function AddCustomerReport() {
         setLoading(false);
       }
     },
-    [filters, pagination.limit, pagination.page, handleApiError]
+    [filters, pagination.limit, pagination.page, handleApiError],
   );
 
   useEffect(() => {
@@ -368,7 +408,9 @@ export default function AddCustomerReport() {
     setDetailsLoading(true);
     setDetailsModal({ open: true, payload: null, row });
     try {
-      const detailsUrl = directApi || `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/${shipperId}`;
+      const detailsUrl =
+        directApi ||
+        `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/${shipperId}`;
       const res = await axios.get(detailsUrl, getAuthConfig());
       setDetailsModal({ open: true, payload: res?.data || null, row });
     } catch (error) {
@@ -380,14 +422,22 @@ export default function AddCustomerReport() {
   };
 
   const _totalLabel = useMemo(
-    () => `Page ${pagination.page} of ${pagination.totalPages} · ${pagination.total} total`,
-    [pagination.page, pagination.total, pagination.totalPages]
+    () =>
+      `Page ${pagination.page} of ${pagination.totalPages} · ${pagination.total} total`,
+    [pagination.page, pagination.total, pagination.totalPages],
   );
   const allLoadAddedDateTimes = useMemo(
-    () => extractLoadAddedDateTimes(detailsModal.payload, detailsModal.row?.metrics),
-    [detailsModal.payload, detailsModal.row?.metrics]
+    () =>
+      extractLoadAddedDateTimes(
+        detailsModal.payload,
+        detailsModal.row?.metrics,
+      ),
+    [detailsModal.payload, detailsModal.row?.metrics],
   );
-  const detailData = useMemo(() => toDetailsObject(detailsModal.payload), [detailsModal.payload]);
+  const detailData = useMemo(
+    () => toDetailsObject(detailsModal.payload),
+    [detailsModal.payload],
+  );
   const statusSelectedLabel = useMemo(() => {
     const found = STATUS_OPTIONS.find((o) => o.value === filters.status);
     return found?.label || "All";
@@ -398,26 +448,36 @@ export default function AddCustomerReport() {
     return STATUS_OPTIONS.filter((opt) => opt.label.toLowerCase().includes(q));
   }, [statusDdQuery]);
   const createdBySelectedLabel = useMemo(() => {
-    const found = CREATED_BY_TYPE_OPTIONS.find((o) => o.value === filters.createdByType);
+    const found = CREATED_BY_TYPE_OPTIONS.find(
+      (o) => o.value === filters.createdByType,
+    );
     return found?.label || "All";
   }, [filters.createdByType]);
   const createdByFilteredOptions = useMemo(() => {
     const q = createdByDdQuery.trim().toLowerCase();
     if (!q) return CREATED_BY_TYPE_OPTIONS;
-    return CREATED_BY_TYPE_OPTIONS.filter((opt) => opt.label.toLowerCase().includes(q));
+    return CREATED_BY_TYPE_OPTIONS.filter((opt) =>
+      opt.label.toLowerCase().includes(q),
+    );
   }, [createdByDdQuery]);
   const addedBySelectedLabel = useMemo(() => {
     if (!filters.addedByEmpId) return "All";
-    const found = employeeOptions.find((o) => String(o.value) === String(filters.addedByEmpId));
+    const found = employeeOptions.find(
+      (o) => String(o.value) === String(filters.addedByEmpId),
+    );
     return found?.label || filters.addedByEmpId;
   }, [employeeOptions, filters.addedByEmpId]);
   const addedByFilteredOptions = useMemo(() => {
     const q = addedByDdQuery.trim().toLowerCase();
     if (!q) return employeeOptions;
-    return employeeOptions.filter((opt) => String(opt.label).toLowerCase().includes(q));
+    return employeeOptions.filter((opt) =>
+      String(opt.label).toLowerCase().includes(q),
+    );
   }, [addedByDdQuery, employeeOptions]);
   const limitSelectedLabel = useMemo(() => {
-    const found = LIMIT_OPTIONS.find((n) => Number(n) === Number(pagination.limit));
+    const found = LIMIT_OPTIONS.find(
+      (n) => Number(n) === Number(pagination.limit),
+    );
     return `${found ?? pagination.limit} / page`;
   }, [pagination.limit]);
   const limitFilteredOptions = useMemo(() => {
@@ -519,7 +579,9 @@ export default function AddCustomerReport() {
                   aria-expanded={statusDdOpen}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 flex items-center justify-between gap-3 hover:bg-gray-50 transition-colors cursor-pointer"
                 >
-                  <span className="min-w-0 truncate text-gray-700">{statusSelectedLabel}</span>
+                  <span className="min-w-0 truncate text-gray-700">
+                    {statusSelectedLabel}
+                  </span>
                   <ChevronDown
                     className={`w-4 h-4 text-gray-400 shrink-0 transition-transform duration-200 ${statusDdOpen ? "rotate-180" : ""}`}
                   />
@@ -548,7 +610,8 @@ export default function AddCustomerReport() {
                   </div>
                   <div className="max-h-64 overflow-auto py-2">
                     {statusFilteredOptions.map((opt) => {
-                      const selected = String(filters.status) === String(opt.value);
+                      const selected =
+                        String(filters.status) === String(opt.value);
                       return (
                         <button
                           key={opt.value || "all"}
@@ -585,7 +648,9 @@ export default function AddCustomerReport() {
                         setAddedByDdOpen(false);
                         setLimitDdOpen(false);
                         if (createdByBtnRef.current) {
-                          setCreatedByMenuPos(calcMenuPos(createdByBtnRef.current));
+                          setCreatedByMenuPos(
+                            calcMenuPos(createdByBtnRef.current),
+                          );
                         }
                       } else {
                         setCreatedByDdQuery("");
@@ -597,7 +662,9 @@ export default function AddCustomerReport() {
                   aria-expanded={createdByDdOpen}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 flex items-center justify-between gap-3 hover:bg-gray-50 transition-colors cursor-pointer"
                 >
-                  <span className="min-w-0 truncate text-gray-700">{createdBySelectedLabel}</span>
+                  <span className="min-w-0 truncate text-gray-700">
+                    {createdBySelectedLabel}
+                  </span>
                   <ChevronDown
                     className={`w-4 h-4 text-gray-400 shrink-0 transition-transform duration-200 ${createdByDdOpen ? "rotate-180" : ""}`}
                   />
@@ -676,7 +743,9 @@ export default function AddCustomerReport() {
                   disabled={loadingEmployees}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 flex items-center justify-between gap-3 hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  <span className="min-w-0 truncate text-gray-700">{addedBySelectedLabel}</span>
+                  <span className="min-w-0 truncate text-gray-700">
+                    {addedBySelectedLabel}
+                  </span>
                   <ChevronDown
                     className={`w-4 h-4 text-gray-400 shrink-0 transition-transform duration-200 ${addedByDdOpen ? "rotate-180" : ""}`}
                   />
@@ -738,7 +807,9 @@ export default function AddCustomerReport() {
                       );
                     })}
                     {!loadingEmployees && employeeOptions.length === 0 && (
-                      <div className="px-4 py-3 text-sm text-gray-500">No employees</div>
+                      <div className="px-4 py-3 text-sm text-gray-500">
+                        No employees
+                      </div>
                     )}
                   </div>
                 </div>
@@ -786,7 +857,9 @@ export default function AddCustomerReport() {
                         className={[
                           "py-3 px-4 text-left text-sm font-medium text-gray-600 uppercase tracking-wide border-y border-gray-200 whitespace-nowrap",
                           idx === 0 ? "border-l rounded-l-xl" : "",
-                          idx === arr.length - 1 ? "border-r rounded-r-xl text-center" : "",
+                          idx === arr.length - 1
+                            ? "border-r rounded-r-xl text-center"
+                            : "",
                         ]
                           .filter(Boolean)
                           .join(" ")}
@@ -798,56 +871,59 @@ export default function AddCustomerReport() {
                 </thead>
                 <tbody>
                   {rows.map((row, idx) => (
-                    <tr key={`${row.shipperId || idx}`} className="group transition-colors">
+                    <tr
+                      key={`${row.shipperId || idx}`}
+                      className="group transition-colors"
+                    >
                       <td className="py-4 px-4 border-y border-l border-gray-200 rounded-l-xl bg-white group-hover:bg-gray-50 align-middle font-medium text-gray-700">
-  <div className="relative group/tooltip max-w-[150px]">
+                        <div className="relative group/tooltip max-w-[150px]">
+                          {/* Truncated Text */}
+                          <span className="block truncate">
+                            {row.companyName || "-"}
+                          </span>
 
-    {/* Truncated Text */}
-    <span className="block truncate">
-      {row.companyName || "-"}
-    </span>
-
-    {/* Tooltip */}
-    {row.companyName && (
-      <div className="absolute left-0 top-full mt-2 hidden group-hover/tooltip:block pointer-events-none
+                          {/* Tooltip */}
+                          {row.companyName && (
+                            <div
+                              className="absolute left-0 top-full mt-2 hidden group-hover/tooltip:block pointer-events-none
                       bg-gray-900 text-white text-sm
                       px-3 py-2.5
                       rounded-lg shadow-xl
                       max-w-[180px]
                       break-words
-                      z-50">
-        {row.companyName}
-      </div>
-    )}
-
-  </div>
-</td>
+                      z-50"
+                            >
+                              {row.companyName}
+                            </div>
+                          )}
+                        </div>
+                      </td>
                       <td className="py-4 px-4 border-y border-gray-200 bg-white group-hover:bg-gray-50 align-middle font-medium text-gray-700 whitespace-nowrap">
                         {row.mcDotNo || "-"}
                       </td>
                       <td className="py-4 px-4 border-y border-gray-200 bg-white group-hover:bg-gray-50 align-middle font-medium text-gray-700">
-  <div className="relative group/tooltip max-w-[150px]">
+                        <div className="relative group/tooltip max-w-[150px]">
+                          {/* Truncated Text */}
+                          <span className="block truncate">
+                            {row.email || "-"}
+                          </span>
 
-    {/* Truncated Text */}
-    <span className="block truncate">
-      {row.email || "-"}
-    </span>
-
-    {/* Tooltip */}
-    {row.email && (
-      <div className="absolute left-0 top-full mt-2 hidden group-hover/tooltip:block pointer-events-none
+                          {/* Tooltip */}
+                          {row.email && (
+                            <div
+                              className="absolute left-0 top-full mt-2 hidden group-hover/tooltip:block pointer-events-none
                       bg-gray-900 text-white text-sm
                       px-3 py-2.5
                       rounded-lg shadow-xl
                       max-w-[200px]
                       break-words
-                      z-50">
-        {row.email}
-      </div>
-    )}
-
-  </div>
-</td>
+                      z-50"
+                            >
+                              {row.email}
+                            </div>
+                          )}
+                        </div>
+                      </td>
                       <td className="py-4 px-4 border-y border-gray-200 bg-white group-hover:bg-gray-50 align-middle font-medium text-gray-700 whitespace-nowrap">
                         {row.phoneNo || "-"}
                       </td>
@@ -863,29 +939,29 @@ export default function AddCustomerReport() {
                       <td className="py-4 px-4 border-y border-gray-200 bg-white group-hover:bg-gray-50 align-middle tabular-nums font-medium text-gray-700 whitespace-nowrap">
                         {row?.metrics?.totalLoads ?? "-"}
                       </td>
-                     <td className="py-4 px-4 border-y border-gray-200 bg-white group-hover:bg-gray-50 align-middle font-medium text-gray-700">
-  <div className="relative group/tooltip max-w-[110px]">
-    
-    {/* Truncated Text */}
-    <span className="block truncate whitespace-nowrap">
-      {formatDateTime(row.createdAt) || "-"}
-    </span>
+                      <td className="py-4 px-4 border-y border-gray-200 bg-white group-hover:bg-gray-50 align-middle font-medium text-gray-700">
+                        <div className="relative group/tooltip max-w-[110px]">
+                          {/* Truncated Text */}
+                          <span className="block truncate whitespace-nowrap">
+                            {formatDateTime(row.createdAt) || "-"}
+                          </span>
 
-    {/* Tooltip */}
-    {row.createdAt && (
-      <div className="absolute left-0 top-full mt-2 hidden group-hover/tooltip:block pointer-events-none
+                          {/* Tooltip */}
+                          {row.createdAt && (
+                            <div
+                              className="absolute left-0 top-full mt-2 hidden group-hover/tooltip:block pointer-events-none
                       bg-gray-900 text-white text-sm
                       px-3 py-2.5
                       rounded-lg shadow-xl
                       max-w-[160px]
                       break-words
-                      z-50">
-        {formatDateTime(row.createdAt)}
-      </div>
-    )}
-
-  </div>
-</td>
+                      z-50"
+                            >
+                              {formatDateTime(row.createdAt)}
+                            </div>
+                          )}
+                        </div>
+                      </td>
                       <td className="py-4 px-4 border-y border-r border-gray-200 rounded-r-xl bg-white group-hover:bg-gray-50 align-middle">
                         <div className="flex items-center justify-center">
                           <button
@@ -912,7 +988,9 @@ export default function AddCustomerReport() {
             <div className="text-sm text-gray-600">
               Showing{" "}
               <span className="font-semibold text-gray-700 tabular-nums">
-                {pagination.total === 0 ? 0 : (pagination.page - 1) * pagination.limit + 1}
+                {pagination.total === 0
+                  ? 0
+                  : (pagination.page - 1) * pagination.limit + 1}
               </span>{" "}
               to{" "}
               <span className="font-semibold text-gray-700 tabular-nums">
@@ -950,7 +1028,9 @@ export default function AddCustomerReport() {
                   aria-expanded={limitDdOpen}
                   className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 flex items-center justify-between gap-2 hover:bg-gray-50 transition-colors cursor-pointer min-w-[130px]"
                 >
-                  <span className="min-w-0 truncate text-gray-700">{limitSelectedLabel}</span>
+                  <span className="min-w-0 truncate text-gray-700">
+                    {limitSelectedLabel}
+                  </span>
                   <ChevronDown
                     className={`w-4 h-4 text-gray-400 shrink-0 transition-transform duration-200 ${limitDdOpen ? "rotate-180" : ""}`}
                   />
@@ -986,7 +1066,10 @@ export default function AddCustomerReport() {
                           key={opt}
                           type="button"
                           onClick={() => {
-                            setPagination((p) => ({ ...p, limit: Number(opt) }));
+                            setPagination((p) => ({
+                              ...p,
+                              limit: Number(opt),
+                            }));
                             setLimitDdOpen(false);
                             setLimitDdQuery("");
                           }}
@@ -1004,7 +1087,12 @@ export default function AddCustomerReport() {
 
               <button
                 type="button"
-                onClick={() => fetchReport(Math.max(1, pagination.page - 1), pagination.limit)}
+                onClick={() =>
+                  fetchReport(
+                    Math.max(1, pagination.page - 1),
+                    pagination.limit,
+                  )
+                }
                 disabled={pagination.page <= 1 || loading}
                 className="cursor-pointer flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-semibold text-gray-600 hover:text-gray-900"
               >
@@ -1019,7 +1107,10 @@ export default function AddCustomerReport() {
               <button
                 type="button"
                 onClick={() =>
-                  fetchReport(Math.min(pagination.totalPages, pagination.page + 1), pagination.limit)
+                  fetchReport(
+                    Math.min(pagination.totalPages, pagination.page + 1),
+                    pagination.limit,
+                  )
                 }
                 disabled={pagination.page >= pagination.totalPages || loading}
                 className="cursor-pointer flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-semibold text-gray-600 hover:text-gray-900"
@@ -1034,7 +1125,9 @@ export default function AddCustomerReport() {
         {detailsModal.open && (
           <div
             className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
-            onClick={() => setDetailsModal({ open: false, payload: null, row: null })}
+            onClick={() =>
+              setDetailsModal({ open: false, payload: null, row: null })
+            }
           >
             <div
               className="bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[92vh] overflow-hidden flex flex-col"
@@ -1056,7 +1149,9 @@ export default function AddCustomerReport() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => setDetailsModal({ open: false, payload: null, row: null })}
+                    onClick={() =>
+                      setDetailsModal({ open: false, payload: null, row: null })
+                    }
                     className="shrink-0 w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center"
                     aria-label="Close"
                   >
@@ -1078,7 +1173,9 @@ export default function AddCustomerReport() {
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                         <div className="flex gap-2">
-                          <span className="text-gray-500 shrink-0">Company:</span>
+                          <span className="text-gray-500 shrink-0">
+                            Company:
+                          </span>
                           <span className="text-gray-800 font-medium min-w-0 truncate">
                             {readValue(
                               detailData?.compName,
@@ -1088,7 +1185,9 @@ export default function AddCustomerReport() {
                           </span>
                         </div>
                         <div className="flex gap-2">
-                          <span className="text-gray-500 shrink-0">MC/DOT:</span>
+                          <span className="text-gray-500 shrink-0">
+                            MC/DOT:
+                          </span>
                           <span className="text-gray-800 font-medium min-w-0 truncate">
                             {readValue(
                               detailData?.mc_dot,
@@ -1100,7 +1199,10 @@ export default function AddCustomerReport() {
                         <div className="flex gap-2">
                           <span className="text-gray-500 shrink-0">Email:</span>
                           <span className="text-gray-800 font-medium min-w-0 truncate">
-                            {readValue(detailData?.email, detailsModal.row?.email)}
+                            {readValue(
+                              detailData?.email,
+                              detailsModal.row?.email,
+                            )}
                           </span>
                         </div>
                         <div className="flex gap-2">
@@ -1114,15 +1216,22 @@ export default function AddCustomerReport() {
                           </span>
                         </div>
                         <div className="flex gap-2">
-                          <span className="text-gray-500 shrink-0">Added Date:</span>
+                          <span className="text-gray-500 shrink-0">
+                            Added Date:
+                          </span>
                           <span className="text-gray-800 font-medium min-w-0 truncate">
                             {formatDateTime(
-                              readValue(detailData?.createdAt, detailsModal.row?.createdAt),
+                              readValue(
+                                detailData?.createdAt,
+                                detailsModal.row?.createdAt,
+                              ),
                             )}
                           </span>
                         </div>
                         <div className="flex gap-2">
-                          <span className="text-gray-500 shrink-0">Total DOs:</span>
+                          <span className="text-gray-500 shrink-0">
+                            Total DOs:
+                          </span>
                           <span className="text-gray-800 font-medium tabular-nums">
                             {readValue(
                               detailData?.metrics?.totalDOs,
@@ -1131,7 +1240,9 @@ export default function AddCustomerReport() {
                           </span>
                         </div>
                         <div className="flex gap-2">
-                          <span className="text-gray-500 shrink-0">Total RR:</span>
+                          <span className="text-gray-500 shrink-0">
+                            Total RR:
+                          </span>
                           <span className="text-gray-800 font-medium tabular-nums">
                             {readValue(
                               detailData?.metrics?.totalLoads,
