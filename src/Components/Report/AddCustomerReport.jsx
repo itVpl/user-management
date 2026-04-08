@@ -159,8 +159,10 @@ export default function AddCustomerReport() {
   const statusInputRef = useRef(null);
   const [statusMenuPos, setStatusMenuPos] = useState({
     top: 0,
+    bottom: 0,
     left: 0,
     width: 0,
+    placement: "bottom",
   });
 
   const [createdByDdOpen, setCreatedByDdOpen] = useState(false);
@@ -170,8 +172,10 @@ export default function AddCustomerReport() {
   const createdByInputRef = useRef(null);
   const [createdByMenuPos, setCreatedByMenuPos] = useState({
     top: 0,
+    bottom: 0,
     left: 0,
     width: 0,
+    placement: "bottom",
   });
 
   const [addedByDdOpen, setAddedByDdOpen] = useState(false);
@@ -181,27 +185,36 @@ export default function AddCustomerReport() {
   const addedByInputRef = useRef(null);
   const [addedByMenuPos, setAddedByMenuPos] = useState({
     top: 0,
+    bottom: 0,
     left: 0,
     width: 0,
+    placement: "bottom",
   });
 
   const [limitDdOpen, setLimitDdOpen] = useState(false);
-  const [limitDdQuery, setLimitDdQuery] = useState("");
   const limitDdRef = useRef(null);
   const limitBtnRef = useRef(null);
-  const limitInputRef = useRef(null);
   const [limitMenuPos, setLimitMenuPos] = useState({
     top: 0,
+    bottom: 0,
     left: 0,
     width: 0,
+    placement: "bottom",
   });
 
   const calcMenuPos = useCallback((el) => {
     const r = el.getBoundingClientRect();
     const width = r.width;
     const left = Math.min(r.left, Math.max(8, window.innerWidth - width - 8));
+    const spaceBelow = window.innerHeight - r.bottom;
+    const spaceAbove = r.top;
+    const openUp = spaceBelow < 260 && spaceAbove > spaceBelow;
+    if (openUp) {
+      const bottom = window.innerHeight - r.top + 8;
+      return { top: 0, bottom, left, width, placement: "top" };
+    }
     const top = r.bottom + 8;
-    return { top, left, width };
+    return { top, bottom: 0, left, width, placement: "bottom" };
   }, []);
 
   useEffect(() => {
@@ -239,10 +252,6 @@ export default function AddCustomerReport() {
     if (addedByDdOpen && addedByInputRef.current)
       addedByInputRef.current.focus();
   }, [addedByDdOpen]);
-
-  useEffect(() => {
-    if (limitDdOpen && limitInputRef.current) limitInputRef.current.focus();
-  }, [limitDdOpen]);
 
   useEffect(() => {
     if (!statusDdOpen && !createdByDdOpen && !addedByDdOpen && !limitDdOpen)
@@ -325,7 +334,7 @@ export default function AddCustomerReport() {
   }, [handleApiError]);
 
   const fetchReport = useCallback(
-    async (page = pagination.page, limit = pagination.limit) => {
+    async (page = 1, limit = pagination.limit) => {
       setLoading(true);
       try {
         const params = {
@@ -356,11 +365,15 @@ export default function AddCustomerReport() {
           generatedBy: data?.generatedBy || null,
           module: payload?.module || null,
         });
+        const nextPage = Number(page) || 1;
+        const nextLimit = Number(p.limit ?? limit) || DEFAULT_LIMIT;
+        const nextTotal = Number(p.total ?? 0) || 0;
+        const nextTotalPages = Math.max(1, Math.ceil(nextTotal / nextLimit));
         setPagination({
-          page: p.page ?? page,
-          limit: p.limit ?? limit,
-          total: p.total ?? 0,
-          totalPages: Math.max(1, p.totalPages ?? 1),
+          page: Math.min(nextPage, nextTotalPages),
+          limit: nextLimit,
+          total: nextTotal,
+          totalPages: nextTotalPages,
         });
       } catch (error) {
         setRows([]);
@@ -369,7 +382,7 @@ export default function AddCustomerReport() {
         setLoading(false);
       }
     },
-    [filters, pagination.limit, pagination.page, handleApiError],
+    [filters, pagination.limit, handleApiError],
   );
 
   useEffect(() => {
@@ -397,7 +410,6 @@ export default function AddCustomerReport() {
     setCreatedByDdOpen(false);
     setAddedByDdQuery("");
     setAddedByDdOpen(false);
-    setLimitDdQuery("");
     setLimitDdOpen(false);
   };
 
@@ -480,11 +492,15 @@ export default function AddCustomerReport() {
     );
     return `${found ?? pagination.limit} / page`;
   }, [pagination.limit]);
-  const limitFilteredOptions = useMemo(() => {
-    const q = limitDdQuery.trim().toLowerCase();
-    if (!q) return LIMIT_OPTIONS;
-    return LIMIT_OPTIONS.filter((n) => String(n).toLowerCase().includes(q));
-  }, [limitDdQuery]);
+  const pageItems = useMemo(() => {
+    const total = Number(pagination.totalPages) || 1;
+    const current = Math.min(Math.max(1, Number(pagination.page) || 1), total);
+    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+    if (current <= 3) return [1, 2, 3, 4, 5, "...", total];
+    if (current >= total - 2)
+      return [1, "...", total - 4, total - 3, total - 2, total - 1, total];
+    return [1, "...", current - 1, current, current + 1, "...", total];
+  }, [pagination.page, pagination.totalPages]);
 
   return (
     <div className="min-h-screen bg-gray-50 px-4 md:px-6 py-4 md:py-6 font-poppins">
@@ -588,11 +604,18 @@ export default function AddCustomerReport() {
                 </button>
                 <div
                   style={{
-                    top: statusMenuPos.top,
+                    top:
+                      statusMenuPos.placement === "bottom"
+                        ? statusMenuPos.top
+                        : undefined,
+                    bottom:
+                      statusMenuPos.placement === "top"
+                        ? statusMenuPos.bottom
+                        : undefined,
                     left: statusMenuPos.left,
                     width: statusMenuPos.width || undefined,
                   }}
-                  className={`fixed z-50 bg-white rounded-xl border border-gray-200 shadow-lg origin-top overflow-hidden transition-all duration-200 ${statusDdOpen ? "opacity-100 translate-y-0 scale-100 max-h-[420px]" : "pointer-events-none opacity-0 -translate-y-1 scale-95 max-h-0"}`}
+                  className={`fixed z-50 bg-white rounded-xl border border-gray-200 shadow-lg overflow-hidden transition-all duration-200 ${statusMenuPos.placement === "top" ? "origin-bottom" : "origin-top"} ${statusDdOpen ? "opacity-100 translate-y-0 scale-100 max-h-[420px]" : `pointer-events-none opacity-0 ${statusMenuPos.placement === "top" ? "translate-y-1" : "-translate-y-1"} scale-95 max-h-0`}`}
                   role="listbox"
                 >
                   <div className="px-3 pt-3">
@@ -671,11 +694,18 @@ export default function AddCustomerReport() {
                 </button>
                 <div
                   style={{
-                    top: createdByMenuPos.top,
+                    top:
+                      createdByMenuPos.placement === "bottom"
+                        ? createdByMenuPos.top
+                        : undefined,
+                    bottom:
+                      createdByMenuPos.placement === "top"
+                        ? createdByMenuPos.bottom
+                        : undefined,
                     left: createdByMenuPos.left,
                     width: createdByMenuPos.width || undefined,
                   }}
-                  className={`fixed z-50 bg-white rounded-xl border border-gray-200 shadow-lg origin-top overflow-hidden transition-all duration-200 ${createdByDdOpen ? "opacity-100 translate-y-0 scale-100 max-h-[420px]" : "pointer-events-none opacity-0 -translate-y-1 scale-95 max-h-0"}`}
+                  className={`fixed z-50 bg-white rounded-xl border border-gray-200 shadow-lg overflow-hidden transition-all duration-200 ${createdByMenuPos.placement === "top" ? "origin-bottom" : "origin-top"} ${createdByDdOpen ? "opacity-100 translate-y-0 scale-100 max-h-[420px]" : `pointer-events-none opacity-0 ${createdByMenuPos.placement === "top" ? "translate-y-1" : "-translate-y-1"} scale-95 max-h-0`}`}
                   role="listbox"
                 >
                   <div className="px-3 pt-3">
@@ -752,11 +782,18 @@ export default function AddCustomerReport() {
                 </button>
                 <div
                   style={{
-                    top: addedByMenuPos.top,
+                    top:
+                      addedByMenuPos.placement === "bottom"
+                        ? addedByMenuPos.top
+                        : undefined,
+                    bottom:
+                      addedByMenuPos.placement === "top"
+                        ? addedByMenuPos.bottom
+                        : undefined,
                     left: addedByMenuPos.left,
                     width: addedByMenuPos.width || undefined,
                   }}
-                  className={`fixed z-50 bg-white rounded-xl border border-gray-200 shadow-lg origin-top overflow-hidden transition-all duration-200 ${addedByDdOpen ? "opacity-100 translate-y-0 scale-100 max-h-[420px]" : "pointer-events-none opacity-0 -translate-y-1 scale-95 max-h-0"}`}
+                  className={`fixed z-50 bg-white rounded-xl border border-gray-200 shadow-lg overflow-hidden transition-all duration-200 ${addedByMenuPos.placement === "top" ? "origin-bottom" : "origin-top"} ${addedByDdOpen ? "opacity-100 translate-y-0 scale-100 max-h-[420px]" : `pointer-events-none opacity-0 ${addedByMenuPos.placement === "top" ? "translate-y-1" : "-translate-y-1"} scale-95 max-h-0`}`}
                   role="listbox"
                 >
                   <div className="px-3 pt-3">
@@ -1018,8 +1055,6 @@ export default function AddCustomerReport() {
                         if (limitBtnRef.current) {
                           setLimitMenuPos(calcMenuPos(limitBtnRef.current));
                         }
-                      } else {
-                        setLimitDdQuery("");
                       }
                       return next;
                     })
@@ -1038,28 +1073,22 @@ export default function AddCustomerReport() {
 
                 <div
                   style={{
-                    top: limitMenuPos.top,
+                    top:
+                      limitMenuPos.placement === "bottom"
+                        ? limitMenuPos.top
+                        : undefined,
+                    bottom:
+                      limitMenuPos.placement === "top"
+                        ? limitMenuPos.bottom
+                        : undefined,
                     left: limitMenuPos.left,
                     width: limitMenuPos.width || undefined,
                   }}
-                  className={`fixed z-50 bg-white rounded-xl border border-gray-200 shadow-lg origin-top overflow-hidden transition-all duration-200 ${limitDdOpen ? "opacity-100 translate-y-0 scale-100 max-h-[420px]" : "pointer-events-none opacity-0 -translate-y-1 scale-95 max-h-0"}`}
+                  className={`fixed z-50 bg-white rounded-xl border border-gray-200 shadow-lg overflow-hidden transition-all duration-200 ${limitMenuPos.placement === "top" ? "origin-bottom" : "origin-top"} ${limitDdOpen ? "opacity-100 translate-y-0 scale-100 max-h-[420px]" : `pointer-events-none opacity-0 ${limitMenuPos.placement === "top" ? "translate-y-1" : "-translate-y-1"} scale-95 max-h-0`}`}
                   role="listbox"
                 >
-                  <div className="px-3 pt-3">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-                      <input
-                        ref={limitInputRef}
-                        type="text"
-                        value={limitDdQuery}
-                        onChange={(e) => setLimitDdQuery(e.target.value)}
-                        placeholder="Search limit…"
-                        className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-gray-200 bg-gray-50 focus:bg-white focus:outline-none focus:ring-0 focus:border-indigo-500 text-sm"
-                      />
-                    </div>
-                  </div>
                   <div className="max-h-64 overflow-auto py-2">
-                    {limitFilteredOptions.map((opt) => {
+                    {LIMIT_OPTIONS.map((opt) => {
                       const selected = Number(pagination.limit) === Number(opt);
                       return (
                         <button
@@ -1071,7 +1100,6 @@ export default function AddCustomerReport() {
                               limit: Number(opt),
                             }));
                             setLimitDdOpen(false);
-                            setLimitDdQuery("");
                           }}
                           className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-50 cursor-pointer ${selected ? "bg-indigo-50/60 text-indigo-700" : "text-gray-700"}`}
                           role="option"
@@ -1100,9 +1128,42 @@ export default function AddCustomerReport() {
                 Previous
               </button>
 
-              <span className="cursor-pointer w-8 h-8 flex items-center justify-center rounded-lg border border-gray-900 text-gray-900 bg-white text-base font-semibold tabular-nums">
-                {pagination.page}
-              </span>
+              <div className="flex items-center gap-1">
+                {pageItems.map((item, idx) => {
+                  if (item === "...") {
+                    return (
+                      <span
+                        key={`dots-${idx}`}
+                        className="w-8 h-8 flex items-center justify-center text-gray-400 text-base font-semibold select-none"
+                      >
+                        …
+                      </span>
+                    );
+                  }
+                  const pageNumber = Number(item);
+                  const active = pageNumber === pagination.page;
+                  return (
+                    <button
+                      key={pageNumber}
+                      type="button"
+                      onClick={() => fetchReport(pageNumber, pagination.limit)}
+                      disabled={loading || active}
+                      className={[
+                        "cursor-pointer w-8 h-8 flex items-center justify-center rounded-lg text-base font-semibold tabular-nums transition-colors",
+                        active
+                          ? "border border-gray-900 text-gray-900 bg-white"
+                          : "border border-transparent text-gray-600 hover:bg-gray-50 hover:text-gray-900",
+                        loading ? "opacity-50 cursor-not-allowed" : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                      aria-current={active ? "page" : undefined}
+                    >
+                      {pageNumber}
+                    </button>
+                  );
+                })}
+              </div>
 
               <button
                 type="button"
