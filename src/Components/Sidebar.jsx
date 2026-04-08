@@ -152,7 +152,8 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Call Data",
       "Call Records (Id)",
       "Report Analysis",
-      "DO Report"
+      "DO Report",
+      "Add Customer Report"
     ],
     "System Administration": [
       "Manage Module"
@@ -537,6 +538,7 @@ const menuItems = [
   { name: "HR Call Reports", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/hr-call-reports" },
   { name: "Assigned Rate Request", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/assigned-rate-request" },
   { name: "Call Data Reports", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/analytics/call-data-reports" },
+  { name: "Add Customer Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/add-customer-report" },
   { name: "Sub Company", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/SubCompanies" },
   { name: "Docs Upload", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/docs-upload" },
   
@@ -684,6 +686,7 @@ const REPORT_NAMES = [
   "Team Rating",
   "Call Data",
   "Call Data Reports",
+  "Add Customer Report",
   "Call Records (Id)",
   "Report Analysis",
   "Emp Login Report",
@@ -717,7 +720,8 @@ const DEPARTMENT_REPORTS = {
   "Sales": [
     "Sales Dept Report",
     "Follow Up Report",
-    "DO Report"
+    "DO Report",
+    "Add Customer Report"
   ],
   "Finance": [
     "Receivable Report",
@@ -741,6 +745,7 @@ const DEPARTMENT_REPORTS = {
   ],
   "Common": [
     "Call Data Reports",
+    "Add Customer Report",
     "Call Data",
     "Call Records (Id)",
     "Report Analysis",

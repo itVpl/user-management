@@ -12,6 +12,43 @@ import {
 import { format } from "date-fns";
 
 const BASE_8X8 = `${API_CONFIG.BASE_URL}/api/v1/analytics/8x8`;
+const BASE_8X8_TRITON = `${API_CONFIG.BASE_URL}/api/v1/analytics/8x8-triton`;
+
+/** Triton-backed PBX (e.g. Identifica LLC): use 8x8-triton call-records for these emp ids. */
+const CALL_DATA_TRITON_EMP_IDS = new Set(["VPL059"]);
+
+/** Fixed disposition dropdown for VPL059 (Identifica / Triton) — not loaded from category-options API. */
+const CALL_DATA_VPL059_DISPOSITIONS = [
+  "No answer",
+  "Voice mail",
+  "Call drop",
+  "RPC Not Available",
+  "Call back",
+  "Not interested",
+  "Introduction/email",
+  "RPC",
+  "MAIL/Email price list",
+  "Rate follow up",
+  "Prospect",
+  "Lead",
+  "DNC",
+  "Existing customer",
+  "Other",
+];
+
+/** Default: `/analytics/8x8` (unchanged). Triton only for ids in CALL_DATA_TRITON_EMP_IDS. */
+const getCallRecordsBase = () => {
+  try {
+    const raw = sessionStorage.getItem("user") || localStorage.getItem("user");
+    if (!raw) return BASE_8X8;
+    const u = JSON.parse(raw);
+    const empId = String(u?.empId ?? u?.empID ?? u?.employeeId ?? "").trim();
+    return CALL_DATA_TRITON_EMP_IDS.has(empId) ? BASE_8X8_TRITON : BASE_8X8;
+  } catch {
+    return BASE_8X8;
+  }
+};
+
 const getAuthHeaders = () => {
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const base = API_CONFIG.getAuthHeaders();
@@ -378,8 +415,9 @@ const UserCallDashboard = () => {
     const to = formatDateTime(end);
 
     try {
+      const recordsBase = getCallRecordsBase();
       const res = await axios.get(
-        `${BASE_8X8}/call-records/filter`,
+        `${recordsBase}/call-records/filter`,
         {
           params: { callerName: alias, calleeName: alias, from, to },
           headers: getAuthHeaders(),
@@ -457,7 +495,7 @@ const UserCallDashboard = () => {
       if (callIds.length > 0) {
         try {
           const catRes = await axios.get(
-            `${BASE_8X8}/call-records/categories`,
+            `${recordsBase}/call-records/categories`,
             {
               params: { callIds: callIds.join(",") },
               headers: getAuthHeaders(),
@@ -503,6 +541,12 @@ const UserCallDashboard = () => {
       } catch {
         /* ignore */
       }
+      const empId = String(storedUser?.empId ?? storedUser?.empID ?? storedUser?.employeeId ?? "").trim();
+      if (CALL_DATA_TRITON_EMP_IDS.has(empId)) {
+        setCategoryOptions([...CALL_DATA_VPL059_DISPOSITIONS]);
+        return;
+      }
+
       const isCmt =
         String(storedUser?.department || "")
           .trim()
@@ -510,7 +554,7 @@ const UserCallDashboard = () => {
 
       try {
         const res = await axios.get(
-          `${BASE_8X8}/call-records/category-options`,
+          `${getCallRecordsBase()}/call-records/category-options`,
           { headers: getAuthHeaders() }
         );
         const opts = res.data?.options ?? res.data?.data;
@@ -558,7 +602,7 @@ const UserCallDashboard = () => {
     if (!callId) return { success: false, error: "Missing call ID" };
     try {
       const res = await axios.put(
-        `${BASE_8X8}/call-records/${encodeURIComponent(callId)}/category`,
+        `${getCallRecordsBase()}/call-records/${encodeURIComponent(callId)}/category`,
         payload,
         { headers: getAuthHeaders() }
       );
@@ -718,11 +762,17 @@ const UserCallDashboard = () => {
     setSavingModal(true);
     setModalError("");
     const current = categories[modalCallId] || {};
-    const result = await updateCategory(modalCallId, {
-      category: current.category ?? null,
+    // Do not send `category: null` — many APIs treat that as "clear category", so follow-up save
+    // would wipe a saved disposition after refresh. Only include category when one is set.
+    const payload = {
       followUp: true,
       followUpDetails: details,
-    });
+    };
+    const cat = current.category;
+    if (cat != null && String(cat).trim() !== "") {
+      payload.category = cat;
+    }
+    const result = await updateCategory(modalCallId, payload);
     setSavingModal(false);
     if (result.success) {
       try {

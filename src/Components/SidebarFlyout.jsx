@@ -31,6 +31,7 @@ const getMenuIcon = (itemName) => {
     'Email': Mail,
     'Daily Follow-Up': Clock,
     'Add Customer': UserPlus,
+    'Add Customer Report': BarChart3,
     'All Customer': Users,
     'All Customers': Users,
     'Check Invoice': FileText,
