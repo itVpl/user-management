@@ -433,6 +433,39 @@ const AudioPlayer = ({ src, isMyMessage, fileName, messageId, caption }) => {
   );
 };
 
+/** Live elapsed time since send, for outgoing messages not yet seen (updates every second). */
+function formatElapsedSinceSent(sentAt) {
+  if (!sentAt) return '—';
+  const t = new Date(sentAt).getTime();
+  if (Number.isNaN(t)) return '—';
+  let sec = Math.floor((Date.now() - t) / 1000);
+  if (sec < 0) sec = 0;
+  if (sec < 60) return `${sec}s`;
+  const m = Math.floor(sec / 60);
+  if (m < 60) return `${m}m ${sec % 60}s`;
+  const h = Math.floor(m / 60);
+  const rm = m % 60;
+  if (h < 48) return `${h}h ${rm}m`;
+  const d = Math.floor(h / 24);
+  const rh = h % 24;
+  return `${d}d ${rh}h`;
+}
+
+function OutgoingUnseenWaitTimer({ sentAt, className }) {
+  const [label, setLabel] = useState(() => formatElapsedSinceSent(sentAt));
+  useEffect(() => {
+    setLabel(formatElapsedSinceSent(sentAt));
+    const id = setInterval(() => setLabel(formatElapsedSinceSent(sentAt)), 1000);
+    return () => clearInterval(id);
+  }, [sentAt]);
+  return (
+    <span className={className} title="Seen hone tak ka time">
+      <Clock size={12} className="inline-block mr-0.5 opacity-90 align-middle shrink-0" />
+      {label}
+    </span>
+  );
+}
+
 const ChatPage = () => {
   const location = useLocation();
   const [chatList, setChatList] = useState([]);
@@ -528,6 +561,46 @@ const ChatPage = () => {
   const individualEmojiButtonRef = useRef(null); // Ref for individual chat emoji button
   const previewEmojiButtonRef = useRef(null); // Ref for preview modal emoji button
   const lastFetchedGroupIdRef = useRef(null); // Track last fetched group to prevent duplicate fetches
+
+  /** Per message: nudge after this long if still unread; timer cleared when that message/thread is read. */
+  const MESSAGE_UNREAD_NUDGE_MS = 45 * 60 * 1000;
+  const perMessageReminderTimersRef = useRef({});
+  const perMessageReminderMetaRef = useRef({});
+  const selectedUserRef = useRef(null);
+  const selectedGroupRef = useRef(null);
+  const newMessagesMapRef = useRef({});
+  const newGroupMessagesMapRef = useRef({});
+  const displayInAppNotificationRef = useRef(() => {});
+
+  function clearPerMessageReminderKey(key) {
+    const id = perMessageReminderTimersRef.current[key];
+    if (id != null) clearTimeout(id);
+    delete perMessageReminderTimersRef.current[key];
+    delete perMessageReminderMetaRef.current[key];
+  }
+  function clearAllPerMessageRemindersForSender(senderEmpId) {
+    if (!senderEmpId) return;
+    Object.keys(perMessageReminderMetaRef.current).forEach((k) => {
+      const m = perMessageReminderMetaRef.current[k];
+      if (m?.kind === 'individual' && m.senderEmpId === senderEmpId) {
+        clearPerMessageReminderKey(k);
+      }
+    });
+  }
+  function clearAllPerMessageRemindersForGroup(groupId) {
+    if (groupId == null || groupId === '') return;
+    const gid = String(groupId);
+    Object.keys(perMessageReminderMetaRef.current).forEach((k) => {
+      const m = perMessageReminderMetaRef.current[k];
+      if (m?.kind === 'group' && String(m.groupId) === gid) {
+        clearPerMessageReminderKey(k);
+      }
+    });
+  }
+  function clearGroupMessageUnreadReminder(groupId, messageId) {
+    if (messageId == null || messageId === '') return;
+    clearPerMessageReminderKey(`gm:${String(groupId)}:${String(messageId)}`);
+  }
 
   const scrollToBottom = (force = false) => {
     // If force is true (when user sends message), always scroll
@@ -1056,6 +1129,7 @@ const ChatPage = () => {
 
   // Clear unread count for a user
   const clearUnreadCount = (empId) => {
+    clearAllPerMessageRemindersForSender(empId);
     setNewMessagesMap(prev => {
       const copy = { ...prev };
       delete copy[empId];
@@ -1074,6 +1148,7 @@ const ChatPage = () => {
   // Mark individual chat messages as seen on server
   // CRITICAL: Must call this when user opens/views a chat (per guide)
   const markMessagesAsSeen = async (senderEmpId) => {
+    clearAllPerMessageRemindersForSender(senderEmpId);
     try {
       // Per guide: POST /api/v1/chat/mark-seen/:empId
       const res = await axios.post(
@@ -1115,6 +1190,131 @@ const ChatPage = () => {
       setInAppNotificationData(null);
     }, 5000);
   };
+
+  useEffect(() => {
+    displayInAppNotificationRef.current = displayInAppNotification;
+  });
+  useEffect(() => {
+    selectedUserRef.current = selectedUser;
+  }, [selectedUser]);
+  useEffect(() => {
+    selectedGroupRef.current = selectedGroup;
+  }, [selectedGroup]);
+  useEffect(() => {
+    newMessagesMapRef.current = newMessagesMap;
+  }, [newMessagesMap]);
+  useEffect(() => {
+    newGroupMessagesMapRef.current = newGroupMessagesMap;
+  }, [newGroupMessagesMap]);
+
+  const tryFireIndividualMessageReminder = (senderEmpId, senderDisplayName, body) => {
+    if (selectedUserRef.current?.empId === senderEmpId) return false;
+    const unread = newMessagesMapRef.current[senderEmpId];
+    if (unread == null || unread <= 0) return false;
+    const mins = Math.round(MESSAGE_UNREAD_NUDGE_MS / 60000);
+    displayInAppNotificationRef.current(
+      `Unread message (${mins}+ min)`,
+      `${senderDisplayName}: ${body || 'Message not opened yet.'}`,
+      senderDisplayName
+    );
+    return true;
+  };
+
+  const tryFireGroupMessageReminder = (groupId, groupName, senderDisplayName, body) => {
+    const gid = String(groupId);
+    if (String(selectedGroupRef.current?._id || '') === gid) return false;
+    const unread = newGroupMessagesMapRef.current[gid];
+    if (unread == null || unread <= 0) return false;
+    const gname = groupName || 'Group';
+    const mins = Math.round(MESSAGE_UNREAD_NUDGE_MS / 60000);
+    displayInAppNotificationRef.current(
+      `Unread group message (${mins}+ min)`,
+      `${gname} — ${senderDisplayName}: ${body || 'Message not opened yet.'}`,
+      `${senderDisplayName} in ${gname}`
+    );
+    return true;
+  };
+
+  const scheduleIndividualMessageUnreadReminder = (reminderKey, senderEmpId, senderDisplayName, body) => {
+    if (!senderEmpId || senderEmpId === storedUser?.empId) return;
+    clearPerMessageReminderKey(reminderKey);
+    perMessageReminderMetaRef.current[reminderKey] = {
+      kind: 'individual',
+      since: Date.now(),
+      senderEmpId,
+      senderDisplayName,
+      body
+    };
+    perMessageReminderTimersRef.current[reminderKey] = setTimeout(() => {
+      const meta = perMessageReminderMetaRef.current[reminderKey];
+      delete perMessageReminderTimersRef.current[reminderKey];
+      delete perMessageReminderMetaRef.current[reminderKey];
+      if (meta?.kind === 'individual') {
+        tryFireIndividualMessageReminder(meta.senderEmpId, meta.senderDisplayName, meta.body);
+      }
+    }, MESSAGE_UNREAD_NUDGE_MS);
+  };
+
+  const scheduleGroupMessageUnreadReminder = (reminderKey, groupId, groupName, senderDisplayName, body) => {
+    if (groupId == null || groupId === '') return;
+    clearPerMessageReminderKey(reminderKey);
+    perMessageReminderMetaRef.current[reminderKey] = {
+      kind: 'group',
+      since: Date.now(),
+      groupId: String(groupId),
+      groupName,
+      senderDisplayName,
+      body
+    };
+    perMessageReminderTimersRef.current[reminderKey] = setTimeout(() => {
+      const meta = perMessageReminderMetaRef.current[reminderKey];
+      delete perMessageReminderTimersRef.current[reminderKey];
+      delete perMessageReminderMetaRef.current[reminderKey];
+      if (meta?.kind === 'group') {
+        tryFireGroupMessageReminder(
+          meta.groupId,
+          meta.groupName,
+          meta.senderDisplayName,
+          meta.body
+        );
+      }
+    }, MESSAGE_UNREAD_NUDGE_MS);
+  };
+
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.hidden) return;
+      const now = Date.now();
+      const keys = Object.keys(perMessageReminderMetaRef.current);
+      for (const key of keys) {
+        const meta = perMessageReminderMetaRef.current[key];
+        if (!meta || now - meta.since < MESSAGE_UNREAD_NUDGE_MS) continue;
+        clearPerMessageReminderKey(key);
+        if (meta.kind === 'individual') {
+          tryFireIndividualMessageReminder(meta.senderEmpId, meta.senderDisplayName, meta.body);
+        } else if (meta.kind === 'group') {
+          tryFireGroupMessageReminder(
+            meta.groupId,
+            meta.groupName,
+            meta.senderDisplayName,
+            meta.body
+          );
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      Object.values(perMessageReminderTimersRef.current).forEach((tid) => {
+        if (tid != null) clearTimeout(tid);
+      });
+      perMessageReminderTimersRef.current = {};
+      perMessageReminderMetaRef.current = {};
+    };
+  }, []);
 
   const fetchMessages = async (selectedEmpId, loadOlder = false) => {
     if (!storedUser?.empId || !selectedEmpId) return;
@@ -1493,6 +1693,7 @@ const ChatPage = () => {
         setLoadingGroupMessages(true);
         setGroupMessagesPage(0);
         setHasMoreGroupMessages(true);
+        clearAllPerMessageRemindersForGroup(groupId);
         // Only clear messages if switching to a different group
         if (lastFetchedGroupIdRef.current && lastFetchedGroupIdRef.current !== groupId) {
           setGroupMessages([]);
@@ -3898,13 +4099,29 @@ const ChatPage = () => {
       }
     };
 
-    const handleNewMessage = async ({ senderEmpId, receiverEmpId, message, senderName, audio, image, file, replyTo }) => {
+    const handleNewMessage = async (payload) => {
+      const {
+        senderEmpId,
+        receiverEmpId,
+        message,
+        senderName,
+        audio,
+        image,
+        file,
+        replyTo,
+        _id,
+        messageId,
+        id
+      } = payload || {};
+      const serverMessageId = _id ?? messageId ?? id;
+
       console.log('🔔🔔🔔 handleNewMessage called:', {
         senderEmpId,
         receiverEmpId,
         storedUserEmpId: storedUser?.empId,
         selectedUserEmpId: selectedUser?.empId,
-        message: message?.substring(0, 50)
+        message: message?.substring(0, 50),
+        serverMessageId
       });
       
       // Mark sender as online when they send a message
@@ -3960,7 +4177,17 @@ const ChatPage = () => {
       if (isForMe && !isFromSelectedUser) {
 
         updateUnreadCount(senderEmpId, 1);
-        
+        const reminderKey =
+          serverMessageId != null && serverMessageId !== ''
+            ? `m:${String(serverMessageId)}`
+            : `p:${senderEmpId}:${Date.now()}:${Math.random().toString(36).slice(2, 9)}`;
+        scheduleIndividualMessageUnreadReminder(
+          reminderKey,
+          senderEmpId,
+          senderName || 'Someone',
+          notificationMessage
+        );
+
         // Re-sort chat list to move unread users to top (don't fetch unread counts from server)
         setTimeout(async () => {
           await fetchChatList();
@@ -4080,7 +4307,24 @@ const ChatPage = () => {
       }
     };
 
-    const handleNewGroupMessage = async ({ groupId, groupName, senderEmpId, senderName, senderAliasName, message, audio, image, file, replyTo }) => {
+    const handleNewGroupMessage = async (payload) => {
+      const {
+        groupId,
+        groupName,
+        senderEmpId,
+        senderName,
+        senderAliasName,
+        message,
+        audio,
+        image,
+        file,
+        replyTo,
+        _id,
+        messageId,
+        id
+      } = payload || {};
+      const serverMessageId = _id ?? messageId ?? id;
+
       console.log('📥📥📥 NEW GROUP MESSAGE RECEIVED:', {
         groupId,
         groupName,
@@ -4090,7 +4334,8 @@ const ChatPage = () => {
         hasReplyTo: !!replyTo,
         replyTo,
         isForSelectedGroup: selectedGroup?._id === groupId,
-        isFromMe: senderEmpId === storedUser.empId
+        isFromMe: senderEmpId === storedUser.empId,
+        serverMessageId
       });
       
       // Mark sender as online when they send a message
@@ -4119,7 +4364,18 @@ const ChatPage = () => {
       if (!isFromMe && (!selectedGroup || !isForSelectedGroup)) {
         const senderDisplayName = senderName || "Someone";
         const groupDisplayName = groupName || "Group";
-        
+        const gReminderKey =
+          serverMessageId != null && serverMessageId !== ''
+            ? `gm:${String(groupId)}:${String(serverMessageId)}`
+            : `gp:${String(groupId)}:${Date.now()}:${Math.random().toString(36).slice(2, 9)}`;
+        scheduleGroupMessageUnreadReminder(
+          gReminderKey,
+          groupId,
+          groupDisplayName,
+          senderDisplayName,
+          notificationMessage
+        );
+
         // Only show in-app notification (browser notifications handled by NotificationHandler)
         displayInAppNotification(`${groupDisplayName}: ${senderDisplayName}`, notificationMessage, `${senderDisplayName} in ${groupDisplayName}`);
         
@@ -4220,6 +4476,10 @@ const ChatPage = () => {
     // Per docs: event structure is { groupId, messageId, seenBy: { empId, employeeName, aliasName, seenAt } }
     const handleGroupMessageSeen = ({ groupId, messageId, seenBy }) => {
       console.log('🔔 Group message seen event received:', { groupId, messageId, seenBy });
+
+      if (messageId && seenBy?.empId === storedUser?.empId) {
+        clearGroupMessageUnreadReminder(groupId, messageId);
+      }
       
       // Only update if it's for the currently selected group
       if (selectedGroup?._id === groupId && messageId && seenBy) {
@@ -4267,6 +4527,10 @@ const ChatPage = () => {
       }
 
       const { empId, unreadCount, online, lastMessage, lastMessageTime, employeeName, aliasName } = updatedChatItem;
+
+      if (!(unreadCount > 0)) {
+        clearAllPerMessageRemindersForSender(empId);
+      }
       
       // Log if this is for sender (current user sent message) or receiver (current user received message)
       const isForCurrentUser = empId === storedUser?.empId;
@@ -4364,6 +4628,10 @@ const ChatPage = () => {
       // Use unreadCount from socket event directly (backend calculates it)
       // unreadCount: 0 means no red dot, > 0 means show red dot with count
       const actualUnreadCount = unreadCount || 0;
+
+      if (actualUnreadCount <= 0) {
+        clearAllPerMessageRemindersForGroup(groupId);
+      }
 
       // Update unread count map for red dot display
       setNewGroupMessagesMap(prev => {
@@ -4466,7 +4734,10 @@ const ChatPage = () => {
     return () => {
       if (socketRef.current) {
         console.log('🧹 Chat.jsx: Removing socket listeners (socket stays connected)');
-        socketRef.current.off("newMessage", handleNewMessage);
+        socketRef.current.off("newMessage", handleIndividualMessage);
+        socketRef.current.off("new_message", handleIndividualMessage);
+        socketRef.current.off("private_message", handleIndividualMessage);
+        socketRef.current.off("message", handleIndividualMessage);
         socketRef.current.off("newGroupMessage", handleNewGroupMessage);
         socketRef.current.off("groupMessageSeen", handleGroupMessageSeen);
         socketRef.current.off("groupMessageSeenUpdated", handleGroupMessageSeen);
@@ -5597,10 +5868,14 @@ const ChatPage = () => {
                                           );
                                         }
                                         
-                                        // Always show "Sent" if not seen yet (like individual chats)
+                                        // Not seen yet: show live wait timer
                                         return (
-                                          <span className="text-xs italic text-white opacity-75">
-                                            Sent
+                                          <span className="text-xs text-white flex items-center gap-2 flex-wrap justify-end">
+                                            <span className="italic opacity-75">Sent</span>
+                                            <OutgoingUnseenWaitTimer
+                                              sentAt={msg.createdAt || msg.timestamp}
+                                              className="text-amber-200 flex items-center font-medium not-italic"
+                                            />
                                           </span>
                                         );
                                       })()}
@@ -5922,7 +6197,8 @@ const ChatPage = () => {
                   </div>
                 ) : (
                   messages.map((msg, idx) => {
-                    const isSentByMe = msg.senderEmpId === storedUser?.empId;
+                    const isSentByMe = msg.senderEmpId === storedUser?.empId || msg.isMyMessage;
+                    const isUnseenOutgoing = isSentByMe && !(msg.isSeen && msg.seenBy);
                     const showDate = idx === 0 || 
                       new Date(msg.timestamp).toDateString() !== 
                       new Date(messages[idx - 1]?.timestamp).toDateString();
@@ -6263,12 +6539,18 @@ const ChatPage = () => {
                                   }}>{msg.message}</p>
                                 )}
                               </div>
-                              <div className={`flex items-center gap-1 mt-1 ${isSentByMe ? "justify-end" : "justify-start"}`}>
+                              <div className={`flex items-center gap-1 mt-1 flex-wrap ${isSentByMe ? "justify-end" : "justify-start"}`}>
                                 <span className="text-xs text-gray-400">
                                   {formatTime(msg.timestamp)}
                                 </span>
                                 {isSentByMe && (
-                                  <div className="flex items-center gap-1">
+                                  <div className="flex items-center gap-1 flex-wrap justify-end">
+                                    {isUnseenOutgoing && (
+                                      <OutgoingUnseenWaitTimer
+                                        sentAt={msg.createdAt || msg.timestamp}
+                                        className="text-xs text-amber-600 flex items-center font-medium"
+                                      />
+                                    )}
                                     <button
                                       onClick={() => msg._id && fetchSeenBy(msg._id, false)}
                                       className="cursor-pointer hover:opacity-80 transition-opacity flex items-center gap-1"
