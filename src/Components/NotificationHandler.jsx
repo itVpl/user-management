@@ -7,6 +7,7 @@ import sharedSocketService from '../services/sharedSocketService';
 import {
   isLoadImportantDateReminder,
   getLoadReminderDedupeKey,
+  isStoredUserCmtDepartment,
 } from '../utils/loadImportantDateReminder';
 
 const NotificationHandler = () => {
@@ -526,6 +527,20 @@ const NotificationHandler = () => {
 
       // Important-date reminders: same socket `notification` event (incl. deliverPendingNotifications replay)
       if (isReminder) {
+        let sessionUser = null;
+        try {
+          const raw =
+            localStorage.getItem("user") || sessionStorage.getItem("user");
+          sessionUser = raw ? JSON.parse(raw) : null;
+        } catch {
+          sessionUser = null;
+        }
+        if (!isStoredUserCmtDepartment(sessionUser)) {
+          console.log(
+            "Load important-date reminder skipped: session user is not CMT department"
+          );
+          return;
+        }
         showBrowserNotification(notificationData);
         if (shouldShowNotification(notificationData)) {
           playNotificationSound();
