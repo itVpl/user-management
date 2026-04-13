@@ -17,3 +17,17 @@ export function isLoadImportantDateReminder(data) {
 export function getLoadReminderDedupeKey(data) {
   return `load-reminder-${data.loadId || "unknown"}-${data.title || ""}-${data.timestamp || Date.now()}`;
 }
+
+/**
+ * Same department rule as Layout / assignment popups: important-date reminders are CMT workflow.
+ * Session `user` may be string or object department (see login payload).
+ */
+export function isStoredUserCmtDepartment(user) {
+  if (!user) return false;
+  const department =
+    typeof user.department === "string"
+      ? user.department
+      : user.department?.name || "";
+  const departmentLower = String(department).toLowerCase().trim();
+  return departmentLower === "cmt" || departmentLower.includes("cmt");
+}
