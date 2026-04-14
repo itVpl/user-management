@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import axios from 'axios';
 import { Search, Truck, ChevronLeft, ChevronRight, Eye, Download, ChevronDown, User } from 'lucide-react';
 import API_CONFIG from '../../config/api.js';
@@ -15,6 +15,18 @@ const TABLE_SCROLL_AREA =
   'w-full min-w-0 max-w-full max-h-[min(72vh,800px)] overflow-auto overscroll-x-contain [scrollbar-gutter:stable] [scrollbar-width:auto] [scrollbar-color:rgb(100_116_139)_rgb(241_245_249)] [&::-webkit-scrollbar]:h-3.5 [&::-webkit-scrollbar]:w-3.5 [&::-webkit-scrollbar-track]:rounded-md [&::-webkit-scrollbar-track]:bg-slate-100 [&::-webkit-scrollbar-thumb]:rounded-md [&::-webkit-scrollbar-thumb]:bg-slate-400 hover:[&::-webkit-scrollbar-thumb]:bg-slate-500';
 const CELL_SCROLL =
   'max-h-56 overflow-y-auto overflow-x-hidden pr-1 [scrollbar-width:thin] [scrollbar-color:rgb(148_163_184)_rgb(248_250_252)] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:rounded [&::-webkit-scrollbar-track]:bg-slate-100 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-400';
+
+/** Backend filters mainly by assignment; widen API range so Important Dates in the user's range still match. Keep moderate to limit payload size vs speed. */
+const API_FETCH_BUFFER_DAYS = 200;
+const FETCH_PAGE_SIZE = 1000;
+
+const parseYmdToLocalDate = (ymdStr) => {
+  if (!ymdStr || typeof ymdStr !== 'string') return null;
+  const parts = ymdStr.split('-').map(Number);
+  if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return null;
+  const [y, m, d] = parts;
+  return new Date(y, m - 1, d);
+};
 
 export default function DOAndSchedulingReport() {
   const [assignedDOs, setAssignedDOs] = useState([]);
@@ -41,10 +53,11 @@ export default function DOAndSchedulingReport() {
   const tableScrollRef = useRef(null);
 
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalCount, setTotalCount] = useState(0);
   const [todayCount, setTodayCount] = useState(0);
   const itemsPerPage = 10;
-  const prevFiltersRef = useRef({ start: null, end: null, cmt: '', isSearching: false });
+  const prevFiltersRef = useRef({ start: null, end: null, cmt: '' });
+  const fetchAbortRef = useRef(null);
+  const fetchRequestIdRef = useRef(0);
 
   const presets = {
     'Today': [new Date(), new Date()],
@@ -63,7 +76,13 @@ export default function DOAndSchedulingReport() {
 
   const ymd = (d) => (d ? format(d, 'yyyy-MM-dd') : null);
 
-  const fetchData = async (page = currentPage, limit = itemsPerPage, startDateParam = null, endDateParam = null) => {
+  const fetchData = async (startDateParam = null, endDateParam = null) => {
+    fetchAbortRef.current?.abort();
+    const ac = new AbortController();
+    fetchAbortRef.current = ac;
+    const { signal } = ac;
+    const myRequestId = ++fetchRequestIdRef.current;
+
     setLoading(true);
     try {
       const token = sessionStorage.getItem('token') || localStorage.getItem('token');
@@ -75,86 +94,79 @@ export default function DOAndSchedulingReport() {
       const endDate = endDateParam ?? ymd(range.endDate);
       if (!startDate || !endDate) {
         setAssignedDOs([]);
-        setTotalCount(0);
+        setTodayCount(0);
         setLoading(false);
         return;
       }
-      const isSearching = (searchTerm || '').trim() !== '';
-      const baseParams = { startDate, endDate };
+      const userStartDt = parseYmdToLocalDate(startDate);
+      const userEndDt = parseYmdToLocalDate(endDate);
+      const apiStartDate =
+        userStartDt && userEndDt
+          ? format(addDays(userStartDt, -API_FETCH_BUFFER_DAYS), 'yyyy-MM-dd')
+          : startDate;
+      const apiEndDate =
+        userStartDt && userEndDt
+          ? format(addDays(userEndDt, API_FETCH_BUFFER_DAYS), 'yyyy-MM-dd')
+          : endDate;
+      const baseParams = { startDate: apiStartDate, endDate: apiEndDate };
       if (selectedCmtEmpId) baseParams.empId = selectedCmtEmpId;
 
-      if (isSearching) {
-        const pageSize = 500;
-        let allRows = [];
-        let nextPage = 1;
-        let totalFromApi = null;
-        let totalPagesFromApi = null;
-        let itemsPerPageFromApi = pageSize;
-        let firstTodayCount = 0;
+      const pageSize = FETCH_PAGE_SIZE;
+      let allRows = [];
+      let nextPage = 1;
+      let totalFromApi = null;
+      let totalPagesFromApi = null;
+      let itemsPerPageFromApi = pageSize;
+      let firstTodayCount = 0;
 
-        while (true) {
-          const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/do/do/all-cmt-assignments`, {
-            params: { ...baseParams, page: nextPage, limit: pageSize },
-            headers: { Authorization: `Bearer ${token}` }
-          });
+      while (true) {
+        if (signal.aborted) return;
 
-          const data = res.data?.data || res.data;
-          const assigned = Array.isArray(data?.assignedDOs) ? data.assignedDOs : [];
-          if (nextPage === 1) firstTodayCount = data?.todayCount ?? 0;
-
-          const pagination = data?.pagination || res.data?.pagination || {};
-          if (totalFromApi == null) {
-            const maybeTotal = pagination.totalItems ?? data.totalCount ?? data.total ?? res.data?.pagination?.totalItems ?? null;
-            totalFromApi = typeof maybeTotal === 'number' ? maybeTotal : null;
-          }
-          if (totalPagesFromApi == null) {
-            const maybePages = pagination.totalPages ?? data.totalPages ?? res.data?.pagination?.totalPages ?? null;
-            totalPagesFromApi = typeof maybePages === 'number' ? maybePages : null;
-          }
-          if (typeof pagination.itemsPerPage === 'number' && Number.isFinite(pagination.itemsPerPage)) {
-            itemsPerPageFromApi = pagination.itemsPerPage;
-          }
-
-          allRows = allRows.concat(assigned);
-
-          if (totalPagesFromApi != null && nextPage >= totalPagesFromApi) break;
-          if (totalFromApi != null && allRows.length >= totalFromApi) break;
-          if (assigned.length === 0) break;
-          if (totalPagesFromApi == null && totalFromApi == null && assigned.length < itemsPerPageFromApi) break;
-
-          nextPage += 1;
-          if (nextPage > 2000) break;
-        }
-
-        setAssignedDOs(allRows);
-        setTotalCount(totalFromApi ?? allRows.length);
-        setTodayCount(firstTodayCount);
-      } else {
         const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/do/do/all-cmt-assignments`, {
-          params: { ...baseParams, page, limit },
-          headers: { Authorization: `Bearer ${token}` }
+          params: { ...baseParams, page: nextPage, limit: pageSize },
+          headers: { Authorization: `Bearer ${token}` },
+          signal,
         });
+
         const data = res.data?.data || res.data;
-        if (res.data?.success && Array.isArray(data?.assignedDOs)) {
-          setAssignedDOs(data.assignedDOs);
-          const pagination = data?.pagination || res.data?.pagination || {};
-          const total = pagination.totalItems ?? data.totalCount ?? data.total ?? res.data?.pagination?.totalItems ?? data.assignedDOs?.length ?? 0;
-          setTotalCount(typeof total === 'number' ? total : data.assignedDOs.length);
-          setTodayCount(data.todayCount ?? 0);
-        } else {
-          setAssignedDOs([]);
-          setTotalCount(0);
-          setTodayCount(0);
+        const assigned = Array.isArray(data?.assignedDOs) ? data.assignedDOs : [];
+        if (nextPage === 1) firstTodayCount = data?.todayCount ?? 0;
+
+        const pagination = data?.pagination || res.data?.pagination || {};
+        if (totalFromApi == null) {
+          const maybeTotal = pagination.totalItems ?? data.totalCount ?? data.total ?? res.data?.pagination?.totalItems ?? null;
+          totalFromApi = typeof maybeTotal === 'number' ? maybeTotal : null;
         }
+        if (totalPagesFromApi == null) {
+          const maybePages = pagination.totalPages ?? data.totalPages ?? res.data?.pagination?.totalPages ?? null;
+          totalPagesFromApi = typeof maybePages === 'number' ? maybePages : null;
+        }
+        if (typeof pagination.itemsPerPage === 'number' && Number.isFinite(pagination.itemsPerPage)) {
+          itemsPerPageFromApi = pagination.itemsPerPage;
+        }
+
+        allRows = allRows.concat(assigned);
+
+        if (totalPagesFromApi != null && nextPage >= totalPagesFromApi) break;
+        if (totalFromApi != null && allRows.length >= totalFromApi) break;
+        if (assigned.length === 0) break;
+        if (totalPagesFromApi == null && totalFromApi == null && assigned.length < itemsPerPageFromApi) break;
+
+        nextPage += 1;
+        if (nextPage > 2000) break;
       }
+
+      if (signal.aborted) return;
+      setAssignedDOs(allRows);
+      setTodayCount(firstTodayCount);
     } catch (err) {
+      if (axios.isCancel?.(err) || err.code === 'ERR_CANCELED' || err.name === 'CanceledError') return;
       console.error(err);
       alertify.error(err.response?.data?.message || 'Failed to load DO and Scheduling report');
       setAssignedDOs([]);
-      setTotalCount(0);
       setTodayCount(0);
     } finally {
-      setLoading(false);
+      if (myRequestId === fetchRequestIdRef.current) setLoading(false);
     }
   };
 
@@ -163,24 +175,24 @@ export default function DOAndSchedulingReport() {
     const endDate = ymd(range.endDate);
     if (!startDate || !endDate) {
       setAssignedDOs([]);
-      setTotalCount(0);
       setTodayCount(0);
       setLoading(false);
       return;
     }
-    const isSearching = (searchTerm || '').trim() !== '';
     const cmt = selectedCmtEmpId || '';
     const prev = prevFiltersRef.current;
     const filtersChanged =
-      prev.start !== startDate || prev.end !== endDate || prev.cmt !== cmt || prev.isSearching !== isSearching;
+      prev.start !== startDate || prev.end !== endDate || prev.cmt !== cmt;
     if (filtersChanged) {
-      prevFiltersRef.current = { start: startDate, end: endDate, cmt, isSearching };
+      prevFiltersRef.current = { start: startDate, end: endDate, cmt };
       setCurrentPage(1);
-      fetchData(1, itemsPerPage, startDate, endDate);
-    } else if (!isSearching) {
-      fetchData(currentPage, itemsPerPage, startDate, endDate);
+      fetchData(startDate, endDate);
     }
-  }, [range.startDate, range.endDate, currentPage, searchTerm, selectedCmtEmpId]);
+  }, [range.startDate, range.endDate, selectedCmtEmpId]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
 
   const fetchCmtUsers = async () => {
     setCmtUsersLoading(true);
@@ -204,6 +216,13 @@ export default function DOAndSchedulingReport() {
     fetchCmtUsers();
   }, []);
 
+  useEffect(
+    () => () => {
+      fetchAbortRef.current?.abort();
+    },
+    [],
+  );
+
   useEffect(() => {
     if (!showCmtFilter) return;
     const handleClickOutside = (e) => {
@@ -226,13 +245,52 @@ export default function DOAndSchedulingReport() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showPresetMenu]);
 
-  const isSearching = (searchTerm || '').trim() !== '';
+  /** Assigned At or any Important Dates calendar day falls in [startYmd, endYmd] (inclusive). */
+  const orderMatchesReportRange = useCallback((order, startYmd, endYmd) => {
+    if (!startYmd || !endYmd) return true;
+    const inRange = (dateVal) => {
+      if (dateVal == null || dateVal === '') return false;
+      try {
+        const d = new Date(dateVal);
+        if (Number.isNaN(d.getTime())) return false;
+        const y = format(d, 'yyyy-MM-dd');
+        return y >= startYmd && y <= endYmd;
+      } catch {
+        return false;
+      }
+    };
+    if (inRange(order?.assignedToCMT?.assignedAt)) return true;
+    const lr = order?.loadReference || {};
+    const imp = lr.importantDates || order?.importantDates || {};
+    const pick = (a, b, c) => a ?? b ?? c ?? null;
+    const rawVals = [
+      pick(lr.vesselETA, imp.vesselETA, imp.vesselDate),
+      pick(lr.latfreeDate, imp.latfreeDate, imp.lastFreeDate),
+      pick(lr.dischargeDate, imp.dischargeDate),
+      pick(lr.outgateDate, imp.outgateDate),
+      imp.dlvyDate,
+      pick(lr.emptyDate, imp.emptyDate),
+      pick(lr.readyToReturnDate, imp.readyToReturnDate),
+      pick(lr.ingateDate, imp.ingateDate),
+      pick(lr.perDiemFreeDay, imp.perDiemFreeDay, imp.perDiemFreeDate),
+    ];
+    return rawVals.some((v) => inRange(v));
+  }, []);
 
-  const filteredAssignedDOs = useMemo(() => {
+  const rangeFilteredAssignedDOs = useMemo(() => {
+    const startYmd = ymd(range.startDate);
+    const endYmd = ymd(range.endDate);
+    if (!startYmd || !endYmd) return [];
+    return assignedDOs.filter((order) => orderMatchesReportRange(order, startYmd, endYmd));
+  }, [assignedDOs, range.startDate, range.endDate, orderMatchesReportRange]);
+
+  const needClientPagination = Boolean(ymd(range.startDate) && ymd(range.endDate));
+
+  const searchFilteredAssignedDOs = useMemo(() => {
     const norm = (v) => String(v ?? '').trim().toLowerCase();
     const q = norm(searchTerm);
-    if (!q) return assignedDOs;
-    return assignedDOs.filter((order) => {
+    if (!q) return rangeFilteredAssignedDOs;
+    return rangeFilteredAssignedDOs.filter((order) => {
       const cust0 = order.customers?.[0] || {};
       const loadNo = norm(cust0.loadNo);
       const dispatcherName = norm(cust0.dispatcherName);
@@ -276,20 +334,22 @@ export default function DOAndSchedulingReport() {
         billTo.includes(q)
       );
     });
-  }, [assignedDOs, searchTerm]);
+  }, [rangeFilteredAssignedDOs, searchTerm]);
 
-  const totalItems = isSearching ? filteredAssignedDOs.length : totalCount;
+  const filteredAssignedDOs = searchFilteredAssignedDOs;
+
+  const totalItems = needClientPagination ? filteredAssignedDOs.length : 0;
   const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const currentOrders = isSearching
+  const currentOrders = needClientPagination
     ? filteredAssignedDOs.slice(startIndex, startIndex + itemsPerPage)
-    : assignedDOs;
+    : [];
 
   useEffect(() => {
-    if (!isSearching) return;
+    if (!needClientPagination) return;
     if (currentPage <= totalPages) return;
     setCurrentPage(totalPages);
-  }, [currentPage, isSearching, totalPages]);
+  }, [currentPage, needClientPagination, totalPages]);
 
   const filteredCmtUsers = useMemo(() => {
     const q = (cmtFilterSearch || '').trim().toLowerCase();
@@ -350,15 +410,15 @@ export default function DOAndSchedulingReport() {
         /* skip invalid */
       }
     };
-    add('Vessel ETA', pick(lr.vesselETA, imp.vesselETA, imp.vesselDate));
-    add('Last free', pick(lr.latfreeDate, imp.latfreeDate, imp.lastFreeDate));
-    add('Discharge', pick(lr.dischargeDate, imp.dischargeDate));
-    add('Outgate', pick(lr.outgateDate, imp.outgateDate));
-    add('Empty', pick(lr.emptyDate, imp.emptyDate));
-    add('Per diem free', pick(lr.perDiemFreeDay, imp.perDiemFreeDay, imp.perDiemFreeDate));
-    add('Ingate', pick(lr.ingateDate, imp.ingateDate));
-    add('Ready return', pick(lr.readyToReturnDate, imp.readyToReturnDate));
-    add('Delivery', imp.dlvyDate);
+    add('Vessel Date', pick(lr.vesselETA, imp.vesselETA, imp.vesselDate));
+    add('Lastfree Date', pick(lr.latfreeDate, imp.latfreeDate, imp.lastFreeDate));
+    add('Discharge Date', pick(lr.dischargeDate, imp.dischargeDate));
+    add('Outgate Date', pick(lr.outgateDate, imp.outgateDate));
+    add('Delivery Date', imp.dlvyDate);
+    add('Empty Date', pick(lr.emptyDate, imp.emptyDate));
+    add('Ready To Return Date', pick(lr.readyToReturnDate, imp.readyToReturnDate));
+    add('Ingate Date', pick(lr.ingateDate, imp.ingateDate));
+    add('Per Diem Free Day', pick(lr.perDiemFreeDay, imp.perDiemFreeDay, imp.perDiemFreeDate));
     return entries;
   };
 
@@ -443,8 +503,7 @@ export default function DOAndSchedulingReport() {
   };
 
   const handleExportCSVClick = () => {
-    const isSearchingNow = (searchTerm || '').trim() !== '';
-    const exportCount = isSearchingNow ? filteredAssignedDOs.length : totalCount;
+    const exportCount = filteredAssignedDOs.length;
     if (exportCount === 0) {
       alertify.error('No data to export');
       return;
@@ -476,33 +535,13 @@ export default function DOAndSchedulingReport() {
         setExportLoading(false);
         return;
       }
-      const isSearchingNow = (searchTerm || '').trim() !== '';
-      if (isSearchingNow) {
-        if (filteredAssignedDOs.length === 0) {
-          alertify.error('No data to export');
-          setExportLoading(false);
-          return;
-        }
-        handleExportCSV(filteredAssignedDOs, name);
-        alertify.success(`Exported ${filteredAssignedDOs.length} orders`);
-        setExportLoading(false);
-        return;
-      }
-      const params = { startDate, endDate, limit: 0 };
-      if (searchTerm?.trim()) params.search = searchTerm.trim();
-      if (selectedCmtEmpId) params.empId = selectedCmtEmpId;
-      const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/do/do/all-cmt-assignments`, {
-        params,
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const list = res.data?.success && Array.isArray(res.data?.data?.assignedDOs) ? res.data.data.assignedDOs : [];
-      if (list.length === 0) {
+      if (filteredAssignedDOs.length === 0) {
         alertify.error('No data to export');
         setExportLoading(false);
         return;
       }
-      handleExportCSV(list, name);
-      alertify.success(`Exported ${list.length} orders`);
+      handleExportCSV(filteredAssignedDOs, name);
+      alertify.success(`Exported ${filteredAssignedDOs.length} orders`);
     } catch (err) {
       console.error(err);
       alertify.error(err.response?.data?.message || 'Export failed');
@@ -545,7 +584,7 @@ export default function DOAndSchedulingReport() {
           <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-white rounded-xl border border-gray-200 p-6 h-[105px] flex items-center relative">
               <div className="w-16 h-12 rounded-full bg-red-100 flex items-center justify-center text-gray-700 font-bold text-2xl">
-                {totalCount}
+                {rangeFilteredAssignedDOs.length}
               </div>
               <div className="absolute inset-0 flex items-center justify-center text-gray-700 font-semibold text-lg">
                 Total Orders
@@ -575,6 +614,9 @@ export default function DOAndSchedulingReport() {
                 </span>
                 <span className="ml-3 text-gray-400">▼</span>
               </button>
+              <p className="text-[11px] text-gray-500 leading-snug px-1">
+                Rows match if <strong>Assigned At</strong> or any <strong>Important Date</strong> falls in the range you pick.
+              </p>
               {showPresetMenu && (
                 <div className="absolute z-50 mt-2 w-full rounded-lg border border-gray-100 bg-white shadow-lg py-1 right-0">
                   <button
@@ -609,7 +651,7 @@ export default function DOAndSchedulingReport() {
             <button
               type="button"
               onClick={handleExportCSVClick}
-              disabled={totalCount === 0 || exportLoading}
+              disabled={filteredAssignedDOs.length === 0 || exportLoading}
               className="cursor-pointer mt-2 w-full flex items-center justify-center gap-2 px-4 h-[45px] bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               title="Export report to CSV (E-Sign required)"
             >
@@ -618,8 +660,8 @@ export default function DOAndSchedulingReport() {
           </div>
         </div>
 
-        <div className="flex gap-2 w-full items-stretch">
-          <div className="relative flex-1">
+        <div className="flex flex-wrap gap-2 w-full items-stretch">
+          <div className="relative flex-1 min-w-[200px]">
             <input
               type="text"
               placeholder="Search Orders"
@@ -750,10 +792,20 @@ export default function DOAndSchedulingReport() {
             <div className="text-center py-12 min-w-0">
               <Truck className="w-16 h-16 text-gray-300 mx-auto mb-4" />
               <p className="text-gray-500 text-lg">
-                {searchTerm ? 'No orders found matching your search' : !ymd(range.startDate) || !ymd(range.endDate) ? 'Select a date range' : 'No DO assignments in this period'}
+                {searchTerm
+                  ? 'No orders found matching your search'
+                  : !ymd(range.startDate) || !ymd(range.endDate)
+                    ? 'Select a date range'
+                    : assignedDOs.length > 0 && rangeFilteredAssignedDOs.length === 0
+                      ? 'No orders match this date range'
+                      : 'No DO assignments in this period'}
               </p>
               <p className="text-gray-400 text-sm">
-                {searchTerm ? 'Try adjusting your search' : 'Change date range or check back later'}
+                {searchTerm
+                  ? 'Try adjusting your search'
+                  : assignedDOs.length > 0 && rangeFilteredAssignedDOs.length === 0
+                    ? 'Nothing in range for Assigned At or Important Dates. Widen the range or change CMT filter.'
+                    : 'Change date range or check back later'}
               </p>
             </div>
           ) : (
@@ -802,29 +854,29 @@ export default function DOAndSchedulingReport() {
                   return (
                     <tr key={order._id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                       <td className="py-4 px-4"><span className="text-gray-700 font-medium">{loadNo}</span></td>
-                    <td className="py-4 px-4">
-  <div className="relative group max-w-[140px]">
+                      <td className="py-4 px-4">
+                        <div className="relative group max-w-[140px]">
 
-    {/* Truncated Text */}
-    <span className="font-medium text-gray-700 block truncate">
-      {carrierName || "-"}
-    </span>
+                          {/* Truncated Text */}
+                          <span className="font-medium text-gray-700 block truncate">
+                            {carrierName || "-"}
+                          </span>
 
-    {/* Tooltip */}
-    {carrierName && (
-      <div className="absolute left-0 top-full mt-2 hidden group-hover:block
+                          {/* Tooltip */}
+                          {carrierName && (
+                            <div className="absolute left-0 top-full mt-2 hidden group-hover:block
                       bg-gray-900 text-white text-sm
                       px-3 py-2.5
                       rounded-lg shadow-xl
                       max-w-[180px]
                       break-words
                       z-50">
-        {carrierName}
-      </div>
-    )}
+                              {carrierName}
+                            </div>
+                          )}
 
-  </div>
-</td>
+                        </div>
+                      </td>
                       <td className="py-4 px-4">
                         <div className="relative group max-w-[220px]">
                           <span className="font-medium text-gray-700 block truncate">
@@ -900,7 +952,7 @@ export default function DOAndSchedulingReport() {
                           onClick={() => setViewingOrder(orderForModal)}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-base cursor-pointer font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
                         >
-                           View
+                          View
                         </button>
                       </td>
                     </tr>
@@ -934,9 +986,8 @@ export default function DOAndSchedulingReport() {
                   <button
                     key={page}
                     onClick={() => handlePageChange(page)}
-                    className={`cursor-pointer w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-all ${
-                      currentPage === page ? 'bg-white border border-black shadow-sm text-black' : 'text-gray-600 hover:bg-gray-50'
-                    }`}
+                    className={`cursor-pointer w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-all ${currentPage === page ? 'bg-white border border-black shadow-sm text-black' : 'text-gray-600 hover:bg-gray-50'
+                      }`}
                   >
                     {page}
                   </button>
@@ -973,7 +1024,7 @@ export default function DOAndSchedulingReport() {
                 type="button"
                 onClick={() => { setShowESignModal(false); setESignName(''); }}
                 className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium"
-              > 
+              >
                 Cancel
               </button>
               <button
@@ -993,7 +1044,7 @@ export default function DOAndSchedulingReport() {
         onClose={() => setViewingOrder(null)}
         order={viewingOrder}
         cmtEmpId={viewingOrder?.raw?.assignedToCMT?.empId || ''}
-        onForwardSuccess={() => { const s = ymd(range.startDate); const e = ymd(range.endDate); if (s && e) fetchData(1, itemsPerPage, s, e); }}
+        onForwardSuccess={() => { const s = ymd(range.startDate); const e = ymd(range.endDate); if (s && e) fetchData(s, e); }}
         reportView={true}
       />
     </div>
