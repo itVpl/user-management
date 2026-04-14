@@ -7,6 +7,7 @@ import Logo from '../../assets/LogoFinal.png';
 import IdentificaLogo from '../../assets/identifica_logo.png';
 import MtPoconoLogo from '../../assets/mtPocono.png';
 import API_CONFIG from '../../config/api.js';
+import { parseDeliveryOrderOcrText, mergeDeliveryOrderOcrPatch } from '../../utils/deliveryOrderOcrParser.js';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
 import 'react-date-range/dist/styles.css';
@@ -578,6 +579,7 @@ export default function DeliveryOrder() {
     pickupLocations: [
       {
         name: '',
+        portName: '', // DRAYAGE pickup 1 → shipper.pickUpLocations[].portName
         address: '',
         city: '',
         state: '',
@@ -1057,9 +1059,10 @@ export default function DeliveryOrder() {
         exporterAddress: src.exporterAddress || '',
 
         pickupLocations: (src.shipper?.pickUpLocations || [{
-          name: '', address: '', city: '', state: '', zipCode: '', weight: '', commodity: '', pickUpDate: '', remarks: ''
+          name: '', portName: '', address: '', city: '', state: '', zipCode: '', weight: '', commodity: '', pickUpDate: '', remarks: ''
         }]).map(l => ({
           name: l?.name || '',
+          portName: l?.portName || '',
           address: l?.address || '',
           city: l?.city || '',
           state: l?.state || '',
@@ -1338,6 +1341,7 @@ export default function DeliveryOrder() {
                 
                 return {
                   name: origin.addressLine1 || '', // addressLine1 goes to Location field
+                  portName: origin.portName || '',
                   address: origin.addressLine1 || '', // addressLine1 also goes to Address field
                   city: origin.city || '',
                   state: origin.state || '',
@@ -1552,7 +1556,7 @@ export default function DeliveryOrder() {
         carrierFees: '',
         
         // Reset pickup locations to default single empty entry
-        pickupLocations: [{ name: '', address: '', city: '', state: '', zipCode: '', weight: '', commodity: '', pickUpDate: '', remarks: '' }],
+        pickupLocations: [{ name: '', portName: '', address: '', city: '', state: '', zipCode: '', weight: '', commodity: '', pickUpDate: '', remarks: '' }],
         
         // Reset drop locations to default single empty entry
         dropLocations: [{ name: '', address: '', city: '', state: '', zipCode: '', weight: '', commodity: '', dropDate: '', remarks: '' }],
@@ -1714,7 +1718,7 @@ export default function DeliveryOrder() {
       ...prev,
       pickupLocations: [
         ...prev.pickupLocations,
-        { name: '', address: '', city: '', state: '', zipCode: '', weight: '', commodity: '', pickUpDate: '', remarks: '' } // 👈 remarks and commodity added
+        { name: '', portName: '', address: '', city: '', state: '', zipCode: '', weight: '', commodity: '', pickUpDate: '', remarks: '' } // 👈 remarks and commodity added
       ]
     }));
   };
@@ -1805,7 +1809,16 @@ export default function DeliveryOrder() {
 
       const extractedText = response?.data?.data?.text || '';
       setOcrExtractedText(extractedText || 'No text extracted from this document.');
-      alertify.success('Document OCR text fetched');
+
+      const { patch, filledCount } = parseDeliveryOrderOcrText(extractedText);
+      if (filledCount > 0 && patch && Object.keys(patch).length > 0) {
+        setFormData((prev) => mergeDeliveryOrderOcrPatch(prev, patch));
+        alertify.success(
+          `Document OCR complete — ${filledCount} section(s) mapped into the form (verify & adjust as needed)`
+        );
+      } else {
+        alertify.success('Document OCR text fetched — no auto-mapped fields; use the text below to fill manually');
+      }
     } catch (error) {
       console.error('Textract OCR failed:', error?.response?.data || error);
       setOcrExtractedText('');
@@ -2200,6 +2213,7 @@ export default function DeliveryOrder() {
       const cleanedPickupLocations = (formData.pickupLocations || [])
         .map(l => ({
           name: (l.name || '').trim(),
+          portName: (l.portName || '').trim(),
           address: (l.address || '').trim(),
           city: (l.city || '').trim(),
           state: (l.state || '').trim(),
@@ -2496,7 +2510,7 @@ export default function DeliveryOrder() {
             zipCode: '',
             returnDate: ''
           },
-          pickupLocations: [{ name: '', address: '', city: '', state: '', zipCode: '', weight: '', commodity: '', pickUpDate: '', remarks: '' }],
+          pickupLocations: [{ name: '', portName: '', address: '', city: '', state: '', zipCode: '', weight: '', commodity: '', pickUpDate: '', remarks: '' }],
           dropLocations: [{ name: '', address: '', city: '', state: '', zipCode: '', weight: '', commodity: '', dropDate: '', remarks: '' }],
           remarks: '',
           bols: [{ bolNo: '' }],
@@ -2678,11 +2692,13 @@ const validateForm = (mode = formMode) => {
       // Reset pickup/drop locations to single for DRAYAGE
       pickupLocations: type === 'DRAYAGE' ? [prev.pickupLocations[0] || {
         name: '',
+        portName: '',
         address: '',
         city: '',
         state: '',
         zipCode: '',
         weight: '',
+        commodity: '',
         pickUpDate: '',
         remarks: ''
       }] : prev.pickupLocations,
@@ -2746,11 +2762,13 @@ const validateForm = (mode = formMode) => {
       pickupLocations: [
         {
           name: '',
+          portName: '',
           address: '',
           city: '',
           state: '',
           zipCode: '',
           weight: '',
+          commodity: '',
           pickUpDate: '',
           remarks: '' // 👈
         }
@@ -2765,6 +2783,7 @@ const validateForm = (mode = formMode) => {
           state: '',
           zipCode: '',
           weight: '',
+          commodity: '',
           dropDate: '',
           remarks: '' // 👈
         }
@@ -2933,9 +2952,10 @@ const validateForm = (mode = formMode) => {
           exporterAddress: fullOrderData.exporterAddress || '',
 
           pickupLocations: (fullOrderData.shipper?.pickUpLocations || [{
-            name: '', address: '', city: '', state: '', zipCode: '', weight: '', commodity: '', pickUpDate: '', remarks: ''
+            name: '', portName: '', address: '', city: '', state: '', zipCode: '', weight: '', commodity: '', pickUpDate: '', remarks: ''
           }]).map(l => ({
             name: l?.name || '',
+            portName: l?.portName || '',
             address: l?.address || '',
             city: l?.city || '',
             state: l?.state || '',
@@ -3028,11 +3048,13 @@ const validateForm = (mode = formMode) => {
         containerType: order.productName || '',
         pickupLocations: [{
           name: order.pickupLocation || '',
+          portName: '',
           address: '',
           city: '',
           state: '',
           zipCode: '',
           weight: order.quantity || '',
+          commodity: '',
           pickUpDate: '',
           remarks: '' // 👈
         }],
@@ -3097,11 +3119,13 @@ const validateForm = (mode = formMode) => {
       pickupLocations: [
         {
           name: '',
+          portName: '',
           address: '',
           city: '',
           state: '',
           zipCode: '',
           weight: '',
+          commodity: '',
           pickUpDate: '',
           remarks: '' // 👈
         }
@@ -3114,6 +3138,7 @@ const validateForm = (mode = formMode) => {
           state: '',
           zipCode: '',
           weight: '',
+          commodity: '',
           dropDate: '',
           remarks: '' // 👈
         }
@@ -3398,6 +3423,7 @@ const handleUpdateOrder = async (e) => {
       containerType: formData.containerType || '',
       pickUpLocations: (formData.pickupLocations || []).map(l => ({
         name: l.name || '',
+        portName: (l.portName || '').trim(),
         address: l.address || '',
         city: l.city || '',
         state: l.state || '',
@@ -5702,6 +5728,14 @@ const handleUpdateOrder = async (e) => {
                             {selectedLoadData.origins.map((origin, index) => (
                               <div key={index} className="mb-2 p-2 bg-white rounded border text-xs">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                  <div className="md:col-span-2">
+                                    <span className="font-medium text-gray-600">Port Name:</span>
+                                    <span className="ml-2 text-gray-800">
+                                      {origin.portName && String(origin.portName).trim()
+                                        ? String(origin.portName).trim()
+                                        : 'N/A'}
+                                    </span>
+                                  </div>
                                   <div>
                                     <span className="font-medium text-gray-600">Address:</span>
                                     <span className="ml-2 text-gray-800">
@@ -6310,6 +6344,19 @@ const handleUpdateOrder = async (e) => {
                             </button>
                           )}
                         </div>
+
+                        {selectedLoadType === 'DRAYAGE' && locationIndex === 0 && (
+                          <div className="mb-3">
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Port Name</label>
+                            <input
+                              type="text"
+                              value={location.portName || ''}
+                              onChange={(e) => handlePickupLocationChange(locationIndex, 'portName', e.target.value)}
+                              className="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 border-gray-300"
+                              placeholder="e.g. Port of Long Beach"
+                            />
+                          </div>
+                        )}
 
                         <div className="grid grid-cols-3 gap-4">
                           <div>
@@ -7217,6 +7264,14 @@ const handleUpdateOrder = async (e) => {
                           {(selectedOrder.shipper?.pickUpLocations || []).map((location, index) => (
                             <div key={index} className="bg-white rounded-lg p-3 border border-orange-200">
                               <div className="grid grid-cols-2 gap-4">
+                                <div className="col-span-2">
+                                  <p className="text-sm text-gray-600">Port Name</p>
+                                  <p className="font-medium text-gray-800">
+                                    {location?.portName && String(location.portName).trim()
+                                      ? String(location.portName).trim()
+                                      : 'N/A'}
+                                  </p>
+                                </div>
                                 <div>
                                   <p className="text-sm text-gray-600">Name</p>
                                   <p className="font-medium text-gray-800">{location?.name || 'N/A'}</p>

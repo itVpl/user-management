@@ -11,7 +11,8 @@ const MS = {
 };
 
 const SOFT = {
-  cardBlue: 'p-4 rounded-2xl border bg-[#EEF4FF] border-[#C9D5FF]',
+  sectionAccountantReupload:
+    'p-4 rounded-2xl border border-teal-200/70 bg-gradient-to-br from-teal-50/90 via-white to-emerald-50/30 shadow-sm shadow-teal-100/35 md:col-span-2',
   insetWhite: 'p-3 rounded-xl border bg-white',
 };
 
@@ -131,8 +132,11 @@ export default function AccountantReuploadForAccountant({
   };
 
   return (
-    <section className={`${SOFT.cardBlue} md:col-span-2`}>
-      <h3 className="text-sm font-semibold text-gray-800 mb-3">Reupload Documents</h3>
+    <section className={SOFT.sectionAccountantReupload}>
+      <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-100 text-teal-800 shadow-sm text-xs font-bold">↻</span>
+        Reupload Documents
+      </h3>
       <p className="text-xs text-gray-600 mb-3">
         Upload photos or documents here to forward to the accountant. This is separate from load reference images above.
       </p>
@@ -204,9 +208,22 @@ export default function AccountantReuploadForAccountant({
             type="button"
             onClick={submit}
             disabled={uploading || !files.length}
-            className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg ${uploading || !files.length ? MS.disabledBtn : MS.primaryBtn}`}
+            className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-semibold transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-1 ${
+              uploading
+                ? 'text-white bg-indigo-400 cursor-wait shadow-sm'
+                : !files.length
+                  ? 'text-white bg-slate-400 cursor-not-allowed shadow-none opacity-80'
+                  : 'text-white bg-gradient-to-r from-indigo-600 to-blue-600 shadow-md shadow-indigo-900/20 hover:from-indigo-500 hover:to-blue-500 hover:shadow-lg active:scale-[0.99]'
+            }`}
           >
-            {uploading ? 'Uploading…' : 'Forward to Accountant'}
+            {uploading ? (
+              <>
+                <span className="h-3.5 w-3.5 shrink-0 rounded-full border-2 border-white border-t-transparent animate-spin" aria-hidden />
+                Uploading…
+              </>
+            ) : (
+              'Forward to Accountant'
+            )}
           </button>
         </div>
 

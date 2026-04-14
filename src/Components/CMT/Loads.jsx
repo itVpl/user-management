@@ -246,6 +246,11 @@ export default function Loads() {
 
   const [activeTab, setActiveTab] = useState("ALL"); // 'ALL', 'OTR', 'DRAYAGE'
 
+  const loadTypeIsDrayage = (t) =>
+    String(t || "").toUpperCase() === "DRAYAGE";
+
+  const loadTypeIsOtr = (t) => String(t || "").toUpperCase() === "OTR";
+
   const [shippers, setShippers] = useState([]);
 
   // New states for View, Edit, Delete modalsdhsfgjhasgdjufgjusadg
@@ -584,6 +589,9 @@ export default function Loads() {
 
     fromState: "",
 
+    /** DRAYAGE pickup: stored in origins[0].portName */
+    portName: "",
+
     toZip: "", // NEW
 
     toAddress: "",
@@ -775,6 +783,8 @@ export default function Loads() {
         city: "",
 
         state: "",
+
+        portName: "",
 
         weight: "",
 
@@ -1368,6 +1378,8 @@ export default function Loads() {
 
         state: "",
 
+        portName: "",
+
         weight: "",
 
         commodity: "",
@@ -1475,6 +1487,7 @@ export default function Loads() {
         "returnCity",
         "returnState",
         "commodity",
+        "portName",
       ].includes(name)
     ) {
       value = value.replace(/\s{2,}/g, " ");
@@ -1911,7 +1924,7 @@ export default function Loads() {
 
     // NEW: DRAYAGE single-shot guard
 
-    if (loadType === "DRAYAGE" && creatingDrayage) {
+    if (loadTypeIsDrayage(loadType) && creatingDrayage) {
       console.log("❌ Already creating drayage, returning...");
 
       return;
@@ -1956,12 +1969,14 @@ export default function Loads() {
 
     let payload;
 
-    if (loadType === "OTR") {
+    if (loadTypeIsOtr(loadType)) {
       console.log("📦 Building OTR payload...");
 
       // OTR Load Structure - Use pickup and delivery locations from state
 
       const origins = pickupLocations.map((location) => ({
+        portName: (location.portName || "").trim(),
+
         addressLine1: (location.address || "").trim(),
 
         addressLine2: "",
@@ -2034,7 +2049,7 @@ export default function Loads() {
 
         rate: totalRate, // Optional but calculating total
 
-        ...(loadType !== "DRAYAGE"
+        ...(!loadTypeIsDrayage(loadType)
           ? { rateType: (loadForm.rateType || "Flat Rate").trim() }
           : {}),
 
@@ -2052,7 +2067,7 @@ export default function Loads() {
 
         OnboardTruckingCompany: (loadForm.onboardTruckingCompany || "").trim(),
       };
-    } else if (loadType === "DRAYAGE") {
+    } else if (loadTypeIsDrayage(loadType)) {
       console.log("📦 Building DRAYAGE payload...");
 
       // Calculate totals
@@ -2074,9 +2089,12 @@ export default function Loads() {
       const totalRateDrayage =
         lineHaulDrayage + fscAmountDrayage + otherTotalDrayage;
 
+      const drayagePortName = (loadForm.portName || "").trim();
+
       // DRAYAGE Load Structure - Add origins and destinations arrays like OTR
       const origins = [
         {
+          portName: drayagePortName,
           addressLine1: (loadForm.fromAddress || "").trim(),
           addressLine2: "",
           city: (loadForm.fromCity || "").trim(),
@@ -2108,6 +2126,8 @@ export default function Loads() {
         loadType: "DRAYAGE",
 
         vehicleType: (loadForm.vehicleType || "").trim(),
+
+        portName: drayagePortName,
 
         fromAddressLine1: (loadForm.fromAddress || "").trim(),
         fromAddressLine2: "",
@@ -2218,7 +2238,7 @@ export default function Loads() {
 
         OnboardTruckingCompany: (loadForm.onboardTruckingCompany || "").trim(),
 
-        ...(loadType === "DRAYAGE"
+        ...(loadTypeIsDrayage(loadType)
           ? {
               returnDate: loadForm.returnDate,
 
@@ -2237,7 +2257,7 @@ export default function Loads() {
     try {
       setCreatingLoad(true);
 
-      if (loadType === "DRAYAGE") setCreatingDrayage(true);
+      if (loadTypeIsDrayage(loadType)) setCreatingDrayage(true);
 
       console.log("🚀 Sending payload to API:", payload);
 
@@ -2285,7 +2305,7 @@ export default function Loads() {
     } finally {
       setCreatingLoad(false);
 
-      if (loadType === "DRAYAGE") setCreatingDrayage(false);
+      if (loadTypeIsDrayage(loadType)) setCreatingDrayage(false);
     }
   };
 
@@ -2351,12 +2371,14 @@ export default function Loads() {
 
     let payload;
 
-    if (loadType === "OTR") {
+    if (loadTypeIsOtr(loadType)) {
       console.log("📦 Building OTR edit payload...");
 
       // OTR Load Structure - Use pickup and delivery locations from state
 
       const origins = pickupLocations.map((location) => ({
+        portName: (location.portName || "").trim(),
+
         addressLine1: (location.address || "").trim(),
 
         addressLine2: "",
@@ -2447,7 +2469,7 @@ export default function Loads() {
 
         onboardTruckingCompany: (loadForm.onboardTruckingCompany || "").trim(),
       };
-    } else if (loadType === "DRAYAGE") {
+    } else if (loadTypeIsDrayage(loadType)) {
       console.log("📦 Building DRAYAGE edit payload...");
 
       // Calculate totals for DRAYAGE edit
@@ -2469,9 +2491,12 @@ export default function Loads() {
       const totalRateDrayageEdit =
         lineHaulDrayageEdit + fscAmountDrayageEdit + otherTotalDrayageEdit;
 
+      const drayagePortNameEdit = (loadForm.portName || "").trim();
+
       // DRAYAGE Load Structure - Add origins and destinations arrays like OTR
       const originsEdit = [
         {
+          portName: drayagePortNameEdit,
           addressLine1: (loadForm.fromAddress || "").trim(),
           addressLine2: "",
           city: (loadForm.fromCity || "").trim(),
@@ -2503,6 +2528,8 @@ export default function Loads() {
         loadType: "DRAYAGE",
 
         vehicleType: (loadForm.vehicleType || "").trim(),
+
+        portName: drayagePortNameEdit,
 
         fromAddressLine1: (loadForm.fromAddress || "").trim(),
         fromAddressLine2: "",
@@ -2614,7 +2641,7 @@ export default function Loads() {
 
         OnboardTruckingCompany: (loadForm.onboardTruckingCompany || "").trim(),
 
-        ...(loadType === "DRAYAGE"
+        ...(loadTypeIsDrayage(loadType)
           ? {
               returnDate: loadForm.returnDate,
 
@@ -3146,6 +3173,16 @@ export default function Loads() {
             fromCity: load.origin?.city || load.fromCity || "",
 
             fromState: load.origin?.state || load.fromState || "",
+
+            portName:
+              load.origins?.[0]?.portName ||
+              load.origins?.[0]?.port_name ||
+              load.origins?.[0]?.pickupPort ||
+              load.origin?.portName ||
+              load.origin?.port_name ||
+              load.portName ||
+              load.port_name ||
+              "",
 
             toCity: load.destination?.city || load.toCity || "",
 
@@ -3719,8 +3756,13 @@ export default function Loads() {
   const populateEditForm = (load) => {
     console.log("🔄 Populating edit form with load data:", load);
 
-    // Set load type based on the load data
-    const lt = load.loadType || "OTR";
+    // Set load type based on the load data (normalize DRAYAGE/OTR casing)
+    const rawLt = load.loadType || "OTR";
+    const lt = loadTypeIsDrayage(rawLt)
+      ? "DRAYAGE"
+      : loadTypeIsOtr(rawLt)
+        ? "OTR"
+        : rawLt;
     setLoadType(lt);
 
     // Extract shipper ID from shipper object or direct property
@@ -3782,14 +3824,15 @@ export default function Loads() {
     let fromZip = "",
       fromCity = "",
       fromState = "",
-      fromAddress = "";
+      fromAddress = "",
+      portName = "";
 
     let toZip = "",
       toCity = "",
       toState = "",
       toAddress = "";
 
-    if (load.loadType === "DRAYAGE") {
+    if (loadTypeIsDrayage(load.loadType)) {
       // For DRAYAGE loads, check origins/destinations arrays first (as per API response structure)
       // Then check top-level fields, then origin/destination objects
 
@@ -3809,6 +3852,11 @@ export default function Loads() {
         fromCity = firstOrigin.city || "";
         fromState = firstOrigin.state || "";
         fromAddress = firstOrigin.addressLine1 || firstOrigin.address || "";
+        portName =
+          firstOrigin.portName ||
+          firstOrigin.port_name ||
+          firstOrigin.pickupPort ||
+          "";
       }
 
       // Check destinations array first (for DRAYAGE, destinations[0] has the loading/unloading location)
@@ -3836,6 +3884,7 @@ export default function Loads() {
         fromCity = fromCity || load.fromCity || "";
         fromState = fromState || load.fromState || "";
         fromAddress = fromAddress || load.fromAddress || "";
+        portName = portName || load.portName || "";
       }
 
       if (!toZip || !toCity || !toState) {
@@ -3883,6 +3932,12 @@ export default function Loads() {
               "";
           if (!fromCity) fromCity = originRaw.city || "";
           if (!fromState) fromState = originRaw.state || "";
+          if (!portName)
+            portName =
+              originRaw.portName ||
+              originRaw.port_name ||
+              originRaw.pickupPort ||
+              "";
         }
 
         // Final fallback to origin object
@@ -3898,6 +3953,12 @@ export default function Loads() {
         if (!fromState) fromState = load.origin?.state || "";
         if (!fromAddress)
           fromAddress = load.origin?.addressLine1 || load.origin?.address || "";
+        if (!portName)
+          portName =
+            load.origin?.portName ||
+            load.origin?.port_name ||
+            load.origin?.pickupPort ||
+            "";
       }
 
       if (!toZip || !toCity || !toState) {
@@ -4045,6 +4106,8 @@ export default function Loads() {
 
       fromState: fromState,
 
+      portName: portName || load.portName || "",
+
       toZip: toZip,
 
       toAddress: toAddress,
@@ -4080,6 +4143,8 @@ export default function Loads() {
 
       const pickupLocs = load.origins.map((origin, index) => ({
         id: `pickup-${Date.now()}-${index}`,
+
+        portName: origin.portName || "",
 
         address: origin.addressLine1 || "",
 
@@ -4165,6 +4230,7 @@ export default function Loads() {
       const pickupLocs = [
         {
           id: `pickup-${Date.now()}-0`,
+          portName: load.portName || load.origins?.[0]?.portName || "",
           address: load.fromAddress || "",
           city: load.fromCity || "",
           state: load.fromState || "",
@@ -4599,6 +4665,8 @@ export default function Loads() {
             onClick={() => {
               console.log("Create Load button clicked!");
               resetLoadForm();
+              if (activeTab === "DRAYAGE") setLoadType("DRAYAGE");
+              else if (activeTab === "OTR") setLoadType("OTR");
               setShowLoadCreationModal(true);
             }}
             className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-6 rounded-xl flex items-center justify-between gap-3 font-medium transition-colors min-w-[380px] h-full"
@@ -6036,6 +6104,20 @@ export default function Loads() {
 
                               <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                  Port Name
+                                </label>
+
+                                <input
+                                  name="portName"
+                                  value={loadForm.portName}
+                                  onChange={handleChange}
+                                  placeholder="e.g. Terminal 5"
+                                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 hover:border-gray-300"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
                                   Pickup Full Address{" "}
                                   <span className="text-red-500">*</span>
                                 </label>
@@ -7467,6 +7549,33 @@ export default function Loads() {
                   </h3>
 
                   <div className="space-y-2">
+                    <div>
+                      <span className="text-gray-600">Port Name:</span>
+
+                      <p className="font-medium">
+                        {(() => {
+                          const o = selectedLoadForAction;
+                          const p = (v) =>
+                            v == null || v === ""
+                              ? ""
+                              : String(v).trim();
+                          return (
+                            p(o.origins?.[0]?.portName) ||
+                            p(o.portName) ||
+                            (o.originRaw &&
+                            typeof o.originRaw === "object"
+                              ? p(o.originRaw.portName)
+                              : "") ||
+                            (o.origin &&
+                            typeof o.origin === "object"
+                              ? p(o.origin.portName)
+                              : "") ||
+                            "—"
+                          );
+                        })()}
+                      </p>
+                    </div>
+
                     <div>
                       <span className="text-gray-600">Origin:</span>
 
@@ -8949,6 +9058,20 @@ export default function Loads() {
                                 <h4 className="font-semibold text-gray-700">
                                   Pickup Location
                                 </h4>
+                              </div>
+
+                              <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                  Port Name
+                                </label>
+
+                                <input
+                                  name="portName"
+                                  value={loadForm.portName}
+                                  onChange={handleChange}
+                                  placeholder="e.g. Terminal 5"
+                                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 hover:border-gray-300"
+                                />
                               </div>
 
                               <div>

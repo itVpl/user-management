@@ -89,6 +89,28 @@ const displayLoadRefFromLoad = (load) => {
   return r || fullLoadId(load._id || load.loadId, "N/A");
 };
 
+/** DRAYAGE / pickup port label for view modals (nested origins + snake_case). */
+const pickupPortNameFromViewLoad = (rowOrApproval) => {
+  if (!rowOrApproval) return "";
+  const x = rowOrApproval;
+  return (
+    x.origin?.portName ||
+    x.origin?.port_name ||
+    x.loadData?.origins?.[0]?.portName ||
+    x.loadData?.origins?.[0]?.port_name ||
+    x.loadData?.origin?.portName ||
+    x.loadData?.origin?.port_name ||
+    x.loadData?.portName ||
+    x.loadData?.port_name ||
+    x.loadId?.origins?.[0]?.portName ||
+    x.loadId?.origins?.[0]?.port_name ||
+    x.loadId?.origin?.portName ||
+    x.loadId?.origin?.port_name ||
+    x.loadId?.portName ||
+    ""
+  ).trim();
+};
+
 /** Normalize 8x8-style offset e.g. ...-0400 → ...-04:00 for reliable Date parsing. */
 const normalizeIsoOffset = (str) =>
   typeof str === "string"
@@ -563,7 +585,13 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
             loadRef: "N/A",
             shipmentNumber: null,
             weight: 0,
-            origin: { address: "", city: "N/A", state: "N/A", zipcode: "N/A" },
+            origin: {
+              address: "",
+              city: "N/A",
+              state: "N/A",
+              zipcode: "N/A",
+              portName: "",
+            },
             destination: {
               address: "",
               city: "N/A",
@@ -598,6 +626,10 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
             const addressLine2 = approval.loadId.origin.addressLine2 || "";
             const fullAddress =
               address + (addressLine2 ? `, ${addressLine2}` : "");
+            const portName =
+              approval.loadId.origin.portName ||
+              approval.loadId.origin.port_name ||
+              "";
             return {
               address: fullAddress,
               city: approval.loadId.origin.city,
@@ -606,6 +638,7 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
                 approval.loadId.origin.zipcode ||
                 approval.loadId.origin.zip ||
                 "N/A",
+              portName,
             };
           }
           if (approval.loadId.origins && approval.loadId.origins.length > 0) {
@@ -614,14 +647,23 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
             const addressLine2 = origin.addressLine2 || "";
             const fullAddress =
               address + (addressLine2 ? `, ${addressLine2}` : "");
+            const portName =
+              origin.portName || origin.port_name || approval.loadId.portName || "";
             return {
               address: fullAddress,
               city: origin.city,
               state: origin.state,
               zipcode: origin.zipcode || origin.zip || "N/A",
+              portName,
             };
           }
-          return { address: "", city: "N/A", state: "N/A", zipcode: "N/A" };
+          return {
+            address: "",
+            city: "N/A",
+            state: "N/A",
+            zipcode: "N/A",
+            portName: approval.loadId.portName || "",
+          };
         };
 
         // Helper function to get destination data (check both single object and array)
@@ -795,7 +837,13 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
             loadRef: "N/A",
             shipmentNumber: null,
             weight: 0,
-            origin: { address: "", city: "N/A", state: "N/A", zipcode: "N/A" },
+            origin: {
+              address: "",
+              city: "N/A",
+              state: "N/A",
+              zipcode: "N/A",
+              portName: "",
+            },
             destination: {
               address: "",
               city: "N/A",
@@ -839,6 +887,10 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
             const addressLine2 = approval.loadId.origin.addressLine2 || "";
             const fullAddress =
               address + (addressLine2 ? `, ${addressLine2}` : "");
+            const portName =
+              approval.loadId.origin.portName ||
+              approval.loadId.origin.port_name ||
+              "";
             return {
               address: fullAddress,
               city: approval.loadId.origin.city,
@@ -847,6 +899,7 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
                 approval.loadId.origin.zipcode ||
                 approval.loadId.origin.zip ||
                 "N/A",
+              portName,
             };
           }
           if (approval.loadId.origins && approval.loadId.origins.length > 0) {
@@ -855,14 +908,23 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
             const addressLine2 = origin.addressLine2 || "";
             const fullAddress =
               address + (addressLine2 ? `, ${addressLine2}` : "");
+            const portName =
+              origin.portName || origin.port_name || approval.loadId.portName || "";
             return {
               address: fullAddress,
               city: origin.city,
               state: origin.state,
               zipcode: origin.zipcode || origin.zip || "N/A",
+              portName,
             };
           }
-          return { address: "", city: "N/A", state: "N/A", zipcode: "N/A" };
+          return {
+            address: "",
+            city: "N/A",
+            state: "N/A",
+            zipcode: "N/A",
+            portName: approval.loadId.portName || "",
+          };
         };
 
         // Helper function to get destination data (check both single object and array)
@@ -4501,6 +4563,14 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
               <div>
                 <strong>Pickup:</strong>
                 <br />
+                {pickupPortNameFromViewLoad(approvalModal.approval) ? (
+                  <>
+                    <span className="text-gray-600">
+                      Port: {pickupPortNameFromViewLoad(approvalModal.approval)}
+                    </span>
+                    <br />
+                  </>
+                ) : null}
                 {approvalModal.approval?.origin?.city || "N/A"}
               </div>
               <div>
@@ -4641,6 +4711,14 @@ const RateRequest = ({ defaultTab = "rate", hideTabs = false }) => {
                       <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                         Pickup Location
                       </div>
+                      {pickupPortNameFromViewLoad(bidDetailsModal.load) ? (
+                        <div className="text-sm font-semibold text-emerald-800">
+                          <span className="text-xs font-medium text-gray-500 uppercase tracking-wide mr-1">
+                            Port name
+                          </span>
+                          {pickupPortNameFromViewLoad(bidDetailsModal.load)}
+                        </div>
+                      ) : null}
                       {bidDetailsModal.load.origin?.address && (
                         <div className="text-sm font-semibold text-gray-800">
                           {bidDetailsModal.load.origin.address}

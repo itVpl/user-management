@@ -448,10 +448,14 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
           const addrLine = formatLocLine(l); // << name + address
           const dateStr = formatDateStr(l && l.pickUpDate);
           const hoursLabel = 'Shipping Hours';
+          const portLine = (l && l.portName && String(l.portName).trim())
+            ? ('<tr><td colspan="2" style="padding:8px;border-bottom:1px solid #eee;"><strong>Port Name:</strong> ' + String(l.portName).trim() + '</td></tr>')
+            : '';
           return (
             '<table class="rates-table">' +
             '<thead><tr><th colspan="2" style="text-align:left;background:#f0f0f0;font-size:14px;font-weight:bold;">Pickup Location ' + (i + 1) + '</th></tr></thead>' +
             '<tbody>' +
+            portLine +
             '<tr>' +
             '<td colspan="2" style="padding:8px;font-weight:bold;border-bottom:1px solid #ddd;">' + addrLine + '</td>' +
             '</tr>' +
@@ -852,6 +856,7 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
         <thead>
           <tr>
             <th>Pick Up Location</th>
+            <th>Port Name</th>
             <th>Address</th>
             <th>Weight (lbs)</th>
             <th>Container No</th>
@@ -867,9 +872,11 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
         const contTp = l?.containerType || order.shipper?.containerType || 'N/A';
         const qty = Number(l?.quantity ?? order.shipper?.quantity) || 1;
         const dateSrc = l?.pickUpDate || order.shipper?.pickUpDate;
+        const portNm = (l?.portName && String(l.portName).trim()) ? String(l.portName).trim() : 'N/A';
         return `
               <tr>
                 <td>${l?.name || 'N/A'}</td>
+                <td>${portNm}</td>
                 <td>${fullAddr(l)}</td>
                 <td>${weight}</td>
                 <td>${contNo}</td>
@@ -1184,9 +1191,12 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
           const dr = dropLocs[i];
           const puDate = pu?.pickUpDate ? fmtDate(pu.pickUpDate) : 'N/A';
           const drDate = dr?.dropDate ? fmtDate(dr.dropDate) : 'N/A';
+          const puPort = pu?.portName && String(pu.portName).trim()
+            ? `<div style="margin-bottom:4px;"><strong>Port Name:</strong> ${String(pu.portName).trim()}</div>`
+            : '';
           return `
                   <tr>
-                    <td>${pu ? fmtAddr(pu) : 'N/A'}</td>
+                    <td>${pu ? (puPort + fmtAddr(pu)) : 'N/A'}</td>
                     <td>${puDate}</td>
                     <td>${dr ? fmtAddr(dr) : 'N/A'}</td>
                     <td>${drDate}</td>
@@ -2554,6 +2564,14 @@ function DetailsModal({ open, onClose, order, cmtEmpId, onForwardSuccess, report
                     {pickUps.map((location, index) => (
                       <div key={index} className="bg-white rounded-lg p-3 border border-orange-200">
                         <div className="grid grid-cols-2 gap-4">
+                          <div className="col-span-2">
+                            <p className="text-sm text-gray-600">Port Name</p>
+                            <p className="font-medium text-gray-800">
+                              {location?.portName && String(location.portName).trim()
+                                ? String(location.portName).trim()
+                                : 'N/A'}
+                            </p>
+                          </div>
                           <div>
                             <p className="text-sm text-gray-600">Name</p>
                             <p className="font-medium text-gray-800">{location?.name || 'N/A'}</p>
