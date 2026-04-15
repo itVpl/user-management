@@ -138,6 +138,8 @@ const MonthlyPerformanceReviewDashboard = lazy(() => import("./Components/Monthl
 const VPL100Redirect = lazy(() => import("./Components/Dashboard/VPL100Redirect.jsx"));
 const MyHourlyCheckinHistory = lazy(() => import("./Pages/HourlyCheckin/MyHourlyCheckinHistory.jsx"));
 const HourlyCheckinReport = lazy(() => import("./Pages/HourlyCheckin/HourlyCheckinReport.jsx"));
+const PublicEmployeeTest = lazy(() => import("./Components/EmployeeTest/PublicEmployeeTest.jsx"));
+const EmployeeTestAdmin = lazy(() => import("./Components/EmployeeTest/EmployeeTestAdmin.jsx"));
 
 
 // Chat Message System Imports - keep as regular imports (needed globally)
@@ -775,6 +777,9 @@ function App() {
           <Route path="docs-upload" element={<DocsUpload />} />
           <Route path="hourly-checkin/my-history" element={<MyHourlyCheckinHistory />} />
           <Route path="hourly-checkin/report" element={<HourlyCheckinReport />} />
+          <Route path="employee-test/take" element={<PublicEmployeeTest />} />
+          <Route path="employee-test" element={<Navigate to="/employee-test/take" replace />} />
+          <Route path="employee-test/admin" element={<EmployeeTestAdmin />} />
           
           {/* QA (Quality Assurance) Routes */}
           <Route path="qa/dashboard" element={<QADashboard />} />
