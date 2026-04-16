@@ -68,26 +68,26 @@ function EmployeeTestModal({ open, onClose, title, subtitle, icon: Icon, childre
     >
       <style>{MODAL_SCROLL_STYLE}</style>
       <div
-        className="et-modal-scroll max-h-[95vh] w-full max-w-6xl overflow-y-auto rounded-3xl bg-white shadow-2xl"
+        className="et-modal-scroll max-h-[95vh] w-full max-w-6xl overflow-y-auto rounded-3xl border border-slate-200 bg-white shadow-none"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
       >
-        <div className="rounded-t-3xl bg-gradient-to-r from-blue-500 to-blue-600 p-6 text-white">
+        <div className="rounded-t-3xl border-b border-slate-800 bg-slate-900 p-6 text-white">
           <div className="flex items-center justify-between gap-4">
             <div className="flex min-w-0 items-center gap-3">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white/20">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/15">
                 <HeaderIcon className="text-white" size={24} strokeWidth={2} />
               </div>
               <div className="min-w-0">
                 <h2 className="text-xl font-bold tracking-tight">{title}</h2>
-                {subtitle ? <p className="mt-0.5 text-sm text-blue-100">{subtitle}</p> : null}
+                {subtitle ? <p className="mt-0.5 text-sm text-slate-200">{subtitle}</p> : null}
               </div>
             </div>
             <button
               type="button"
               onClick={onClose}
-              className="shrink-0 text-2xl font-bold leading-none text-white transition hover:text-gray-200"
+              className="shrink-0 rounded-xl px-3 py-1.5 text-2xl font-bold leading-none text-white transition hover:bg-white/10"
               aria-label="Close"
             >
               ×
@@ -284,59 +284,68 @@ const EmployeeTestAdmin = () => {
 
   if (!allowed) {
     return (
-      <div className="flex min-h-[calc(100vh-4rem)] w-full items-center justify-center bg-gradient-to-br from-slate-100 via-white to-blue-50/40 px-4 py-12">
-        <div className="w-full max-w-lg rounded-2xl border border-amber-200/80 bg-white/90 p-8 shadow-lg backdrop-blur">
-          <h1 className="text-lg font-bold text-amber-950">Employee test — admin</h1>
-          <p className="mt-3 text-sm leading-relaxed text-amber-900/90">
+      <div className="min-h-[calc(100vh-4rem)] bg-slate-50 text-slate-800 font-poppins py-10">
+        <main className="mx-auto max-w-[1400px] px-4 sm:px-10">
+          <div className="rounded-3xl bg-white p-10 shadow-sm">
+            <div className="flex items-start gap-5">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500 ring-2 ring-amber-50">
+                <ClipboardList className="h-6 w-6 text-white" />
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-2xl font-bold tracking-tight text-slate-900 leading-tight">
+                  Employee test — admin
+                </h1>
+                <p className="mt-2 text-sm leading-relaxed text-slate-600">
             Only users with the <strong>admin</strong> or <strong>superadmin</strong> role can manage
             tests. Ask your administrator to assign access, or open the public candidate link instead.
-          </p>
-        </div>
+                </p>
+              </div>
+            </div>
+          </div>
+        </main>
       </div>
     );
   }
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] w-full bg-gradient-to-b from-gray-50 to-gray-100/90">
-      {/* Full-width page header (not centered narrow column) */}
-      <div className="w-full border-b border-gray-200 bg-white shadow-sm">
-        <div className="flex w-full flex-col gap-6 px-4 py-6 sm:px-6 lg:flex-row lg:items-start lg:justify-between lg:px-8 lg:py-8">
-          <div className="flex min-w-0 items-start gap-4">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-md">
-              <ClipboardList size={28} strokeWidth={2} />
+    <div className="min-h-[calc(100vh-4rem)] bg-slate-50 text-slate-800 font-poppins py-10">
+      <main className="mx-auto max-w-[1400px] px-4 sm:px-10 space-y-8">
+        <div className="rounded-3xl bg-white p-10 shadow-sm">
+          <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-5">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-600 shadow-lg shadow-indigo-100 ring-2 ring-indigo-50">
+                <ClipboardList className="h-6 w-6 text-white" />
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-2xl font-bold tracking-tight text-slate-900 leading-tight">
+                  Employee Test Admin
+                </h1>
+                <p className="text-xs font-semibold text-slate-500 mt-1 uppercase tracking-wider">
+                  Manage tests, questions, and submissions
+                </p>
+              </div>
             </div>
-            <div className="min-w-0">
-              <h1 className="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">
-                Employee test
-              </h1>
-              <p className="mt-1 max-w-2xl text-sm text-gray-600 sm:text-base">
-                Configure assessments, MCQ items (four options each), and review completed candidate
-                submissions — same flow style as delivery orders.
-              </p>
-            </div>
-          </div>
 
-          {/* Right column: DeliveryOrder-style primary CTA */}
-          <div className="flex w-full flex-col gap-3 lg:w-[min(100%,380px)] lg:shrink-0">
-            <button
-              type="button"
-              onClick={() => loadTests()}
-              className="flex h-[42px] w-full items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white text-sm font-semibold text-gray-700 shadow-sm transition hover:border-gray-300 hover:bg-gray-50"
-            >
-              <RefreshCw size={18} />
-              Refresh list
-            </button>
-            <button
-              type="button"
-              onClick={() => setCreateOpen(true)}
-              className="flex h-[40px] w-full items-center justify-between gap-4 rounded-lg bg-blue-600 px-6 text-sm font-semibold text-white shadow-md transition hover:bg-blue-700"
-            >
-              <span>New test</span>
-              <PlusCircle size={20} />
-            </button>
+            <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
+              <button
+                type="button"
+                onClick={() => loadTests()}
+                className="flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-2xl border-2 border-slate-200 bg-white px-6 text-sm font-bold text-slate-700 transition-all hover:bg-blue-50 hover:border-blue-200 active:scale-[0.99] sm:w-auto"
+              >
+                <RefreshCw size={18} />
+                Refresh
+              </button>
+              <button
+                type="button"
+                onClick={() => setCreateOpen(true)}
+                className="flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-6 text-sm font-bold text-white shadow-lg shadow-indigo-200 transition-all hover:bg-indigo-700 hover:-translate-y-0.5 active:translate-y-0 sm:w-auto"
+              >
+                <PlusCircle size={20} />
+                New test
+              </button>
+            </div>
           </div>
         </div>
-      </div>
 
       {/* Modals — DeliveryOrder “Add Delivery Order” pattern */}
       <EmployeeTestModal
@@ -347,45 +356,45 @@ const EmployeeTestAdmin = () => {
         subtitle="Create a new assessment for candidates"
       >
         <form onSubmit={submitCreate} className="space-y-6 p-6">
-          <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-100">
-            <h3 className="mb-4 text-lg font-semibold text-orange-800">Test details</h3>
+          <div className="rounded-2xl border border-slate-200 bg-white p-5">
+            <h3 className="mb-4 text-base font-bold text-slate-900 uppercase tracking-wide">Test details</h3>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <label className="block text-sm md:col-span-2">
-                <span className="font-semibold text-gray-700">Title</span>
+                <span className="font-semibold text-slate-700">Title</span>
                 <input
                   required
-                  className="mt-1.5 w-full rounded-lg border border-gray-200 px-4 py-2.5 text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                  className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
                   placeholder="e.g. Onboarding knowledge check"
                   value={createForm.title}
                   onChange={(e) => setCreateForm((f) => ({ ...f, title: e.target.value }))}
                 />
               </label>
               <label className="block text-sm md:col-span-2">
-                <span className="font-semibold text-gray-700">Disclaimer</span>
+                <span className="font-semibold text-slate-700">Disclaimer</span>
                 <textarea
                   rows={5}
-                  className="mt-1.5 w-full resize-y rounded-lg border border-gray-200 px-4 py-2.5 text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                  className="mt-1.5 w-full resize-y rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
                   placeholder="Shown to candidates before they accept terms"
                   value={createForm.disclaimerText}
                   onChange={(e) => setCreateForm((f) => ({ ...f, disclaimerText: e.target.value }))}
                 />
               </label>
               <label className="block text-sm">
-                <span className="font-semibold text-gray-700">Terms version</span>
+                <span className="font-semibold text-slate-700">Terms version</span>
                 <input
                   type="number"
                   min={1}
-                  className="mt-1.5 w-full rounded-lg border border-gray-200 px-4 py-2.5 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                  className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
                   value={createForm.termsVersion}
                   onChange={(e) =>
                     setCreateForm((f) => ({ ...f, termsVersion: Number(e.target.value) }))
                   }
                 />
               </label>
-              <label className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50/80 px-4 py-3 text-sm font-medium text-gray-800">
+              <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-800">
                 <input
                   type="checkbox"
-                  className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                   checked={createForm.isActive}
                   onChange={(e) => setCreateForm((f) => ({ ...f, isActive: e.target.checked }))}
                 />
@@ -393,17 +402,17 @@ const EmployeeTestAdmin = () => {
               </label>
             </div>
           </div>
-          <div className="flex flex-wrap justify-end gap-3 border-t border-gray-100 pt-4">
+          <div className="flex flex-wrap justify-end gap-3 border-t border-slate-200 pt-4">
             <button
               type="button"
               onClick={() => setCreateOpen(false)}
-              className="min-w-[100px] rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+              className="min-w-[100px] cursor-pointer rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-blue-50"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="min-w-[120px] rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+              className="min-w-[120px] cursor-pointer rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
             >
               Create test
             </button>
@@ -445,187 +454,222 @@ const EmployeeTestAdmin = () => {
         />
       )}
 
-      {/* Main workspace — full width */}
-      <div className="grid w-full grid-cols-1 gap-6 px-4 py-6 sm:px-6 lg:grid-cols-12 lg:gap-8 lg:px-8 lg:py-8">
-        <aside className="flex min-h-[280px] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm lg:col-span-4 xl:col-span-3">
-          <div className="border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white px-5 py-4">
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Library</p>
-            <p className="text-lg font-bold text-gray-900">All tests</p>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            {loading ? (
-              <div className="flex justify-center py-16">
-                <Loader2 className="h-9 w-9 animate-spin text-blue-600" />
-              </div>
-            ) : tests.length === 0 ? (
-              <div className="p-6 text-center text-sm text-gray-500">
-                No tests yet. Use <span className="font-semibold text-gray-700">New test</span> above.
-              </div>
-            ) : (
-              tests.map((t) => (
-                <button
-                  key={t._id}
-                  type="button"
-                  onClick={() => openTest(t)}
-                  className={`flex w-full flex-col items-start gap-1 border-b border-gray-50 px-5 py-4 text-left transition hover:bg-blue-50/50 ${
-                    selected?._id === t._id ? 'border-l-4 border-l-blue-600 bg-blue-50/70' : 'border-l-4 border-l-transparent'
-                  }`}
-                >
-                  <span className="font-semibold text-gray-900">{t.title || '(Untitled)'}</span>
-                  <span className="text-xs font-medium text-gray-500">
-                    {t.isActive ? (
-                      <span className="text-emerald-600">Active</span>
-                    ) : (
-                      <span className="text-gray-400">Inactive</span>
-                    )}{' '}
-                    · Terms v{t.termsVersion ?? '—'}
-                  </span>
-                </button>
-              ))
-            )}
-          </div>
-        </aside>
-
-        <section className="flex min-h-[480px] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm lg:col-span-8 xl:col-span-9">
-          {!selected ? (
-            <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 py-20 text-center">
-              <div className="rounded-full bg-gray-100 p-5 text-gray-400">
-                <ListChecks size={40} strokeWidth={1.5} />
-              </div>
-              <p className="text-lg font-semibold text-gray-800">Select a test</p>
-              <p className="max-w-md text-sm text-gray-500">
-                Choose an assessment from the list to edit settings, questions, or view submissions.
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
+          <aside className="flex min-h-[280px] flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm lg:col-span-4 xl:col-span-3">
+            <div className="border-b border-slate-200 bg-slate-900 px-6 py-6 text-white">
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-300">Library</p>
+              <p className="mt-1 text-xl font-black tracking-tight">All Tests</p>
+              <p className="mt-1 text-xs font-semibold text-slate-300">
+                Select a test to manage settings, questions, and submissions
               </p>
             </div>
-          ) : (
-            <>
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 bg-gradient-to-r from-white to-gray-50/80 px-5 py-4 sm:px-6">
-                <div className="flex min-w-0 items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setSelected(null)}
-                    className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-600 transition hover:bg-gray-50 lg:hidden"
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                    Back
-                  </button>
-                  <h2 className="truncate text-lg font-bold text-gray-900 sm:text-xl">
-                    {selected.title}
-                  </h2>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {loading ? (
+                <div className="flex justify-center py-16">
+                  <Loader2 className="h-9 w-9 animate-spin text-indigo-600" />
                 </div>
-              </div>
-              <div className="flex border-b border-gray-100 bg-white px-2 sm:px-4">
-                {['settings', 'questions', 'attempts'].map((k) => (
-                  <button
-                    key={k}
-                    type="button"
-                    onClick={() => setTab(k)}
-                    className={`relative px-4 py-3 text-sm font-semibold capitalize transition sm:px-5 ${
-                      tab === k
-                        ? 'text-blue-600 after:absolute after:bottom-0 after:left-2 after:right-2 after:h-0.5 after:rounded-full after:bg-blue-600 sm:after:left-4 sm:after:right-4'
-                        : 'text-gray-500 hover:text-gray-800'
-                    }`}
-                  >
-                    {k}
-                  </button>
-                ))}
-              </div>
+              ) : tests.length === 0 ? (
+                <div className="p-8 text-center">
+                  <p className="text-sm font-semibold text-slate-700">No tests yet</p>
+                  <p className="mt-1 text-xs font-medium text-slate-500">
+                    Use <span className="font-bold text-slate-700">New test</span> to create one.
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {tests.map((t) => (
+                    <button
+                      key={t._id}
+                      type="button"
+                      onClick={() => openTest(t)}
+                      className={`w-full cursor-pointer px-6 py-5 text-left transition ${
+                        selected?._id === t._id ? 'bg-blue-50' : 'hover:bg-blue-50/60'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-bold text-slate-900">{t.title || '(Untitled)'}</p>
+                          <p className="mt-1 text-xs font-semibold text-slate-500">
+                            Terms v{t.termsVersion ?? '—'}
+                          </p>
+                        </div>
+                        <span
+                          className={`shrink-0 rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wider ${
+                            t.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'
+                          }`}
+                        >
+                          {t.isActive ? 'Active' : 'Inactive'}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </aside>
 
-              <div className="flex-1 overflow-y-auto p-5 sm:p-6">
-                {tab === 'settings' && editForm && (
-                  <div className="mx-auto max-w-3xl space-y-6">
-                    <div className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-100 sm:p-6">
-                      <h3 className="mb-4 text-lg font-semibold text-orange-800">Test configuration</h3>
-                      <div className="space-y-4">
-                        <label className="block text-sm">
-                          <span className="font-semibold text-gray-700">Title</span>
-                          <input
-                            className="mt-1.5 w-full rounded-lg border border-gray-200 px-4 py-2.5 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                            value={editForm.title}
-                            onChange={(e) => setEditForm((f) => ({ ...f, title: e.target.value }))}
-                          />
-                        </label>
-                        <label className="block text-sm">
-                          <span className="font-semibold text-gray-700">Disclaimer</span>
-                          <textarea
-                            rows={6}
-                            className="mt-1.5 w-full resize-y rounded-lg border border-gray-200 px-4 py-2.5 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                            value={editForm.disclaimerText}
-                            onChange={(e) =>
-                              setEditForm((f) => ({ ...f, disclaimerText: e.target.value }))
-                            }
-                          />
-                        </label>
-                        <div className="grid gap-4 sm:grid-cols-2">
+          <section className="flex min-h-[480px] flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm lg:col-span-8 xl:col-span-9">
+            {!selected ? (
+              <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 py-20 text-center">
+                <div className="rounded-2xl bg-slate-100 p-5 text-slate-400">
+                  <ListChecks size={40} strokeWidth={1.5} />
+                </div>
+                <p className="text-lg font-bold text-slate-900">Select a test</p>
+                <p className="max-w-md text-sm font-medium text-slate-500">
+                  Choose an assessment from the library to edit settings, questions, or view submissions.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="border-b border-slate-200 bg-slate-900 px-6 py-6 text-white">
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setSelected(null)}
+                        className="inline-flex cursor-pointer items-center gap-1 rounded-2xl border border-white/15 bg-white/10 px-4 py-2 text-sm font-bold text-white transition hover:bg-white/15 lg:hidden"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                        Back
+                      </button>
+                      <div className="min-w-0">
+                        <h2 className="truncate text-xl font-black tracking-tight">{selected.title}</h2>
+                        <p className="mt-1 text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                          {selected.isActive ? 'Active' : 'Inactive'} · Terms v{selected.termsVersion ?? '—'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-b border-slate-200 bg-white px-4 py-4">
+                  <div className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-2">
+                    {['settings', 'questions', 'attempts'].map((k) => (
+                      <button
+                        key={k}
+                        type="button"
+                        onClick={() => setTab(k)}
+                        className={`cursor-pointer rounded-xl px-5 py-2.5 text-sm font-bold capitalize transition-all ${
+                          tab === k
+                            ? 'bg-white text-indigo-700 shadow-sm'
+                            : 'text-slate-600 hover:bg-white hover:text-slate-900'
+                        }`}
+                      >
+                        {k}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-6">
+                  {tab === 'settings' && editForm && (
+                    <div className="space-y-6">
+                      <div className="rounded-3xl border border-slate-200 bg-white p-6">
+                        <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-6">
+                          Test configuration
+                        </h3>
+                        <div className="space-y-5">
                           <label className="block text-sm">
-                            <span className="font-semibold text-gray-700">Terms version</span>
+                            <span className="font-bold text-slate-700">Title</span>
                             <input
-                              type="number"
-                              min={1}
-                              className="mt-1.5 w-full rounded-lg border border-gray-200 px-4 py-2.5 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                              value={editForm.termsVersion}
+                              className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50/40 px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10"
+                              value={editForm.title}
+                              onChange={(e) => setEditForm((f) => ({ ...f, title: e.target.value }))}
+                            />
+                          </label>
+                          <label className="block text-sm">
+                            <span className="font-bold text-slate-700">Disclaimer</span>
+                            <textarea
+                              rows={6}
+                              className="mt-2 w-full resize-y rounded-2xl border border-slate-200 bg-slate-50/40 px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10"
+                              value={editForm.disclaimerText}
+                              onChange={(e) =>
+                                setEditForm((f) => ({ ...f, disclaimerText: e.target.value }))
+                              }
+                            />
+                          </label>
+                          <div className="grid gap-4 sm:grid-cols-2">
+                            <label className="block text-sm">
+                              <span className="font-bold text-slate-700">Terms version</span>
+                              <input
+                                type="number"
+                                min={1}
+                                className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50/40 px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10"
+                                value={editForm.termsVersion}
+                                onChange={(e) =>
+                                  setEditForm((f) => ({
+                                    ...f,
+                                    termsVersion: Number(e.target.value),
+                                  }))
+                                }
+                              />
+                            </label>
+                            <label className="flex items-center gap-3 self-end rounded-2xl border border-slate-200 bg-slate-50/60 px-4 py-3 text-sm font-semibold text-slate-800">
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                checked={editForm.isActive}
+                                onChange={(e) =>
+                                  setEditForm((f) => ({ ...f, isActive: e.target.checked }))
+                                }
+                              />
+                              Active
+                            </label>
+                          </div>
+                          <label className="flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+                              checked={editForm.bumpTermsOnDisclaimerChange}
                               onChange={(e) =>
                                 setEditForm((f) => ({
                                   ...f,
-                                  termsVersion: Number(e.target.value),
+                                  bumpTermsOnDisclaimerChange: e.target.checked,
                                 }))
                               }
                             />
+                            Bump terms version if disclaimer text changes
                           </label>
-                          <label className="flex items-center gap-3 self-end rounded-lg border border-gray-100 bg-gray-50/80 px-4 py-3 text-sm font-medium text-gray-800">
-                            <input
-                              type="checkbox"
-                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                              checked={editForm.isActive}
-                              onChange={(e) =>
-                                setEditForm((f) => ({ ...f, isActive: e.target.checked }))
-                              }
-                            />
-                            Active
-                          </label>
+                          <button
+                            type="button"
+                            onClick={saveTest}
+                            className="mt-2 inline-flex w-full cursor-pointer items-center justify-center rounded-2xl bg-indigo-600 px-8 py-4 text-sm font-bold text-white shadow-lg shadow-indigo-200 transition-all hover:bg-indigo-700 hover:-translate-y-0.5 active:translate-y-0 sm:w-auto"
+                          >
+                            Save changes
+                          </button>
                         </div>
-                        <label className="flex items-center gap-3 rounded-lg border border-amber-100 bg-amber-50/50 px-4 py-3 text-sm text-amber-950">
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
-                            checked={editForm.bumpTermsOnDisclaimerChange}
-                            onChange={(e) =>
-                              setEditForm((f) => ({
-                                ...f,
-                                bumpTermsOnDisclaimerChange: e.target.checked,
-                              }))
-                            }
-                          />
-                          Bump terms version if disclaimer text changes
-                        </label>
-                        <button
-                          type="button"
-                          onClick={saveTest}
-                          className="w-full rounded-lg bg-blue-600 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 sm:w-auto sm:px-8"
-                        >
-                          Save changes
-                        </button>
+                      </div>
+
+                      <div className="rounded-3xl border border-slate-200 bg-slate-50/60 p-6">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">
+                              Public link
+                            </h3>
+                            <p className="mt-1 text-xs font-semibold text-slate-500">
+                              Share this link with candidates for this test
+                            </p>
+                          </div>
+                        </div>
+                        <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+                          <code className="block break-all font-mono text-xs font-bold text-indigo-700">
+                            /employee-test/take?testId={selected._id}
+                          </code>
+                        </div>
                       </div>
                     </div>
-                    <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50/80 px-4 py-3 text-sm text-gray-600">
-                      <span className="font-semibold text-gray-800">Public link:</span>{' '}
-                      <code className="rounded bg-white px-2 py-0.5 font-mono text-xs text-blue-700 ring-1 ring-gray-200">
-                        /employee-test/take?testId={selected._id}
-                      </code>
-                    </div>
-                  </div>
-                )}
+                  )}
 
                 {tab === 'questions' && (
                   <div className="space-y-6">
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                      <p className="text-sm text-gray-600">
+                      <p className="text-sm font-medium text-slate-600">
                         Each question must have <strong>exactly four</strong> options (MCQ).
                       </p>
                       <button
                         type="button"
                         onClick={() => setQDialog('create')}
-                        className="flex h-[40px] w-full shrink-0 items-center justify-between gap-4 rounded-lg bg-blue-600 px-6 text-sm font-semibold text-white shadow-md transition hover:bg-blue-700 sm:w-[min(100%,280px)]"
+                        className="flex h-12 w-full shrink-0 cursor-pointer items-center justify-between gap-4 rounded-2xl bg-indigo-600 px-6 text-sm font-bold text-white shadow-lg shadow-indigo-200 transition-all hover:bg-indigo-700 hover:-translate-y-0.5 active:translate-y-0 sm:w-[min(100%,280px)]"
                       >
                         <span>Add question</span>
                         <PlusCircle size={20} />
@@ -636,56 +680,67 @@ const EmployeeTestAdmin = () => {
                         <Loader2 className="h-9 w-9 animate-spin text-blue-600" />
                       </div>
                     ) : questions.length === 0 ? (
-                      <div className="rounded-xl border border-gray-200 bg-gray-50/50 py-12 text-center text-sm text-gray-500">
+                      <div className="rounded-3xl border border-slate-200 bg-slate-50/50 py-12 text-center text-sm text-slate-500">
                         No questions yet. Use <strong>Add question</strong>.
                       </div>
                     ) : (
-                      <ul className="space-y-3">
+                      <ul className="space-y-4">
                         {questions
                           .slice()
                           .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
                           .map((q) => (
                             <li
                               key={q._id}
-                              className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-gradient-to-br from-white to-gray-50/80 p-4 shadow-sm sm:flex-row sm:items-start sm:justify-between"
+                              className="rounded-3xl border border-slate-200 bg-white p-6 transition hover:bg-blue-50/30"
                             >
-                              <div className="min-w-0 flex-1">
-                                <span className="text-xs font-bold uppercase tracking-wide text-blue-600">
-                                  Q{q.order ?? '—'}
-                                </span>
-                                <p className="mt-1 text-sm font-medium leading-relaxed text-gray-900">
-                                  {q.prompt}
-                                </p>
-                                <p className="mt-2 text-xs text-gray-500">
-                                  {(q.options || []).length} options ·{' '}
-                                  {q.isActive === false ? (
-                                    <span className="text-amber-700">Inactive</span>
-                                  ) : (
-                                    <span className="text-emerald-600">Active</span>
-                                  )}
-                                </p>
-                              </div>
-                              <div className="flex shrink-0 gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => setQDialog({ edit: q })}
-                                  className="rounded-lg border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-600 transition hover:bg-orange-50"
-                                >
-                                  <span className="inline-flex items-center gap-1.5">
-                                    <Pencil className="h-4 w-4" />
-                                    Edit
-                                  </span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => removeQuestion(q._id)}
-                                  className="rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50"
-                                >
-                                  <span className="inline-flex items-center gap-1.5">
-                                    <Trash2 className="h-4 w-4" />
-                                    Remove
-                                  </span>
-                                </button>
+                              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-3">
+                                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-xs font-bold text-indigo-600">
+                                      {q.order ?? '—'}
+                                    </span>
+                                    <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                                      Question
+                                    </span>
+                                    <span
+                                      className={`ml-auto rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wider sm:ml-0 ${
+                                        q.isActive === false
+                                          ? 'bg-amber-50 text-amber-700'
+                                          : 'bg-emerald-50 text-emerald-700'
+                                      }`}
+                                    >
+                                      {q.isActive === false ? 'Inactive' : 'Active'}
+                                    </span>
+                                  </div>
+                                  <p className="mt-4 text-base font-bold leading-relaxed text-slate-900">
+                                    {q.prompt}
+                                  </p>
+                                  <p className="mt-2 text-xs font-semibold text-slate-500">
+                                    {(q.options || []).length} options
+                                  </p>
+                                </div>
+                                <div className="flex shrink-0 gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => setQDialog({ edit: q })}
+                                    className="cursor-pointer rounded-2xl border-2 border-orange-200 bg-white px-4 py-2 text-sm font-bold text-orange-700 transition hover:bg-orange-50"
+                                  >
+                                    <span className="inline-flex items-center gap-2">
+                                      <Pencil className="h-4 w-4" />
+                                      Edit
+                                    </span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeQuestion(q._id)}
+                                    className="cursor-pointer rounded-2xl border-2 border-red-200 bg-white px-4 py-2 text-sm font-bold text-red-700 transition hover:bg-red-50"
+                                  >
+                                    <span className="inline-flex items-center gap-2">
+                                      <Trash2 className="h-4 w-4" />
+                                      Remove
+                                    </span>
+                                  </button>
+                                </div>
                               </div>
                             </li>
                           ))}
@@ -698,27 +753,27 @@ const EmployeeTestAdmin = () => {
                   <div>
                     {attLoading ? (
                       <div className="flex justify-center py-16">
-                        <Loader2 className="h-9 w-9 animate-spin text-blue-600" />
+                        <Loader2 className="h-9 w-9 animate-spin text-indigo-600" />
                       </div>
                     ) : attempts.length === 0 ? (
-                      <div className="rounded-xl border border-gray-200 bg-gray-50/50 py-12 text-center text-sm text-gray-500">
+                      <div className="rounded-3xl border border-slate-200 bg-slate-50/50 py-12 text-center text-sm text-slate-500">
                         No completed attempts for this test.
                       </div>
                     ) : (
                       <>
-                        <div className="overflow-x-auto rounded-xl border border-gray-200">
-                          <table className="w-full min-w-[520px] text-left text-sm">
-                            <thead className="bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+                          <table className="w-full min-w-[520px] border-separate border-spacing-y-2 text-left text-sm">
+                            <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
                               <tr>
                                 <th className="px-4 py-3">Candidate</th>
                                 <th className="px-4 py-3">Completed</th>
                                 <th className="px-4 py-3">Result</th>
                               </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-100 bg-white">
+                            <tbody className="bg-transparent">
                               {attempts.map((row) => (
-                                <tr key={row._id} className="hover:bg-gray-50/80">
-                                  <td className="px-4 py-3 align-top">
+                                <tr key={row._id} className="group">
+                                  <td className="px-4 py-3 align-top bg-white group-hover:bg-blue-50 border-y border-l border-slate-200 rounded-l-xl">
                                     <div className="font-semibold text-gray-900">
                                       {row.candidate?.fullName ||
                                         row.profile?.fullName ||
@@ -729,10 +784,10 @@ const EmployeeTestAdmin = () => {
                                       {row.candidate?.email || row.profile?.email || ''}
                                     </div>
                                   </td>
-                                  <td className="px-4 py-3 align-top text-gray-600">
+                                  <td className="px-4 py-3 align-top text-gray-700 bg-white group-hover:bg-blue-50 border-y border-slate-200">
                                     {formatWhen(row.completedAt || row.updatedAt)}
                                   </td>
-                                  <td className="px-4 py-3 align-top text-gray-800">
+                                  <td className="px-4 py-3 align-top text-slate-900 bg-white group-hover:bg-blue-50 border-y border-r border-slate-200 rounded-r-xl">
                                     {row.result ? (
                                       <span>
                                         {row.result.totalScore != null
@@ -749,12 +804,12 @@ const EmployeeTestAdmin = () => {
                             </tbody>
                           </table>
                         </div>
-                        <div className="mt-6 flex items-center justify-between border-t border-gray-100 pt-4 text-sm">
+                        <div className="mt-6 flex items-center justify-between border-t border-slate-200 pt-4 text-sm">
                           <button
                             type="button"
                             disabled={attPage <= 1 || attLoading}
                             onClick={() => loadAttempts(selected._id, attPage - 1)}
-                            className="rounded-lg border border-gray-200 bg-white px-4 py-2 font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                            className="cursor-pointer rounded-xl border border-slate-200 bg-white px-4 py-2 font-semibold text-slate-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40"
                           >
                             Previous
                           </button>
@@ -763,7 +818,7 @@ const EmployeeTestAdmin = () => {
                             type="button"
                             disabled={attLoading || !attMeta?.hasNextPage}
                             onClick={() => loadAttempts(selected._id, attPage + 1)}
-                            className="rounded-lg border border-gray-200 bg-white px-4 py-2 font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                            className="cursor-pointer rounded-xl border border-slate-200 bg-white px-4 py-2 font-semibold text-slate-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40"
                           >
                             Next
                           </button>
@@ -772,11 +827,12 @@ const EmployeeTestAdmin = () => {
                     )}
                   </div>
                 )}
-              </div>
-            </>
-          )}
-        </section>
-      </div>
+                </div>
+              </>
+            )}
+          </section>
+        </div>
+      </main>
     </div>
   );
 };
@@ -809,7 +865,7 @@ function QuestionFormDialog({ mode, initial, onClose, onSave }) {
         label: o.label.trim(),
         order: i,
         score: Number(o.score) || 0,
-        resultTag: (o.resultTag || '').trim() || 'neutral',
+        resultTag: (o.resultTag || '').trim() || 'wrong',
       })),
     };
     onSave(payload);
@@ -827,103 +883,138 @@ function QuestionFormDialog({ mode, initial, onClose, onSave }) {
           : 'Update prompt, order, options, or active state'
       }
     >
-      <form onSubmit={handleSubmit} className="space-y-6 p-6">
-        <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-100">
-          <h3 className="mb-4 text-lg font-semibold text-orange-800">Question</h3>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <label className="block text-sm md:col-span-2">
-              <span className="font-semibold text-gray-700">Prompt</span>
-              <textarea
-                required
-                rows={4}
-                className="mt-1.5 w-full resize-y rounded-lg border border-gray-200 px-4 py-2.5 text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                placeholder="Enter the question text"
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-              />
-            </label>
-            <label className="block text-sm">
-              <span className="font-semibold text-gray-700">Display order</span>
-              <input
-                type="number"
-                min={1}
-                className="mt-1.5 w-full rounded-lg border border-gray-200 px-4 py-2.5 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                value={order}
-                onChange={(e) => setOrder(e.target.value)}
-              />
-            </label>
-            {mode === 'edit' && (
-              <label className="flex items-center gap-3 self-end rounded-lg border border-gray-100 bg-gray-50/80 px-4 py-3 text-sm font-medium text-gray-800">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  checked={isActive}
-                  onChange={(e) => setIsActive(e.target.checked)}
-                />
-                Question is active
-              </label>
-            )}
-          </div>
-        </div>
-
-        <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-100">
-          <h3 className="mb-1 text-lg font-semibold text-orange-800">Answer options</h3>
-          <p className="mb-4 text-xs text-gray-500">Four options required — scoring and tags are saved with each option.</p>
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            {options.map((o, i) => (
-              <div
-                key={i}
-                className="rounded-xl border border-gray-200 bg-gradient-to-br from-gray-50/80 to-white p-4 shadow-sm"
-              >
-                <span className="text-xs font-bold uppercase tracking-wide text-blue-600">
-                  Option {i + 1}
-                </span>
-                <input
-                  required
-                  placeholder="Option label"
-                  className="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                  value={o.label}
-                  onChange={(e) => updateOpt(i, 'label', e.target.value)}
-                />
-                <div className="mt-3 grid grid-cols-2 gap-3">
-                  <label className="text-xs font-semibold text-gray-600">
-                    Score
-                    <input
-                      type="number"
-                      className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                      value={o.score}
-                      onChange={(e) => updateOpt(i, 'score', e.target.value)}
-                    />
-                  </label>
-                  <label className="text-xs font-semibold text-gray-600">
-                    Result tag
-                    <input
-                      className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                      placeholder="e.g. correct"
-                      value={o.resultTag}
-                      onChange={(e) => updateOpt(i, 'resultTag', e.target.value)}
-                    />
-                  </label>
-                </div>
+      <form onSubmit={handleSubmit} className="p-6 sm:p-8">
+        <div className="space-y-6">
+          <div className="rounded-3xl border border-slate-200 bg-white p-6">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">
+                  Question
+                </h3>
+                <p className="mt-1 text-xs font-semibold text-slate-500">
+                  Write a clear prompt and set the display order.
+                </p>
               </div>
-            ))}
-          </div>
-        </div>
+              {mode === 'edit' && (
+                <label className="mt-2 flex cursor-pointer items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50/60 px-4 py-3 text-sm font-semibold text-slate-800 sm:mt-0">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                    checked={isActive}
+                    onChange={(e) => setIsActive(e.target.checked)}
+                  />
+                  Question is active
+                </label>
+              )}
+            </div>
 
-        <div className="flex flex-wrap justify-end gap-3 border-t border-gray-100 pt-4">
-          <button
-            type="button"
-            onClick={onClose}
-            className="min-w-[100px] rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            className="min-w-[120px] rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
-          >
-            {mode === 'create' ? 'Add question' : 'Save changes'}
-          </button>
+            <div className="mt-6 grid gap-4 lg:grid-cols-12">
+              <label className="block text-sm lg:col-span-9">
+                <span className="font-bold text-slate-700">Prompt</span>
+                <textarea
+                  required
+                  rows={5}
+                  className="mt-2 w-full resize-y rounded-2xl border border-slate-200 bg-slate-50/40 px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10"
+                  placeholder="Enter the question text"
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                />
+              </label>
+              <label className="block text-sm lg:col-span-3">
+                <span className="font-bold text-slate-700">Display order</span>
+                <input
+                  type="number"
+                  min={1}
+                  className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50/40 px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10"
+                  value={order}
+                  onChange={(e) => setOrder(e.target.value)}
+                />
+              </label>
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-slate-200 bg-white p-6">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">
+                  Answer options
+                </h3>
+                <p className="mt-1 text-xs font-semibold text-slate-500">
+                  Exactly four options required. Choose score and a tag for each option.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-2">
+              {options.map((o, i) => (
+                <div
+                  key={i}
+                  className="rounded-3xl border border-slate-200 bg-slate-50/60 p-5"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-xs font-bold text-indigo-600">
+                      {i + 1}
+                    </span>
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                      Option
+                    </span>
+                  </div>
+
+                  <label className="mt-4 block text-sm">
+                    <span className="font-bold text-slate-700">Label</span>
+                    <input
+                      required
+                      placeholder="Option label"
+                      className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10"
+                      value={o.label}
+                      onChange={(e) => updateOpt(i, 'label', e.target.value)}
+                    />
+                  </label>
+
+                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                    <label className="block text-sm">
+                      <span className="font-bold text-slate-700">Score</span>
+                      <select
+                        className="mt-2 w-full cursor-pointer rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10"
+                        value={String(o.score ?? 0)}
+                        onChange={(e) => updateOpt(i, 'score', e.target.value)}
+                      >
+                        <option value="0">0</option>
+                        <option value="2">2</option>
+                      </select>
+                    </label>
+                    <label className="block text-sm">
+                      <span className="font-bold text-slate-700">Result tag</span>
+                      <select
+                        className="mt-2 w-full cursor-pointer rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10"
+                        value={(o.resultTag === 'correct' || o.resultTag === 'wrong' ? o.resultTag : 'wrong').toString()}
+                        onChange={(e) => updateOpt(i, 'resultTag', e.target.value)}
+                      >
+                        <option value="correct">Correct</option>
+                        <option value="wrong">Wrong</option>
+                      </select>
+                    </label>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap justify-end gap-3 border-t border-slate-200 pt-6">
+            <button
+              type="button"
+              onClick={onClose}
+              className="min-w-[110px] cursor-pointer rounded-2xl border-2 border-slate-200 bg-white px-6 py-3 text-sm font-bold text-slate-700 transition hover:bg-blue-50 hover:border-blue-200"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="min-w-[150px] cursor-pointer rounded-2xl bg-indigo-600 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-200 transition-all hover:bg-indigo-700 hover:-translate-y-0.5 active:translate-y-0"
+            >
+              {mode === 'create' ? 'Add question' : 'Save changes'}
+            </button>
+          </div>
         </div>
       </form>
     </EmployeeTestModal>
