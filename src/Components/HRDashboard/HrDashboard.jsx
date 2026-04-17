@@ -4,6 +4,7 @@ import { MoreHorizontal, User, Settings, Users, Calendar, FileText, Clock, Check
 import API_CONFIG from '../../config/api.js';
 import UpcomingBirthdays from '../UpcomingBirthdays';
 import TodaysCandidateInterviews from './TodaysCandidateInterviews.jsx';
+import DinnerThaliDashboardCard from '../DinnerThali/DinnerThaliDashboardCard';
 
 
 const HRDashboard = () => {
@@ -305,8 +306,7 @@ const HRDashboard = () => {
 
   return (
     <div className="p-6 bg-white min-h-screen">
-      {/* Header */}
-
+      <DinnerThaliDashboardCard />
 
       {/* Top Stats Cards */}
       <div className="grid lg:grid-cols-4 md:grid-cols-2 gap-6 mb-3">

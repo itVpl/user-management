@@ -8,6 +8,7 @@ import {
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import './Dashboard.css';
 import MyAssignedTruckersWidget from './MyAssignedTruckersWidget';
+import DinnerThaliDashboardCard from '../DinnerThali/DinnerThaliDashboardCard';
 
 const shipments = [
   { id: 'FEX123456789US', status: 'Pre-Loading', time: '2hrs 15min' },
@@ -50,6 +51,7 @@ const statusColor = {
 function Dashboard() {
   return (
     <div className="pt-6 px-6">
+      <DinnerThaliDashboardCard />
       <MyAssignedTruckersWidget />
 
       {/* Cards Row 1 */}

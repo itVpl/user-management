@@ -1,6 +1,7 @@
 import React from 'react';
 import { Calendar, Target, MoreHorizontal, CheckCircle } from 'lucide-react';
 import { AttandaceCalendar, laptop, NewUSerImage } from '../../assets/image';
+import DinnerThaliDashboardCard from '../DinnerThali/DinnerThaliDashboardCard';
 
 const TLDashboard = () => {
   // Sample data for the dashboard
@@ -43,6 +44,8 @@ const TLDashboard = () => {
   return (
     <div className="min-h-screen bg-gray-100 p-4">
       <div className="max-w-7xl mx-auto">
+        <DinnerThaliDashboardCard />
+
         {/* Top Stats Cards */}
         <div className="grid grid-cols-3 gap-4 mb-6">
           {/* Attendance Card */}

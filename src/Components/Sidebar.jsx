@@ -79,7 +79,8 @@ const DEPARTMENT_MODULE_CATEGORIES = {
     "Office Management": [
       "Office Inventory",
       "Office Expenses",
-      "Dinner Status"
+      "Dinner Status",
+      "Dinner Thali"
     ],
     "Tasks": [
       "Task",
@@ -134,7 +135,8 @@ const DEPARTMENT_MODULE_CATEGORIES = {
     "Tasks": [
       "Daily Task",
       "Weekly Target Setup",
-      "My Target"
+      "My Target",
+      "Dinner Thali"
     ],
     "Team Management": [
       "Team",
@@ -238,7 +240,8 @@ const DEPARTMENT_MODULE_CATEGORIES = {
     "Tasks": [
       "Daily Task",
       "Weekly Target Setup",
-      "My Target"
+      "My Target",
+      "Dinner Thali"
     ],
     "Team Management": [
       "Team",
@@ -260,7 +263,8 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Tracking"
     ],
     "Common Modules": [
-      "Dinner Status"
+      "Dinner Status",
+      "Dinner Thali"
     ],
     "CMT Reports": [
       "CMT Dept Report",
@@ -318,7 +322,8 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Employee Hygiene"
     ],
     "Common Modules": [
-      "Dinner Status"
+      "Dinner Status",
+      "Dinner Thali"
     ],
     "Finance Reports": [
       "Receivable Report",
@@ -355,7 +360,8 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Pending Reviews",
       "Manager Review",
       "My Reviews",
-      "QA Call Report"
+      "QA Call Report",
+      "Dinner Thali"
     ],
     "Team Management": [
       "Team",
@@ -508,6 +514,7 @@ const menuItems = [
   { name: "Office Expenses", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/OfficeExpenses" },
   { name: "Office Inventory", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/OfficeInventory" },
   { name: "Dinner Status", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/dinner-status" },
+  { name: "Dinner Thali", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/dinner-thali" },
   { name: "Trucker Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/TruckerReport" },
   { name: "All Leads", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/AllLeads" },
   { name: "Task Schedule", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/TaskScheduling" },
@@ -1412,15 +1419,17 @@ const Sidebar = () => {
               REPORT_NAMES.includes(item.name)
             );
             
-            // For superadmin, extract Chat, Email, Dinner Status, and Tracking to move them outside departments
+            // For superadmin, extract Chat, Email, Dinner Status, Dinner Thali, and Tracking to move them outside departments
             let chatMenuItem = null;
             let emailMenuItem = null;
             let dinnerStatusMenuItem = null;
+            let dinnerThaliMenuItem = null;
             let trackingMenuItem = null;
             if (isSuperAdmin) {
               chatMenuItem = matchedMenus.find(item => item.name === "Chat");
               emailMenuItem = matchedMenus.find(item => item.name === "Email");
               dinnerStatusMenuItem = matchedMenus.find(item => item.name === "Dinner Status");
+              dinnerThaliMenuItem = matchedMenus.find(item => item.name === "Dinner Thali");
               trackingMenuItem = matchedMenus.find(item => item.name === "Tracking");
             }
             
@@ -1439,8 +1448,8 @@ const Sidebar = () => {
                 const categoryItems = [];
                 
                 moduleNames.forEach(moduleName => {
-                  // For superadmin, skip Chat, Email, Dinner Status, and Tracking in department categories
-                  if (isSuperAdmin && (moduleName === "Chat" || moduleName === "Email" || moduleName === "Dinner Status" || moduleName === "Tracking")) {
+                  // For superadmin, skip Chat, Email, Dinner Status, Dinner Thali, and Tracking in department categories
+                  if (isSuperAdmin && (moduleName === "Chat" || moduleName === "Email" || moduleName === "Dinner Status" || moduleName === "Dinner Thali" || moduleName === "Tracking")) {
                     return;
                   }
                   
@@ -1470,12 +1479,12 @@ const Sidebar = () => {
             });
             
             // Set department menu items (flattened for display logic)
-            // For superadmin, exclude Chat, Email, Dinner Status, and Tracking from department menus
+            // For superadmin, exclude Chat, Email, Dinner Status, Dinner Thali, and Tracking from department menus
             const allDeptMenus = Object.values(departmentCategoriesMap).flatMap(cats =>
               Object.values(cats).flat()
             ).filter(item => {
               if (isSuperAdmin) {
-                return item.name !== "Chat" && item.name !== "Email" && item.name !== "Dinner Status" && item.name !== "Tracking";
+                return item.name !== "Chat" && item.name !== "Email" && item.name !== "Dinner Status" && item.name !== "Dinner Thali" && item.name !== "Tracking";
               }
               return true;
             });
@@ -1503,7 +1512,7 @@ const Sidebar = () => {
               }
             }
             
-            // For superadmin, add Chat, Email, Dinner Status, and Tracking as top-level menu items (outside departments)
+            // For superadmin, add Chat, Email, Dinner Status, Dinner Thali, and Tracking as top-level menu items (outside departments)
             // Only add if they're not already in otherMenus (they might not be in department categories)
             if (isSuperAdmin) {
               // Add Tracking first (after Dashboard)
@@ -1523,6 +1532,9 @@ const Sidebar = () => {
               }
               if (dinnerStatusMenuItem && !otherMenus.some(item => item.name === "Dinner Status")) {
                 otherMenus.push(dinnerStatusMenuItem);
+              }
+              if (dinnerThaliMenuItem && !otherMenus.some(item => item.name === "Dinner Thali")) {
+                otherMenus.push(dinnerThaliMenuItem);
               }
             }
             
@@ -1578,19 +1590,21 @@ const Sidebar = () => {
                 allDeptModuleNames.includes(item.name)
               );
               
-              // For superadmin, extract Chat, Email, Dinner Status, and Tracking from department modules
+              // For superadmin, extract Chat, Email, Dinner Status, Dinner Thali, and Tracking from department modules
               let chatMenuItem = null;
               let emailMenuItem = null;
               let dinnerStatusMenuItem = null;
+              let dinnerThaliMenuItem = null;
               let trackingMenuItem = null;
               if (isSuperAdmin) {
                 chatMenuItem = deptMenus.find(item => item.name === "Chat");
                 emailMenuItem = deptMenus.find(item => item.name === "Email");
                 dinnerStatusMenuItem = deptMenus.find(item => item.name === "Dinner Status");
+                dinnerThaliMenuItem = deptMenus.find(item => item.name === "Dinner Thali");
                 trackingMenuItem = matchedMenus.find(item => item.name === "Tracking");
-                // Remove Chat, Email, and Dinner Status from department menus
+                // Remove Chat, Email, Dinner Status, and Dinner Thali from department menus
                 deptMenus = deptMenus.filter(item => 
-                  item.name !== "Chat" && item.name !== "Email" && item.name !== "Dinner Status"
+                  item.name !== "Chat" && item.name !== "Email" && item.name !== "Dinner Status" && item.name !== "Dinner Thali"
                 );
               }
               
@@ -1629,7 +1643,7 @@ const Sidebar = () => {
                 }
               }
               
-              // For superadmin, add Chat, Email, Dinner Status, and Tracking as top-level menu items (outside departments)
+              // For superadmin, add Chat, Email, Dinner Status, Dinner Thali, and Tracking as top-level menu items (outside departments)
               // Only add if they're not already in otherMenus (they might not be in department categories)
               if (isSuperAdmin) {
                 // Add Tracking first (after Dashboard)
@@ -1649,6 +1663,9 @@ const Sidebar = () => {
                 }
                 if (dinnerStatusMenuItem && !otherMenus.some(item => item.name === "Dinner Status")) {
                   otherMenus.push(dinnerStatusMenuItem);
+                }
+                if (dinnerThaliMenuItem && !otherMenus.some(item => item.name === "Dinner Thali")) {
+                  otherMenus.push(dinnerThaliMenuItem);
                 }
               }
               

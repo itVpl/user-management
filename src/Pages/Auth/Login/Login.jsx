@@ -7,6 +7,8 @@ import TermsAndConditions from '../../../Components/TermsAndConditions';
 import { ArrowLeft } from 'lucide-react';
 import API_CONFIG from '../../../config/api.js';
 import { persistAssignedTruckersFromLogin } from '../../../utils/truckerAssignmentStorage';
+import { DINNER_THALI_LOGIN_PROMPT_KEY } from '../../../constants/dinnerThaliLoginPrompt';
+import DinnerThaliLoginPromptModal from '../../../Components/DinnerThali/DinnerThaliLoginPromptModal';
 
 // Simple inline icons (no extra libs)
 const Eye = (props) => (
@@ -27,17 +29,19 @@ const EyeOff = (props) => (
 function Login({ setIsAuthenticated }) {
   const [empId, setEmpId] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false); // 👁️ default hidden (eye closed)
+  const [showPassword, setShowPassword] = useState(false); //  default hidden (eye closed)
   const [loading, setLoading] = useState(false);
 
   // Inline validation errors
   const [fieldErrors, setFieldErrors] = useState({ empId: '', password: '' });
   // Auth error (invalid id/password)
   const [authError, setAuthError] = useState('');
-
+  
   // Terms and conditions state
   const [showTerms, setShowTerms] = useState(false);
   const [userData, setUserData] = useState(null);
+  /** Dinner thali popup on login page when terms are not required (token already saved). */
+  const [loginDinnerPrompt, setLoginDinnerPrompt] = useState(null);
 
   const navigate = useNavigate();
 
@@ -85,13 +89,29 @@ function Login({ setIsAuthenticated }) {
           sessionStorage.setItem('emailAccountId', user.emailAccountId);
         }
 
-        // Check if terms are accepted
-        if (user.termsAccepted === false || user.termsAccepted === undefined) {
-          // Show terms and conditions modal
+        const dinnerThali = res.data.dinnerThali;
+        const promptThali = dinnerThali?.promptAfterLogin === true;
+
+        // Terms: API flag first, then employee record (terms before dinner popup per spec)
+        const needsTerms =
+          res.data.requiresTermsAcceptance === true ||
+          user.termsAccepted === false ||
+          user.termsAccepted === undefined;
+
+        if (needsTerms) {
+          if (promptThali) {
+            sessionStorage.setItem(DINNER_THALI_LOGIN_PROMPT_KEY, JSON.stringify(dinnerThali));
+          } else {
+            sessionStorage.removeItem(DINNER_THALI_LOGIN_PROMPT_KEY);
+          }
           setUserData(user);
           setShowTerms(true);
+        } else if (promptThali) {
+          sessionStorage.removeItem(DINNER_THALI_LOGIN_PROMPT_KEY);
+          setIsAuthenticated?.(true);
+          setLoginDinnerPrompt(dinnerThali);
         } else {
-          // Terms already accepted, proceed to dashboard
+          sessionStorage.removeItem(DINNER_THALI_LOGIN_PROMPT_KEY);
           setIsAuthenticated?.(true);
           navigate('/dashboard');
         }
@@ -249,6 +269,17 @@ function Login({ setIsAuthenticated }) {
         <TermsAndConditions 
           onAccept={handleTermsAccepted} 
           user={userData} 
+        />
+      )}
+
+      {loginDinnerPrompt && (
+        <DinnerThaliLoginPromptModal
+          key={loginDinnerPrompt.forDateKey || "dinner-thali-login"}
+          payload={loginDinnerPrompt}
+          onDismiss={() => {
+            setLoginDinnerPrompt(null);
+            navigate('/dashboard');
+          }}
         />
       )}
     </div>

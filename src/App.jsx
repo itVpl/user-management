@@ -82,6 +82,7 @@ const CustomerLoads = lazy(() => import("./Pages/CustomerLoads.jsx"));
 const DailyRateRequest = lazy(() => import("./Components/CMT-Manager/DailyRateRequest.jsx"));
 const OfficeInventory = lazy(() => import("./Components/HRDashboard/OfficeInventory.jsx"));
 const DinnerStatus = lazy(() => import("./Pages/DinnerStatus.jsx"));
+const DinnerThali = lazy(() => import("./Pages/DinnerThali.jsx"));
 const TruckerReport = lazy(() => import("./Components/CMT/TruckerReport.jsx"));
 const AllLeads = lazy(() => import("./Components/AllLeads.jsx"));
 const TaskScheduling = lazy(() => import("./Components/TaskScheduling/TaskScheduling.jsx"));
@@ -725,6 +726,7 @@ function App() {
           <Route path="DailyRateRequest" element={<DailyRateRequest />} />
           <Route path="OfficeInventory" element={<OfficeInventory />} />
           <Route path="dinner-status" element={<DinnerStatus />} />
+          <Route path="dinner-thali" element={<DinnerThali />} />
           <Route path="TruckerReport" element={<TruckerReport />} />
           <Route path="AllLeads" element={<AllLeads />} />
           <Route path="TaskScheduling" element={<TaskScheduling />} />
