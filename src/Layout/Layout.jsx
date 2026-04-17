@@ -11,6 +11,8 @@ import RightSideDrawer from "../Components/common/RightSideDrawer";
 import { useDOAssignmentNotification } from "../hooks/useDOAssignmentNotification";
 import { useAssignmentNotification } from "../hooks/useAssignmentNotification";
 import API_CONFIG from "../config/api.js";
+import { DINNER_THALI_LOGIN_PROMPT_KEY } from "../constants/dinnerThaliLoginPrompt";
+import DinnerThaliLoginPromptModal from "../Components/DinnerThali/DinnerThaliLoginPromptModal";
 import { 
   Settings, 
   BarChart3, 
@@ -41,8 +43,34 @@ const Layout = () => {
   const [showPendingNotification, setShowPendingNotification] = useState(false);
   const [pendingDecisionCount, setPendingDecisionCount] = useState(0);
   const [notificationShown, setNotificationShown] = useState(false);
+  const [dinnerLoginPrompt, setDinnerLoginPrompt] = useState(null);
   const location = useLocation();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+    if (!token) {
+      setDinnerLoginPrompt(null);
+      return;
+    }
+    try {
+      const raw = sessionStorage.getItem(DINNER_THALI_LOGIN_PROMPT_KEY);
+      if (!raw) {
+        setDinnerLoginPrompt(null);
+        return;
+      }
+      const payload = JSON.parse(raw);
+      if (payload?.promptAfterLogin === true) {
+        setDinnerLoginPrompt(payload);
+      } else {
+        sessionStorage.removeItem(DINNER_THALI_LOGIN_PROMPT_KEY);
+        setDinnerLoginPrompt(null);
+      }
+    } catch {
+      sessionStorage.removeItem(DINNER_THALI_LOGIN_PROMPT_KEY);
+      setDinnerLoginPrompt(null);
+    }
+  }, [location.pathname]);
   
   // Get user data and check if CMT user
   useEffect(() => {
@@ -612,6 +640,16 @@ const Layout = () => {
             </div>
           </div>
         </RightSideDrawer>
+      )}
+
+      {dinnerLoginPrompt && (
+        <DinnerThaliLoginPromptModal
+          payload={dinnerLoginPrompt}
+          onDismiss={() => {
+            sessionStorage.removeItem(DINNER_THALI_LOGIN_PROMPT_KEY);
+            setDinnerLoginPrompt(null);
+          }}
+        />
       )}
     </div>
   );

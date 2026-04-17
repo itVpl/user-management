@@ -111,6 +111,22 @@ const getCreatedAt = (u) => {
   return 0;
 };
 
+const departmentFromStorage = () => {
+  const direct = (localStorage.getItem('department') || sessionStorage.getItem('department') || '').trim();
+  if (direct) return direct;
+  const raw = localStorage.getItem('user') || sessionStorage.getItem('user');
+  if (!raw) return '';
+  try {
+    const u = JSON.parse(raw);
+    const d = typeof u?.department === 'string' ? u.department : u?.department?.name || '';
+    return String(d).trim();
+  } catch {
+    return '';
+  }
+};
+
+const isHrDepartment = () => departmentFromStorage().toLowerCase() === 'hr';
+
 
 const ManageUser = () => {
   const [downloading, setDownloading] = useState(false);
@@ -131,6 +147,8 @@ const ManageUser = () => {
   const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'active' | 'inactive'
   const [assignManagerLoading, setAssignManagerLoading] = useState(false);
   const [roleUpdateLoading, setRoleUpdateLoading] = useState(false);
+  const [cmtTeamDetailLoading, setCmtTeamDetailLoading] = useState(false);
+  const [cmtTeamSaving, setCmtTeamSaving] = useState(false);
   const usersPerPage = 10;
 
 
@@ -162,6 +180,41 @@ const ManageUser = () => {
   useEffect(() => {
     fetchUsers();
   }, []);
+
+  /** HR + CMT: refresh profile so `cmtTeam` matches GET /api/v1/inhouseUser/:empId */
+  useEffect(() => {
+    if (!showViewModal || !viewingUser?.empId) return;
+    if (!isHrDepartment() || viewingUser.department !== 'CMT') return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        setCmtTeamDetailLoading(true);
+        const res = await axios.get(
+          `${API_CONFIG.BASE_URL}/api/v1/inhouseUser/${viewingUser.empId}`,
+          { withCredentials: true }
+        );
+        if (cancelled) return;
+        const emp = res.data?.employee;
+        if (emp) {
+          setViewingUser((prev) => {
+            if (!prev || prev.empId !== emp.empId) return prev;
+            const merged = { ...prev, ...emp };
+            merged.isActive = emp.status === 'active' || emp.status === undefined;
+            return merged;
+          });
+        }
+      } catch (err) {
+        console.error('Failed to load employee detail:', err);
+      } finally {
+        if (!cancelled) setCmtTeamDetailLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [showViewModal, viewingUser?.empId, viewingUser?.department]);
 
   const openViewModal = (user) => {
     setViewingUser(user);
@@ -478,6 +531,28 @@ const ManageUser = () => {
     }
   };
 
+  const handleCmtTeamChange = async (empId, cmtTeam) => {
+    setCmtTeamSaving(true);
+    try {
+      const fd = new FormData();
+      fd.append('cmtTeam', cmtTeam || '');
+      await axios.put(`${API_CONFIG.BASE_URL}/api/v1/inhouseUser/${empId}`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        withCredentials: true,
+      });
+      setViewingUser((u) => (u && u.empId === empId ? { ...u, cmtTeam: cmtTeam || undefined } : u));
+      setUsers((list) =>
+        list.map((x) => (x.empId === empId ? { ...x, cmtTeam: cmtTeam || undefined } : x)),
+      );
+      alertify.success('CMT sub-team updated');
+    } catch (error) {
+      console.error('Failed to update CMT sub-team:', error);
+      alertify.error(error?.response?.data?.message || 'Failed to update CMT sub-team.');
+    } finally {
+      setCmtTeamSaving(false);
+    }
+  };
+
   const handleEditUser = (user) => {
     setEditingUser(user);
     setShowEditModal(true);
@@ -560,6 +635,7 @@ const ManageUser = () => {
       {showEditModal && editingUser && (
         <EditUserModal
           user={editingUser}
+          includeCmtTeamField={isHrDepartment()}
           onClose={() => { setShowEditModal(false); setEditingUser(null); }}
           onUpdate={handleUpdateUser}
         />
@@ -866,6 +942,27 @@ const ManageUser = () => {
                     {viewingUser.isActive ? 'Deactivate' : 'Activate'}
                   </button>
                 </div>
+
+                {isHrDepartment() && viewingUser.department === 'CMT' && (
+                  <div className="mt-4 pt-4 border-t border-indigo-200">
+                    <p className="text-sm text-gray-600 mb-2">CMT sub-team</p>
+                    {cmtTeamDetailLoading ? (
+                      <p className="text-xs text-gray-500">Loading team…</p>
+                    ) : (
+                      <select
+                        value={viewingUser.cmtTeam || ''}
+                        onChange={(e) => handleCmtTeamChange(viewingUser.empId, e.target.value)}
+                        disabled={cmtTeamSaving}
+                        className="w-full max-w-md px-4 py-3 border border-gray-300 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:opacity-60"
+                      >
+                        <option value="">Not set</option>
+                        <option value="scheduling">Scheduling</option>
+                        <option value="rate_request">Rate request</option>
+                      </select>
+                    )}
+                    {cmtTeamSaving && <p className="text-xs text-gray-500 mt-1">Saving…</p>}
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-6">
@@ -1090,7 +1187,7 @@ const ManageUser = () => {
 const DEPARTMENT_OPTIONS = ['IT', 'HR', 'CMT', 'Sales', 'Finance', 'QA'];
 const SALES_TIER_OPTIONS = ['1', '2', '3'];
 
-const EditUserModal = ({ user, onClose, onUpdate }) => {
+const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate }) => {
   // ---- key filters (prevent invalid keystrokes) ----
   const allowKey = (e, type) => {
     const nav = ['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab', 'Home', 'End'];
@@ -1122,6 +1219,7 @@ const EditUserModal = ({ user, onClose, onUpdate }) => {
     department: user.department || '',
     designation: getDesignationForDepartment(user.department, user.salesExecutiveTier, user.designation),
     salesExecutiveTier: user.salesExecutiveTier || '',
+    cmtTeam: user.cmtTeam || '',
     basicSalary: user.basicSalary || '',
     sex: user.sex || '',
     dateOfBirth: user.dateOfBirth ? new Date(user.dateOfBirth).toISOString().split('T')[0] : '',
@@ -1191,6 +1289,7 @@ const EditUserModal = ({ user, onClose, onUpdate }) => {
           next.designation = getDesignationForSalesTier('');
         }
         if (v !== 'Sales') next.salesExecutiveTier = '';
+        if (v !== 'CMT') next.cmtTeam = '';
         return next;
       });
       setErrors((prev) => ({ ...prev, department: '' }));
@@ -1482,7 +1581,7 @@ const EditUserModal = ({ user, onClose, onUpdate }) => {
 
       // append normal fields (dates in DD-MM-YYYY)
       Object.entries(formData).forEach(([key, val]) => {
-        if (['accountHolderName', 'accountNumber', 'ifscCode', 'designation'].includes(key)) return;
+        if (['accountHolderName', 'accountNumber', 'ifscCode', 'designation', 'cmtTeam'].includes(key)) return;
         if (key === 'dateOfBirth' || key === 'dateOfJoining') {
           const d = new Date(val);
           const dd = String(d.getDate()).padStart(2, '0');
@@ -1495,6 +1594,10 @@ const EditUserModal = ({ user, onClose, onUpdate }) => {
       });
 
       submitData.append('designation', designationValue);
+
+      if (includeCmtTeamField && formData.department === 'CMT') {
+        submitData.append('cmtTeam', formData.cmtTeam || '');
+      }
 
       // bank fields
       submitData.append('accountHolderName', formData.accountHolderName || '');
@@ -1710,6 +1813,22 @@ const EditUserModal = ({ user, onClose, onUpdate }) => {
                       ))}
                     </select>
                     {errors.salesExecutiveTier && <p className="text-red-600 text-xs mt-1">{errors.salesExecutiveTier}</p>}
+                  </div>
+                )}
+
+                {includeCmtTeamField && formData.department === 'CMT' && (
+                  <div className="space-y-3">
+                    <label className="block text-sm font-bold text-gray-700">CMT sub-team</label>
+                    <select
+                      name="cmtTeam"
+                      value={formData.cmtTeam}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-green-200 focus:border-green-500 transition-all duration-300"
+                    >
+                      <option value="">Not set</option>
+                      <option value="scheduling">Scheduling</option>
+                      <option value="rate_request">Rate request</option>
+                    </select>
                   </div>
                 )}
 

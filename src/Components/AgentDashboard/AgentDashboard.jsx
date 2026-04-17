@@ -11,6 +11,7 @@ import { IoCall } from "react-icons/io5";
 import CallFollowUpsDashboardCard from './CallFollowUpsDashboardCard';
 import API_CONFIG from '../../config/api';
 import MyAssignedTruckersWidget from '../Dashboard/MyAssignedTruckersWidget';
+import DinnerThaliDashboardCard from '../DinnerThali/DinnerThaliDashboardCard';
 // import firstIcon from "../../assets/Icon.svg"
 
 const Dashboard = () => {
@@ -497,6 +498,7 @@ const Dashboard = () => {
   });
   return (
     <div className="p-6 bg-white min-h-screen">
+      <DinnerThaliDashboardCard />
       {department === 'CMT' ? (
         // --- CMT Dashboard (current layout) ---
         <>
