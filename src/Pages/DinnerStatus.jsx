@@ -3,6 +3,7 @@ import axios from 'axios';
 import alertify from 'alertifyjs';
 import diningTableImage from '../assets/dinnerChaIT.png';
 import API_CONFIG from '../config/api';
+import DinnerThaliDashboardCard from '../Components/DinnerThali/DinnerThaliDashboardCard';
 
 const DinnerStatus = () => {
   // Initialize seats state
@@ -323,6 +324,10 @@ const DinnerStatus = () => {
           animation: fade-in-up 0.6s ease-out;
         }
       `}</style>
+
+      <div className="w-full max-w-6xl mx-auto">
+        <DinnerThaliDashboardCard />
+      </div>
       {/* Header */}
       <div className="text-center mb-1 animate-fade-in-up">
         <h3 className="text-3xl font-bold text-gray-800 mb-1 transition-all duration-300 hover:scale-105">🍽️ Dinner Reservation</h3>

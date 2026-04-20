@@ -3,7 +3,6 @@ import axios from 'axios';
 import { MoreHorizontal, DollarSign, TrendingUp, TrendingDown, CreditCard, Receipt, PieChart, BarChart3, Calendar, Users, FileText, CheckCircle, AlertCircle, Clock, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import API_CONFIG from '../../config/api.js';
 import UpcomingBirthdays from '../UpcomingBirthdays';
-import DinnerThaliDashboardCard from '../DinnerThali/DinnerThaliDashboardCard';
 
 const FinanceDashboard = () => {
   const [financialData, setFinancialData] = useState({
@@ -379,8 +378,6 @@ const FinanceDashboard = () => {
 
   return (
     <div className="p-6 bg-white min-h-screen">
-      <DinnerThaliDashboardCard />
-
       {/* Top Stats Cards */}
       <div className="grid lg:grid-cols-3 md:grid-cols-1 gap-6 mb-8">
         <StatCard
