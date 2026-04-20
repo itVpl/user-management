@@ -274,6 +274,27 @@ const CustomerTable = React.memo(function CustomerTable({ customers, onAction, o
   });
   const [followUpSubmitting, setFollowUpSubmitting] = useState(false);
   const [followUpErrors, setFollowUpErrors] = useState({});
+  const [editModal, setEditModal] = useState({ open: false, customer: null });
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editForm, setEditForm] = useState({
+    eventName: '',
+    eventDate: '',
+    personName: '',
+    companyName: '',
+    contactNumber: '',
+    whatsappNumber: '',
+    email: '',
+    linkedin: '',
+    companyAddress: '',
+    mc_dot_no: '',
+    onboardCompany: '',
+    companyEmail: '',
+    country: '',
+    state: '',
+    city: '',
+    zipcode: '',
+    compAdd: '',
+  });
   const [prospectForm, setProspectForm] = useState({
     remark: '',
     prospectStatus: 'Warm',
@@ -461,6 +482,76 @@ const CustomerTable = React.memo(function CustomerTable({ customers, onAction, o
       toast.error(error.response?.data?.message || 'Failed to fetch customer details');
       setViewModal({ open: false, customer: null, data: null, loading: false });
       setFollowUpHistory({ data: null, loading: false });
+    }
+  };
+
+  const isEventBasedRow = (customer) =>
+    customer?.recordType === 'event_based' || customer?.sourceType === 'upcoming_event';
+
+  const openEditModal = (customer) => {
+    if (!isEventBasedRow(customer)) {
+      toast.info('Edit is available for event-based customers only.');
+      return;
+    }
+    setEditForm({
+      eventName: customer?.eventName || '',
+      eventDate: customer?.eventDate ? String(customer.eventDate).slice(0, 10) : '',
+      personName: customer?.personName || '',
+      companyName: customer?.companyName || customer?.compName || '',
+      contactNumber: customer?.contactNumber || customer?.phoneNo || '',
+      whatsappNumber: customer?.whatsappNumber || '',
+      email: customer?.email || '',
+      linkedin: customer?.linkedin || '',
+      companyAddress: customer?.companyAddress || customer?.compAdd || '',
+      mc_dot_no: customer?.mc_dot_no || '',
+      onboardCompany: customer?.onboardCompany || '',
+      companyEmail: customer?.companyEmail || '',
+      country: customer?.country || '',
+      state: customer?.state || '',
+      city: customer?.city || '',
+      zipcode: customer?.zipcode || '',
+      compAdd: customer?.compAdd || customer?.companyAddress || '',
+    });
+    setEditModal({ open: true, customer });
+  };
+
+  const closeEditModal = () => {
+    setEditModal({ open: false, customer: null });
+    setEditSubmitting(false);
+  };
+
+  const handleEditSave = async (e) => {
+    e.preventDefault();
+    const customerId = editModal?.customer?.userId || editModal?.customer?._id || editModal?.customer?.id;
+    if (!customerId) {
+      toast.error('Customer ID not found');
+      return;
+    }
+    try {
+      setEditSubmitting(true);
+      const token = getToken();
+      const payload = Object.fromEntries(
+        Object.entries(editForm).map(([k, v]) => [k, typeof v === 'string' ? v.trim() : v])
+      );
+      const res = await axios.patch(
+        `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/event-customer/${customerId}`,
+        payload,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          withCredentials: true
+        }
+      );
+      if (res?.data?.success) {
+        toast.success(res?.data?.message || 'Event customer updated successfully.');
+        closeEditModal();
+        onLaneDetailsSaved?.(customerId);
+      } else {
+        toast.error(res?.data?.message || 'Failed to update event customer');
+      }
+    } catch (error) {
+      toast.error(error?.response?.data?.message || 'Failed to update event customer');
+    } finally {
+      setEditSubmitting(false);
     }
   };
 
@@ -868,8 +959,8 @@ const CustomerTable = React.memo(function CustomerTable({ customers, onAction, o
 
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 p-4 overflow-hidden">
-      <div className="overflow-x-auto">
+    <div className="bg-white rounded-2xl border border-gray-200 p-4 overflow-visible">
+      <div className="customer-table-scroll-area do-report-table-outer-scroll scrollbar-show overflow-x-auto overflow-y-scroll h-[420px] md:h-[52vh] pr-0">
         <table className="min-w-full text-sm text-gray-700 border-separate border-spacing-y-3">
           <thead>
             <tr className="bg-gray-50">
@@ -887,7 +978,15 @@ const CustomerTable = React.memo(function CustomerTable({ customers, onAction, o
             {pageData.map((cust, index) => (
               <tr key={index} className="group transition-colors">
                 <td className="py-4 px-4 border-y border-l border-gray-200 rounded-l-xl first:pl-6 align-middle bg-white group-hover:bg-gray-50">
-                  <span className="font-medium text-gray-700">{cust.compName}</span>
+                  <div className="flex flex-col">
+                    <span className="font-medium text-gray-700">{cust.compName || cust.companyName || cust.personName || 'N/A'}</span>
+                    {(cust.recordType === 'event_based' || cust.sourceType === 'upcoming_event') && (
+                      <span className="text-xs text-purple-700">
+                        {cust.eventName || 'Event Based'}
+                        {cust.eventDate ? ` • ${new Date(cust.eventDate).toLocaleDateString()}` : ''}
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="py-4 px-4 border-y border-gray-200 align-middle bg-white group-hover:bg-gray-50">
                   <span className="font-medium text-gray-700">{cust.mc_dot_no || 'N/A'}</span>
@@ -921,11 +1020,15 @@ const CustomerTable = React.memo(function CustomerTable({ customers, onAction, o
                 </td>
                 <td className="py-4 px-4 border-y border-gray-200 align-middle bg-white group-hover:bg-gray-50">
                   <span className={`font-medium ${
-                    cust.type === 'final_customer'
+                    (cust.recordType === 'event_based' || cust.sourceType === 'upcoming_event')
+                      ? 'text-purple-700'
+                      : cust.type === 'final_customer'
                       ? 'text-green-700'
                       : 'text-gray-700'
                   }`}>
-                    {cust.type === 'final_customer'
+                    {(cust.recordType === 'event_based' || cust.sourceType === 'upcoming_event')
+                      ? 'Event Based'
+                      : cust.type === 'final_customer'
                       ? 'Active'
                       : (cust.type || 'N/A')}
                   </span>
@@ -942,6 +1045,12 @@ const CustomerTable = React.memo(function CustomerTable({ customers, onAction, o
                       className="px-4 py-1 font-medium rounded-md transition-colors border border-blue-300 text-blue-700 hover:bg-blue-50"
                     >
                       View
+                    </button>
+                    <button
+                      onClick={() => openEditModal(cust)}
+                      className="px-4 py-1 font-medium rounded-md transition-colors border border-amber-300 text-amber-700 hover:bg-amber-50"
+                    >
+                      Edit
                     </button>
                     <button
                       onClick={() => handleLaneDetail(cust)}
@@ -1040,7 +1149,7 @@ const CustomerTable = React.memo(function CustomerTable({ customers, onAction, o
                 </div>
                 <div>
                   <h2 className="text-xl font-bold">Customer Details</h2>
-                  <p className="text-blue-100 text-sm">{viewModal.customer?.compName || 'Loading...'}</p>
+                  <p className="text-blue-100 text-sm">{viewModal.customer?.compName || viewModal.customer?.personName || 'Loading...'}</p>
                 </div>
               </div>
               <button
@@ -1742,6 +1851,54 @@ const CustomerTable = React.memo(function CustomerTable({ customers, onAction, o
       )}
 
       {/* Follow Up Modal */}
+      {editModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={closeEditModal}>
+          <div className="bg-white rounded-3xl max-w-3xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-gradient-to-r from-amber-500 to-orange-600 text-white p-6 rounded-t-3xl flex justify-between items-center sticky top-0 z-10">
+              <h2 className="text-xl font-bold">Edit Event Customer</h2>
+              <button onClick={closeEditModal} className="text-2xl font-bold">×</button>
+            </div>
+            <form onSubmit={handleEditSave} className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+              {[
+                ['eventName', 'Event Name'],
+                ['eventDate', 'Event Date'],
+                ['personName', 'Person Name'],
+                ['companyName', 'Company Name'],
+                ['contactNumber', 'Contact Number'],
+                ['whatsappNumber', 'WhatsApp Number'],
+                ['email', 'Email'],
+                ['linkedin', 'LinkedIn'],
+                ['companyAddress', 'Company Address'],
+                ['mc_dot_no', 'MC/DOT'],
+                ['onboardCompany', 'Onboard Company'],
+                ['companyEmail', 'Company Email'],
+                ['country', 'Country'],
+                ['state', 'State'],
+                ['city', 'City'],
+                ['zipcode', 'Zipcode']
+              ].map(([key, label]) => (
+                <div key={key} className={key === 'companyAddress' ? 'md:col-span-2' : ''}>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+                  <input
+                    type={key === 'eventDate' ? 'date' : key === 'email' || key === 'companyEmail' ? 'email' : 'text'}
+                    value={editForm[key] || ''}
+                    onChange={(e) => setEditForm((p) => ({ ...p, [key]: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  />
+                </div>
+              ))}
+              <div className="md:col-span-2 flex justify-end gap-3 pt-2">
+                <button type="button" onClick={closeEditModal} className="px-4 py-2 border rounded-lg">Cancel</button>
+                <button type="submit" disabled={editSubmitting} className="px-4 py-2 bg-amber-600 text-white rounded-lg disabled:opacity-60">
+                  {editSubmitting ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Follow Up Modal */}
       {followUpModal.open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={closeFollowUpModal}>
           <div 
@@ -1917,6 +2074,14 @@ const initialForm = {
   mc_dot_no: '',
   phoneNo: '',
   email: '',
+  eventName: '',
+  eventDate: '',
+  personName: '',
+  companyName: '',
+  contactNumber: '',
+  whatsappNumber: '',
+  linkedin: '',
+  companyAddress: '',
   companyEmail: '', // Company email dropdown field
   onboardCompany: '', // Onboard company dropdown field
   password: '',
@@ -1938,9 +2103,13 @@ const passComboRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*(\d|\W)).{8,14}$/; // (kept 
 
 const AddCustomer = () => {
   const [customers, setCustomers] = useState([]);
+  const [isEventBasedCustomer, setIsEventBasedCustomer] = useState(false);
   const [todayStats, setTodayStats] = useState({ totalAdded: 0 });
   const [totalStats, setTotalStats] = useState({ totalCustomers: 0, pendingCustomers: 0 });
   const [open, setOpen] = useState(false);
+  const addModalScrollRef = useRef(null);
+  const addModalScrollLogRef = useRef(false);
+  const addModalScrollInteractionLogRef = useRef(false);
 
   // Company Email Options - Based on the three companies in the system
   const companyEmailOptions = [
@@ -1997,6 +2166,7 @@ const AddCustomer = () => {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filterType, setFilterType] = useState('total'); // 'all' | 'total' | 'today'
+  const [sourceTypeFilter, setSourceTypeFilter] = useState('all'); // 'all' | 'regular' | 'upcoming_event'
 
   // Date range filter
   const [dateRange, setDateRange] = useState({ startDate: null, endDate: null });
@@ -2038,16 +2208,73 @@ const AddCustomer = () => {
   useEffect(() => {
     fetchAllCustomers();
     fetchTodayStats();
-  }, []);
+  }, [sourceTypeFilter, debouncedSearch]);
+
+  useEffect(() => {
+    if (!open) {
+      addModalScrollLogRef.current = false;
+      addModalScrollInteractionLogRef.current = false;
+      return;
+    }
+
+    const el = addModalScrollRef.current;
+    if (!el) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/01cd5b68-26c1-4c97-920c-7e9e5a0b39b0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'pre-fix',hypothesisId:'H7',location:'AddCustomer.jsx:modal-mount',message:'Add customer modal open but scroll container missing',data:{open},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      return;
+    }
+
+    if (addModalScrollLogRef.current) return;
+    addModalScrollLogRef.current = true;
+    const computed = window.getComputedStyle(el);
+
+    let hideScrollbarRuleFound = false;
+    let hideScrollbarRuleCount = 0;
+    for (const sheet of Array.from(document.styleSheets)) {
+      let rules;
+      try {
+        rules = sheet.cssRules;
+      } catch {
+        continue;
+      }
+      for (const rule of Array.from(rules || [])) {
+        const cssText = String(rule.cssText || '');
+        if (cssText.includes('*::-webkit-scrollbar') && cssText.includes('display: none')) {
+          hideScrollbarRuleFound = true;
+          hideScrollbarRuleCount += 1;
+        }
+      }
+    }
+
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/01cd5b68-26c1-4c97-920c-7e9e5a0b39b0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'pre-fix',hypothesisId:'H5',location:'AddCustomer.jsx:add-modal-scroll',message:'Add modal scrollbar diagnostics after open',data:{className:el.className,overflowY:computed.overflowY,overflowX:computed.overflowX,clientHeight:el.clientHeight,scrollHeight:el.scrollHeight,clientWidth:el.clientWidth,scrollWidth:el.scrollWidth,hasVerticalOverflow:el.scrollHeight>el.clientHeight,hasHorizontalOverflow:el.scrollWidth>el.clientWidth,hideScrollbarRuleFound,hideScrollbarRuleCount},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+  }, [open]);
+
+  const handleAddModalScrollDebug = (e) => {
+    if (addModalScrollInteractionLogRef.current) return;
+    addModalScrollInteractionLogRef.current = true;
+    const el = e.currentTarget;
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/01cd5b68-26c1-4c97-920c-7e9e5a0b39b0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'pre-fix',hypothesisId:'H6',location:'AddCustomer.jsx:onModalScroll',message:'User scrolled add modal container',data:{scrollTop:el.scrollTop,maxScrollableY:Math.max(0,el.scrollHeight-el.clientHeight),scrollLeft:el.scrollLeft,maxScrollableX:Math.max(0,el.scrollWidth-el.clientWidth)},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+  };
 
 
   const fetchAllCustomers = async () => {
     try {
       const token = getToken();
+      const normalizedSourceType = sourceTypeFilter || 'all';
+      const normalizedSearch = debouncedSearch.trim();
       const res = await axios.get(
         `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/department/customers`,
         { 
           headers: { Authorization: `Bearer ${token}` },
+          params: {
+            sourceType: normalizedSourceType,
+            ...(normalizedSearch ? { search: normalizedSearch } : {})
+          },
           withCredentials: true // 🔥 CRITICAL: Required for Safari/iOS cross-site cookies
         }
       );
@@ -2095,7 +2322,6 @@ const AddCustomer = () => {
       console.error("❌ Error fetching today's stats:", error);
     }
   };
-
 
   // Local fallback count
   const todaysCountLocal = useMemo(() => {
@@ -2176,9 +2402,13 @@ const AddCustomer = () => {
   const handleBlur = useCallback((e) => {
     const { name, value } = e.target;
     if (!validators[name]) return;
+    if (
+      isEventBasedCustomer &&
+      ['mc_dot_no', 'password', 'confirmPassword', 'country', 'state', 'city', 'zipcode', 'email', 'phoneNo', 'compName', 'compAdd'].includes(name)
+    ) return;
     const msg = validators[name](value, formData);
     setErrors(prev => ({ ...prev, [name]: msg }));
-  }, [formData]);
+  }, [formData, isEventBasedCustomer]);
 
 
   const handleChange = useCallback((e) => {
@@ -2187,6 +2417,7 @@ const AddCustomer = () => {
     if (name === 'email') v = v.replace(/\s+/g, '');
     if (name === 'phoneNo') v = v.replace(/\D+/g, '').slice(0, 10);
     if (name === 'zipcode') v = v.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8);
+    if (name === 'contactNumber' || name === 'whatsappNumber') v = v.replace(/[^\d+]/g, '').slice(0, 16);
     setFormData(prev => ({ ...prev, [name]: v }));
   }, []);
 
@@ -2198,6 +2429,7 @@ const AddCustomer = () => {
     setErrors({});
     setShowPassword(true);
     setShowConfirm(true);
+    setIsEventBasedCustomer(false);
   };
 
 
@@ -2209,11 +2441,153 @@ const AddCustomer = () => {
       return;
     }
 
+    if (isEventBasedCustomer) {
+      const eventErrors = {};
+      if (formData.personName?.trim() && formData.personName.trim().length < 2) {
+        eventErrors.personName = 'Please enter person name (min 2 chars).';
+      }
+      if (formData.companyName?.trim() && formData.companyName.trim().length < 2) {
+        eventErrors.companyName = 'Please enter company name (min 2 chars).';
+      }
+      if ((formData.contactNumber || '').trim() && !/^\+?\d{10,15}$/.test((formData.contactNumber || '').trim())) {
+        eventErrors.contactNumber = 'Please enter valid contact number.';
+      }
+      if ((formData.whatsappNumber || '').trim() && !/^\+?\d{10,15}$/.test((formData.whatsappNumber || '').trim())) {
+        eventErrors.whatsappNumber = 'Please enter valid WhatsApp number.';
+      }
+      if ((formData.email || '').trim() && !emailRegex.test((formData.email || '').trim())) {
+        eventErrors.email = 'Please enter the valid email id.';
+      }
+      if ((formData.linkedin || '').trim().length > 255) {
+        eventErrors.linkedin = 'LinkedIn must be up to 255 characters.';
+      }
+      const companyAddress = (formData.companyAddress || '').trim();
+      if (companyAddress && (companyAddress.length < 5 || companyAddress.length > 300)) {
+        eventErrors.companyAddress = 'Please enter company address (5-300 chars).';
+      }
+
+      // Password is optional in EVENT mode.
+      // If either password field is provided, both must be provided, match, and follow policy.
+      const hasPassword = !!(formData.password || '');
+      const hasConfirmPassword = !!(formData.confirmPassword || '');
+      if (hasPassword !== hasConfirmPassword) {
+        const msg = 'password and confirmPassword must both be provided together';
+        eventErrors.password = msg;
+        eventErrors.confirmPassword = msg;
+      } else if (hasPassword && hasConfirmPassword) {
+        if ((formData.password || '').length < 8) {
+          eventErrors.password = 'Please enter the minimum 8 characters.';
+        } else if ((formData.password || '').length > 14) {
+          eventErrors.password = 'Please enter the valid password.';
+        }
+        if ((formData.confirmPassword || '') !== (formData.password || '')) {
+          eventErrors.confirmPassword = 'Kindly ensure the  password and confirm password are the same';
+        }
+      }
+
+      const normalizedForRegularValidation = {
+        ...formData,
+        compName: formData.compName || formData.companyName || '',
+        compAdd: formData.compAdd || formData.companyAddress || '',
+        phoneNo: formData.phoneNo || formData.contactNumber || '',
+        email: formData.email || formData.companyEmail || '',
+      };
+      const regularErrors = validateAll(normalizedForRegularValidation);
+      // MC/DOT remains mandatory in REGULAR flow, but optional in EVENT flow.
+      delete regularErrors.mc_dot_no;
+      delete regularErrors.compName;
+      delete regularErrors.compAdd;
+      delete regularErrors.phoneNo;
+      delete regularErrors.email;
+      delete regularErrors.password;
+      delete regularErrors.confirmPassword;
+      delete regularErrors.country;
+      delete regularErrors.state;
+      delete regularErrors.city;
+      delete regularErrors.zipcode;
+      const mergedErrors = { ...regularErrors, ...eventErrors };
+
+      if (Object.keys(mergedErrors).length > 0) {
+        setErrors(mergedErrors);
+        const firstErrorKey = Object.keys(mergedErrors)[0];
+        focusField(firstErrorKey);
+        toast.error(mergedErrors[firstErrorKey] || 'Please correct highlighted fields in Event form.');
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const payload = {
+          eventName: formData.eventName.trim(),
+          eventDate: formData.eventDate.trim(),
+          personName: formData.personName.trim(),
+          companyName: formData.companyName.trim(),
+          contactNumber: formData.contactNumber.trim(),
+          whatsappNumber: formData.whatsappNumber.trim(),
+          email: formData.email.trim().toLowerCase(),
+          linkedin: (formData.linkedin || '').trim(),
+          companyAddress: formData.companyAddress.trim(),
+          mc_dot_no: (formData.mc_dot_no || '').trim(),
+          onboardCompany: (formData.onboardCompany || '').trim(),
+          companyEmail: (formData.companyEmail || '').trim(),
+          password: formData.password || '',
+          confirmPassword: formData.confirmPassword || '',
+          country: (formData.country || '').trim(),
+          state: (formData.state || '').trim(),
+          city: (formData.city || '').trim(),
+          zipcode: (formData.zipcode || '').trim(),
+          compAdd: (formData.compAdd || formData.companyAddress || '').trim(),
+          compName: (formData.compName || formData.companyName || '').trim(),
+          phoneNo: (formData.phoneNo || formData.contactNumber || '').trim(),
+        };
+
+        const res = await axios.post(
+          `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/department/add-agent-customer-from-event`,
+          payload,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+            withCredentials: true
+          }
+        );
+
+        if (res?.data?.success) {
+          toast.success(res?.data?.message || 'Agent customer created from upcoming event.');
+          handleClose();
+          await fetchAllCustomers();
+          await fetchTodayStats();
+        } else {
+          const apiMsg = res?.data?.message || 'Unknown error';
+          const apiErrors = res?.data?.errors || {};
+          if (Object.keys(apiErrors).length > 0) {
+            setErrors((prev) => ({ ...prev, ...apiErrors }));
+            focusField(Object.keys(apiErrors)[0]);
+          }
+          toast.error('❌ Failed: ' + apiMsg);
+        }
+      } catch (error) {
+        const msg =
+          error?.response?.data?.message ||
+          error?.response?.data?.error ||
+          error?.message ||
+          'Unexpected error';
+        const apiErrors = error?.response?.data?.errors || {};
+        if (Object.keys(apiErrors).length > 0) {
+          setErrors((prev) => ({ ...prev, ...apiErrors }));
+          focusField(Object.keys(apiErrors)[0]);
+        }
+        toast.error('❌ Failed: ' + msg);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
 
     const newErrors = validateAll(formData);
     const keys = Object.keys(newErrors);
     if (keys.length > 0) {
       focusField(keys[0]);
+      toast.error('Please fill all required fields.');
       return;
     }
 
@@ -2337,7 +2711,22 @@ const AddCustomer = () => {
     // Apply search filter
     const q = debouncedSearch.trim().toLowerCase();
     if (q) {
-      filtered = filtered.filter(c => (c?.compName || '').toLowerCase().includes(q));
+      filtered = filtered.filter(c => {
+        const companyName = (c?.compName || '').toLowerCase();
+        const eventCompanyName = (c?.companyName || '').toLowerCase();
+        const personName = (c?.personName || '').toLowerCase();
+        const email = (c?.email || '').toLowerCase();
+        const phone = (c?.phoneNo || c?.contactNumber || '').toLowerCase();
+        const eventName = (c?.eventName || '').toLowerCase();
+        return (
+          companyName.includes(q) ||
+          eventCompanyName.includes(q) ||
+          personName.includes(q) ||
+          email.includes(q) ||
+          phone.includes(q) ||
+          eventName.includes(q)
+        );
+      });
     }
    
     return filtered;
@@ -2440,6 +2829,68 @@ const AddCustomer = () => {
 
   return (
     <div className="p-6">
+      <style>{`
+        .customer-table-scroll-area {
+          scrollbar-width: thin !important;
+          scrollbar-color: #94a3b8 #f1f5f9 !important;
+          scrollbar-gutter: stable both-edges;
+          -ms-overflow-style: auto !important;
+        }
+
+        .customer-table-scroll-area::-webkit-scrollbar {
+          -webkit-appearance: none !important;
+          display: block !important;
+          width: 12px !important;
+          height: 10px !important;
+        }
+
+        .customer-table-scroll-area::-webkit-scrollbar:vertical {
+          width: 12px !important;
+          display: block !important;
+        }
+
+        .customer-table-scroll-area::-webkit-scrollbar-track {
+          background: #f1f5f9 !important;
+          border-radius: 999px !important;
+        }
+
+        .customer-table-scroll-area::-webkit-scrollbar-thumb {
+          background: #94a3b8 !important;
+          border-radius: 999px !important;
+          border: 2px solid #f1f5f9 !important;
+          min-height: 36px !important;
+        }
+
+        .customer-table-scroll-area::-webkit-scrollbar-thumb:hover {
+          background: #64748b !important;
+        }
+
+        .add-customer-modal-scroll {
+          scrollbar-width: thin;
+          scrollbar-color: #94a3b8 #f1f5f9;
+          scrollbar-gutter: stable;
+        }
+
+        .add-customer-modal-scroll::-webkit-scrollbar {
+          width: 10px;
+        }
+
+        .add-customer-modal-scroll::-webkit-scrollbar-track {
+          background: #f1f5f9;
+          border-radius: 999px;
+        }
+
+        .add-customer-modal-scroll::-webkit-scrollbar-thumb {
+          background: #94a3b8;
+          border-radius: 999px;
+          border: 2px solid #f1f5f9;
+        }
+
+        .add-customer-modal-scroll::-webkit-scrollbar-thumb:hover {
+          background: #64748b;
+        }
+      `}</style>
+
       {/* Stats + Search + Add */}
       <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
@@ -2477,11 +2928,22 @@ const AddCustomer = () => {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
             <input
               type="text"
-              placeholder="Search by company name..."
+              placeholder="Search by company/person/email/phone/event..."
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent text-base transition-all"
             />
+          </div>
+          <div className="relative shrink-0 w-[190px]">
+            <select
+              value={sourceTypeFilter}
+              onChange={(e) => setSourceTypeFilter(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-white text-gray-700 font-medium hover:border-gray-300 transition-colors text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+            >
+              <option value="all">All Sources</option>
+              <option value="regular">Regular Only</option>
+              <option value="upcoming_event">Event Based</option>
+            </select>
           </div>
           <div className="relative shrink-0 w-[240px]" ref={dateRangeMenuRef}>
             <button
@@ -2540,18 +3002,15 @@ const AddCustomer = () => {
         <div
           className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4"
         >
-          <style>{`
-            .hide-scrollbar::-webkit-scrollbar { display: none; }
-            .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
-          `}</style>
           <div
-            className="bg-white rounded-3xl max-w-6xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
-            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            ref={addModalScrollRef}
+            onScroll={handleAddModalScrollDebug}
+            className="bg-white rounded-3xl max-w-6xl w-full max-h-[95vh] overflow-y-auto add-customer-modal-scroll"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
             <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl">
-              <div className="flex justify-between items-center">
+              <div className="flex justify-between items-center gap-4">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
                     <User className="text-white" size={24} />
@@ -2561,42 +3020,181 @@ const AddCustomer = () => {
                     <p className="text-blue-100">Enter customer information below</p>
                   </div>
                 </div>
-                <button
-                  onClick={handleClose}
-                  className="text-white hover:text-gray-200 text-2xl font-bold transition-colors"
-                >
-                  ×
-                </button>
+                <div className="flex items-center gap-3">
+                  <div className="inline-flex h-11 items-stretch rounded-full border border-white/40 bg-[#3B82F6] shadow-sm overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsEventBasedCustomer(false);
+                        setErrors({});
+                      }}
+                      className={`px-8 text-base font-bold transition ${
+                        !isEventBasedCustomer
+                          ? 'bg-white text-[#2563EB]'
+                          : 'bg-transparent text-white hover:bg-white/10'
+                      }`}
+                    >
+                      REGULAR
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsEventBasedCustomer(true);
+                        setErrors({});
+                      }}
+                      className={`px-8 text-base font-bold transition ${
+                        isEventBasedCustomer
+                          ? 'bg-white text-[#2563EB]'
+                          : 'bg-transparent text-white hover:bg-white/10'
+                      }`}
+                    >
+                      EVENT
+                    </button>
+                  </div>
+                  <button
+                    onClick={handleClose}
+                    className="text-white hover:text-gray-200 text-2xl font-bold transition-colors"
+                  >
+                    ×
+                  </button>
+                </div>
               </div>
             </div>
 
 
             {/* Form */}
             <form className="p-6 space-y-6" onSubmit={handleSubmit}>
+              {isEventBasedCustomer && (
+                <>
+                  <div className="bg-orange-50 p-4 rounded-lg">
+                    <h3 className="text-lg font-semibold text-orange-800 mb-4">Event Customer Details</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <Input
+                        name="eventName"
+                        label="Event Name"
+                        placeholder="Enter event name"
+                        value={formData.eventName}
+                        onChange={handleChange}
+                        error={errors.eventName}
+                        inputRef={(el) => (fieldRefs.current.eventName = el)}
+                      />
+
+                      <Input
+                        name="eventDate"
+                        label="Event Date"
+                        type="date"
+                        value={formData.eventDate}
+                        onChange={handleChange}
+                        error={errors.eventDate}
+                        inputRef={(el) => (fieldRefs.current.eventDate = el)}
+                      />
+
+                      <Input
+                        name="personName"
+                        label="Person Name"
+                        placeholder="Enter person name"
+                        value={formData.personName}
+                        onChange={handleChange}
+                        error={errors.personName}
+                        inputRef={(el) => (fieldRefs.current.personName = el)}
+                      />
+
+                      <Input
+                        name="companyName"
+                        label="Company Name"
+                        placeholder="Enter company name"
+                        value={formData.companyName}
+                        onChange={handleChange}
+                        error={errors.companyName}
+                        inputRef={(el) => (fieldRefs.current.companyName = el)}
+                      />
+
+                      <Input
+                        name="contactNumber"
+                        label="Contact Number"
+                        placeholder="+1234567890"
+                        value={formData.contactNumber}
+                        onChange={handleChange}
+                        error={errors.contactNumber}
+                        inputRef={(el) => (fieldRefs.current.contactNumber = el)}
+                      />
+
+                      <Input
+                        name="whatsappNumber"
+                        label="WhatsApp Number"
+                        placeholder="+1234567890"
+                        value={formData.whatsappNumber}
+                        onChange={handleChange}
+                        error={errors.whatsappNumber}
+                        inputRef={(el) => (fieldRefs.current.whatsappNumber = el)}
+                      />
+
+                      <Input
+                        name="email"
+                        label="Email"
+                        type="email"
+                        placeholder="name@company.com"
+                        value={formData.email}
+                        onChange={handleChange}
+                        onBlur={handleBlur}
+                        error={errors.email}
+                        inputProps={{ inputMode: 'email', autoCapitalize: 'none', autoCorrect: 'off' }}
+                        inputRef={(el) => (fieldRefs.current.email = el)}
+                      />
+
+                      <Input
+                        name="linkedin"
+                        label="LinkedIn URL or Name"
+                        placeholder="https://linkedin.com/in/..."
+                        value={formData.linkedin}
+                        onChange={handleChange}
+                        error={errors.linkedin}
+                        inputRef={(el) => (fieldRefs.current.linkedin = el)}
+                      />
+
+                    </div>
+                  </div>
+
+                  <div className="bg-teal-50 p-4 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <svg className="w-4 h-4 text-teal-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span className="text-sm font-medium text-teal-800">Event Form Validation</span>
+                    </div>
+                    <p className="text-xs text-teal-700 mt-2">
+                      Fill event and contact details carefully. Contact and WhatsApp should include country code if applicable.
+                    </p>
+                  </div>
+                </>
+              )}
+
               {/* Company Information */}
               <div className="bg-orange-50 p-4 rounded-lg">
                 <h3 className="text-lg font-semibold text-orange-800 mb-4">Company Information</h3>
 
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <Input
-                      name="compName"
-                      label="Company Name"
-                      required
-                      placeholder="Enter company name"
-                      icon={<Building2 className="w-5 h-5" />}
-                      value={formData.compName}
-                      onChange={handleChange}
-                      onBlur={handleBlur}
-                      error={errors.compName}
-                      inputRef={el => (fieldRefs.current.compName = el)}
-                    />
+                    {!isEventBasedCustomer && (
+                      <Input
+                        name="compName"
+                        label="Company Name"
+                        required
+                        placeholder="Enter company name"
+                        icon={<Building2 className="w-5 h-5" />}
+                        value={formData.compName}
+                        onChange={handleChange}
+                        onBlur={handleBlur}
+                        error={errors.compName}
+                        inputRef={el => (fieldRefs.current.compName = el)}
+                      />
+                    )}
 
 
                     <Input
                       name="mc_dot_no"
                       label="MC/DOT Number"
-                      required
+                      required={!isEventBasedCustomer}
                       placeholder="Enter MC/DOT number"
                       icon={<FileText className="w-5 h-5" />}
                       value={formData.mc_dot_no}
@@ -2607,23 +3205,25 @@ const AddCustomer = () => {
                     />
 
 
-                    <Input
-                      name="compAdd"
-                      label="Company Address"
-                      required
-                      placeholder="Enter company address"
-                      icon={
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                      }
-                      value={formData.compAdd}
-                      onChange={handleChange}
-                      onBlur={handleBlur}
-                      error={errors.compAdd}
-                      inputRef={el => (fieldRefs.current.compAdd = el)}
-                    />
+                    {!isEventBasedCustomer && (
+                      <Input
+                        name="compAdd"
+                        label="Company Address"
+                        required
+                        placeholder="Enter company address"
+                        icon={
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
+                        }
+                        value={formData.compAdd}
+                        onChange={handleChange}
+                        onBlur={handleBlur}
+                        error={errors.compAdd}
+                        inputRef={el => (fieldRefs.current.compAdd = el)}
+                      />
+                    )}
                   </div>
               </div>
 
@@ -2658,41 +3258,45 @@ const AddCustomer = () => {
 
                   {/* Row 1: Email and Phone - 2 fields per row */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Input
-                      name="email"
-                      label="Email Address"
-                      required
-                      placeholder="e.g. abc@gmail.com"
-                      value={formData.email}
-                      onChange={handleChange}
-                      onBlur={handleBlur}
-                      error={errors.email}
-                      inputProps={{ inputMode: 'email', autoCapitalize: 'none', autoCorrect: 'off' }}
-                      icon={
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" />
-                        </svg>
-                      }
-                      inputRef={el => (fieldRefs.current.email = el)}
-                    />
+                    {!isEventBasedCustomer && (
+                      <>
+                        <Input
+                          name="email"
+                          label="Email Address"
+                          required
+                          placeholder="e.g. abc@gmail.com"
+                          value={formData.email}
+                          onChange={handleChange}
+                          onBlur={handleBlur}
+                          error={errors.email}
+                          inputProps={{ inputMode: 'email', autoCapitalize: 'none', autoCorrect: 'off' }}
+                          icon={
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" />
+                            </svg>
+                          }
+                          inputRef={el => (fieldRefs.current.email = el)}
+                        />
 
-                    <Input
-                      name="phoneNo"
-                      label="Mobile Number"
-                      required
-                      placeholder="10-digit mobile"
-                      value={formData.phoneNo}
-                      onChange={handleChange}
-                      onBlur={handleBlur}
-                      error={errors.phoneNo}
-                      inputProps={{ inputMode: 'numeric', maxLength: 10, pattern: '[0-9]*' }}
-                      icon={
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                        </svg>
-                      }
-                      inputRef={el => (fieldRefs.current.phoneNo = el)}
-                    />
+                        <Input
+                          name="phoneNo"
+                          label="Mobile Number"
+                          required
+                          placeholder="10-digit mobile"
+                          value={formData.phoneNo}
+                          onChange={handleChange}
+                          onBlur={handleBlur}
+                          error={errors.phoneNo}
+                          inputProps={{ inputMode: 'numeric', maxLength: 10, pattern: '[0-9]*' }}
+                          icon={
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                            </svg>
+                          }
+                          inputRef={el => (fieldRefs.current.phoneNo = el)}
+                        />
+                      </>
+                    )}
                   </div>
 
                   {/* Password Fields - 2 fields per row */}
@@ -2700,7 +3304,7 @@ const AddCustomer = () => {
                     <Input
                       name="password"
                       label="Password"
-                      required
+                      required={!isEventBasedCustomer}
                       placeholder="8–14 chars, mix cases & num/symbol"
                       value={formData.password}
                       onChange={handleChange}
@@ -2729,7 +3333,7 @@ const AddCustomer = () => {
                     <Input
                       name="confirmPassword"
                       label="Confirm Password"
-                      required
+                      required={!isEventBasedCustomer}
                       placeholder="Re-enter password"
                       value={formData.confirmPassword}
                       onChange={handleChange}
@@ -2759,10 +3363,23 @@ const AddCustomer = () => {
 
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {isEventBasedCustomer && (
+                      <div className="md:col-span-2">
+                        <Input
+                          name="companyAddress"
+                          label="Company Address"
+                          placeholder="Enter company address"
+                          value={formData.companyAddress}
+                          onChange={handleChange}
+                          error={errors.companyAddress}
+                          inputRef={(el) => (fieldRefs.current.companyAddress = el)}
+                        />
+                      </div>
+                    )}
                     <Input
                       name="country"
                       label="Country"
-                      required
+                      required={!isEventBasedCustomer}
                       placeholder="Enter country"
                       value={formData.country}
                       onChange={handleChange}
@@ -2778,7 +3395,7 @@ const AddCustomer = () => {
                     <Input
                       name="state"
                       label="State"
-                      required
+                      required={!isEventBasedCustomer}
                       placeholder="Enter state"
                       value={formData.state}
                       onChange={handleChange}
@@ -2794,7 +3411,7 @@ const AddCustomer = () => {
                     <Input
                       name="city"
                       label="City"
-                      required
+                      required={!isEventBasedCustomer}
                       placeholder="Enter city"
                       value={formData.city}
                       onChange={handleChange}
@@ -2810,7 +3427,7 @@ const AddCustomer = () => {
                     <Input
                       name="zipcode"
                       label="Zip/Postal Code"
-                      required
+                      required={!isEventBasedCustomer}
                       placeholder="5–8 letters/numbers"
                       value={formData.zipcode}
                       onChange={handleChange}
@@ -2852,7 +3469,8 @@ const AddCustomer = () => {
                   Cancel
                 </button>
                 <button
-                  type="submit"
+                  type="button"
+                  onClick={handleSubmit}
                   disabled={loading}
                   className={`px-6 py-3 rounded-xl font-semibold text-white transition-all flex items-center gap-2 ${!loading
                       ? 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700'
@@ -2867,7 +3485,7 @@ const AddCustomer = () => {
                   ) : (
                     <>
                       <PlusCircle className="w-5 h-5" />
-                      Create Customer
+                      {isEventBasedCustomer ? 'Create Event Customer' : 'Create Customer'}
                     </>
                   )}
                 </button>
