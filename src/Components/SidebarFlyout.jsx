@@ -35,7 +35,7 @@ const getMenuIcon = (itemName) => {
     'All Customer': Users,
     'All Customers': Users,
     'Check Invoice': FileText,
-    'CMT Dept Report': BarChart3,
+    'CMT Comparison Report': BarChart3,
     'Trucker Report': BarChart3,
     'Rate Request Report': BarChart3,
     'Break Report': Clock,

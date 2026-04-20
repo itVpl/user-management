@@ -49,7 +49,7 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Break Report",
       "Hourly Performance Report",
       "Target Reports",
-      "CMT Dept Report",
+      "CMT Comparison Report",
       "Sales Dept Report",
       "DO Report",
       "DO and Scheduling Report",
@@ -208,7 +208,7 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Add Trucker Drivers"
     ],
     "Reports": [
-      "CMT Dept Report",
+      "CMT Comparison Report",
       "Trucker Report",
       "Rate Request Report",
       "DO Report",
@@ -267,7 +267,7 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Dinner Thali"
     ],
     "CMT Reports": [
-      "CMT Dept Report",
+      "CMT Comparison Report",
       "Trucker Report",
       "Rate Request Report",
       "DO Report",
@@ -343,7 +343,7 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Break Report",
       "Hourly Performance Report",
       "Target Reports",
-      "CMT Dept Report",
+      "CMT Comparison Report",
       "Sales Dept Report",
       "DO Report",
       "DO and Scheduling Report",
@@ -519,7 +519,7 @@ const menuItems = [
   { name: "All Leads", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/AllLeads" },
   { name: "Task Schedule", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/TaskScheduling" },
   { name: "TO-DO List", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/todo-list" },
-  { name: "CMT Dept Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/CmtDeptReport" },
+  { name: "CMT Comparison Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/CmtDeptReport" },
   { name: "Sales Dept Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/SalesDeptReport" },
   { name: "Break Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/break-report" },
   { name: "Hourly Performance Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/hourly-performance-report" },
@@ -704,7 +704,7 @@ const REPORT_NAMES = [
   "Receivable Report",
   "Payable Report",
   "Rate Request Report",
-  "CMT Dept Report",
+  "CMT Comparison Report",
   "Trucker Report",
   "Target Reports",
   "Employee Target Report",
@@ -719,7 +719,7 @@ const REPORT_NAMES = [
 // Department-wise report categorization
 const DEPARTMENT_REPORTS = {
   "CMT": [
-    "CMT Dept Report",
+    "CMT Comparison Report",
     "Trucker Report",
     "Rate Request Report",
     "DO Report",
@@ -1350,22 +1350,28 @@ const Sidebar = () => {
           // Also normalize multiple spaces, hyphens, and camelCase (e.g. LeaveApproval -> leave approval) for matching
           const normalizeForMatch = (str) =>
             (str || '').trim().replace(/\s+/g, ' ').replace(/-/g, ' ').replace(/([A-Z])/g, ' $1').trim().toLowerCase();
-          // Allow "Dept" <-> "Department" so "CMT Department Report" matches "CMT Dept Report"
+          // Allow "Dept" <-> "Department"; legacy Mongo names still match via moduleAliases below
           const normalizeDept = (s) => s.replace(/\bdept\b/g, 'department');
-          const moduleAliases = {
-            "all rate request": ["rate request"],
-            "rate suggestion": ["rate request"],
-            // Backend module name is "Tracker"; allow legacy "Trucker" if ever used
-            tracker: ["trucker"],
+            const moduleAliases = {
+              "all rate request": ["rate request"],
+              "rate suggestion": ["rate request"],
+              // Backend module name is "Tracker"; allow legacy "Trucker" if ever used
+              tracker: ["trucker"],
+            // Menu label "CMT Comparison Report" — match older modulemasters names / typo
+              "c m t  comparison  report": [
+                "c m t  dept  report",
+              "c m t  department  report",
+              "c m t  comparison  reportt",
+            ],  
           };
           const matchedMenus = menuItems.filter((item) => {
             const match = activeModules.some((mod) => {
-              const modName = normalizeForMatch(mod.name);
+              const modName = normalizeForMatch(mod.name);  
               const modLabel = normalizeForMatch(mod.label);
-              const itemName = normalizeForMatch(item.name);
-              const modNameDept = normalizeDept(modName);
-              const itemNameDept = normalizeDept(itemName);
-              const aliases = moduleAliases[itemName] || [];
+              const itemName = normalizeForMatch(item.name);  
+              const modNameDept = normalizeDept(modName); 
+              const itemNameDept = normalizeDept(itemName); 
+              const aliases = moduleAliases[itemName] || [];  
               
               // Match by name OR label (including Dept/Department variant)
               const isMatch =

@@ -15,7 +15,6 @@ import { useNavigate } from 'react-router-dom';
 import qaService from '../../services/qaService';
 import { format } from 'date-fns';
 import UpcomingBirthdays from '../UpcomingBirthdays';
-import DinnerThaliDashboardCard from '../DinnerThali/DinnerThaliDashboardCard';
 
 const QADashboard = () => {
   const navigate = useNavigate();
@@ -121,8 +120,6 @@ const QADashboard = () => {
 
   return (
     <div className="p-6 bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50 min-h-screen">
-      <DinnerThaliDashboardCard />
-
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <div>

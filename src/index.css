@@ -170,6 +170,77 @@ body::-webkit-scrollbar {
   background: rgba(37, 99, 235, 0.75) !important;
 }
 
+/*
+ * Visible vertical scroll for in-cell lists (Important Dates, Calls 8x8, update history).
+ * Overrides global * { scrollbar: none } above.
+ */
+.do-report-scroll-y {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin !important;
+  scrollbar-color: rgb(148 163 184) rgb(248 250 252) !important;
+  -ms-overflow-style: auto !important;
+}
+
+.do-report-scroll-y::-webkit-scrollbar {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  display: block !important;
+  width: 8px !important;
+  height: 8px !important;
+}
+
+.do-report-scroll-y::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.08) !important;
+  border-radius: 6px !important;
+}
+
+.do-report-scroll-y::-webkit-scrollbar-thumb {
+  background: rgba(59, 130, 246, 0.5) !important;
+  border-radius: 6px !important;
+  min-height: 36px !important;
+}
+
+.do-report-scroll-y::-webkit-scrollbar-thumb:hover {
+  background: rgba(37, 99, 235, 0.72) !important;
+}
+
+/*
+ * DO & Scheduling report: single overflow-auto port for the wide table (X + Y).
+ * Pairs with DOAndSchedulingReport.jsx `TABLE_SCROLL_AREA`.
+ */
+.do-report-table-outer-scroll {
+  scrollbar-gutter: stable;
+  scrollbar-width: auto !important;
+  scrollbar-color: rgb(100 116 139) rgb(241 245 249) !important;
+  -ms-overflow-style: auto !important;
+}
+
+.do-report-table-outer-scroll::-webkit-scrollbar {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  display: block !important;
+  width: 14px !important;
+  height: 14px !important;
+}
+
+.do-report-table-outer-scroll::-webkit-scrollbar-track {
+  background: rgb(241 245 249) !important;
+  border-radius: 6px !important;
+}
+
+.do-report-table-outer-scroll::-webkit-scrollbar-thumb {
+  background: rgb(148 163 184) !important;
+  border-radius: 6px !important;
+  min-width: 40px !important;
+  min-height: 40px !important;
+}
+
+.do-report-table-outer-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgb(100 116 139) !important;
+}
+
 /* Notification Toast Animation */
 @keyframes slideUp {
   from {

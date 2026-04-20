@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import { toast } from 'react-toastify';
 import { GreenCheck } from '../../assets/image';
 import {
   Calendar, Clock, User, CheckCircle, XCircle, AlertCircle,
@@ -10,7 +11,7 @@ import API_CONFIG from '../../config/api.js';
 
 // ------------------ COMPONENT ------------------
 const HRManagementSystem = () => {
-  const [activeTab, setActiveTab] = useState('dailyAttendance'); // 'dailyAttendance' | 'leaveRequest' | 'leaveBalance'
+  const [activeTab, setActiveTab] = useState('dailyAttendance'); // 'dailyAttendance' | 'leaveRequest' | 'leaveBalance' | 'manualHalfDay' | 'manualHalfDayReport'
 
 
   // Attendance data
@@ -33,6 +34,27 @@ const HRManagementSystem = () => {
   // per-row action loading (for finalize tick)
   const [finalizing, setFinalizing] = useState({});
 
+  // Manual half day (HR correction) — dedicated tab
+  const [manualHalfDayDate, setManualHalfDayDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [manualHalfDayRoster, setManualHalfDayRoster] = useState([]);
+  const [loadingManualHalfDayRoster, setLoadingManualHalfDayRoster] = useState(false);
+  const [manualHalfDayRosterError, setManualHalfDayRosterError] = useState(null);
+  const [manualHalfDayEmpSelect, setManualHalfDayEmpSelect] = useState('');
+  const [manualHalfDayEmpOverride, setManualHalfDayEmpOverride] = useState('');
+  const [manualHalfDayDropdownOpen, setManualHalfDayDropdownOpen] = useState(false);
+  const [manualHalfDayEmpSearch, setManualHalfDayEmpSearch] = useState("");
+  const [halfDayConfirm, setHalfDayConfirm] = useState(null); // { empId, empName, date, action?: 'mark'|'remove' } | null
+  const [markingHalfDay, setMarkingHalfDay] = useState(false);
+
+  const [mhdSummaryEmpId, setMhdSummaryEmpId] = useState("");
+  const [mhdSummaryStart, setMhdSummaryStart] = useState("");
+  const [mhdSummaryEnd, setMhdSummaryEnd] = useState("");
+  const [mhdSummaryData, setMhdSummaryData] = useState(null);
+  const [loadingMhdSummary, setLoadingMhdSummary] = useState(false);
+  const [mhdSummaryError, setMhdSummaryError] = useState(null);
+  const [mhdSummaryDropdownOpen, setMhdSummaryDropdownOpen] = useState(false);
+  const [mhdSummaryEmpSearch, setMhdSummaryEmpSearch] = useState("");
+
 
   // Leave Balance (from API)
   const [leaveBalanceData, setLeaveBalanceData] = useState([]);
@@ -47,51 +69,101 @@ const HRManagementSystem = () => {
 
 
   // Reset page on tab/date/filter/search change
-  useEffect(() => setCurrentPage(1), [activeTab, selectedDate, attendanceStatusFilter, leaveStatusFilter, attendanceSearch, leaveSearch, leaveBalanceSearch]);
+  useEffect(() => setCurrentPage(1), [activeTab, selectedDate, manualHalfDayDate, attendanceStatusFilter, leaveStatusFilter, attendanceSearch, leaveSearch, leaveBalanceSearch]);
 
 
   // ------------------ FETCH: Attendance ------------------
-  useEffect(() => {
-    const fetchAttendance = async () => {
-      const userData = sessionStorage.getItem("user");
-      if (!userData) {
-        setAttendanceError("User not logged in");
-        setLoadingAttendance(false);
-        return;
-      }
-      const { empId } = JSON.parse(userData);
-      if (!empId) {
-        setAttendanceError("Invalid session");
-        setLoadingAttendance(false);
-        return;
-      }
-      try {
-        setLoadingAttendance(true);
-        setAttendanceError(null);
-        const res = await axios.get(
-          `${API_CONFIG.BASE_URL}/api/v1/attendance?date=${selectedDate}`,
-          { withCredentials: true }
+  const loadAttendance = useCallback(async () => {
+    const userData = sessionStorage.getItem("user");
+    if (!userData) {
+      setAttendanceError("User not logged in");
+      setLoadingAttendance(false);
+      return;
+    }
+    const { empId } = JSON.parse(userData);
+    if (!empId) {
+      setAttendanceError("Invalid session");
+      setLoadingAttendance(false);
+      return;
+    }
+    try {
+      setLoadingAttendance(true);
+      setAttendanceError(null);
+      const res = await axios.get(
+        `${API_CONFIG.BASE_URL}/api/v1/attendance?date=${selectedDate}`,
+        { withCredentials: true }
+      );
+      setDailyAttendanceData(res.data.records || []);
+    } catch (error) {
+      console.error("Error fetching attendance:", error);
+      const status = error.response?.status;
+      const msg = error.response?.data?.message || error.response?.data?.msg;
+      if (status === 403 || status === 401) {
+        setAttendanceError(
+          msg || "You don't have permission to view attendance. Contact HR or admin to get access."
         );
-        setDailyAttendanceData(res.data.records || []);
-      } catch (error) {
-        console.error("Error fetching attendance:", error);
-        const status = error.response?.status;
-        const msg = error.response?.data?.message || error.response?.data?.msg;
-        if (status === 403 || status === 401) {
-          setAttendanceError(
-            msg || "You don't have permission to view attendance. Contact HR or admin to get access."
-          );
-        } else if (msg) {
-          setAttendanceError(msg);
-        } else {
-          setAttendanceError("Could not fetch attendance. Please try again or contact support.");
-        }
-      } finally {
-        setLoadingAttendance(false);
+      } else if (msg) {
+        setAttendanceError(msg);
+      } else {
+        setAttendanceError("Could not fetch attendance. Please try again or contact support.");
       }
-    };
-    fetchAttendance();
+    } finally {
+      setLoadingAttendance(false);
+    }
   }, [selectedDate]);
+
+  useEffect(() => {
+    loadAttendance();
+  }, [loadAttendance]);
+
+
+  const loadManualHalfDayRoster = useCallback(async () => {
+    const userData = sessionStorage.getItem("user");
+    if (!userData) {
+      setManualHalfDayRosterError("User not logged in");
+      setManualHalfDayRoster([]);
+      setLoadingManualHalfDayRoster(false);
+      return;
+    }
+    const { empId } = JSON.parse(userData);
+    if (!empId) {
+      setManualHalfDayRosterError("Invalid session");
+      setManualHalfDayRoster([]);
+      setLoadingManualHalfDayRoster(false);
+      return;
+    }
+    try {
+      setLoadingManualHalfDayRoster(true);
+      setManualHalfDayRosterError(null);
+      const res = await axios.get(
+        `${API_CONFIG.BASE_URL}/api/v1/attendance?date=${manualHalfDayDate}`,
+        { withCredentials: true }
+      );
+      const records = res.data.records || [];
+      setManualHalfDayRoster(records);
+    } catch (err) {
+      console.error("Error loading roster for manual half day:", err);
+      const status = err.response?.status;
+      const msg = err.response?.data?.message || err.response?.data?.msg;
+      if (status === 403 || status === 401) {
+        setManualHalfDayRosterError(
+          msg || "You don't have permission to load attendance for this date."
+        );
+      } else if (msg) {
+        setManualHalfDayRosterError(msg);
+      } else {
+        setManualHalfDayRosterError("Could not load employee list for this date.");
+      }
+      setManualHalfDayRoster([]);
+    } finally {
+      setLoadingManualHalfDayRoster(false);
+    }
+  }, [manualHalfDayDate]);
+
+  useEffect(() => {
+    if (activeTab !== "manualHalfDay" && activeTab !== "manualHalfDayReport") return;
+    loadManualHalfDayRoster();
+  }, [activeTab, loadManualHalfDayRoster]);
 
 
   // ------------------ FETCH: Leaves ------------------
@@ -180,12 +252,29 @@ const HRManagementSystem = () => {
 
 
   const getAttendanceBadge = (status) => {
-    switch ((status || '').toLowerCase()) {
-      case 'present':  return 'bg-green-100 text-green-700 px-4 py-1.5 rounded-full text-base font-semibold';
-      case 'half day': return 'bg-yellow-100 text-yellow-700 px-4 py-1.5 rounded-full text-base font-semibold';
-      case 'absent':   return 'bg-red-100 text-red-700 px-4 py-1.5 rounded-full text-base font-semibold';
-      default:         return 'bg-gray-100 text-gray-700 px-4 py-1.5 rounded-full text-base font-semibold';
+    const s = (status || "").toLowerCase().trim();
+    switch (s) {
+      case "present":
+        return "bg-green-100 text-green-700 px-4 py-1.5 rounded-full text-base font-semibold";
+      case "half day":
+      case "half day (manual)":
+        return "bg-yellow-100 text-yellow-700 px-4 py-1.5 rounded-full text-base font-semibold";
+      case "absent":
+        return "bg-red-100 text-red-700 px-4 py-1.5 rounded-full text-base font-semibold";
+      default:
+        return "bg-gray-100 text-gray-700 px-4 py-1.5 rounded-full text-base font-semibold";
     }
+  };
+
+
+  const rowHasManualHalfDayFlag = (r) => r?.manualHalfDay === true || String(r?.manualHalfDay).toLowerCase() === "true";
+
+
+  const attendanceRowMatchesStatusFilter = (rowStatus, filter) => {
+    const st = (rowStatus || "").toLowerCase().trim();
+    if (filter === "all") return true;
+    if (filter === "half day") return st === "half day" || st === "half day (manual)";
+    return st === filter;
   };
 
 
@@ -247,6 +336,82 @@ const HRManagementSystem = () => {
   };
 
 
+  const executeHalfDayConfirm = async () => {
+    const empId = halfDayConfirm?.empId?.trim();
+    const date = halfDayConfirm?.date;
+    const action = halfDayConfirm?.action === "remove" ? "remove" : "mark";
+    if (!empId || !date) {
+      toast.error("Please select employee and date");
+      return;
+    }
+    try {
+      setMarkingHalfDay(true);
+      if (action === "remove") {
+        const res = await axios.delete(
+          `${API_CONFIG.BASE_URL}/api/v1/attendance/manual-half-day`,
+          { data: { empId, date }, withCredentials: true }
+        );
+        toast.success(res.data?.message || "Manual half day removed successfully");
+      } else {
+        const res = await axios.post(
+          `${API_CONFIG.BASE_URL}/api/v1/attendance/manual-half-day`,
+          { empId, date },
+          { withCredentials: true }
+        );
+        toast.success(res.data?.message || "Manual half day marked successfully");
+      }
+      setHalfDayConfirm(null);
+      setManualHalfDayEmpSelect("");
+      setManualHalfDayEmpOverride("");
+      await loadAttendance();
+      await loadManualHalfDayRoster();
+    } catch (err) {
+      console.error("Manual half day request failed", err);
+      const msg =
+        err.response?.data?.message ||
+        err.response?.data?.msg ||
+        err.message ||
+        (action === "remove" ? "Unable to remove manual half day" : "Unable to mark manual half day");
+      toast.error(msg);
+    } finally {
+      setMarkingHalfDay(false);
+    }
+  };
+
+
+  const fetchManualHalfDaySummary = async () => {
+    const empId = mhdSummaryEmpId.trim();
+    if (!empId) {
+      toast.error("Enter an employee ID for the summary");
+      return;
+    }
+    try {
+      setLoadingMhdSummary(true);
+      setMhdSummaryError(null);
+      const params = { empId };
+      if (mhdSummaryStart.trim()) params.startDate = mhdSummaryStart.trim();
+      if (mhdSummaryEnd.trim()) params.endDate = mhdSummaryEnd.trim();
+      const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/attendance/manual-half-day/summary`, {
+        params,
+        withCredentials: true,
+      });
+      setMhdSummaryData(res.data);
+    } catch (err) {
+      console.error("Manual half day summary failed", err);
+      const msg =
+        err.response?.data?.message ||
+        err.response?.data?.msg ||
+        err.message ||
+        "Could not load manual half day summary";
+      setMhdSummaryError(msg);
+      setMhdSummaryData(null);
+      toast.error(msg);
+    } finally {
+      setLoadingMhdSummary(false);
+    }
+  };
+
+
   // ACTION CELL:
   // - if status == manager_approved -> show green tick button (to finalize)
   // - else -> show "—"
@@ -281,8 +446,10 @@ const HRManagementSystem = () => {
     const matchText = (attendanceSearch || '').trim().toLowerCase();
     const str = `${r.empId || ''} ${r.empName || ''} ${r.department || ''} ${r.role || ''}`.toLowerCase();
     const okSearch = matchText ? str.includes(matchText) : true;
-    const st = (r.status || '').toLowerCase();
-    const okStatus = attendanceStatusFilter === 'all' ? true : st === attendanceStatusFilter;
+    const okStatus =
+      attendanceStatusFilter === "manual_hd"
+        ? rowHasManualHalfDayFlag(r)
+        : attendanceRowMatchesStatusFilter(r.status, attendanceStatusFilter);
     return okSearch && okStatus;
   });
 
@@ -310,6 +477,22 @@ const HRManagementSystem = () => {
     return str.includes(matchText);
   });
 
+  const mhdRosterSorted = [...manualHalfDayRoster].sort((a, b) =>
+    (a.empName || "").localeCompare(b.empName || "", undefined, { sensitivity: "base" })
+  );
+  const mhdRosterFiltered = mhdRosterSorted.filter((r) => {
+    const s = mhdSummaryEmpSearch.trim().toLowerCase();
+    if (!s) return true;
+    const t = `${r.empId || ""} ${r.empName || ""}`.toLowerCase();
+    return t.includes(s);
+  });
+  const manualHalfDayRosterFiltered = mhdRosterSorted.filter((r) => {
+    const s = manualHalfDayEmpSearch.trim().toLowerCase();
+    if (!s) return true;
+    const t = `${r.empId || ""} ${r.empName || ""}`.toLowerCase();
+    return t.includes(s);
+  });
+
 
   // Pagination helpers on filtered lists
   const paginated = (arr) => {
@@ -323,6 +506,8 @@ const HRManagementSystem = () => {
     ? attendanceFiltered
     : activeTab === 'leaveRequest'
     ? leaveFiltered
+    : activeTab === 'manualHalfDay' || activeTab === 'manualHalfDayReport'
+    ? []
     : leaveBalanceFiltered;
 
 
@@ -369,13 +554,17 @@ const HRManagementSystem = () => {
   const StatsHeader = () => {
     if (activeTab === 'dailyAttendance') {
       const present = attendanceFiltered.filter(x => (x.status || '').toLowerCase() === 'present').length;
-      const halfday = attendanceFiltered.filter(x => (x.status || '').toLowerCase() === 'half day').length;
+      const halfday = attendanceFiltered.filter((x) => {
+        const s = (x.status || "").toLowerCase().trim();
+        return s === "half day" || s === "half day (manual)";
+      }).length;
+      const manualHd = attendanceFiltered.filter((x) => rowHasManualHalfDayFlag(x)).length;
       const absent  = attendanceFiltered.filter(x => (x.status || '').toLowerCase() === 'absent').length;
       const total   = attendanceFiltered.length;
 
 
       return (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
           <div className="px-5 py-4 min-h-[96px] border border-gray-200 rounded-2xl flex items-center justify-between">
             <div>
               <p className="text-xl text-gray-700 font-medium">Records</p>
@@ -398,11 +587,23 @@ const HRManagementSystem = () => {
 
           <div className="px-5 py-4 min-h-[96px] border border-gray-200 rounded-2xl flex items-center justify-between">
             <div>
-              <p className="text-xl text-gray-700 font-medium">Half Day</p>
+              <p className="text-xl text-gray-700 font-medium">Half day</p>
               <p className="mt-4 text-2xl font-bold text-yellow-600">{halfday}</p>
+              <p className="text-sm text-gray-500 mt-1">clock + manual status</p>
             </div>
             <div className="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center">
               <Clock className="text-yellow-600" size={20} />
+            </div>
+          </div>
+
+          <div className="px-5 py-4 min-h-[96px] border border-gray-200 rounded-2xl flex items-center justify-between">
+            <div>
+              <p className="text-xl text-gray-700 font-medium">Manual HD</p>
+              <p className="mt-4 text-2xl font-bold text-indigo-600">{manualHd}</p>
+              <p className="text-sm text-gray-500 mt-1">manualHalfDay flag</p>
+            </div>
+            <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
+              <User className="text-indigo-600" size={20} />
             </div>
           </div>
 
@@ -419,6 +620,60 @@ const HRManagementSystem = () => {
       );
     }
 
+
+    if (activeTab === 'manualHalfDay') {
+      const roster = manualHalfDayRoster;
+      const total = roster.length;
+      const absent = roster.filter((x) => (x.status || "").toLowerCase() === "absent").length;
+      const halfday = roster.filter((x) => {
+        const s = (x.status || "").toLowerCase().trim();
+        return s === "half day" || s === "half day (manual)";
+      }).length;
+      const manualHd = roster.filter((x) => rowHasManualHalfDayFlag(x)).length;
+      return (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="px-5 py-4 min-h-[96px] border border-gray-200 rounded-2xl flex items-center justify-between">
+            <div>
+              <p className="text-xl text-gray-700 font-medium">Loaded for date</p>
+              <p className="mt-4 text-2xl font-bold text-gray-800">{total}</p>
+              <p className="text-sm text-gray-500 mt-1">employees in roster</p>
+            </div>
+            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+              <Calendar className="text-blue-600" size={20} />
+            </div>
+          </div>
+          <div className="px-5 py-4 min-h-[96px] border border-gray-200 rounded-2xl flex items-center justify-between">
+            <div>
+              <p className="text-xl text-gray-700 font-medium">Absent</p>
+              <p className="mt-4 text-2xl font-bold text-red-600">{absent}</p>
+            </div>
+            <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+              <XCircle className="text-red-600" size={20} />
+            </div>
+          </div>
+          <div className="px-5 py-4 min-h-[96px] border border-gray-200 rounded-2xl flex items-center justify-between">
+            <div>
+              <p className="text-xl text-gray-700 font-medium">Half day</p>
+              <p className="mt-4 text-2xl font-bold text-yellow-600">{halfday}</p>
+              <p className="text-sm text-gray-500 mt-1">by status text</p>
+            </div>
+            <div className="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center">
+              <Clock className="text-yellow-600" size={20} />
+            </div>
+          </div>
+          <div className="px-5 py-4 min-h-[96px] border border-gray-200 rounded-2xl flex items-center justify-between">
+            <div>
+              <p className="text-xl text-gray-700 font-medium">Manual HD</p>
+              <p className="mt-4 text-2xl font-bold text-indigo-600">{manualHd}</p>
+              <p className="text-sm text-gray-500 mt-1">manualHalfDay flag</p>
+            </div>
+            <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
+              <User className="text-indigo-600" size={20} />
+            </div>
+          </div>
+        </div>
+      );
+    }
 
     if (activeTab === 'leaveRequest') {
       const total    = leaveFiltered.length;
@@ -473,20 +728,23 @@ const HRManagementSystem = () => {
     }
 
 
-    // Leave Balance
-    return (
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div className="px-5 py-4 min-h-[96px] border border-gray-200 rounded-2xl flex items-center justify-between">
-          <div>
-            <p className="text-xl text-gray-700 font-medium">Employees</p>
-            <p className="mt-4 text-2xl font-bold text-gray-800">{leaveBalanceFiltered.length}</p>
-          </div>
-          <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-            <User className="text-blue-600" size={20} />
+    if (activeTab === 'leaveBalance') {
+      return (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="px-5 py-4 min-h-[96px] border border-gray-200 rounded-2xl flex items-center justify-between">
+            <div>
+              <p className="text-xl text-gray-700 font-medium">Employees</p>
+              <p className="mt-4 text-2xl font-bold text-gray-800">{leaveBalanceFiltered.length}</p>
+            </div>
+            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+              <User className="text-blue-600" size={20} />
+            </div>
           </div>
         </div>
-      </div>
-    );
+      );
+    }
+
+    return null;
   };
 
 
@@ -518,6 +776,8 @@ const HRManagementSystem = () => {
           { key: 'dailyAttendance', label: 'Daily Attendance' },
           { key: 'leaveRequest', label: 'Leave Request' },
           { key: 'leaveBalance', label: 'Leave Balance' },
+          { key: 'manualHalfDay', label: 'Manual Half Day' },
+          { key: 'manualHalfDayReport', label: 'Manual Half Day Report' },
         ].map(t => (
           <button
             key={t.key}
@@ -533,73 +793,405 @@ const HRManagementSystem = () => {
 
 
       {/* Top Section */}
-      <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
-        <StatsHeader />
+      {activeTab !== 'manualHalfDay' && activeTab !== 'manualHalfDayReport' && (
+        <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
+          <StatsHeader />
 
-        <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-          <div className="relative w-full md:flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-            <input
-              type="text"
-              placeholder={
-                activeTab === 'dailyAttendance'
-                  ? 'Search by employee name, ID, dept, role...'
-                  : activeTab === 'leaveRequest'
-                  ? 'Search by employee, leave type, dept, role...'
-                  : 'Search by employee name or ID...'
-              }
-              value={activeTab === 'dailyAttendance' ? attendanceSearch : activeTab === 'leaveRequest' ? leaveSearch : leaveBalanceSearch}
-              onChange={(e) => {
-                if (activeTab === 'dailyAttendance') setAttendanceSearch(e.target.value);
-                else if (activeTab === 'leaveRequest') setLeaveSearch(e.target.value);
-                else setLeaveBalanceSearch(e.target.value);
-              }}
-              className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-            />
-          </div>
+          <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+            <div className="relative w-full md:flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+              <input
+                type="text"
+                placeholder={
+                  activeTab === 'dailyAttendance'
+                    ? 'Search by employee name, ID, dept, role...'
+                    : activeTab === 'leaveRequest'
+                    ? 'Search by employee, leave type, dept, role...'
+                    : 'Search by employee name or ID...'
+                }
+                value={activeTab === 'dailyAttendance' ? attendanceSearch : activeTab === 'leaveRequest' ? leaveSearch : leaveBalanceSearch}
+                onChange={(e) => {
+                  if (activeTab === 'dailyAttendance') setAttendanceSearch(e.target.value);
+                  else if (activeTab === 'leaveRequest') setLeaveSearch(e.target.value);
+                  else setLeaveBalanceSearch(e.target.value);
+                }}
+                className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+              />
+            </div>
 
-          <div className="flex items-center gap-3 w-full md:w-auto">
-            <Filter className="text-gray-400 hidden md:block" size={18} />
-            {activeTab === 'dailyAttendance' && (
-              <>
+            <div className="flex items-center gap-3 w-full md:w-auto">
+              <Filter className="text-gray-400 hidden md:block" size={18} />
+              {activeTab === 'dailyAttendance' && (
+                <>
+                  <select
+                    value={attendanceStatusFilter}
+                    onChange={(e) => setAttendanceStatusFilter(e.target.value)}
+                    className="px-4 py-3 border border-gray-200 rounded-xl focus:outline-none bg-white text-base text-gray-800"
+                  >
+                    <option value="all">All Status</option>
+                    <option value="present">Present</option>
+                    <option value="half day">Half day (all)</option>
+                    <option value="half day (manual)">Half day (manual)</option>
+                    <option value="absent">Absent</option>
+                    <option value="manual_hd">Manual HD flag</option>
+                  </select>
+                  <input
+                    type="date"
+                    value={selectedDate}
+                    onChange={(e) => setSelectedDate(e.target.value)}
+                    className="px-4 py-3 border border-gray-200 rounded-xl focus:outline-none bg-white text-base text-gray-800"
+                  />
+                </>
+              )}
+              {activeTab === 'leaveRequest' && (
                 <select
-                  value={attendanceStatusFilter}
-                  onChange={(e) => setAttendanceStatusFilter(e.target.value)}
+                  value={leaveStatusFilter}
+                  onChange={(e) => setLeaveStatusFilter(e.target.value)}
                   className="px-4 py-3 border border-gray-200 rounded-xl focus:outline-none bg-white text-base text-gray-800"
                 >
                   <option value="all">All Status</option>
-                  <option value="present">Present</option>
-                  <option value="half day">Half Day</option>
-                  <option value="absent">Absent</option>
+                  <option value="pending">Pending</option>
+                  <option value="manager_approved">Manager Approved</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
+                  <option value="cancelled">Cancelled</option>
                 </select>
-                <input
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className="px-4 py-3 border border-gray-200 rounded-xl focus:outline-none bg-white text-base text-gray-800"
-                />
-              </>
-            )}
-            {activeTab === 'leaveRequest' && (
-              <select
-                value={leaveStatusFilter}
-                onChange={(e) => setLeaveStatusFilter(e.target.value)}
-                className="px-4 py-3 border border-gray-200 rounded-xl focus:outline-none bg-white text-base text-gray-800"
-              >
-                <option value="all">All Status</option>
-                <option value="pending">Pending</option>
-                <option value="manager_approved">Manager Approved</option>
-                <option value="approved">Approved</option>
-                <option value="rejected">Rejected</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+
+      {/* Table Section (other tabs) or Manual Half Day form */}
+      {activeTab === 'manualHalfDay' ? (
+        <div className="space-y-6">
+        <div className="bg-white rounded-2xl border border-gray-200 p-6 md:p-8 overflow-visible">
+          <h2 className="text-lg font-semibold text-gray-900 mb-1">Mark / remove manual half day</h2>
+          <p className="text-sm text-gray-600 mb-6 max-w-2xl">
+            Manual half day is its own record (not login/logout hours). It works together with clock attendance: the
+            daily list can show <span className="font-medium text-gray-800">half day (manual)</span> when there is no
+            clock time, or keep hours-based status when the employee did log in, with a <span className="font-medium text-gray-800">Manual HD</span>{" "}
+            badge when <span className="font-mono text-xs">manualHalfDay</span> is true. Marking again for the same
+            employee and date returns an error from the API.
+          </p>
+
+          {manualHalfDayRosterError && (
+            <div className="mb-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+              <AlertCircle className="shrink-0 mt-0.5" size={18} />
+              <span>{manualHalfDayRosterError}</span>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl">
+            <div>
+              <label htmlFor="mhd-date" className="block text-sm font-medium text-gray-700 mb-2">
+                Date
+              </label>
+              <input
+                id="mhd-date"
+                type="date"
+                value={manualHalfDayDate}
+                onChange={(e) => setManualHalfDayDate(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+              />
+            </div>
+            <div>
+              <label htmlFor="mhd-emp" className="block text-sm font-medium text-gray-700 mb-2">
+                Employee
+              </label>
+              <div className="relative z-50">
+                <button
+                  id="mhd-emp"
+                  type="button"
+                  disabled={loadingManualHalfDayRoster || !!manualHalfDayRosterError}
+                  onClick={() => {
+                    setManualHalfDayDropdownOpen((v) => !v);
+                    if (!manualHalfDayDropdownOpen) setManualHalfDayEmpSearch("");
+                  }}
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-white text-left text-gray-800 disabled:bg-gray-100 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500 inline-flex items-center justify-between"
+                >
+                  <span className={manualHalfDayEmpSelect ? "text-gray-900" : "text-gray-500"}>
+                    {manualHalfDayEmpSelect
+                      ? (() => {
+                          const emp = mhdRosterSorted.find((r) => String(r.empId) === String(manualHalfDayEmpSelect));
+                          return emp
+                            ? `${emp.empId} — ${emp.empName || "N/A"} (${(emp.status || "").trim() || "—"})`
+                            : manualHalfDayEmpSelect;
+                        })()
+                      : "Select employee from roster..."}
+                  </span>
+                  <span className="text-gray-500">▾</span>
+                </button>
+
+                {manualHalfDayDropdownOpen && !loadingManualHalfDayRoster && !manualHalfDayRosterError && (
+                  <div className="mt-2 w-full rounded-xl border border-gray-200 bg-white shadow-xl">
+                    <div className="p-2 border-b border-gray-100">
+                      <input
+                        type="text"
+                        placeholder="Search employee by ID or name..."
+                        value={manualHalfDayEmpSearch}
+                        onChange={(e) => setManualHalfDayEmpSearch(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div className="max-h-80 overflow-y-auto py-1">
+                      {manualHalfDayRosterFiltered.length === 0 ? (
+                        <p className="px-3 py-2 text-sm text-gray-500">No employees found</p>
+                      ) : (
+                        manualHalfDayRosterFiltered.map((r) => (
+                          <button
+                            key={r.empId}
+                            type="button"
+                            onClick={() => {
+                              setManualHalfDayEmpSelect(String(r.empId));
+                              setManualHalfDayDropdownOpen(false);
+                              setManualHalfDayEmpSearch("");
+                            }}
+                            className="block w-full px-3 py-2 text-left text-sm text-gray-800 hover:bg-blue-50"
+                          >
+                            {r.empId} — {r.empName || "N/A"} ({(r.status || "").trim() || "—"})
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="md:col-span-2">
+              <label htmlFor="mhd-override" className="block text-sm font-medium text-gray-700 mb-2">
+                Or enter Emp ID
+              </label>
+              <input
+                id="mhd-override"
+                type="text"
+                placeholder="e.g. VPL004 (overrides dropdown when filled)"
+                value={manualHalfDayEmpOverride}
+                onChange={(e) => setManualHalfDayEmpOverride(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 focus:bg-white text-gray-800"
+              />
+            </div>
+          </div>
+
+          <div className="mt-8 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              disabled={loadingManualHalfDayRoster || markingHalfDay}
+              onClick={() => {
+                const empId = (manualHalfDayEmpOverride.trim() || manualHalfDayEmpSelect).trim();
+                if (!manualHalfDayDate) {
+                  toast.error("Please select a date");
+                  return;
+                }
+                if (!empId) {
+                  toast.error("Please select an employee or enter an Emp ID");
+                  return;
+                }
+                const row = manualHalfDayRoster.find((r) => String(r.empId) === String(empId));
+                const empName = row?.empName || empId;
+                setHalfDayConfirm({ empId, empName, date: manualHalfDayDate, action: "mark" });
+              }}
+              className="px-5 py-2.5 rounded-full bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Mark manual half day
+            </button>
+            <button
+              type="button"
+              disabled={loadingManualHalfDayRoster || markingHalfDay}
+              onClick={() => {
+                const empId = (manualHalfDayEmpOverride.trim() || manualHalfDayEmpSelect).trim();
+                if (!manualHalfDayDate) {
+                  toast.error("Please select a date");
+                  return;
+                }
+                if (!empId) {
+                  toast.error("Please select an employee or enter an Emp ID");
+                  return;
+                }
+                const row = manualHalfDayRoster.find((r) => String(r.empId) === String(empId));
+                const empName = row?.empName || empId;
+                setHalfDayConfirm({ empId, empName, date: manualHalfDayDate, action: "remove" });
+              }}
+              className="px-5 py-2.5 rounded-full border border-red-200 bg-red-50 text-red-800 font-semibold hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Remove manual half day
+            </button>
+            <button
+              type="button"
+              disabled={markingHalfDay}
+              onClick={() => {
+                setManualHalfDayDate(new Date().toISOString().split("T")[0]);
+                setManualHalfDayEmpSelect("");
+                setManualHalfDayEmpOverride("");
+                setManualHalfDayEmpSearch("");
+                setManualHalfDayDropdownOpen(false);
+              }}
+              className="px-5 py-2.5 rounded-full border border-gray-300 bg-white text-gray-800 font-semibold hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Clear filters
+            </button>
+            {loadingManualHalfDayRoster && (
+              <span className="text-sm text-gray-500">Loading roster for selected date…</span>
             )}
           </div>
         </div>
-      </div>
+        </div>
+      ) : activeTab === 'manualHalfDayReport' ? (
+        <div className="bg-white rounded-2xl border border-gray-200 p-6 md:p-8">
+          <h3 className="text-base font-semibold text-gray-900 mb-1">Manual half days in period</h3>
+          {/* <p className="text-sm text-gray-600 mb-4 max-w-2xl">
+            Uses <span className="font-mono text-xs">GET /api/v1/attendance/manual-half-day/summary</span>. Leave start
+            and end empty to use the API default (about the last 30 days through today).
+          </p> */}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            <div className="md:col-span-2">
+              <label htmlFor="mhd-sum-emp" className="block text-sm font-medium text-gray-700 mb-2">
+                Employee ID <span className="text-red-500">*</span>
+              </label>
+              <div className="relative z-50">
+                <button
+                  id="mhd-sum-emp"
+                  type="button"
+                  disabled={loadingManualHalfDayRoster || !!manualHalfDayRosterError}
+                  onClick={() => {
+                    setMhdSummaryDropdownOpen((v) => !v);
+                    if (!mhdSummaryDropdownOpen) setMhdSummaryEmpSearch("");
+                  }}
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-white text-left text-gray-800 disabled:bg-gray-100 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500 inline-flex items-center justify-between"
+                >
+                  <span className={mhdSummaryEmpId ? "text-gray-900" : "text-gray-500"}>
+                    {mhdSummaryEmpId
+                      ? (() => {
+                          const emp = mhdRosterSorted.find((r) => String(r.empId) === String(mhdSummaryEmpId));
+                          return emp ? `${emp.empId} — ${emp.empName || "N/A"}` : mhdSummaryEmpId;
+                        })()
+                      : "Select employee from roster..."}
+                  </span>
+                  <span className="text-gray-500">▾</span>
+                </button>
 
-
-      {/* Table Section */}
+                {mhdSummaryDropdownOpen && !loadingManualHalfDayRoster && !manualHalfDayRosterError && (
+                  <div className="mt-2 w-full rounded-xl border border-gray-200 bg-white shadow-xl">
+                    <div className="p-2 border-b border-gray-100">
+                      <input
+                        type="text"
+                        placeholder="Search employee by ID or name..."
+                        value={mhdSummaryEmpSearch}
+                        onChange={(e) => setMhdSummaryEmpSearch(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div className="max-h-80 overflow-y-auto py-1">
+                      {mhdRosterFiltered.length === 0 ? (
+                        <p className="px-3 py-2 text-sm text-gray-500">No employees found</p>
+                      ) : (
+                        mhdRosterFiltered.map((r) => (
+                          <button
+                            key={r.empId}
+                            type="button"
+                            onClick={() => {
+                              setMhdSummaryEmpId(String(r.empId));
+                              setMhdSummaryDropdownOpen(false);
+                              setMhdSummaryEmpSearch("");
+                            }}
+                            className="block w-full px-3 py-2 text-left text-sm text-gray-800 hover:bg-blue-50"
+                          >
+                            {r.empId} — {r.empName || "N/A"}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div>
+              <label htmlFor="mhd-sum-start" className="block text-sm font-medium text-gray-700 mb-2">
+                Start date (optional)
+              </label>
+              <input
+                id="mhd-sum-start"
+                type="date"
+                value={mhdSummaryStart}
+                onChange={(e) => setMhdSummaryStart(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+              />
+            </div>
+            <div>
+              <label htmlFor="mhd-sum-end" className="block text-sm font-medium text-gray-700 mb-2">
+                End date (optional)
+              </label>
+              <input
+                id="mhd-sum-end"
+                type="date"
+                value={mhdSummaryEnd}
+                onChange={(e) => setMhdSummaryEnd(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+              />
+            </div>
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={fetchManualHalfDaySummary}
+              disabled={loadingMhdSummary}
+              className="px-5 py-2.5 rounded-full bg-gray-900 text-white font-semibold hover:bg-gray-800 disabled:opacity-50 inline-flex items-center gap-2"
+            >
+              {loadingMhdSummary && (
+                <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              )}
+              Load summary
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMhdSummaryEmpId("");
+                setMhdSummaryStart("");
+                setMhdSummaryEnd("");
+                setMhdSummaryEmpSearch("");
+                setMhdSummaryDropdownOpen(false);
+                setMhdSummaryData(null);
+                setMhdSummaryError(null);
+              }}
+              className="px-5 py-2.5 rounded-full border border-gray-300 bg-white text-gray-800 font-semibold hover:bg-gray-50"
+            >
+              Clear filters
+            </button>
+          </div>
+          {mhdSummaryError && (
+            <p className="mt-3 text-sm text-red-600">{mhdSummaryError}</p>
+          )}
+          {mhdSummaryData && !loadingMhdSummary && (
+            <div className="mt-5 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800">
+              <p className="font-semibold text-gray-900">
+                {Number(mhdSummaryData.manualHalfDays) || 0} manual half day
+                {Number(mhdSummaryData.manualHalfDays) === 1 ? "" : "s"}
+                {mhdSummaryData.empId ? (
+                  <span className="font-normal text-gray-600">
+                    {" "}
+                    for <span className="font-mono font-medium text-gray-900">{mhdSummaryData.empId}</span>
+                  </span>
+                ) : null}
+              </p>
+              {mhdSummaryData.period && (
+                <p className="mt-1 text-gray-600">
+                  Period: {mhdSummaryData.period.startDate} → {mhdSummaryData.period.endDate}
+                </p>
+              )}
+              {Array.isArray(mhdSummaryData.dates) && mhdSummaryData.dates.length > 0 && (
+                <ul className="mt-2 list-disc list-inside text-gray-700">
+                  {mhdSummaryData.dates.map((d) => (
+                    <li key={d} className="font-mono text-xs sm:text-sm">
+                      {d}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+      ) : (
       <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto p-4">
           <table className="w-full border-separate border-spacing-y-4">
@@ -746,8 +1338,8 @@ const HRManagementSystem = () => {
                   </tr>
                 ) : (
                   paginated(attendanceFiltered).map((row, idx) => (
-                    <tr key={idx} className="bg-white hover:bg-gray-50 transition-colors">
-                      <td className="px-4 py-4 border-y first:border-l last:border-r border-gray-200 first:rounded-l-lg last:rounded-r-lg text-gray-700 font-medium">
+                    <tr key={`${row.empId || idx}-${selectedDate}`} className="bg-white hover:bg-gray-50 transition-colors">
+                      <td className="px-4 py-4 border-y first:border-l border-gray-200 first:rounded-l-lg text-gray-700 font-medium">
                         {formatDate(row.date)}
                       </td>
                       <td className="px-4 py-4 border-y border-gray-200 text-gray-700 font-medium">
@@ -766,9 +1358,19 @@ const HRManagementSystem = () => {
                         {row.totalTime || ''}
                       </td>
                       <td className="px-4 py-4 border-y border-gray-200">
-                        <span className={getAttendanceBadge(row.status)}>{row.status}</span>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={getAttendanceBadge(row.status)}>{row.status}</span>
+                          {rowHasManualHalfDayFlag(row) ? (
+                            <span
+                              className="text-xs font-semibold uppercase tracking-wide text-indigo-800 bg-indigo-100 px-2.5 py-1 rounded-full"
+                              title="manualHalfDay from API"
+                            >
+                              Manual HD
+                            </span>
+                          ) : null}
+                        </div>
                       </td>
-                      <td className="px-4 py-4 border-y first:border-r border-gray-200 last:rounded-r-lg text-gray-700 font-medium">
+                      <td className="px-4 py-4 border-y last:border-r border-gray-200 last:rounded-r-lg text-gray-700 font-medium">
                         {row.department}
                       </td>
                     </tr>
@@ -868,7 +1470,67 @@ const HRManagementSystem = () => {
           </table>
         </div>
       </div>
+      )}
 
+
+      {halfDayConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="half-day-modal-title"
+        >
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-xl max-w-md w-full p-6">
+            <h2 id="half-day-modal-title" className="text-lg font-semibold text-gray-900">
+              {halfDayConfirm.action === "remove" ? "Remove manual half day?" : "Mark manual half day?"}
+            </h2>
+            <p className="mt-3 text-gray-600 text-sm leading-relaxed">
+              {halfDayConfirm.action === "remove" ? (
+                <>
+                  This will delete the manual half day record for{" "}
+                  <span className="font-semibold text-gray-800">{halfDayConfirm.empName}</span> (
+                  <span className="font-mono">{halfDayConfirm.empId}</span>) on{" "}
+                  <span className="font-semibold text-gray-800">{halfDayConfirm.date}</span>.
+                </>
+              ) : (
+                <>
+                  This will create a manual half day record for{" "}
+                  <span className="font-semibold text-gray-800">{halfDayConfirm.empName}</span> (
+                  <span className="font-mono">{halfDayConfirm.empId}</span>) on{" "}
+                  <span className="font-semibold text-gray-800">{halfDayConfirm.date}</span>. It is not tied to
+                  clock-in hours. If a manual half day already exists for that employee on that date, the API will
+                  return an error.
+                </>
+              )}
+            </p>
+            <div className="mt-6 flex flex-wrap gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => !markingHalfDay && setHalfDayConfirm(null)}
+                disabled={markingHalfDay}
+                className="px-4 py-2 rounded-xl border border-gray-300 text-gray-800 font-medium hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={executeHalfDayConfirm}
+                disabled={markingHalfDay}
+                className={`px-4 py-2 rounded-xl text-white font-medium disabled:opacity-50 inline-flex items-center gap-2 ${
+                  halfDayConfirm.action === "remove"
+                    ? "bg-red-600 hover:bg-red-700"
+                    : "bg-blue-600 hover:bg-blue-700"
+                }`}
+              >
+                {markingHalfDay && (
+                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                )}
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {currentData.length > 0 && (
         <div className="mt-4 bg-white border border-gray-200 rounded-2xl px-4 py-3 flex flex-col md:flex-row items-center justify-between gap-3">
