@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import axios from 'axios';
-import { Search, Truck, ChevronLeft, ChevronRight, Eye, Download, ChevronDown, User } from 'lucide-react';
+import { Search, Truck, ChevronLeft, ChevronRight, Eye, Download, ChevronDown, Phone } from 'lucide-react';
 import API_CONFIG from '../../config/api.js';
 import { DetailsModal } from '../CMT/DODetails.jsx';
 import alertify from 'alertifyjs';
@@ -10,15 +10,62 @@ import 'react-date-range/dist/theme/default.css';
 import { DateRange } from 'react-date-range';
 import { addDays, format } from 'date-fns';
 
-/** Single scrollport for X + Y (nested H/V wrappers break horizontal scrollbar in several browsers). */
+/** Single scrollport for X + Y; scrollbar styling in `index.css` (`.do-report-table-outer-scroll`). */
 const TABLE_SCROLL_AREA =
-  'w-full min-w-0 max-w-full max-h-[min(72vh,800px)] overflow-auto overscroll-x-contain [scrollbar-gutter:stable] [scrollbar-width:auto] [scrollbar-color:rgb(100_116_139)_rgb(241_245_249)] [&::-webkit-scrollbar]:h-3.5 [&::-webkit-scrollbar]:w-3.5 [&::-webkit-scrollbar-track]:rounded-md [&::-webkit-scrollbar-track]:bg-slate-100 [&::-webkit-scrollbar-thumb]:rounded-md [&::-webkit-scrollbar-thumb]:bg-slate-400 hover:[&::-webkit-scrollbar-thumb]:bg-slate-500';
+  'do-report-table-outer-scroll w-full min-w-0 max-w-full max-h-[min(72vh,800px)] overflow-auto';
+/** In-cell vertical lists; `-webkit-scrollbar` overrides global hide via `.do-report-scroll-y` in `index.css`. */
 const CELL_SCROLL =
-  'max-h-56 overflow-y-auto overflow-x-hidden pr-1 [scrollbar-width:thin] [scrollbar-color:rgb(148_163_184)_rgb(248_250_252)] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:rounded [&::-webkit-scrollbar-track]:bg-slate-100 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-400';
+  'max-h-56 overflow-y-auto overflow-x-hidden pr-1 do-report-scroll-y';
 
-/** Backend filters mainly by assignment; widen API range so Important Dates in the user's range still match. Keep moderate to limit payload size vs speed. */
-const API_FETCH_BUFFER_DAYS = 200;
+/** Backend filters mainly by assignment; widen API range so Important Dates in the user's range still match. Lower = fewer paginated DO requests (faster). */
+const API_FETCH_BUFFER_DAYS = 120;
 const FETCH_PAGE_SIZE = 1000;
+/** Max per API spec; no separate call table — one page fills the per-row “Calls (8x8)” column. */
+const IMPORTANT_DATE_CALLS_LIMIT = 500;
+const IMPORTANT_DATE_CALLS_PATH = '/api/v1/analytics/8x8/call-records/by-important-date-windows';
+
+/** Normalize 8x8-style offset for Date parsing (same as RateRequest). */
+const normalizeIsoOffset = (str) =>
+  typeof str === 'string' ? str.replace(/([+-]\d{2})(\d{2})$/, '$1:$2') : str;
+
+const getEightEightStartMs = (rec) => {
+  if (typeof rec?.startTimeUTC === 'number' && rec.startTimeUTC > 0) return rec.startTimeUTC;
+  if (rec?.startTime && String(rec.startTime) !== '0') {
+    const raw = normalizeIsoOffset(String(rec.startTime));
+    const t = Date.parse(raw);
+    const d = Number.isNaN(t) ? new Date(rec.startTime) : new Date(t);
+    if (!Number.isNaN(d.getTime())) return d.getTime();
+  }
+  return null;
+};
+
+const formatDurationFromMs = (totalMs) => {
+  if (totalMs == null || totalMs < 0) return '00:00:00';
+  const sec = Math.floor(totalMs / 1000);
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+};
+
+/** Other party: outgoing = number our employee dialed; incoming = number / name of person who called us. */
+const getEightEightCounterpartyPhone = (rec) => {
+  const d = String(rec?.direction || '').trim().toLowerCase();
+  if (d.includes('incoming')) {
+    return rec?.callerNumber || rec?.callerName || '—';
+  }
+  if (d.includes('outgoing')) {
+    return rec?.calleeNumber || rec?.receiverNumber || '—';
+  }
+  return rec?.calleeNumber || rec?.receiverNumber || rec?.callerNumber || rec?.callerName || '—';
+};
+
+const getEightEightCounterpartyLabel = (rec) => {
+  const d = String(rec?.direction || '').trim().toLowerCase();
+  if (d.includes('incoming')) return 'Caller';
+  if (d.includes('outgoing')) return 'Called';
+  return 'Contact';
+};
 
 const parseYmdToLocalDate = (ymdStr) => {
   if (!ymdStr || typeof ymdStr !== 'string') return null;
@@ -58,6 +105,13 @@ export default function DOAndSchedulingReport() {
   const prevFiltersRef = useRef({ start: null, end: null, cmt: '' });
   const fetchAbortRef = useRef(null);
   const fetchRequestIdRef = useRef(0);
+  const importantDateCallsAbortRef = useRef(null);
+  const prevImportantCallsKeyRef = useRef('');
+  const importantCallsRequestIdRef = useRef(0);
+
+  const [importantDateCallsPage, setImportantDateCallsPage] = useState(1);
+  const [importantDateCallsLoading, setImportantDateCallsLoading] = useState(false);
+  const [importantDateCallsData, setImportantDateCallsData] = useState(null);
 
   const presets = {
     'Today': [new Date(), new Date()],
@@ -75,6 +129,18 @@ export default function DOAndSchedulingReport() {
   };
 
   const ymd = (d) => (d ? format(d, 'yyyy-MM-dd') : null);
+
+  /**
+   * Use in effect dependency arrays instead of raw `Date` refs — new object identity with the same
+   * calendar range was re-running DO + 8x8 fetches (slow, duplicated network traffic).
+   */
+  const reportRangeEpochKey = useMemo(() => {
+    if (!range.startDate || !range.endDate) return '';
+    const s = range.startDate.getTime();
+    const e = range.endDate.getTime();
+    if (Number.isNaN(s) || Number.isNaN(e)) return '';
+    return `${s}|${e}`;
+  }, [range.startDate, range.endDate]);
 
   const fetchData = async (startDateParam = null, endDateParam = null) => {
     fetchAbortRef.current?.abort();
@@ -171,14 +237,22 @@ export default function DOAndSchedulingReport() {
   };
 
   useEffect(() => {
-    const startDate = ymd(range.startDate);
-    const endDate = ymd(range.endDate);
-    if (!startDate || !endDate) {
+    if (!reportRangeEpochKey) {
       setAssignedDOs([]);
       setTodayCount(0);
       setLoading(false);
       return;
     }
+    const parts = reportRangeEpochKey.split('|').map(Number);
+    const [sMs, eMs] = parts;
+    if (parts.length !== 2 || Number.isNaN(sMs) || Number.isNaN(eMs)) {
+      setAssignedDOs([]);
+      setTodayCount(0);
+      setLoading(false);
+      return;
+    }
+    const startDate = format(new Date(sMs), 'yyyy-MM-dd');
+    const endDate = format(new Date(eMs), 'yyyy-MM-dd');
     const cmt = selectedCmtEmpId || '';
     const prev = prevFiltersRef.current;
     const filtersChanged =
@@ -188,7 +262,8 @@ export default function DOAndSchedulingReport() {
       setCurrentPage(1);
       fetchData(startDate, endDate);
     }
-  }, [range.startDate, range.endDate, selectedCmtEmpId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchData omitted on purpose; dates always passed explicitly from reportRangeEpochKey
+  }, [reportRangeEpochKey, selectedCmtEmpId]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -219,9 +294,119 @@ export default function DOAndSchedulingReport() {
   useEffect(
     () => () => {
       fetchAbortRef.current?.abort();
+      importantDateCallsAbortRef.current?.abort();
     },
     [],
   );
+
+  /** 8x8 / Triton calls that fall in “between important dates” windows for the selected CMT + report date range. */
+  useEffect(() => {
+    if (!reportRangeEpochKey) {
+      prevImportantCallsKeyRef.current = '';
+      setImportantDateCallsData(null);
+      setImportantDateCallsLoading(false);
+      return;
+    }
+    const parts = reportRangeEpochKey.split('|').map(Number);
+    const [sMs, eMs] = parts;
+    if (parts.length !== 2 || Number.isNaN(sMs) || Number.isNaN(eMs)) {
+      prevImportantCallsKeyRef.current = '';
+      setImportantDateCallsData(null);
+      setImportantDateCallsLoading(false);
+      return;
+    }
+    const startDate = format(new Date(sMs), 'yyyy-MM-dd');
+    const endDate = format(new Date(eMs), 'yyyy-MM-dd');
+    const key = `${selectedCmtEmpId}|${startDate}|${endDate}`;
+
+    if (!selectedCmtEmpId) {
+      prevImportantCallsKeyRef.current = '';
+      setImportantDateCallsData(null);
+      setImportantDateCallsLoading(false);
+      return;
+    }
+
+    if (prevImportantCallsKeyRef.current !== key) {
+      prevImportantCallsKeyRef.current = key;
+      if (importantDateCallsPage !== 1) {
+        setImportantDateCallsPage(1);
+        return;
+      }
+    }
+
+    const reqId = ++importantCallsRequestIdRef.current;
+    const ac = new AbortController();
+    importantDateCallsAbortRef.current?.abort();
+    importantDateCallsAbortRef.current = ac;
+    const { signal } = ac;
+
+    const run = async () => {
+      setImportantDateCallsLoading(true);
+      try {
+        const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+        if (!token) {
+          setImportantDateCallsData(null);
+          return;
+        }
+        const timeZone =
+          typeof Intl !== 'undefined' && Intl.DateTimeFormat
+            ? Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+            : 'UTC';
+
+        const res = await axios.get(`${API_CONFIG.BASE_URL}${IMPORTANT_DATE_CALLS_PATH}`, {
+          params: {
+            empId: selectedCmtEmpId,
+            startDate,
+            endDate,
+            timeZone,
+            includeContext: 1,
+            page: importantDateCallsPage,
+            limit: IMPORTANT_DATE_CALLS_LIMIT,
+          },
+          headers: { Authorization: `Bearer ${token}` },
+          signal,
+        });
+
+        if (signal.aborted || reqId !== importantCallsRequestIdRef.current) return;
+        const raw = res.data?.data ?? res.data;
+        setImportantDateCallsData({
+          records: Array.isArray(raw?.records) ? raw.records : [],
+          summary: raw?.summary && typeof raw.summary === 'object' ? raw.summary : {},
+          windows: Array.isArray(raw?.windows) ? raw.windows : [],
+          pagination: raw?.pagination && typeof raw.pagination === 'object' ? raw.pagination : null,
+          truncated: Boolean(raw?.truncated),
+          timeZone: raw?.timeZone || timeZone,
+        });
+      } catch (err) {
+        if (axios.isCancel?.(err) || err.code === 'ERR_CANCELED' || err.name === 'CanceledError') return;
+        console.error(err);
+        if (reqId !== importantCallsRequestIdRef.current) return;
+        const msg =
+          err.response?.data?.message ||
+          err.response?.data?.error ||
+          err.message ||
+          'Failed to load calls between important dates';
+        alertify.error(msg);
+        if (!signal.aborted) {
+          setImportantDateCallsData({
+            records: [],
+            summary: {},
+            windows: [],
+            pagination: null,
+            truncated: false,
+            timeZone: '',
+          });
+        }
+      } finally {
+        if (reqId === importantCallsRequestIdRef.current) {
+          setImportantDateCallsLoading(false);
+        }
+      }
+    };
+
+    run();
+    return () => ac.abort();
+  }, [reportRangeEpochKey, selectedCmtEmpId, importantDateCallsPage]);
 
   useEffect(() => {
     if (!showCmtFilter) return;
@@ -366,6 +551,52 @@ export default function DOAndSchedulingReport() {
     [cmtUsers, selectedCmtEmpId]
   );
 
+  const importantCallsRecords = importantDateCallsData?.records || [];
+  const importantCallsSummary = importantDateCallsData?.summary || {};
+
+  /** Index 8x8 rows by loadNo / doId from `matchedWindows` for per-order column (current API page only). */
+  const importantCallsByLoadKey = useMemo(() => {
+    const records = importantDateCallsData?.records || [];
+    const map = new Map();
+    const normLoad = (v) => String(v ?? '').trim().toUpperCase();
+    for (const rec of records) {
+      const seenKeys = new Set();
+      for (const mw of Array.isArray(rec?.matchedWindows) ? rec.matchedWindows : []) {
+        if (mw?.loadNo) seenKeys.add(`L:${normLoad(mw.loadNo)}`);
+        if (mw?.doId != null && String(mw.doId).trim() !== '') seenKeys.add(`D:${String(mw.doId).trim()}`);
+      }
+      for (const k of seenKeys) {
+        if (!map.has(k)) map.set(k, []);
+        map.get(k).push(rec);
+      }
+    }
+    return map;
+  }, [importantDateCallsData]);
+
+  const getImportantDateCallsForOrder = useCallback(
+    (order) => {
+      const cust0 = order?.customers?.[0] || {};
+      const loadNo = cust0.loadNo;
+      const normLoad = (v) => String(v ?? '').trim().toUpperCase();
+      const keys = new Set();
+      if (loadNo && String(loadNo).trim() !== '' && loadNo !== 'N/A') keys.add(`L:${normLoad(loadNo)}`);
+      const oid = order?._id;
+      if (oid != null && String(oid).trim() !== '') keys.add(`D:${String(oid).trim()}`);
+      const merged = [];
+      for (const k of keys) {
+        const arr = importantCallsByLoadKey.get(k);
+        if (arr?.length) merged.push(...arr);
+      }
+      const byId = new Map();
+      for (const c of merged) {
+        const id = c?.callId ?? `${getEightEightStartMs(c)}-${c?.direction}`;
+        if (!byId.has(id)) byId.set(id, c);
+      }
+      return Array.from(byId.values());
+    },
+    [importantCallsByLoadKey],
+  );
+
   const handlePageChange = (page) => {
     if (page < 1 || page > totalPages) return;
     setCurrentPage(page);
@@ -405,7 +636,7 @@ export default function DOAndSchedulingReport() {
       try {
         const dt = new Date(rawVal);
         if (Number.isNaN(dt.getTime())) return;
-        entries.push({ label, value: format(dt, 'MMM dd, yyyy') });
+        entries.push({ label, value: format(dt, 'MMM dd, yyyy HH:mm') });
       } catch {
         /* skip invalid */
       }
@@ -728,6 +959,71 @@ export default function DOAndSchedulingReport() {
             )}
           </div>
         </div>
+
+        {/* 8x8 / Triton: calls between consecutive important-date milestones (same calendar day, ≥2 milestones) */}
+        <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50/60 p-4 sm:p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+            <div className="flex items-start gap-2 min-w-0">
+              <div className="mt-0.5 rounded-lg bg-blue-100 p-2 text-blue-700 shrink-0">
+                <Phone size={20} aria-hidden />
+              </div>
+              <div className="min-w-0">
+                <h2 className="text-base font-semibold text-gray-900">Calls between important dates (8x8)</h2>
+                <p className="text-xs text-gray-600 mt-1 leading-relaxed">
+                  Uses the <strong>same date range</strong> as above and{' '}
+                  <strong>requires a specific CMT user</strong> (not &quot;All&quot;). Shows calls that fall in time
+                  windows between consecutive important-date milestones on days where that user has two or more such
+                  dates. Timezone for bucketing:{' '}
+                  <code className="text-[11px] bg-white px-1 py-0.5 rounded border border-slate-200">
+                    {importantDateCallsData?.timeZone ||
+                      (typeof Intl !== 'undefined' && Intl.DateTimeFormat
+                        ? Intl.DateTimeFormat().resolvedOptions().timeZone
+                        : 'UTC')}
+                  </code>
+                  .
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {!selectedCmtEmpId ? (
+            <p className="text-sm text-gray-600 py-4 text-center border border-dashed border-slate-200 rounded-lg bg-white/80">
+              Select a <strong>CMT user</strong> to load call records for this report range.
+            </p>
+          ) : importantDateCallsLoading && importantCallsRecords.length === 0 ? (
+            <div className="flex justify-center py-10 bg-white/80 rounded-lg border border-slate-100">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-3" />
+                <p className="text-sm text-gray-600">Loading call records…</p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+                <div className="rounded-lg border border-white bg-white px-3 py-3 shadow-sm">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Total calls (8x8)</p>
+                  <p className="text-2xl font-semibold text-gray-900 mt-1">
+                    {importantCallsSummary.totalCalls ?? importantCallsRecords.length}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-white bg-white px-3 py-3 shadow-sm">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Incoming</p>
+                  <p className="text-2xl font-semibold text-gray-900 mt-1">{importantCallsSummary.incoming ?? '—'}</p>
+                </div>
+                <div className="rounded-lg border border-white bg-white px-3 py-3 shadow-sm">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Outgoing</p>
+                  <p className="text-2xl font-semibold text-gray-900 mt-1">{importantCallsSummary.outgoing ?? '—'}</p>
+                </div>
+                <div className="rounded-lg border border-white bg-white px-3 py-3 shadow-sm">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Total talk</p>
+                  <p className="text-2xl font-semibold text-gray-900 mt-1 tabular-nums">
+                    {formatDurationFromMs(importantCallsSummary.totalTalkTimeMS)}
+                  </p>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {showCustomRange && (
@@ -759,7 +1055,7 @@ export default function DOAndSchedulingReport() {
         </div>
       )}
 
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden min-w-0">
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm min-w-0 overflow-x-clip overflow-y-visible">
         {currentOrders.length > 0 && (
           <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 border-b border-gray-200 bg-slate-50/90">
             <p className="text-xs text-gray-600">
@@ -821,6 +1117,12 @@ export default function DOAndSchedulingReport() {
                   <th className="text-left py-4 px-4 text-gray-500 font-medium text-base whitespace-nowrap min-w-[190px] w-[230px]">
                     Important Dates
                   </th>
+                  <th
+                    className="text-left py-4 px-4 text-gray-500 font-medium text-base whitespace-nowrap min-w-[200px] w-[260px] max-w-[280px]"
+                    title="8x8 calls that matched an important-date window involving this load (same CMT + date range as the report). Up to 500 calls are loaded for matching."
+                  >
+                    Calls (8x8)
+                  </th>
                   <th className="text-left py-4 px-4 text-gray-500 font-medium text-base whitespace-nowrap min-w-[280px] w-[300px]">
                     Important Date Update History
                   </th>
@@ -844,6 +1146,21 @@ export default function DOAndSchedulingReport() {
                     : '';
                   const historyList = getImportantDateHistoryList(order);
                   const historyTitle = getImportantDateHistoryForExport(order);
+                  const rowImportantCalls = getImportantDateCallsForOrder(order);
+                  const rowCallsTitle = rowImportantCalls.length
+                    ? rowImportantCalls
+                        .map((rec) => {
+                          const st = getEightEightStartMs(rec);
+                          const startStr =
+                            st != null ? format(new Date(st), 'MMM dd, yyyy HH:mm') : '—';
+                          const party = getEightEightCounterpartyPhone(rec);
+                          const partyLbl = getEightEightCounterpartyLabel(rec);
+                          const disp = rec?.lastLegDisposition || '—';
+                          const cid = rec?.callId != null ? String(rec.callId) : '—';
+                          return `${rec?.direction || '—'} · ${startStr} · Talk ${rec?.talkTime || '—'} | ${partyLbl}: ${party} | Disposition: ${disp} | Call ID: ${cid}`;
+                        })
+                        .join('\n')
+                    : '';
                   const orderForModal = {
                     id: order._id,
                     doId: `DO-${String(order._id || '').slice(-6) || '—'}`,

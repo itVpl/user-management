@@ -53,7 +53,7 @@ export default function TruckerReport() {
   const cmtFilterRef = React.useRef(null);
   const lastTruckerReportQueryRef = React.useRef('');
 
-  // Deep link from CMT Dept Report: ?empId=&startDate=&endDate=
+  // Deep link from CMT Comparison Report: ?empId=&startDate=&endDate=
   useEffect(() => {
     const q = searchParams.toString();
     if (q === lastTruckerReportQueryRef.current) return;
