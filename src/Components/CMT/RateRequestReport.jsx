@@ -311,7 +311,7 @@ const RateRequestReport = () => {
     fetchSalesUsers();
   }, []);
 
-  // Deep link from CMT Dept Report: ?cmtEmpId=&startDate=&endDate= (employee name via location.state only)
+  // Deep link from CMT Comparison Report: ?cmtEmpId=&startDate=&endDate= (employee name via location.state only)
   useEffect(() => {
     const cmtEmpId = searchParams.get("cmtEmpId")?.trim() || "";
     const start = searchParams.get("startDate")?.trim() || "";

@@ -19,7 +19,10 @@ import {
   XCircle,
   LogIn,
   LogOut,
-  Minus
+  Minus,
+  ArrowUp,
+  ArrowDown,
+  ChevronsUpDown
 } from 'lucide-react';
 import API_CONFIG from '../../config/api.js';
 
@@ -68,6 +71,132 @@ const getTodayLoginRaw = (row) =>
   row?.is_today_login ??
   row?.isLogin ??
   row?.is_login;
+
+/** @typedef {'empName'|'status'|'calls'|'todayLogin'|'carrier'|'rateRequest'|'softwareSell'|'totalCarrier'|'totalRR'|'totalSoftwareSell'} SortColumnKey */
+
+/** @param {Record<string, unknown>} row @param {SortColumnKey} key */
+function getSortValue(row, key) {
+  switch (key) {
+    case 'empName':
+      return formatEmpDisplayName(row).toLowerCase();
+    case 'status':
+      return String(row?.status ?? '').trim().toLowerCase();
+    case 'calls':
+      return Number(row?.calls ?? 0);
+    case 'todayLogin': {
+      const raw = getTodayLoginRaw(row);
+      if (raw === true || raw === 'true' || raw === 1) return 1;
+      if (raw === false || raw === 'false' || raw === 0) return 0;
+      const label = formatTodayLogin(row).toLowerCase();
+      if (label === 'yes') return 1;
+      if (label === 'no') return 0;
+      return -1;
+    }
+    case 'carrier':
+      return Number(row?.Truckers ?? 0);
+    case 'rateRequest':
+      return Number(row?.Load ?? 0);
+    case 'softwareSell':
+      return Number(row?.softwareSell ?? 0);
+    case 'totalCarrier':
+      return Number(row?.totalTrucker ?? 0);
+    case 'totalRR':
+      return Number(row?.totalLoadAssign ?? 0);
+    case 'totalSoftwareSell':
+      return Number(row?.totalSoftwareSell ?? 0);
+    default:
+      return '';
+  }
+}
+
+/** @param {unknown} a @param {unknown} b @param {'asc'|'desc'} direction */
+function compareSortValues(a, b, direction) {
+  const typeA = typeof a;
+  const typeB = typeof b;
+  if (typeA === 'number' && typeB === 'number' && !Number.isNaN(a) && !Number.isNaN(b)) {
+    const n = /** @type {number} */ (a) - /** @type {number} */ (b);
+    return direction === 'asc' ? n : -n;
+  }
+  const sa = String(a ?? '');
+  const sb = String(b ?? '');
+  const cmp = sa.localeCompare(sb, undefined, { numeric: true, sensitivity: 'base' });
+  return direction === 'asc' ? cmp : -cmp;
+}
+
+/**
+ * @param {object} props
+ * @param {string} props.label
+ * @param {SortColumnKey} props.columnKey
+ * @param {SortColumnKey | null} props.sortKey
+ * @param {'asc'|'desc'} props.sortDir
+ * @param {(k: SortColumnKey) => void} props.onSort
+ */
+function SortableTh({ label, columnKey, sortKey, sortDir, onSort }) {
+  const active = sortKey === columnKey;
+  const sortHint = active
+    ? sortDir === 'asc'
+      ? `Sorted low → high. Click for high → low.`
+      : `Sorted high → low. Click for low → high.`
+    : 'Click to sort';
+
+  return (
+    <th
+      scope="col"
+      aria-sort={active ? (sortDir === 'asc' ? 'ascending' : 'descending') : undefined}
+      className="text-left align-bottom py-3 px-2 sm:px-3"
+    >
+      <button
+        type="button"
+        title={sortHint}
+        aria-label={
+          active
+            ? `${label}: ${sortDir === 'asc' ? 'ascending' : 'descending'}. Activate to reverse order.`
+            : `${label}: not sorted. Activate to sort ascending.`
+        }
+        onClick={() => onSort(columnKey)}
+        className={[
+          'group flex w-full min-h-[2.5rem] max-w-full min-w-0 items-center gap-2 rounded-lg border text-left text-sm sm:text-base transition-colors duration-150',
+          'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1',
+          active
+            ? 'border-blue-200/90 bg-gradient-to-b from-blue-50 to-blue-50/70 px-2.5 py-2 text-blue-900 shadow-sm ring-1 ring-blue-100/80'
+            : 'border-transparent bg-transparent px-2 py-2 text-gray-800 hover:border-gray-200 hover:bg-gray-50'
+        ].join(' ')}
+      >
+        <span
+          className={[
+            'min-w-0 flex-1 truncate leading-snug',
+            active ? 'font-semibold tracking-tight' : 'font-medium group-hover:text-gray-900'
+          ].join(' ')}
+        >
+          {label}
+        </span>
+        <span className="inline-flex shrink-0 flex-col items-stretch gap-0.5" aria-hidden>
+          {!active ? (
+            <span className="inline-flex items-center justify-center rounded-md p-0.5 text-gray-400 group-hover:bg-gray-100 group-hover:text-gray-600">
+              <ChevronsUpDown size={16} strokeWidth={2.25} />
+            </span>
+          ) : sortDir === 'asc' ? (
+            <span
+              className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-1.5 py-1 text-[10px] font-bold uppercase leading-none tracking-wide text-white shadow-sm"
+              title="Ascending"
+            >
+              <ArrowUp size={13} strokeWidth={2.75} className="shrink-0" />
+              <span className="hidden sm:inline">Asc</span>
+            </span>
+          ) : (
+            <span
+              className="inline-flex items-center gap-1 rounded-md bg-indigo-600 px-1.5 py-1 text-[10px] font-bold uppercase leading-none tracking-wide text-white shadow-sm"
+              title="Descending"
+            >
+              <ArrowDown size={13} strokeWidth={2.75} className="shrink-0" />
+              <span className="hidden sm:inline">Desc</span>
+            </span>
+          )}
+        </span>
+      </button>
+    </th>
+  );
+}
 
 function StatusBadge({ status }) {
   const s = String(status ?? '').trim().toLowerCase();
@@ -160,6 +289,8 @@ export default function CmtDeptReport() {
   const [searchTerm, setSearchTerm] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
+  const [sortKey, setSortKey] = useState(/** @type {SortColumnKey | null} */ (null));
+  const [sortDir, setSortDir] = useState(/** @type {'asc' | 'desc'} */ ('asc'));
 
   const presets = {
     Today: [new Date(), new Date()],
@@ -280,12 +411,32 @@ export default function CmtDeptReport() {
     });
   }, [rows, searchTerm]);
 
-  const totalCount = filteredRows.length;
+  const handleColumnSort = useCallback((key) => {
+    if (sortKey !== key) {
+      setSortKey(key);
+      setSortDir('asc');
+    } else {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    }
+  }, [sortKey]);
+
+  const sortedFilteredRows = useMemo(() => {
+    if (!sortKey) return filteredRows;
+    const key = sortKey;
+    const dir = sortDir;
+    return [...filteredRows].sort((rowA, rowB) => {
+      const va = getSortValue(rowA, key);
+      const vb = getSortValue(rowB, key);
+      return compareSortValues(va, vb, dir);
+    });
+  }, [filteredRows, sortKey, sortDir]);
+
+  const totalCount = sortedFilteredRows.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / limit));
   const paginatedRows = useMemo(() => {
     const start = (page - 1) * limit;
-    return filteredRows.slice(start, start + limit);
-  }, [filteredRows, page, limit]);
+    return sortedFilteredRows.slice(start, start + limit);
+  }, [sortedFilteredRows, page, limit]);
 
   useEffect(() => {
     setPage(1);
@@ -328,7 +479,7 @@ export default function CmtDeptReport() {
   };
 
   const handleExportToExcel = () => {
-    if (!startDateStr || !endDateStr || filteredRows.length === 0) return;
+    if (!startDateStr || !endDateStr || sortedFilteredRows.length === 0) return;
     const headers = [
       'Emp Name',
       'Status',
@@ -346,7 +497,7 @@ export default function CmtDeptReport() {
     csv += `${escapeCsvCell('Filter End Date')},${escapeCsvCell(endDateStr)}\n`;
     csv += '\n';
     csv += headers.map(escapeCsvCell).join(',') + '\n';
-    for (const row of filteredRows) {
+    for (const row of sortedFilteredRows) {
       csv +=
         [
           formatEmpDisplayName(row),
@@ -523,16 +674,16 @@ export default function CmtDeptReport() {
             <button
               type="button"
               onClick={handleExportToExcel}
-              disabled={!startDateStr || !endDateStr || filteredRows.length === 0 || loading}
+              disabled={!startDateStr || !endDateStr || sortedFilteredRows.length === 0 || loading}
               title={
                 !startDateStr || !endDateStr
                   ? 'Select a date range first'
-                  : filteredRows.length === 0
+                  : sortedFilteredRows.length === 0
                     ? 'No rows to export'
                     : `Export (${startDateStr} → ${endDateStr})`
               }
               className={`h-[45px] flex-1 rounded-lg font-semibold border border-gray-200 flex items-center justify-center gap-2 transition-all ${
-                !startDateStr || !endDateStr || filteredRows.length === 0 || loading
+                !startDateStr || !endDateStr || sortedFilteredRows.length === 0 || loading
                   ? 'text-gray-400 bg-gray-50 cursor-not-allowed'
                   : 'text-gray-800 bg-white hover:border-gray-300 hover:bg-gray-50'
               }`}
@@ -623,16 +774,76 @@ export default function CmtDeptReport() {
               <table className="w-full">
                 <thead className="bg-white border-b border-gray-200">
                   <tr>
-                    <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Emp Name</th>
-                    <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Status</th>
-                    <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Calls</th>
-                    <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Today Login</th>
-                    <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Carrier</th>
-                    <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Rate Request</th>
-                    <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Software Sell</th>
-                    <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Total Carrier</th>
-                    <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Total RR</th>
-                    <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Total Software Sell</th>
+                    <SortableTh
+                      label="Emp Name"
+                      columnKey="empName"
+                      sortKey={sortKey}
+                      sortDir={sortDir}
+                      onSort={handleColumnSort}
+                    />
+                    <SortableTh
+                      label="Status"
+                      columnKey="status"
+                      sortKey={sortKey}
+                      sortDir={sortDir}
+                      onSort={handleColumnSort}
+                    />
+                    <SortableTh
+                      label="Calls"
+                      columnKey="calls"
+                      sortKey={sortKey}
+                      sortDir={sortDir}
+                      onSort={handleColumnSort}
+                    />
+                    <SortableTh
+                      label="Today Login"
+                      columnKey="todayLogin"
+                      sortKey={sortKey}
+                      sortDir={sortDir}
+                      onSort={handleColumnSort}
+                    />
+                    <SortableTh
+                      label="Carrier"
+                      columnKey="carrier"
+                      sortKey={sortKey}
+                      sortDir={sortDir}
+                      onSort={handleColumnSort}
+                    />
+                    <SortableTh
+                      label="Rate Request"
+                      columnKey="rateRequest"
+                      sortKey={sortKey}
+                      sortDir={sortDir}
+                      onSort={handleColumnSort}
+                    />
+                    <SortableTh
+                      label="Software Sell"
+                      columnKey="softwareSell"
+                      sortKey={sortKey}
+                      sortDir={sortDir}
+                      onSort={handleColumnSort}
+                    />
+                    <SortableTh
+                      label="Total Carrier"
+                      columnKey="totalCarrier"
+                      sortKey={sortKey}
+                      sortDir={sortDir}
+                      onSort={handleColumnSort}
+                    />
+                    <SortableTh
+                      label="Total RR"
+                      columnKey="totalRR"
+                      sortKey={sortKey}
+                      sortDir={sortDir}
+                      onSort={handleColumnSort}
+                    />
+                    <SortableTh
+                      label="Total Software Sell"
+                      columnKey="totalSoftwareSell"
+                      sortKey={sortKey}
+                      sortDir={sortDir}
+                      onSort={handleColumnSort}
+                    />
                   </tr>
                 </thead>
                 <tbody>
