@@ -12,6 +12,11 @@ import {
   Eye,
   EyeOff,
   PlusCircle,
+  Building,
+  MapPin,
+  Truck,
+  Wallet,
+  KeyRound,
 } from "lucide-react";
 // ========= Searchable dropdown (no lib) =========
 function SearchableSelect({
@@ -60,7 +65,7 @@ function SearchableSelect({
             return nx;
           });
         }}
-        className={`w-full text-left border px-4 py-2 rounded-lg bg-white ${error ? "border-red-500" : "border-gray-400"} ${disabled ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
+        className={`w-full text-left px-4 py-3 border rounded-lg bg-white focus:outline-none ${error ? "border-red-500 bg-red-50 focus:ring-2 focus:ring-red-200" : "border-gray-300 focus:ring-2 focus:ring-blue-500"} ${disabled ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
         aria-expanded={open}
       >
         {loading ? <span className="text-gray-400">Loading…</span> :
@@ -240,16 +245,6 @@ const PASSWORD_RULES = (pwd) => ({
   numOrSym: /[\d\W_]/.test(pwd),
 });
 
-const isAllowedDocType = (file) => {
-  if (!file) return false;
-  const name = file.name.toLowerCase();
-  return (
-    name.endsWith(".pdf") || name.endsWith(".doc") || name.endsWith(".docx")
-  );
-};
-
-const isUnder10MB = (file) => file && file.size <= 10 * 1024 * 1024;
-
 // ---------- Component ----------
 export default function AddTruckerForm({ onSuccess }) {
   const [formData, setFormData] = useState({
@@ -420,14 +415,14 @@ React.useEffect(() => {
 }, [formData.country, formData.state]);
 
   const documentFields = [
-    { key: "brokeragePacket", label: "Brokerage Packet", required: true },
+    { key: "brokeragePacket", label: "Brokerage Packet" },
     { key: "carrierPartnerAgreement", label: "Carrier Partner Agreement" },
-    { key: "w9Form", label: "W9 Form", required: true },
-    { key: "mcAuthority", label: "MC Authority", required: true },
-    { key: "safetyLetter", label: "Safety Letter", required: false },
-    { key: "bankingInfo", label: "Banking Information", required: true },
-    { key: "inspectionLetter", label: "Inspection Letter", required: false },
-    { key: "insurance", label: "Insurance", required: true },
+    { key: "w9Form", label: "W9 Form" },
+    { key: "mcAuthority", label: "MC Authority" },
+    { key: "safetyLetter", label: "Safety Letter" },
+    { key: "bankingInfo", label: "Banking Information" },
+    { key: "inspectionLetter", label: "Inspection Letter" },
+    { key: "insurance", label: "Insurance" },
   ];
 
   // ---------- Field-level validation helpers ----------
@@ -543,28 +538,6 @@ React.useEffect(() => {
       });
     }
 
-    // Documents
-    documentFields.forEach((doc) => {
-      const file = formData[doc.key];
-      const key = doc.key;
-
-      // Required missing
-      if (doc.required && !file) {
-        const msg = `Please choose the ${doc.label} file.`;
-        newErrors[key] = msg;
-        return;
-      }
-
-      if (file) {
-        if (!isAllowedDocType(file)) {
-          newErrors[key] =
-            "Please select the .pdf , .doc and .docx file only.";
-        } else if (!isUnder10MB(file)) {
-          newErrors[key] = "Please choose the file less than 10 MB.";
-        }
-      }
-    });
-
     setErrors(newErrors);
     return newErrors;
   };
@@ -661,21 +634,11 @@ React.useEffect(() => {
 
     setFormData((prev) => ({ ...prev, [name]: file }));
     setUploadStatus((prev) => ({ ...prev, [name]: !!file }));
-
-    // validate the file
-    let err;
-    if (!file) {
-      // If required, message will be set on submit; clear now.
-      err = undefined;
-    } else if (!isAllowedDocType(file)) {
-      err = "Please select the .pdf , .doc and .docx file only.";
-    } else if (!isUnder10MB(file)) {
-      err = "Please choose the file less than 10 MB.";
-    } else {
-      err = undefined;
-    }
-
-    setErrors((prev) => ({ ...prev, [name]: err }));
+    setErrors((prev) => {
+      const next = { ...prev };
+      delete next[name];
+      return next;
+    });
   };
 
   const handleSubmit = async (e) => {
@@ -851,12 +814,24 @@ React.useEffect(() => {
       </p>
     ) : null;
 
+  const fieldClass = (name) =>
+    `w-full px-4 py-3 border rounded-lg focus:outline-none ${
+      errors[name]
+        ? "border-red-500 bg-red-50 focus:ring-2 focus:ring-red-200"
+        : "border-gray-300 focus:ring-2 focus:ring-blue-500"
+    }`;
+
+  const fileFieldClass = (name) =>
+    `${fieldClass(name)} file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100`;
+
   return (
-    <div className="min-h-screen flex flex-col justify-center items-center bg-transparent py-8 px-2">
-      <form onSubmit={handleSubmit} noValidate  className="w-full max-w-2xl flex flex-col gap-4">
-        {/* Basic Details */}
-        <div className="w-full max-w-2xl bg-white rounded-3xl shadow-xl mb-1 p-8">
-          <h4 className="text-2xl font-bold mb-4 text-center">Basic Details</h4>
+    <form onSubmit={handleSubmit} noValidate className="w-full p-6 space-y-6">
+        {/* Company (same palette as view popup) */}
+        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-100 shadow-sm">
+          <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+            <Building className="text-blue-600 shrink-0" size={20} />
+            Company
+          </h3>
           <div className="w-full flex flex-col gap-4">
             <div>
               <label className="text-sm font-medium text-gray-700">
@@ -868,104 +843,27 @@ React.useEffect(() => {
                 placeholder="Company Name"
                 value={formData.compName}
                 onChange={handleChange}
-                className="w-full border border-gray-400 px-4 py-2 rounded-lg"
+                className={fieldClass("compName")}
               />
               {renderError("compName")}
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium text-gray-700">
-                  Company Address <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  name="compAdd"
-                  placeholder="Company Address"
-                  value={formData.compAdd}
-                  onChange={handleChange}
-                  className="border border-gray-400 px-4 py-2 rounded-lg w-full"
-                />
-                {renderError("compAdd")}
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700">
-                  Country <span className="text-red-500">*</span>
-                </label>
-                <SearchableSelect
-  required
-  name="country"
-  value={formData.country || ""}
-  onChange={(val) => {
-    // agar aap country ko US par lock rakhna chahte ho:
-    // const US = "United States"; val = US;
-    setFormData(p => ({ ...p, country: val, state: "", city: "" }));
-  }}
-  options={countryOptions}
-  placeholder="Search country…"
-  loading={geoLoading.countries}
-  error={errors.country}
-/>
-
-                {renderError("country")}
-              </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700">
+                Company Address <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                name="compAdd"
+                placeholder="Company Address"
+                value={formData.compAdd}
+                onChange={handleChange}
+                className={fieldClass("compAdd")}
+              />
+              {renderError("compAdd")}
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium text-gray-700">
-                  State <span className="text-red-500">*</span>
-                </label>
-                <SearchableSelect
-  required
-  name="state"
-  value={formData.state || ""}
-  onChange={(val) => setFormData(p => ({ ...p, state: val, city: "" }))}
-  options={stateOptions}
-  placeholder={formData.country ? "Search state…" : "Select country first"}
-  disabled={!formData.country}
-  loading={geoLoading.states}
-  error={errors.state}
-/>
-
-                {renderError("state")}
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700">
-                  City <span className="text-red-500">*</span>
-                </label>
-                <SearchableSelect
-  required
-  name="city"
-  value={formData.city || ""}
-  onChange={(val) => setFormData(p => ({ ...p, city: val }))}
-  options={cityOptions}
-  placeholder={formData.state ? "Search city…" : "Select state first"}
-  allowCustom
-  disabled={!formData.state}
-  loading={geoLoading.cities}
-  error={errors.city}
-/>
-
-                {renderError("city")}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium text-gray-700">
-                  Zip Code <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  name="zipcode"
-                  placeholder="Zip Code"
-                  value={formData.zipcode}
-                  onChange={handleChange}
-                  className="border border-gray-400 px-4 py-2 rounded-lg w-full"
-                />
-                {renderError("zipcode")}
-              </div>
               <div>
                 <label className="text-sm font-medium text-gray-700">
                   Phone <span className="text-red-500">*</span>
@@ -976,15 +874,11 @@ React.useEffect(() => {
                   placeholder="Phone"
                   value={formData.phoneNo}
                   onChange={handleChange}
-                  className="border border-gray-400 px-4 py-2 rounded-lg w-full"
+                  className={fieldClass("phoneNo")}
                   inputMode="numeric"
                 />
                 {renderError("phoneNo")}
               </div>
-            </div>
-
-            {/* Secondary Phone Number | Onboard Company */}
-            <div className="grid grid-cols-2 gap-4 mt-4">
               <div>
                 <label className="text-sm font-medium text-gray-700">
                   Secondary Phone Number
@@ -995,12 +889,14 @@ React.useEffect(() => {
                   placeholder="Secondary Phone Number (Optional)"
                   value={formData.secondaryPhoneNo}
                   onChange={handleChange}
-                  className="border border-gray-400 px-4 py-2 rounded-lg w-full"
+                  className={fieldClass("secondaryPhoneNo")}
                   inputMode="numeric"
                 />
                 {renderError("secondaryPhoneNo")}
               </div>
+            </div>
 
+            <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium text-gray-700">
                   Onboard Company
@@ -1026,27 +922,112 @@ React.useEffect(() => {
                 />
                 {renderError("onboardCompany")}
               </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700">
+                  Load Reference
+                </label>
+                <input
+                  type="text"
+                  name="loadRef"
+                  placeholder="Load Reference"
+                  value={formData.loadRef}
+                  onChange={handleChange}
+                  className={fieldClass("loadRef")}
+                />
+                {renderError("loadRef")}
+              </div>
             </div>
-            <div className="mt-4">
-              <label className="text-sm font-medium text-gray-700">
-                Load Reference
-              </label>
-              <input
-                type="text"
-                name="loadRef"
-                placeholder="Load Reference"
-                value={formData.loadRef}
-                onChange={handleChange}
-                className="border border-gray-400 px-4 py-2 rounded-lg w-full"
-              />
-              {renderError("loadRef")}
+          </div>
+        </div>
+
+        {/* Address */}
+        <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6 border border-purple-100 shadow-sm">
+          <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+            <MapPin className="text-purple-600 shrink-0" size={20} />
+            Address
+          </h3>
+          <div className="w-full flex flex-col gap-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium text-gray-700">
+                  Country <span className="text-red-500">*</span>
+                </label>
+                <SearchableSelect
+                  required
+                  name="country"
+                  value={formData.country || ""}
+                  onChange={(val) => {
+                    setFormData(p => ({ ...p, country: val, state: "", city: "" }));
+                  }}
+                  options={countryOptions}
+                  placeholder="Search country…"
+                  loading={geoLoading.countries}
+                  error={errors.country}
+                />
+                {renderError("country")}
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700">
+                  State <span className="text-red-500">*</span>
+                </label>
+                <SearchableSelect
+                  required
+                  name="state"
+                  value={formData.state || ""}
+                  onChange={(val) => setFormData(p => ({ ...p, state: val, city: "" }))}
+                  options={stateOptions}
+                  placeholder={formData.country ? "Search state…" : "Select country first"}
+                  disabled={!formData.country}
+                  loading={geoLoading.states}
+                  error={errors.state}
+                />
+                {renderError("state")}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium text-gray-700">
+                  City <span className="text-red-500">*</span>
+                </label>
+                <SearchableSelect
+                  required
+                  name="city"
+                  value={formData.city || ""}
+                  onChange={(val) => setFormData(p => ({ ...p, city: val }))}
+                  options={cityOptions}
+                  placeholder={formData.state ? "Search city…" : "Select state first"}
+                  allowCustom
+                  disabled={!formData.state}
+                  loading={geoLoading.cities}
+                  error={errors.city}
+                />
+                {renderError("city")}
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700">
+                  Zip Code <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="zipcode"
+                  placeholder="Zip Code"
+                  value={formData.zipcode}
+                  onChange={handleChange}
+                  className={fieldClass("zipcode")}
+                />
+                {renderError("zipcode")}
+              </div>
             </div>
           </div>
         </div>
 
         {/* Banking Details */}
-        <div className="w-full max-w-2xl bg-white rounded-3xl shadow-xl mb-1 p-8">
-          <h4 className="text-2xl font-bold mb-4 text-center">Banking Details</h4>
+        <div className="bg-gradient-to-br from-cyan-50 to-sky-50 rounded-2xl p-6 border border-cyan-100 shadow-sm">
+          <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+            <Wallet className="text-cyan-700 shrink-0" size={20} />
+            Banking Details
+          </h3>
           <div className="w-full flex flex-col gap-4">
             {/* Payment Type */}
             <div>
@@ -1055,7 +1036,7 @@ React.useEffect(() => {
                 name="paymentType"
                 value={formData.paymentType}
                 onChange={handleChange}
-                className="w-full border border-gray-400 px-4 py-2 rounded-lg"
+                className={fieldClass("paymentType")}
               >
                 <option value="">Select Payment Type...</option>
                 <option value="ACH">ACH</option>
@@ -1076,7 +1057,7 @@ React.useEffect(() => {
                     placeholder="Factoring Name"
                     value={formData.factoringName}
                     onChange={handleChange}
-                    className="w-full border border-gray-400 px-4 py-2 rounded-lg"
+                    className={fieldClass("factoringName")}
                   />
                   {renderError("factoringName")}
                 </div>
@@ -1092,7 +1073,7 @@ React.useEffect(() => {
                       placeholder="Bank Name"
                       value={formData.bankName}
                       onChange={handleChange}
-                      className="w-full border border-gray-400 px-4 py-2 rounded-lg"
+                      className={fieldClass("bankName")}
                     />
                     {renderError("bankName")}
                   </div>
@@ -1106,7 +1087,7 @@ React.useEffect(() => {
                       placeholder="Account Number"
                       value={formData.accountNumber}
                       onChange={handleChange}
-                      className="w-full border border-gray-400 px-4 py-2 rounded-lg"
+                      className={fieldClass("accountNumber")}
                     />
                     {renderError("accountNumber")}
                   </div>
@@ -1120,7 +1101,7 @@ React.useEffect(() => {
                       placeholder="Routing Number"
                       value={formData.routingNumber}
                       onChange={handleChange}
-                      className="w-full border border-gray-400 px-4 py-2 rounded-lg"
+                      className={fieldClass("routingNumber")}
                     />
                     {renderError("routingNumber")}
                   </div>
@@ -1134,7 +1115,7 @@ React.useEffect(() => {
                       placeholder="Account Holder Name"
                       value={formData.accountHolderName}
                       onChange={handleChange}
-                      className="w-full border border-gray-400 px-4 py-2 rounded-lg"
+                      className={fieldClass("accountHolderName")}
                     />
                     {renderError("accountHolderName")}
                   </div>
@@ -1146,7 +1127,7 @@ React.useEffect(() => {
                       name="accountType"
                       value={formData.accountType}
                       onChange={handleChange}
-                      className="w-full border border-gray-400 px-4 py-2 rounded-lg"
+                      className={fieldClass("accountType")}
                     >
                       <option value="">Select Account Type...</option>
                       <option value="Checking">Checking</option>
@@ -1164,7 +1145,7 @@ React.useEffect(() => {
                       placeholder="Bank Address"
                       value={formData.bankAddress}
                       onChange={handleChange}
-                      className="w-full border border-gray-400 px-4 py-2 rounded-lg"
+                      className={fieldClass("bankAddress")}
                     />
                     {renderError("bankAddress")}
                   </div>
@@ -1178,7 +1159,7 @@ React.useEffect(() => {
                       placeholder="City"
                       value={formData.bankCity}
                       onChange={handleChange}
-                      className="w-full border border-gray-400 px-4 py-2 rounded-lg"
+                      className={fieldClass("bankCity")}
                     />
                     {renderError("bankCity")}
                   </div>
@@ -1192,7 +1173,7 @@ React.useEffect(() => {
                       placeholder="State"
                       value={formData.bankState}
                       onChange={handleChange}
-                      className="w-full border border-gray-400 px-4 py-2 rounded-lg"
+                      className={fieldClass("bankState")}
                     />
                     {renderError("bankState")}
                   </div>
@@ -1209,7 +1190,7 @@ React.useEffect(() => {
                         const v = e.target.value.replace(/[^0-9-]/g, '').slice(0, 10);
                         setFormData(prev => ({ ...prev, bankZipcode: v }));
                       }}
-                      className="w-full border border-gray-400 px-4 py-2 rounded-lg"
+                      className={fieldClass("bankZipcode")}
                     />
                     {renderError("bankZipcode")}
                   </div>
@@ -1220,9 +1201,12 @@ React.useEffect(() => {
         </div>
 
         {/* Working Address */}
-        <div className="w-full max-w-2xl bg-white rounded-3xl shadow-xl mb-1 p-8">
+        <div className="bg-gradient-to-br from-orange-50 to-yellow-50 rounded-2xl p-6 border border-amber-100 shadow-sm">
           <div className="flex items-center justify-between mb-4">
-            <h4 className="text-2xl font-bold">Working Address (Optional)</h4>
+            <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+              <MapPin className="text-orange-600 shrink-0" size={20} />
+              Working Address (Optional)
+            </h3>
             <button
               type="button"
               onClick={() => {
@@ -1239,7 +1223,7 @@ React.useEffect(() => {
           <div className="w-full flex flex-col gap-4">
             {formData.workingAddress && formData.workingAddress.length > 0 ? (
               formData.workingAddress.map((addr, idx) => (
-                <div key={idx} className="border-2 border-gray-200 rounded-xl p-4 bg-gray-50">
+                <div key={idx} className="bg-white rounded-xl p-4 border border-orange-200 shadow-sm">
                   <div className="flex items-center justify-between mb-3">
                     <h5 className="text-lg font-semibold text-gray-700">Working Address #{idx + 1}</h5>
                     <button
@@ -1343,7 +1327,7 @@ React.useEffect(() => {
                           updated[idx] = { ...updated[idx], attachment: file };
                           setFormData(prev => ({ ...prev, workingAddress: updated }));
                         }}
-                        className="w-full border border-gray-400 px-4 py-2 rounded-lg file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                        className={fileFieldClass("_workingAttachment")}
                         accept=".pdf,.doc,.docx"
                       />
                       {addr.attachment && (
@@ -1365,8 +1349,11 @@ React.useEffect(() => {
         </div>
 
         {/* Fleet Details */}
-        <div className="w-full max-w-2xl bg-white rounded-3xl shadow-xl mb-1 p-8">
-          <h4 className="text-2xl font-bold mb-4 text-center">Fleet Details</h4>
+        <div className="bg-gradient-to-br from-violet-50 to-purple-50 rounded-2xl p-6 border border-violet-100 shadow-sm">
+          <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+            <Truck className="text-violet-600 shrink-0" size={20} />
+            Fleet Details
+          </h3>
           <div className="w-full grid grid-cols-3 gap-4">
             <div>
               <label className="text-sm font-medium text-gray-700">
@@ -1378,7 +1365,7 @@ React.useEffect(() => {
                 placeholder="MC/DOT No"
                 value={formData.mc_dot_no}
                 onChange={handleChange}
-                className="border border-gray-400 px-4 py-2 rounded-lg w-full"
+                className={fieldClass("mc_dot_no")}
               />
               {renderError("mc_dot_no")}
             </div>
@@ -1392,7 +1379,7 @@ React.useEffect(() => {
                 placeholder="Carrier Type"
                 value={formData.carrierType}
                 onChange={handleChange}
-                className="border border-gray-400 px-4 py-2 rounded-lg w-full"
+                className={fieldClass("carrierType")}
               />
               {renderError("carrierType")}
             </div>
@@ -1408,7 +1395,7 @@ React.useEffect(() => {
                 placeholder="Fleet Size"
                 value={formData.fleetsize}
                 onChange={handleChange}
-                className="border border-gray-400 px-4 py-2 rounded-lg w-full"
+                className={fieldClass("fleetsize")}
               />
               {renderError("fleetsize")}
             </div>
@@ -1416,22 +1403,24 @@ React.useEffect(() => {
         </div>
 
         {/* Documents */}
-        <div className="w-full max-w-2xl bg-white rounded-3xl shadow-xl mb-1 p-8">
-          <h4 className="text-2xl font-bold mb-4 text-center">Required Documents</h4>
+        <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6 border border-green-100 shadow-sm">
+          <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+            <FileText className="text-green-600 shrink-0" size={20} />
+            Documents
+          </h3>
           <div className="w-full grid grid-cols-2 gap-4">
             {documentFields.map((doc) => (
               <div key={doc.key} className="flex flex-col">
                 <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
                   <FileText size={16} />
-                  {doc.label} {doc.required && <span className="text-red-500">*</span>}
+                  {doc.label}
                 </label>
                 <div className="relative">
                   <input
                     type="file"
                     name={doc.key}
                     onChange={handleFileChange}
-                    className="w-full border border-gray-400 px-4 py-2 rounded-lg file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                    accept=".pdf,.doc,.docx"
+                    className={fileFieldClass(doc.key)}
                   />
                   <div className="absolute right-2 top-1/2 -translate-y-1/2">
                     {getUploadIcon(doc.key)}
@@ -1444,8 +1433,11 @@ React.useEffect(() => {
         </div>
 
         {/* Create Account */}
-        <div className="w-full max-w-2xl bg-white rounded-3xl shadow-xl mb-1 p-8">
-          <h4 className="text-2xl font-bold mb-4 text-center">Create Account</h4>
+        <div className="bg-gradient-to-br from-sky-50 to-indigo-50 rounded-2xl p-6 border border-indigo-100 shadow-sm">
+          <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+            <KeyRound className="text-indigo-600 shrink-0" size={20} />
+            Create Account
+          </h3>
 
           <div className="w-full flex flex-col gap-4 mb-4">
             <div>
@@ -1458,7 +1450,7 @@ React.useEffect(() => {
                 placeholder="Enter E-mail"
                 value={formData.email}
                 onChange={handleChange}
-                className="w-full border border-gray-400 px-4 py-2 rounded-lg"
+                className={fieldClass("email")}
               />
               {renderError("email")}
             </div>
@@ -1474,7 +1466,7 @@ React.useEffect(() => {
                   placeholder="Create Password"
                   value={formData.password}
                   onChange={handleChange}
-                  className="border border-gray-400 px-4 py-2 rounded-lg w-full pr-10"
+                  className={`${fieldClass("password")} pr-10`}
                 />
                 <button
                   type="button"
@@ -1497,7 +1489,7 @@ React.useEffect(() => {
                   placeholder="Re-enter Password"
                   value={formData.confirmPassword}
                   onChange={handleChange}
-                  className="border border-gray-400 px-4 py-2 rounded-lg w-full pr-10"
+                  className={`${fieldClass("confirmPassword")} pr-10`}
                 />
                 <button
                   type="button"
@@ -1511,17 +1503,19 @@ React.useEffect(() => {
               </div>
             </div>
           </div>
+        </div>
 
+        <div className="flex justify-end gap-4 pt-6 border-t border-gray-200">
           <button
             type="submit"
             disabled={isSubmitting}
-            className={`w-full py-3 rounded-full text-lg font-bold transition flex items-center justify-center gap-2 ${
-              isSubmitting ? "bg-gray-400 cursor-not-allowed" : "bg-black text-white hover:opacity-90"
+            className={`px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 ${
+              isSubmitting ? "opacity-50 cursor-not-allowed" : "hover:from-blue-600 hover:to-blue-700"
             }`}
           >
             {isSubmitting ? (
               <>
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 Adding Trucker...
               </>
             ) : (
@@ -1529,7 +1523,6 @@ React.useEffect(() => {
             )}
           </button>
         </div>
-      </form>
-    </div>
+    </form>
   );
 }

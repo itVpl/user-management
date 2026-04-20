@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { FaArrowLeft, FaDownload, FaEye, FaFileAlt, FaEdit } from 'react-icons/fa';
-import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, Eye, Edit, Upload, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, Eye, Edit, Upload, Search, ChevronLeft, ChevronRight, Wallet } from 'lucide-react';
 import AddTruckerForm from './AddTruckerform';
 import axios from 'axios';
 import API_CONFIG from '../../config/api.js';
@@ -138,7 +138,7 @@ function SelectWithSearch({
         type="button"
         disabled={disabled}
         onClick={() => setOpen((s) => !s)}
-        className={`w-full text-left border px-4 py-2 rounded-lg bg-white ${disabled ? "opacity-60 cursor-not-allowed" : "cursor-pointer"} ${error ? "border-red-500" : "border-gray-400"} ${inputClass}`}
+        className={`w-full text-left px-4 py-3 border rounded-lg bg-white focus:outline-none ${disabled ? "opacity-60 cursor-not-allowed" : "cursor-pointer"} ${error ? "border-red-500 bg-red-50 focus:ring-2 focus:ring-red-200" : "border-gray-300 focus:ring-2 focus:ring-blue-500"} ${inputClass}`}
       >
         {value || <span className="text-gray-400">{placeholder}</span>}
       </button>
@@ -229,10 +229,8 @@ const isValidZip = (val) => {
   return usZipPattern.test(trimmed) || indiaPinPattern.test(trimmed);
 };
 
-const ALLOWED_DOC_EXT = ['PDF', 'DOC', 'DOCX'];
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const getExt = (nameOrUrl = '') => (nameOrUrl.split('?')[0].split('.').pop() || '').toUpperCase();
-const fileIsAllowed = (file) => !!file && ALLOWED_DOC_EXT.includes(getExt(file.name)) && file.size <= MAX_FILE_BYTES;
 
 const IMG_EXTS = ['PNG', 'JPG', 'JPEG', 'GIF', 'WEBP'];
 const isImageUrl = (url = '') => IMG_EXTS.includes(getExt(url));
@@ -246,10 +244,61 @@ const actionFileIsAllowed = (file) => {
   return ALLOWED_ACTION_EXT.includes(ext) && file.size <= MAX_FILE_BYTES;
 };
 
+/** Edit form inputs — same visual language as Sales/DeliveryOrder */
+const editFieldClass = (hasError, extra = '') =>
+  `w-full px-4 py-3 border rounded-lg focus:outline-none ${hasError ? 'border-red-500 bg-red-50 focus:ring-2 focus:ring-red-200' : 'border-gray-300 focus:ring-2 focus:ring-blue-500'} ${extra}`.trim();
+
+/** Normalize API `docsVerified` (boolean, number, or string like "unverified", "verified", "pending"). */
+function humanizeDocsVerifiedLabel(v) {
+  if (v == null) return '';
+  const raw = String(v).trim();
+  if (!raw) return '';
+  return raw
+    .replace(/_/g, ' ')
+    .split(/\s+/)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+}
+
+function docsVerifiedDisplay(v) {
+  const empty = { label: '—', className: 'bg-gray-100 text-gray-500 border border-gray-200' };
+  if (v == null) return empty;
+  if (typeof v === 'boolean') {
+    return v
+      ? { label: 'Verified', className: 'bg-green-100 text-green-800 border border-green-200' }
+      : { label: 'Unverified', className: 'bg-gray-100 text-gray-800 border border-gray-200' };
+  }
+  if (typeof v === 'number') {
+    if (v === 1) return { label: 'Verified', className: 'bg-green-100 text-green-800 border border-green-200' };
+    if (v === 0) return { label: 'Unverified', className: 'bg-gray-100 text-gray-800 border border-gray-200' };
+  }
+
+  const s = String(v).trim().toLowerCase();
+  if (!s) return empty;
+
+  const verified = new Set(['true', '1', 'verified', 'yes', 'approved', 'complete', 'completed', 'done']);
+  const unverified = new Set(['false', '0', 'no', 'unverified', 'not_verified', 'not verified', 'rejected', 'denied']);
+  const pending = new Set(['pending', 'in_progress', 'in progress', 'processing', 'submitted', 'review', 'under_review', 'under review']);
+
+  if (verified.has(s)) {
+    return { label: 'Verified', className: 'bg-green-100 text-green-800 border border-green-200' };
+  }
+  if (pending.has(s)) {
+    return { label: humanizeDocsVerifiedLabel(v), className: 'bg-amber-100 text-amber-900 border border-amber-200' };
+  }
+  if (unverified.has(s)) {
+    return { label: 'Unverified', className: 'bg-gray-100 text-gray-800 border border-gray-200' };
+  }
+
+  const label = humanizeDocsVerifiedLabel(v);
+  return {
+    label: label || '—',
+    className: 'bg-slate-100 text-slate-700 border border-slate-200',
+  };
+}
 
 export default function TruckerDocuments() {
   const [editErrors, setEditErrors] = useState({});
-  const [docErrors, setDocErrors] = useState({});
   const [truckers, setTruckers] = useState([]);
   const [viewDoc, setViewDoc] = useState(false);
   const [previewImg, setPreviewImg] = useState(null);
@@ -454,22 +503,31 @@ const handleWorkingAddressFileChange = (idx, file) => {
 
   // Document fields configuration
   const documentFields = [
-    { key: 'brokeragePacket', label: 'Brokerage Packet', required: true },
+    { key: 'brokeragePacket', label: 'Brokerage Packet' },
     { key: 'carrierPartnerAgreement', label: 'Carrier Partner Agreement' },
-    { key: 'w9Form', label: 'W9 Form', required: true },
-    { key: 'mcAuthority', label: 'MC Authority', required: true },
-    { key: 'safetyLetter', label: 'Safety Letter', required: false },
-    { key: 'bankingInfo', label: 'Banking Information', required: true },
-    { key: 'inspectionLetter', label: 'Inspection Letter', required: false },
-    { key: 'insurance', label: 'Insurance', required: true },
+    { key: 'w9Form', label: 'W9 Form' },
+    { key: 'mcAuthority', label: 'MC Authority' },
+    { key: 'safetyLetter', label: 'Safety Letter' },
+    { key: 'bankingInfo', label: 'Banking Information' },
+    { key: 'inspectionLetter', label: 'Inspection Letter' },
+    { key: 'insurance', label: 'Insurance' },
   ];
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 8;
+  const itemsPerPage = 10;
+  const [backendPagination, setBackendPagination] = useState({
+    page: 1,
+    limit: 10,
+    totalRecords: 0,
+    totalPages: 1,
+    hasNextPage: false,
+    hasPrevPage: false,
+  });
 
   // Search state
   const [searchTerm, setSearchTerm] = useState('');
+  const [allSearchTruckers, setAllSearchTruckers] = useState([]);
 
   // Onboard Company state - store company for each trucker
   const [onboardCompanies, setOnboardCompanies] = useState({}); // { truckerId: companyName }
@@ -480,9 +538,12 @@ const handleWorkingAddressFileChange = (idx, file) => {
     { label: 'Quick Logistics', value: 'Quick Logistics' }
   ];
 
+  const isSearchMode = searchTerm.trim().length > 0;
+
   useEffect(() => {
-    fetchTruckers();
-  }, []);
+    if (isSearchMode) return;
+    fetchTruckers(currentPage);
+  }, [currentPage, isSearchMode]);
 
   // Initialize onboard companies from trucker data
   useEffect(() => {
@@ -542,7 +603,7 @@ const handleWorkingAddressFileChange = (idx, file) => {
     }
   };
 
-  const fetchTruckers = async () => {
+  const fetchTruckers = async (page = 1) => {
     try {
       setLoading(true);
       setError(null);
@@ -568,7 +629,9 @@ const handleWorkingAddressFileChange = (idx, file) => {
       let response;
       try {
         // First try the CMT specific endpoint
-        response = await axiosInstance.get('/api/v1/shipper_driver/cmt/truckers');
+        response = await axiosInstance.get('/api/v1/shipper_driver/cmt/truckers', {
+          params: { page, limit: itemsPerPage },
+        });
         response = response.data; // Extract data from axios response
       } catch (cmtError) {
 
@@ -586,6 +649,10 @@ const handleWorkingAddressFileChange = (idx, file) => {
 
       // Handle different response structures
       let truckersList = [];
+      const serverPagination =
+        response?.pagination ||
+        response?.data?.pagination ||
+        null;
       if (response.truckers) {
         truckersList = response.truckers;
       } else if (response.data && response.data.truckers) {
@@ -603,6 +670,29 @@ const handleWorkingAddressFileChange = (idx, file) => {
       }
       
       setTruckers(truckersList);
+      if (serverPagination) {
+        const resolvedPage = serverPagination.page || page;
+        setBackendPagination({
+          page: resolvedPage,
+          limit: serverPagination.limit || itemsPerPage,
+          totalRecords: serverPagination.totalRecords || truckersList.length,
+          totalPages: serverPagination.totalPages || 1,
+          hasNextPage: Boolean(serverPagination.hasNextPage),
+          hasPrevPage: Boolean(serverPagination.hasPrevPage),
+        });
+        if (resolvedPage !== currentPage) {
+          setCurrentPage(resolvedPage);
+        }
+      } else {
+        setBackendPagination({
+          page,
+          limit: itemsPerPage,
+          totalRecords: truckersList.length,
+          totalPages: 1,
+          hasNextPage: false,
+          hasPrevPage: false,
+        });
+      }
     } catch (err) {
       console.error('Error fetching truckers:', err);
       if (err.message.includes('403') || err.message.includes('401')) {
@@ -613,6 +703,69 @@ const handleWorkingAddressFileChange = (idx, file) => {
         setError("Failed to load truckers. Please try again.");
       }
       setTruckers([]);
+      setBackendPagination({
+        page: 1,
+        limit: itemsPerPage,
+        totalRecords: 0,
+        totalPages: 1,
+        hasNextPage: false,
+        hasPrevPage: false,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch all pages for global search across backend pagination
+  const fetchAllTruckersForSearch = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const token = sessionStorage.getItem("authToken") || localStorage.getItem("authToken");
+      if (!token) {
+        setError("Authentication required. Please login again.");
+        setLoading(false);
+        return;
+      }
+
+      const axiosInstance = axios.create({
+        baseURL: `${API_CONFIG.BASE_URL}`,
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        withCredentials: true
+      });
+
+      const pageSize = 100;
+      let page = 1;
+      let totalPages = 1;
+      let allRows = [];
+
+      do {
+        const res = await axiosInstance.get('/api/v1/shipper_driver/cmt/truckers', {
+          params: { page, limit: pageSize },
+        });
+        const payload = res.data || {};
+        const rows = Array.isArray(payload.truckers) ? payload.truckers : [];
+        const pagination = payload.pagination || {};
+
+        allRows = allRows.concat(rows);
+        totalPages = pagination.totalPages || 1;
+        page += 1;
+      } while (page <= totalPages);
+
+      setAllSearchTruckers(allRows);
+    } catch (err) {
+      console.error('Error fetching truckers for search:', err);
+      if (err.message.includes('403') || err.message.includes('401')) {
+        setError("Access denied. Please check your permissions or login again.");
+      } else if (err.message.includes('500')) {
+        setError("Server error. Please try again later.");
+      } else {
+        setError("Failed to load truckers. Please try again.");
+      }
+      setAllSearchTruckers([]);
     } finally {
       setLoading(false);
     }
@@ -643,7 +796,7 @@ const handleWorkingAddressFileChange = (idx, file) => {
       setReason('');
       setSelectedTrucker(null);
       setViewDoc(false);
-      fetchTruckers(); // Refresh
+      fetchTruckers(currentPage); // Refresh
     } catch (err) {
       console.error('Status update failed:', err);
       alert('Failed to update status. Please try again.');
@@ -783,43 +936,8 @@ const handleWorkingAddressFileChange = (idx, file) => {
     setEditErrors(errs);
     if (Object.keys(errs).length) return;
 
-    // 2) Documents validations
-    const requiredDocKeys = ['brokeragePacket', 'w9Form', 'mcAuthority', 'bankingInfo', 'insurance'];
-
-    const missingRequired = [];
-    const badFiles = [];
-
-    requiredDocKeys.forEach((k) => {
-      const existingUrl = editFormData[`${k}Url`];
-      const newFile = editFormData[k];
-
-      if (!existingUrl && !newFile) {
-        missingRequired.push(k);
-      }
-      if (newFile && !fileIsAllowed(newFile)) {
-        badFiles.push(k);
-      }
-    });
-
-    if (missingRequired.length) {
-      const msgMap = {
-        brokeragePacket: 'Please choose the Brokerage Packet file.',
-        w9Form: 'Please choose the W9 Form file.',
-        mcAuthority: 'Please choose the MC Authority file.',
-        bankingInfo: 'Please choose the Banking Information file.',
-        insurance: 'Please choose the Insurance file.',
-      };
-      alert(missingRequired.map(k => msgMap[k]).join('\n'));
-      return;
-    }
-
-    if (badFiles.length) {
-      alert('Please select the .pdf , .doc and .docx file only and size <= 10 MB.');
-      return;
-    }
-
     try {
-      // 3) Prepare payloads
+      // 2) Prepare payloads
       const documentsFormData = new FormData();
       documentFields.forEach(doc => {
         if (editFormData[doc.key]) {
@@ -929,7 +1047,7 @@ const handleWorkingAddressFileChange = (idx, file) => {
         withCredentials: true // 🔥 CRITICAL: Required for Safari/iOS cross-site cookies
       });
 
-      // 4) API calls
+      // 3) API calls
       const hasFileUploads = documentFields.some(doc => editFormData[doc.key]);
       const hasWorkingAddressAttachments = editFormData.workingAddress?.some(addr => 
         addr.attachment && addr.attachment instanceof File
@@ -972,7 +1090,7 @@ const handleWorkingAddressFileChange = (idx, file) => {
         { headers: { 'Content-Type': 'application/json' } }
       );
 
-      // 5) Reset + refresh
+      // 4) Reset + refresh
       setShowEditModal(false);
       setEditFormData({});
       setEditUploadStatus({
@@ -985,7 +1103,7 @@ const handleWorkingAddressFileChange = (idx, file) => {
         inspectionLetter: false,
         insurance: false,
       });
-      await fetchTruckers();
+      await fetchTruckers(currentPage);
       alert('Trucker Update successfully.');
 
     } catch (err) {
@@ -1004,47 +1122,17 @@ const handleWorkingAddressFileChange = (idx, file) => {
     }));
   };
 
-  // Handle file change for edit form
-  // Handle file change for edit form (with inline validation)
   const handleEditFileChange = (e) => {
     const { name, files } = e.target;
     if (!(files && files[0])) {
-      // clear chosen file + error (user cleared)
       setEditFormData(prev => ({ ...prev, [name]: null }));
       setEditUploadStatus(prev => ({ ...prev, [name]: false }));
-      setDocErrors(prev => {
-        const copy = { ...prev };
-        delete copy[name];
-        return copy;
-      });
       return;
     }
 
     const file = files[0];
-    const ext = (file.name.split('.').pop() || '').toUpperCase();
-
-    let errMsg = '';
-    if (!['PDF', 'DOC', 'DOCX'].includes(ext)) {
-      errMsg = 'Please select the .pdf, .doc and .docx file only.';
-    } else if (file.size > 10 * 1024 * 1024) {
-      errMsg = 'Please choose the file less than 10 MB.';
-    }
-
-    if (errMsg) {
-      // set error and DO NOT attach invalid file
-      setDocErrors(prev => ({ ...prev, [name]: errMsg }));
-      setEditFormData(prev => ({ ...prev, [name]: null }));
-      setEditUploadStatus(prev => ({ ...prev, [name]: false }));
-    } else {
-      // valid
-      setDocErrors(prev => {
-        const copy = { ...prev };
-        delete copy[name];
-        return copy;
-      });
-      setEditFormData(prev => ({ ...prev, [name]: file }));
-      setEditUploadStatus(prev => ({ ...prev, [name]: true }));
-    }
+    setEditFormData(prev => ({ ...prev, [name]: file }));
+    setEditUploadStatus(prev => ({ ...prev, [name]: true }));
   };
 
   // NEW: handle changes
@@ -1114,7 +1202,7 @@ const handleWorkingAddressFileChange = (idx, file) => {
       // reset + refresh
       setActionType('');
       setActionForm({ reason: '', remarks: '', attachment: null });
-      await fetchTruckers();
+      await fetchTruckers(currentPage);
       setShowEditModal(false); // optional: close modal after action
     } catch (err) {
       console.error('Account action failed:', err);
@@ -1173,8 +1261,10 @@ const handleWorkingAddressFileChange = (idx, file) => {
     return 'bg-blue-100 text-blue-700';
   };
 
+  const sourceTruckers = isSearchMode ? allSearchTruckers : truckers;
+
   // Search and filter functionality
-  const filteredTruckers = truckers.filter(trucker => {
+  const filteredTruckers = sourceTruckers.filter(trucker => {
     if (!searchTerm) return true;
     const searchLower = searchTerm.toLowerCase();
     return (
@@ -1186,18 +1276,37 @@ const handleWorkingAddressFileChange = (idx, file) => {
   });
 
   // Pagination calculations
-  const totalPages = Math.ceil(filteredTruckers.length / itemsPerPage);
+  const totalPages = isSearchMode
+    ? Math.max(Math.ceil(filteredTruckers.length / itemsPerPage), 1)
+    : Math.max(backendPagination.totalPages || 1, 1);
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentTruckers = filteredTruckers.slice(startIndex, endIndex);
+  const endIndex = isSearchMode
+    ? startIndex + Math.min(itemsPerPage, filteredTruckers.length - startIndex)
+    : startIndex + filteredTruckers.length;
+  const currentTruckers = isSearchMode
+    ? filteredTruckers.slice(startIndex, startIndex + itemsPerPage)
+    : filteredTruckers;
 
   // Reset to first page when search changes
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm]);
 
+  // Global search: load all paginated data once user starts searching
+  useEffect(() => {
+    if (!isSearchMode) {
+      setAllSearchTruckers([]);
+      return;
+    }
+    const timer = setTimeout(() => {
+      fetchAllTruckersForSearch();
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm, isSearchMode]);
+
   // Handle page change
   const handlePageChange = (page) => {
+    if (page < 1 || page > totalPages) return;
     setCurrentPage(page);
   };
 
@@ -1345,33 +1454,47 @@ const handleWorkingAddressFileChange = (idx, file) => {
 
   if (showEditModal) {
     return (
-      <div 
-        className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
+      <div
+        className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4"
+        onClick={() => setShowEditModal(false)}
       >
-        <div 
-          className="relative w-full max-w-2xl rounded-2xl shadow-2xl overflow-auto max-h-[90vh] p-4 bg-gradient-to-br from-blue-200 via-white to-blue-300" 
-          style={{
-            scrollbarWidth: 'none', // Firefox
-            msOverflowStyle: 'none', // IE 10+
-          }}
+        <style>{`
+          .hide-scrollbar::-webkit-scrollbar { display: none; }
+          .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+        `}</style>
+        <div
+          className="bg-white rounded-3xl max-w-6xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar shadow-2xl"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
           onClick={(e) => e.stopPropagation()}
         >
-          <style>{`
-             .hide-scrollbar::-webkit-scrollbar { display: none; }
-           `}</style>
-          <button
-            onClick={() => setShowEditModal(false)}
-            className="absolute top-3 right-3 text-gray-500 hover:text-black text-2xl"
-          >
-            ×
-          </button>
-          <div className="hide-scrollbar">
-            <form noValidate onSubmit={handleEditSubmit} className="w-full max-w-2xl flex flex-col gap-4">
-              {/* Basic Details Card */}
-              <div className="w-full max-w-2xl bg-white rounded-3xl shadow-xl mb-1 p-8 flex flex-col items-center">
-                <h4 className="text-2xl font-bold mb-4 text-center">Basic Details</h4>
+          <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                  <Edit className="text-white" size={24} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold">Edit Trucker</h2>
+                  <p className="text-blue-100">Update profile, banking, and documents</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowEditModal(false)}
+                className="text-white hover:text-gray-200 text-2xl font-bold leading-none"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+            <form noValidate onSubmit={handleEditSubmit} className="p-6 space-y-6">
+              {/* Company */}
+              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-100 shadow-sm">
+                <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                  <Building className="text-blue-600 shrink-0" size={20} />
+                  Company
+                </h3>
                 <div className="w-full flex flex-col gap-4">
-                  {/* Company Name full width */}
                   <label className="text-sm font-medium text-gray-700">Company Name <span className="text-red-500">*</span></label>
                   <input
                     type="text"
@@ -1379,12 +1502,10 @@ const handleWorkingAddressFileChange = (idx, file) => {
                     placeholder="Company Name"
                     value={editFormData.compName}
                     onChange={handleEditInputChange}
-                    className={`w-full border px-4 py-2 rounded-lg ${editErrors.compName ? 'border-red-500' : 'border-gray-400'}`}
-
+                    className={editFieldClass(!!editErrors.compName)}
                   />
                   {editErrors.compName && <p className="text-xs text-red-600 mt-1">Please enter the company name.</p>}
 
-                  {/* Company Address */}
                   <label className="text-sm font-medium text-gray-700 mt-3">Company Address <span className="text-red-500">*</span></label>
                   <input
                     type="text"
@@ -1392,12 +1513,10 @@ const handleWorkingAddressFileChange = (idx, file) => {
                     placeholder="Company Address"
                     value={editFormData.address}
                     onChange={handleEditInputChange}
-                    className={`w-full border px-4 py-2 rounded-lg ${editErrors.address ? 'border-red-500' : 'border-gray-400'}`}
-
+                    className={editFieldClass(!!editErrors.address)}
                   />
                   {editErrors.address && <p className="text-xs text-red-600 mt-1">Please enter the company address.</p>}
 
-                  {/* Email */}
                   <label className="text-sm font-medium text-gray-700 mt-3">
                     Email Address <span className="text-red-500">*</span>
                   </label>
@@ -1407,7 +1526,7 @@ const handleWorkingAddressFileChange = (idx, file) => {
                     placeholder="Email Address"
                     value={editFormData.email}
                     onChange={handleEditInputChange}
-                    className={`w-full border px-4 py-2 rounded-lg ${editErrors.email ? 'border-red-500' : 'border-gray-400'}`}
+                    className={editFieldClass(!!editErrors.email)}
                     aria-invalid={!!editErrors.email}
                     aria-describedby={editErrors.email ? 'email-err' : undefined}
                   />
@@ -1419,8 +1538,6 @@ const handleWorkingAddressFileChange = (idx, file) => {
                     </p>
                   )}
 
-
-                  {/* Phone | MC/DOT */}
                   <div className="grid grid-cols-2 gap-4 mt-3">
                     <div>
                       <label className="text-sm font-medium text-gray-700">Phone <span className="text-red-500">*</span></label>
@@ -1435,12 +1552,10 @@ const handleWorkingAddressFileChange = (idx, file) => {
                         }}
                         onKeyDown={(e) => { if (e.key === ' ') e.preventDefault(); }}
                         inputMode="numeric"
-                        className={`w-full border px-4 py-2 rounded-lg ${editErrors.phoneNo ? 'border-red-500' : 'border-gray-400'}`}
-
+                        className={editFieldClass(!!editErrors.phoneNo)}
                       />
                       {editErrors.phoneNo && <p className="text-xs text-red-600 mt-1">Please enter the valid mobile number.</p>}
                     </div>
-
                     <div>
                       <label className="text-sm font-medium text-gray-700">MC/DOT No <span className="text-red-500">*</span></label>
                       <input
@@ -1449,14 +1564,12 @@ const handleWorkingAddressFileChange = (idx, file) => {
                         placeholder="MC/DOT Number"
                         value={editFormData.mc_dot_no}
                         onChange={handleEditInputChange}
-                        className={`w-full border px-4 py-2 rounded-lg ${editErrors.mc_dot_no ? 'border-red-500' : 'border-gray-400'}`}
-
+                        className={editFieldClass(!!editErrors.mc_dot_no)}
                       />
                       {editErrors.mc_dot_no && <p className="text-xs text-red-600 mt-1">Please enter the mc/dot no.</p>}
                     </div>
                   </div>
 
-                  {/* Secondary Phone Number | Onboard Company */}
                   <div className="grid grid-cols-2 gap-4 mt-3">
                     <div>
                       <label className="text-sm font-medium text-gray-700">Secondary Phone Number</label>
@@ -1471,10 +1584,9 @@ const handleWorkingAddressFileChange = (idx, file) => {
                         }}
                         onKeyDown={(e) => { if (e.key === ' ') e.preventDefault(); }}
                         inputMode="numeric"
-                        className="w-full border px-4 py-2 rounded-lg border-gray-400"
+                        className={editFieldClass(false)}
                       />
                     </div>
-
                     <div>
                       <label className="text-sm font-medium text-gray-700">Onboard Company</label>
                       <SelectWithSearch
@@ -1499,63 +1611,65 @@ const handleWorkingAddressFileChange = (idx, file) => {
                       placeholder="Load Reference"
                       value={editFormData.loadRef || ''}
                       onChange={handleEditInputChange}
-                      className="w-full border px-4 py-2 rounded-lg border-gray-400"
+                      className={editFieldClass(false)}
                     />
                   </div>
+                </div>
+              </div>
 
-                  {/* City | State */}
-                  <div className="grid grid-cols-2 gap-4 mt-3">
-                      <div>
-    <label className="text-sm font-medium text-gray-700">
-      Country <span className="text-red-500">*</span>
-    </label>
-    <SelectWithSearch
-      name="Country"
-      value={editFormData.country}
-      onChange={handleCountrySelect}
-      options={countryOptions}
-      placeholder={geoLoading.countries ? "Loading..." : "Select..."}
-      disabled={geoLoading.countries}
-      error={editErrors.country ? "Please enter the county." : ""}
-    />
-  </div>
-
-
-                   <div>
-    <label className="text-sm font-medium text-gray-700">
-      State <span className="text-red-500">*</span>
-    </label>
-    <SelectWithSearch
-      name="State"
-      value={editFormData.state}
-      onChange={handleStateSelect}
-      options={stateOptions}
-      placeholder={geoLoading.states ? "Loading..." : "Select..."}
-      disabled={!editFormData.country || geoLoading.states}
-      error={editErrors.state ? "Please enter the state." : ""}
-      inputClass=""
-    />
-  </div>
-
+              {/* Address */}
+              <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6 border border-purple-100 shadow-sm">
+                <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                  <MapPin className="text-purple-600 shrink-0" size={20} />
+                  Address
+                </h3>
+                <div className="w-full flex flex-col gap-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-gray-700">
+                        Country <span className="text-red-500">*</span>
+                      </label>
+                      <SelectWithSearch
+                        name="Country"
+                        value={editFormData.country}
+                        onChange={handleCountrySelect}
+                        options={countryOptions}
+                        placeholder={geoLoading.countries ? "Loading..." : "Select..."}
+                        disabled={geoLoading.countries}
+                        error={editErrors.country ? "Please enter the county." : ""}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-700">
+                        State <span className="text-red-500">*</span>
+                      </label>
+                      <SelectWithSearch
+                        name="State"
+                        value={editFormData.state}
+                        onChange={handleStateSelect}
+                        options={stateOptions}
+                        placeholder={geoLoading.states ? "Loading..." : "Select..."}
+                        disabled={!editFormData.country || geoLoading.states}
+                        error={editErrors.state ? "Please enter the state." : ""}
+                        inputClass=""
+                      />
+                    </div>
                   </div>
-
-                  {/* Country | Zip */}
                   <div className="grid grid-cols-2 gap-4 mt-3">
                     <div>
-    <label className="text-sm font-medium text-gray-700">
-      City <span className="text-red-500">*</span>
-    </label>
-    <SelectWithSearch
-      name="City"
-      value={editFormData.city}
-      onChange={handleCitySelect}
-      options={cityOptions}
-      placeholder={geoLoading.cities ? "Loading..." : "Select..."}
-      disabled={!editFormData.state || geoLoading.cities}
-      error={editErrors.city ? "Please enter the city." : ""}
-    />
-  </div>
-
+                      <label className="text-sm font-medium text-gray-700">
+                        City <span className="text-red-500">*</span>
+                      </label>
+                      <SelectWithSearch
+                        name="City"
+                        value={editFormData.city}
+                        onChange={handleCitySelect}
+                        options={cityOptions}
+                        placeholder={geoLoading.cities ? "Loading..." : "Select..."}
+                        disabled={!editFormData.state || geoLoading.cities}
+                        error={editErrors.city ? "Please enter the city." : ""}
+                      />
+                    </div>
                     <div>
                       <label className="text-sm font-medium text-gray-700">Zip Code <span className="text-red-500">*</span></label>
                       <input
@@ -1567,8 +1681,7 @@ const handleWorkingAddressFileChange = (idx, file) => {
                           const v = e.target.value.toUpperCase().replace(/[^0-9-]/g, '').slice(0, 10);
                           setEditFormData(prev => ({ ...prev, zipCode: v }));
                         }}
-                        className={`w-full border px-4 py-2 rounded-lg ${editErrors.zipCode ? 'border-red-500' : 'border-gray-400'}`}
-
+                        className={editFieldClass(!!editErrors.zipCode)}
                       />
                       {editErrors.zipCode && (
                         <p className="text-xs text-red-600 mt-1">
@@ -1581,9 +1694,12 @@ const handleWorkingAddressFileChange = (idx, file) => {
               </div>
 
               {/* Working Address Card (Optional) */}
-              <div className="w-full max-w-2xl bg-white rounded-3xl shadow-xl mb-1 p-8">
+              <div className="bg-gradient-to-br from-orange-50 to-yellow-50 rounded-2xl p-6 border border-amber-100 shadow-sm">
                 <div className="flex items-center justify-between mb-4">
-                  <h4 className="text-2xl font-bold">Working Address (Optional)</h4>
+                  <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                    <MapPin className="text-orange-600 shrink-0" size={20} />
+                    Working Address (Optional)
+                  </h3>
                   <button
                     type="button"
                     onClick={handleAddWorkingAddress}
@@ -1599,7 +1715,7 @@ const handleWorkingAddressFileChange = (idx, file) => {
                       const addrStateCities = addr.state ? (citiesCacheRef.current[`${editFormData.country}|${addr.state}`] || []) : [];
                       
                       return (
-                        <div key={idx} className="border-2 border-gray-200 rounded-xl p-4 bg-gray-50">
+                        <div key={idx} className="bg-white rounded-xl p-4 border border-orange-200 shadow-sm">
                           <div className="flex items-center justify-between mb-3">
                             <h5 className="text-lg font-semibold text-gray-700">Working Address #{idx + 1}</h5>
                             <button
@@ -1650,8 +1766,7 @@ const handleWorkingAddressFileChange = (idx, file) => {
                                   const file = e.target.files?.[0] || null;
                                   handleWorkingAddressFileChange(idx, file);
                                 }}
-                                className="w-full border border-gray-400 px-4 py-2 rounded-lg file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                                accept=".pdf,.doc,.docx"
+                                className={editFieldClass(false, 'file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100')}
                               />
                               {addr.attachment && (
                                 <div className="mt-2 text-sm text-green-600 flex items-center gap-2">
@@ -1681,8 +1796,11 @@ const handleWorkingAddressFileChange = (idx, file) => {
               </div>
 
               {/* Fleet Details Card */}
-              <div className="w-full max-w-2xl bg-white rounded-3xl shadow-xl mb-1 p-8 flex flex-col items-center">
-                <h4 className="text-2xl font-bold mb-4 text-center">Fleet Details</h4>
+              <div className="bg-gradient-to-br from-violet-50 to-purple-50 rounded-2xl p-6 border border-violet-100 shadow-sm">
+                <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                  <Truck className="text-violet-600 shrink-0" size={20} />
+                  Fleet Details
+                </h3>
                 <div className="w-full grid grid-cols-2 gap-4">
                   {/* Carrier Type */}
                   <div>
@@ -1693,7 +1811,7 @@ const handleWorkingAddressFileChange = (idx, file) => {
                       placeholder="Carrier Type"
                       value={editFormData.carrierType}
                       onChange={handleEditInputChange}
-                      className={`border px-4 py-2 rounded-lg ${editErrors.carrierType ? 'border-red-500' : 'border-gray-400'}`}
+                      className={editFieldClass(!!editErrors.carrierType)}
                     />
                     {editErrors.carrierType && <p className="text-xs text-red-600 mt-1">Please enter the Carrier Type.</p>}
                   </div>
@@ -1706,7 +1824,7 @@ const handleWorkingAddressFileChange = (idx, file) => {
                       placeholder="Fleet Size"
                       value={editFormData.fleetsize}
                       onChange={handleEditInputChange}
-                      className={`border px-4 py-2 rounded-lg ${editErrors.fleetsize ? 'border-red-500' : 'border-gray-400'}`}
+                      className={editFieldClass(!!editErrors.fleetsize)}
                     />
                     {editErrors.fleetsize && <p className="text-xs text-red-600 mt-1">Please enter the Fleet Size.</p>}
                   </div>
@@ -1714,8 +1832,11 @@ const handleWorkingAddressFileChange = (idx, file) => {
               </div>
 
               {/* Banking Details Card */}
-              <div className="w-full max-w-2xl bg-white rounded-3xl shadow-xl mb-1 p-8 flex flex-col items-center">
-                <h4 className="text-2xl font-bold mb-4 text-center">Banking Details</h4>
+              <div className="bg-gradient-to-br from-cyan-50 to-sky-50 rounded-2xl p-6 border border-cyan-100 shadow-sm">
+                <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                  <Wallet className="text-cyan-700 shrink-0" size={20} />
+                  Banking Details
+                </h3>
                 <div className="w-full flex flex-col gap-4">
                   {/* Payment Type */}
                   <div>
@@ -1724,7 +1845,7 @@ const handleWorkingAddressFileChange = (idx, file) => {
                       name="paymentType"
                       value={editFormData.paymentType || ''}
                       onChange={handleEditInputChange}
-                      className="w-full border px-4 py-2 rounded-lg border-gray-400"
+                      className={editFieldClass(false)}
                     >
                       <option value="">Select Payment Type...</option>
                       <option value="ACH">ACH</option>
@@ -1744,7 +1865,7 @@ const handleWorkingAddressFileChange = (idx, file) => {
                           placeholder="Factoring Name"
                           value={editFormData.factoringName || ''}
                           onChange={handleEditInputChange}
-                          className="w-full border px-4 py-2 rounded-lg border-gray-400"
+                          className={editFieldClass(false)}
                         />
                       </div>
 
@@ -1759,7 +1880,7 @@ const handleWorkingAddressFileChange = (idx, file) => {
                             placeholder="Bank Name"
                             value={editFormData.bankName || ''}
                             onChange={handleEditInputChange}
-                            className="w-full border px-4 py-2 rounded-lg border-gray-400"
+                            className={editFieldClass(false)}
                           />
                         </div>
 
@@ -1772,7 +1893,7 @@ const handleWorkingAddressFileChange = (idx, file) => {
                             placeholder="Account Number"
                             value={editFormData.accountNumber || ''}
                             onChange={handleEditInputChange}
-                            className="w-full border px-4 py-2 rounded-lg border-gray-400"
+                            className={editFieldClass(false)}
                           />
                         </div>
 
@@ -1785,7 +1906,7 @@ const handleWorkingAddressFileChange = (idx, file) => {
                             placeholder="Routing Number"
                             value={editFormData.routingNumber || ''}
                             onChange={handleEditInputChange}
-                            className="w-full border px-4 py-2 rounded-lg border-gray-400"
+                            className={editFieldClass(false)}
                           />
                         </div>
 
@@ -1798,7 +1919,7 @@ const handleWorkingAddressFileChange = (idx, file) => {
                             placeholder="Account Holder Name"
                             value={editFormData.accountHolderName || ''}
                             onChange={handleEditInputChange}
-                            className="w-full border px-4 py-2 rounded-lg border-gray-400"
+                            className={editFieldClass(false)}
                           />
                         </div>
 
@@ -1809,7 +1930,7 @@ const handleWorkingAddressFileChange = (idx, file) => {
                             name="accountType"
                             value={editFormData.accountType || ''}
                             onChange={handleEditInputChange}
-                            className="w-full border px-4 py-2 rounded-lg border-gray-400"
+                            className={editFieldClass(false)}
                           >
                             <option value="">Select Account Type...</option>
                             <option value="Checking">Checking</option>
@@ -1826,7 +1947,7 @@ const handleWorkingAddressFileChange = (idx, file) => {
                             placeholder="Bank Address"
                             value={editFormData.bankAddress || ''}
                             onChange={handleEditInputChange}
-                            className="w-full border px-4 py-2 rounded-lg border-gray-400"
+                            className={editFieldClass(false)}
                           />
                         </div>
 
@@ -1839,7 +1960,7 @@ const handleWorkingAddressFileChange = (idx, file) => {
                             placeholder="City"
                             value={editFormData.bankCity || ''}
                             onChange={handleEditInputChange}
-                            className="w-full border px-4 py-2 rounded-lg border-gray-400"
+                            className={editFieldClass(false)}
                           />
                         </div>
 
@@ -1852,7 +1973,7 @@ const handleWorkingAddressFileChange = (idx, file) => {
                             placeholder="State"
                             value={editFormData.bankState || ''}
                             onChange={handleEditInputChange}
-                            className="w-full border px-4 py-2 rounded-lg border-gray-400"
+                            className={editFieldClass(false)}
                           />
                         </div>
 
@@ -1868,7 +1989,7 @@ const handleWorkingAddressFileChange = (idx, file) => {
                               const v = e.target.value.toUpperCase().replace(/[^0-9-]/g, '').slice(0, 10);
                               setEditFormData(prev => ({ ...prev, bankZipcode: v }));
                             }}
-                            className="w-full border px-4 py-2 rounded-lg border-gray-400"
+                            className={editFieldClass(false)}
                           />
                         </div>
                       </div>
@@ -1880,8 +2001,11 @@ const handleWorkingAddressFileChange = (idx, file) => {
               {/* Current Documents Display Card */}
               {/* Only show Current Documents section if there are existing documents */}
               {Object.keys(editFormData).some(key => key.endsWith('Url') && editFormData[key]) && (
-                <div className="w-full max-w-2xl bg-white rounded-3xl shadow-xl mb-1 p-8 flex flex-col items-center">
-                  <h4 className="text-2xl font-bold mb-4 text-center">Current Documents</h4>
+                <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6 border border-green-100 shadow-sm">
+                  <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <FileText className="text-green-600 shrink-0" size={20} />
+                    Current Documents
+                  </h3>
                   <div className="w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {documentFields.map((doc) => {
                       const docUrl = editFormData[`${doc.key}Url`];
@@ -1890,7 +2014,7 @@ const handleWorkingAddressFileChange = (idx, file) => {
                       if (!docUrl) return null;
 
                       return (
-                        <div key={doc.key} className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 shadow-sm border border-green-100 hover:shadow-md transition">
+                        <div key={doc.key} className="bg-white rounded-xl p-4 shadow-sm border border-green-100 hover:shadow-md transition">
                           <div className="flex items-center justify-between mb-3">
                             <div className="flex items-center gap-2">
                               <FileText className="text-green-600" size={16} />
@@ -1935,16 +2059,18 @@ const handleWorkingAddressFileChange = (idx, file) => {
                 </div>
               )}
 
-              {/* Required Documents Upload Card */}
-              <div className="w-full max-w-2xl bg-white rounded-3xl shadow-xl mb-1 p-8 flex flex-col items-center">
-                <h4 className="text-2xl font-bold mb-4 text-center">Upload New Documents</h4>
+              {/* Documents upload (optional replacements) */}
+              <div className="bg-gradient-to-br from-teal-50 to-emerald-50 rounded-2xl p-6 border border-teal-100 shadow-sm">
+                <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                  <Upload className="text-teal-600 shrink-0" size={20} />
+                  Upload New Documents
+                </h3>
                 <div className="w-full grid grid-cols-2 gap-4">
                   {documentFields.map((doc) => (
                     <div key={doc.key} className="flex flex-col gap-2">
                       <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
                         <FileText size={16} />
                         {doc.label}
-                        {doc.required && <span className="text-red-500">*</span>}
                       </label>
 
                       <div className="relative">
@@ -1952,8 +2078,7 @@ const handleWorkingAddressFileChange = (idx, file) => {
                           type="file"
                           name={doc.key}
                           onChange={handleEditFileChange}
-                          className="w-full border border-gray-400 px-4 py-2 rounded-lg file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                          accept=".pdf,.doc,.docx"
+                          className={editFieldClass(false, 'file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100')}
                         />
                         <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
                           {getEditUploadIcon(doc.key)}
@@ -1968,8 +2093,11 @@ const handleWorkingAddressFileChange = (idx, file) => {
               </div>
               {/* NEW: Account Action Block (OK / Blacklist) */}
               {/* Account Action (OK / Blacklist) */}
-              <div className="w-full max-w-2xl bg-white rounded-3xl shadow-xl mb-1 p-8 flex flex-col items-center">
-                <h4 className="text-2xl font-bold mb-4 text-center">Account Action</h4>
+              <div className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-2xl p-6 border border-amber-100 shadow-sm">
+                <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                  <Clock className="text-orange-600 shrink-0" size={20} />
+                  Account Action
+                </h3>
 
                 {/* Dropdown */}
                 <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1982,7 +2110,7 @@ const handleWorkingAddressFileChange = (idx, file) => {
                         setActionForm({ reason: '', remarks: '', attachment: null });
                         setActionErrors({});
                       }}
-                      className="w-full border px-4 py-2 rounded-lg border-gray-400"
+                      className={editFieldClass(false)}
                     >
                       <option value="">— Select —</option>
                       <option value="ok">OK (Remove from Blacklist)</option>
@@ -2007,7 +2135,7 @@ const handleWorkingAddressFileChange = (idx, file) => {
                         value={actionForm.reason}
                         onChange={handleActionInput}
                         placeholder={actionType === 'blacklist' ? 'Payment Issues' : 'Payment Issues Resolved'}
-                        className={`w-full border px-4 py-2 rounded-lg ${actionErrors.reason ? 'border-red-500' : 'border-gray-400'}`}
+                        className={editFieldClass(!!actionErrors.reason)}
                       />
                       {actionErrors.reason && <p className="text-xs text-red-600 mt-1">Please enter the reason.</p>}
                     </div>
@@ -2019,7 +2147,7 @@ const handleWorkingAddressFileChange = (idx, file) => {
                         rows={3}
                         value={actionForm.remarks}
                         onChange={handleActionInput}
-                        className="w-full border px-4 py-2 rounded-lg border-gray-400"
+                        className={editFieldClass(false)}
                       />
                     </div>
 
@@ -2030,7 +2158,7 @@ const handleWorkingAddressFileChange = (idx, file) => {
                         name="attachment"
                         onChange={handleActionInput}
                         accept=".png,.jpg,.jpeg,.webp,.pdf,.doc,.docx"
-                        className={`w-full border px-4 py-2 rounded-lg ${actionErrors.attachment ? 'border-red-500' : 'border-gray-400'}`}
+                        className={editFieldClass(!!actionErrors.attachment, 'file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100')}
                       />
                       {actionErrors.attachment && <p className="text-xs text-red-600 mt-1">{actionErrors.attachment}</p>}
                     </div>
@@ -2057,26 +2185,22 @@ const handleWorkingAddressFileChange = (idx, file) => {
               </div>
 
 
-              {/* Action Buttons Card */}
-              <div className="w-full max-w-2xl bg-white rounded-3xl shadow-xl mb-1 p-8 flex flex-col items-center">
-                <div className="w-full flex gap-4">
-                  <button
-                    type="button"
-                    onClick={() => setShowEditModal(false)}
-                    className="flex-1 py-3 rounded-full text-lg font-bold border-2 border-gray-300 text-gray-700 hover:bg-gray-50 transition"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 py-3 rounded-full text-lg font-bold bg-black text-white hover:opacity-90 transition"
-                  >
-                    Save Changes
-                  </button>
-                </div>
+              <div className="flex justify-end gap-4 pt-6 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 font-semibold hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-semibold hover:from-blue-600 hover:to-blue-700 transition-colors"
+                >
+                  Save Changes
+                </button>
               </div>
             </form>
-          </div>
         </div>
       </div>
     );
@@ -2092,7 +2216,7 @@ const handleWorkingAddressFileChange = (idx, file) => {
           <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-white rounded-xl border border-gray-200 p-6 h-[90px] flex items-center gap-4">
               <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-gray-700 font-bold text-2xl shrink-0">
-                {truckers.length}
+                {backendPagination.totalRecords || truckers.length}
               </div>
               <span className="text-gray-700 font-semibold">Total Truckers</span>
             </div>
@@ -2144,7 +2268,7 @@ const handleWorkingAddressFileChange = (idx, file) => {
             </div>
             <div className="flex gap-2">
               <button
-                onClick={fetchTruckers}
+                onClick={() => (isSearchMode ? fetchAllTruckersForSearch() : fetchTruckers(currentPage))}
                 className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition"
               >
                 Retry
@@ -2195,7 +2319,7 @@ const handleWorkingAddressFileChange = (idx, file) => {
             <img
               src={absUrl(selectedTrucker.docUpload)}
               alt="Uploaded Doc"
-              className="rounded-xl shadow-lg max-h-[250px] w/full object-contain border border-blue-100 cursor-pointer hover:scale-105 transition"
+              className="rounded-xl shadow-lg max-h-[250px] w-full object-contain border border-blue-100 cursor-pointer hover:scale-105 transition"
               onClick={() => setPreviewImg(absUrl(selectedTrucker.docUpload))}
             />
 
@@ -2214,6 +2338,20 @@ const handleWorkingAddressFileChange = (idx, file) => {
               {(selectedTrucker.loadRef || selectedTrucker.loadReference) && (
                 <div className="flex items-center gap-2 text-gray-700"><FileText size={16} /> <span className="font-medium">Load Reference:</span> {selectedTrucker.loadRef || selectedTrucker.loadReference}</div>
               )}
+              {(() => {
+                const dv =
+                  selectedTrucker.docsVerified ??
+                  selectedTrucker.documents?.docsVerified ??
+                  selectedTrucker.user?.docsVerified;
+                const d = docsVerifiedDisplay(dv);
+                return (
+                  <div className="flex items-center gap-2 text-gray-700 flex-wrap">
+                    <FileText size={16} />
+                    <span className="font-medium">Docs verified:</span>
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${d.className}`}>{d.label}</span>
+                  </div>
+                );
+              })()}
               <div className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold mt-2 ${statusColor(selectedTrucker.status)}`}>
                 {selectedTrucker.status === 'approved' && <CheckCircle size={14} />}
                 {selectedTrucker.status === 'rejected' && <XCircle size={14} />}
@@ -2315,13 +2453,13 @@ const handleWorkingAddressFileChange = (idx, file) => {
           {totalPages > 1 && currentTruckers.length > 0 && (
             <div className="flex justify-between items-center mt-6 bg-white rounded-2xl border border-gray-200 p-4">
               <div className="text-sm text-gray-600">
-                Showing {startIndex + 1} to {Math.min(endIndex, filteredTruckers.length)} of {filteredTruckers.length} truckers
+                Showing {startIndex + 1} to {Math.min(endIndex, isSearchMode ? filteredTruckers.length : (backendPagination.totalRecords || filteredTruckers.length))} of {isSearchMode ? filteredTruckers.length : (backendPagination.totalRecords || filteredTruckers.length)} truckers
                 {searchTerm && ` (searching)`}
               </div>
               <div className="flex gap-1 items-center">
                 <button
                   onClick={() => handlePageChange(currentPage - 1)}
-                  disabled={currentPage === 1}
+                  disabled={isSearchMode ? currentPage === 1 : !backendPagination.hasPrevPage}
                   className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
                 >
                   <ChevronLeft size={18} />
@@ -2351,7 +2489,7 @@ const handleWorkingAddressFileChange = (idx, file) => {
                 </div>
                 <button
                   onClick={() => handlePageChange(currentPage + 1)}
-                  disabled={currentPage === totalPages}
+                  disabled={isSearchMode ? currentPage === totalPages : !backendPagination.hasNextPage}
                   className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
                 >
                   <span>Next</span>
@@ -2476,6 +2614,26 @@ const handleWorkingAddressFileChange = (idx, file) => {
                       </div>
                     </div>
                   )}
+                  {(() => {
+                    const dv =
+                      selectedTrucker.docsVerified ??
+                      selectedTrucker.documents?.docsVerified ??
+                      selectedTrucker.user?.docsVerified;
+                    const d = docsVerifiedDisplay(dv);
+                    return (
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-teal-100 rounded-full flex items-center justify-center">
+                          <CheckCircle className="text-teal-700" size={16} />
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">Docs verified</p>
+                          <p className="font-semibold">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${d.className}`}>{d.label}</span>
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })()}
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
                       <Truck className="text-orange-600" size={16} />
@@ -2697,32 +2855,45 @@ const handleWorkingAddressFileChange = (idx, file) => {
       )}
 
       {showAddTruckerForm && (
-        <div 
-          className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center"
+        <div
+          className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4"
+          onClick={() => setShowAddTruckerForm(false)}
         >
+          <style>{`
+            .hide-scrollbar::-webkit-scrollbar { display: none; }
+            .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+          `}</style>
           <div
-            className="relative w-full max-w-3xl rounded-2xl shadow-2xl overflow-auto max-h-[90vh] p-4 bg-gradient-to-br from-blue-200 via-white to-blue-300"
-            style={{
-              scrollbarWidth: 'none', // Firefox
-              msOverflowStyle: 'none', // IE 10+
-            }}
+            className="bg-white rounded-3xl max-w-6xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar shadow-2xl"
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             onClick={(e) => e.stopPropagation()}
           >
-            <style>{`
-              .hide-scrollbar::-webkit-scrollbar { display: none; }
-            `}</style>
-            <button
-              onClick={() => setShowAddTruckerForm(false)}
-              className="absolute top-3 right-3 text-gray-500 hover:text-black text-2xl"
-            >
-              ×
-            </button>
-            <div className="hide-scrollbar">
-              <AddTruckerForm onSuccess={() => {
-                setShowAddTruckerForm(false);
-                fetchTruckers(); // Refresh table after successful addition
-              }} />
+            <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                    <PlusCircle className="text-white" size={24} />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold">Add Trucker</h2>
+                    <p className="text-blue-100">Register a new trucker and upload documents</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowAddTruckerForm(false)}
+                  className="text-white hover:text-gray-200 text-2xl font-bold leading-none"
+                >
+                  ×
+                </button>
+              </div>
             </div>
+            <AddTruckerForm
+              onSuccess={() => {
+                setShowAddTruckerForm(false);
+                fetchTruckers(currentPage);
+              }}
+            />
           </div>
         </div>
       )}
