@@ -107,7 +107,8 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Assign Agent"
     ],
     "Communication": [
-      "Import Carrier Emails"
+      "Import Carrier Emails",
+      
     ],
     "Documents": [
       "Shipper",
@@ -295,7 +296,8 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Daily Task",
       "Tracking",
       "Load By Location",
-      "Import Carrier Emails"
+      "Import Carrier Emails",
+      "News Letter"
     ],
     "Company Management": [
       "Sub Company"
@@ -454,6 +456,7 @@ const menuItems = [
   { name: "Call Data", icon: BlueCall, whiteIcon: WhiteCall, path: "/call-dashboard" },
   { name: "Chat", icon: ChatBlue, whiteIcon: ChatWhite, path: "/Chat" },
   { name: "Email", icon: BlueInbox, whiteIcon: WhiteInbox, path: "/Inbox" },
+  { name: "News Letter", icon: BlueInbox, whiteIcon: WhiteInbox, path: "/newsletter" },
   { name: "Import Carrier Emails", icon: BlueInbox, whiteIcon: WhiteInbox, path: "/ImportCarrierEmails" },
   { name: "Revenue & Satatistics", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/AgentRevenueStatistics" },
   { name: "Employee Hygiene", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/EmployeeHygiene" },
@@ -553,6 +556,9 @@ const menuItems = [
   
   
 ];
+
+// Keep sidebar module data stable across route remounts in SPA navigation.
+let sidebarStateCache = null;
 
 /** Keep "Tracker" at top level: immediately after Dashboard (outer sidebar, not inside dept flyout). */
 const BREAK_TYPES = ["Bio break", "Smoking/Tea Break", "Dinner break"]; // POST /api/v1/break/start { breakType }
@@ -818,22 +824,38 @@ const categorizeReportsByDepartment = (reportItems) => {
 const Sidebar = () => {
   const [isExpanded, setIsExpanded] = useState(true);
   const sidebarRef = useRef(null);
-  const [filteredMenuItems, setFilteredMenuItems] = useState([]);
-  const [departmentMenuItems, setDepartmentMenuItems] = useState([]);
-  const [departmentCategories, setDepartmentCategories] = useState({});
-  const [allDepartmentCategories, setAllDepartmentCategories] = useState({}); // For universal_user: stores all dept categories
+  const [filteredMenuItems, setFilteredMenuItems] = useState(
+    () => sidebarStateCache?.filteredMenuItems || []
+  );
+  const [departmentMenuItems, setDepartmentMenuItems] = useState(
+    () => sidebarStateCache?.departmentMenuItems || []
+  );
+  const [departmentCategories, setDepartmentCategories] = useState(
+    () => sidebarStateCache?.departmentCategories || {}
+  );
+  const [allDepartmentCategories, setAllDepartmentCategories] = useState(
+    () => sidebarStateCache?.allDepartmentCategories || {}
+  ); // For universal_user: stores all dept categories
   const [isDepartmentMenuOpen, setIsDepartmentMenuOpen] = useState(false);
   const [openCategories, setOpenCategories] = useState({});
   const [isReportsOpen, setIsReportsOpen] = useState(true);
   const [reportMenuItems, setReportMenuItems] = useState([]);
   const [reportCategories, setReportCategories] = useState({}); // Department-wise report categories
   const [showLogoutModal, setShowLogoutModal] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [userDepartment, setUserDepartment] = useState(null);
+  const [loading, setLoading] = useState(() => !sidebarStateCache);
+  const [userDepartment, setUserDepartment] = useState(
+    () => sidebarStateCache?.userDepartment ?? null
+  );
   /** HR / profile department (not overwritten when universal user gets first flyout dept) — for Tracker label */
-  const [userAssignedDepartment, setUserAssignedDepartment] = useState("");
-  const [userRole, setUserRole] = useState(null); // Store user role
-  const [isVPL100, setIsVPL100] = useState(false); // Track if user is VPL100
+  const [userAssignedDepartment, setUserAssignedDepartment] = useState(
+    () => sidebarStateCache?.userAssignedDepartment || ""
+  );
+  const [userRole, setUserRole] = useState(
+    () => sidebarStateCache?.userRole ?? null
+  ); // Store user role
+  const [isVPL100, setIsVPL100] = useState(
+    () => sidebarStateCache?.isVPL100 || false
+  ); // Track if user is VPL100
   
   // Time Display and Break/Meeting states
   const [loginTime, setLoginTime] = useState(() => {
@@ -1237,6 +1259,12 @@ const Sidebar = () => {
 
   useEffect(() => {
     const fetchModules = async () => {
+      // Reuse cached sidebar state to avoid loader flicker on route switches.
+      if (sidebarStateCache) {
+        setLoading(false);
+        return;
+      }
+
       // Declare variables in outer scope so they're accessible in catch block
       let department = "";
       let role = "";
@@ -1773,6 +1801,35 @@ const Sidebar = () => {
 
     fetchModules();
   }, []);
+
+  // Persist computed sidebar state in memory for fast remounts.
+  useEffect(() => {
+    if (loading) return;
+    sidebarStateCache = {
+      filteredMenuItems,
+      departmentMenuItems,
+      departmentCategories,
+      allDepartmentCategories,
+      reportMenuItems,
+      reportCategories,
+      userDepartment,
+      userAssignedDepartment,
+      userRole,
+      isVPL100,
+    };
+  }, [
+    loading,
+    filteredMenuItems,
+    departmentMenuItems,
+    departmentCategories,
+    allDepartmentCategories,
+    reportMenuItems,
+    reportCategories,
+    userDepartment,
+    userAssignedDepartment,
+    userRole,
+    isVPL100,
+  ]);
 
   // Auto-expand department dropdown and relevant category if current location matches any department module path
   useEffect(() => {

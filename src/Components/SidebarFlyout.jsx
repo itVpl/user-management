@@ -29,6 +29,7 @@ const getMenuIcon = (itemName) => {
     'Chats': MessageCircle,
     'Chat': MessageCircle,
     'Email': Mail,
+    'News Letter': Mail,
     'Daily Follow-Up': Clock,
     'Add Customer': UserPlus,
     'Add Customer Report': BarChart3,

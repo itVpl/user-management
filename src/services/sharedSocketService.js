@@ -35,6 +35,21 @@ class SharedSocketService {
       return this.socket;
     }
 
+    // If same user socket already exists (connecting/reconnecting), reuse it.
+    // Prevent creating parallel sockets for the same empId.
+    if (this.socket && this.empId === empId) {
+      console.log('ℹ️ Reusing existing shared socket instance for same user');
+      if (!this.socket.connected) {
+        try {
+          this.socket.connect();
+        } catch (error) {
+          console.warn('⚠️ Failed to reconnect existing shared socket:', error);
+        }
+      }
+      this.isInitialized = true;
+      return this.socket;
+    }
+
     // If empId changed, disconnect old socket
     if (this.socket && this.empId !== empId) {
       console.log('🔄 Employee ID changed, reinitializing socket...');

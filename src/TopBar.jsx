@@ -654,7 +654,7 @@ const Topbar = () => {
                 </React.Fragment>
               );
             })
-          ) : userDepartment !== 'hr' && userDepartment !== 'finance' ? (
+          ) : userDepartment && userDepartment !== 'hr' && userDepartment !== 'finance' ? (
             // Fallback static icons when no checklist data (not for HR)
             <>
               <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
