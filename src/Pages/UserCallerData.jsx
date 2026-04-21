@@ -401,7 +401,7 @@ const UserCallDashboard = () => {
   const itemsPerPage = 12;
 
   /** Row highlight when opening Call Data from dashboard (?focusCallId=) */
-  const [highlightCallId, setHighlightCallId] = useState(null);
+  const [highlightCallId, setHighlightCallId] = useState(null);    
 
   // Notification state
   const [notification, setNotification] = useState({ show: false, message: '', type: 'info' });
