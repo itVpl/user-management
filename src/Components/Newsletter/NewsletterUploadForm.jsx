@@ -21,48 +21,20 @@ const NewsletterUploadForm = ({
       <h3 className="text-sm font-semibold text-gray-800">Upload Newsletter</h3>
 
       <div>
-        <label className="mb-1 block text-xs font-medium text-gray-600">Title *</label>
-        <input
-          value={formData.title}
-          onChange={(e) => onFieldChange("title", e.target.value)}
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
-          placeholder="Monthly newsletter title"
-        />
-      </div>
-
-      <div>
-        <label className="mb-1 block text-xs font-medium text-gray-600">Description</label>
-        <input
-          value={formData.description}
-          onChange={(e) => onFieldChange("description", e.target.value)}
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
-          placeholder="Optional description"
-        />
-      </div>
-
-      <div>
-        <label className="mb-1 block text-xs font-medium text-gray-600">Subject</label>
-        <input
-          value={formData.subject}
-          onChange={(e) => onFieldChange("subject", e.target.value)}
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
-          placeholder="Email subject"
-        />
-      </div>
-
-      <div>
         <label className="mb-1 block text-xs font-medium text-gray-600">Message</label>
         <textarea
           value={formData.message}
           onChange={(e) => onFieldChange("message", e.target.value)}
           rows={4}
           className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
-          placeholder="Enter newsletter message"
+          placeholder="Enter newsletter message (required for text-only, without a file)"
         />
       </div>
 
       <div>
-        <label className="mb-1 block text-xs font-medium text-gray-600">Upload file *</label>
+        <label className="mb-1 block text-xs font-medium text-gray-600">
+          Upload file <span className="text-gray-400">(optional if you send text only)</span>
+        </label>
         <input
           type="file"
           onChange={(e) => onFileChange(e.target.files?.[0] || null)}
@@ -71,6 +43,11 @@ const NewsletterUploadForm = ({
         {file ? <p className="mt-1 text-xs text-gray-500">Selected: {file.name}</p> : null}
         {maxSizeMb > 0 ? <p className="mt-1 text-xs text-gray-500">Max size: {maxSizeMb}MB</p> : null}
         {allowed ? <p className="mt-1 text-xs text-gray-500">Allowed: {allowed}</p> : null}
+        {!file ? (
+          <p className="mt-1 text-xs text-amber-800/90">
+            Text-only: omit the file when your message is non-empty (API rule).
+          </p>
+        ) : null}
       </div>
 
       {errors.upload ? <p className="text-xs text-red-600">{errors.upload}</p> : null}
@@ -80,7 +57,7 @@ const NewsletterUploadForm = ({
         disabled={isUploading}
         className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {isUploading ? "Uploading..." : "Upload Newsletter"}
+        {isUploading ? "Saving..." : file ? "Upload Newsletter" : "Save text newsletter"}
       </button>
     </form>
   );

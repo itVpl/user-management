@@ -41,6 +41,13 @@ export const newsletterService = {
     });
   },
 
+  getWhatsappConfig() {
+    return request("/meta/whatsapp-config", {
+      method: "GET",
+      headers: authHeaders(),
+    });
+  },
+
   uploadNewsletter(formData) {
     return request("/upload", {
       method: "POST",
@@ -88,6 +95,19 @@ export const newsletterService = {
 
     const suffix = query.toString() ? `/history?${query.toString()}` : "/history";
     return request(suffix, {
+      method: "GET",
+      headers: authHeaders(),
+    });
+  },
+
+  /** Poll Twilio for final delivery state (WhatsApp rows may include `response.messageSid`). */
+  getTwilioMessageStatus(messageSid) {
+    const trimmed = String(messageSid || "").trim();
+    if (!trimmed) {
+      return Promise.reject(new Error("Missing Twilio message SID."));
+    }
+    const sid = encodeURIComponent(trimmed);
+    return request(`/twilio-message/${sid}/status`, {
       method: "GET",
       headers: authHeaders(),
     });

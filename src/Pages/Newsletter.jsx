@@ -33,15 +33,15 @@ const getSendTypeFromChannels = (channels) => {
   return "";
 };
 
+/** Text-only upload (no file): API requires non-empty message (description removed from UI). */
+const hasTextOnlyBody = (fd) => Boolean(fd?.message?.trim());
+
 const Newsletter = () => {
   const [uploadConfig, setUploadConfig] = useState({
     maxFileSizeBytes: FALLBACK_MAX_SIZE,
     allowedExtensions: FALLBACK_ALLOWED_EXTENSIONS,
   });
   const [formData, setFormData] = useState({
-    title: "",
-    description: "",
-    subject: "",
     message: "",
   });
   const [file, setFile] = useState(null);
@@ -71,11 +71,78 @@ const Newsletter = () => {
     channels: "",
     send: "",
   });
+  const [whatsappMeta, setWhatsappMeta] = useState(null);
+  const [sendWhatsappSandbox, setSendWhatsappSandbox] = useState({
+    active: false,
+    notice: "",
+  });
+
+  const messageTrim = () => (formData.message || "").trim();
+
+  const deriveNewsletterTitle = () => {
+    const msg = messageTrim();
+    if (msg) {
+      return msg.length > 120 ? `${msg.slice(0, 117)}...` : msg;
+    }
+    if (file?.name) {
+      const base = file.name.replace(/\.[^.]+$/, "");
+      const t = base.trim().slice(0, 120);
+      return t || "Newsletter";
+    }
+    return "Newsletter";
+  };
+
+  const deriveEmailSubject = () => {
+    const msg = messageTrim();
+    if (msg) {
+      return msg.length > 200 ? `${msg.slice(0, 197)}...` : msg;
+    }
+    return deriveNewsletterTitle();
+  };
+
+  /** Allow send without prior upload when there is an attachment or message to create/save a draft. */
+  const textOnlySendReady = useMemo(() => {
+    if (newsletterId) return false;
+    return Boolean(file) || hasTextOnlyBody(formData);
+  }, [newsletterId, file, formData.message]);
 
   const sendPanelDisabled = useMemo(
-    () => !newsletterId || selectedRecipientIds.length === 0 || !sendType,
-    [newsletterId, selectedRecipientIds.length, sendType]
+    () =>
+      (!newsletterId && !textOnlySendReady) ||
+      selectedRecipientIds.length === 0 ||
+      !sendType,
+    [newsletterId, textOnlySendReady, selectedRecipientIds.length, sendType]
   );
+
+  const whatsappChannelSelected = useMemo(
+    () => Boolean(channels.whatsapp || sendType === "whatsapp" || sendType === "both"),
+    [channels.whatsapp, sendType]
+  );
+
+  const whatsappSandboxBanner = useMemo(() => {
+    const sandboxOn =
+      Boolean(whatsappMeta?.whatsappSandboxMode) || Boolean(sendWhatsappSandbox.active);
+    if (!sandboxOn || !whatsappChannelSelected) {
+      return { show: false, notice: "", senderDisplay: "" };
+    }
+    const noticeFromSend =
+      sendWhatsappSandbox.active && sendWhatsappSandbox.notice?.trim()
+        ? sendWhatsappSandbox.notice.trim()
+        : "";
+    const noticeFromMeta = whatsappMeta?.whatsappSandboxNotice?.trim() || "";
+    const notice =
+      noticeFromSend ||
+      noticeFromMeta ||
+      "Twilio Sandbox is active. Recipients may need to join the sandbox before receiving WhatsApp messages.";
+    const senderDisplay =
+      whatsappMeta?.whatsappSenderDisplay || senderDetails?.whatsappSenderNumber || "";
+    return { show: true, notice, senderDisplay };
+  }, [
+    whatsappMeta,
+    sendWhatsappSandbox,
+    whatsappChannelSelected,
+    senderDetails?.whatsappSenderNumber,
+  ]);
 
   useEffect(() => {
     const loadConfig = async () => {
@@ -94,6 +161,19 @@ const Newsletter = () => {
       }
     };
     loadConfig();
+  }, []);
+
+  useEffect(() => {
+    const loadWhatsappMeta = async () => {
+      try {
+        const data = await newsletterService.getWhatsappConfig();
+        setWhatsappMeta(data);
+      } catch (error) {
+        console.error("Failed to load WhatsApp newsletter config:", error);
+        setWhatsappMeta(null);
+      }
+    };
+    loadWhatsappMeta();
   }, []);
 
   useEffect(() => {
@@ -158,58 +238,73 @@ const Newsletter = () => {
     setFormData((prev) => ({ ...prev, [key]: value }));
   };
 
+  const buildUploadFormData = (includeFile) => {
+    const body = new FormData();
+    if (includeFile && file) {
+      body.append("file", file);
+    }
+    body.append("title", deriveNewsletterTitle());
+    const msg = messageTrim();
+    if (msg) {
+      body.append("message", msg);
+    }
+    const subject = deriveEmailSubject();
+    if (subject) {
+      body.append("subject", subject);
+    }
+    body.append("sendType", sendType || "both");
+    return body;
+  };
+
+  const persistNewsletterFromResponse = (data, uploadedId) => {
+    if (uploadedId) {
+      setNewsletterId(uploadedId);
+      setHistoryFilters((prev) => ({ ...prev, newsletterId: uploadedId || prev.newsletterId }));
+    }
+    setNewsletters((prev) => {
+      const created = data?.newsletter;
+      if (!created?._id) return prev;
+      return [created, ...prev.filter((item) => item?._id !== created._id)];
+    });
+  };
+
   const handleUpload = async (event) => {
     event.preventDefault();
     setErrors((prev) => ({ ...prev, upload: "" }));
 
-    if (!formData.title.trim()) {
-      setErrors((prev) => ({ ...prev, upload: "Title is required." }));
-      return;
-    }
+    if (file) {
+      const allowedExtensions = uploadConfig.allowedExtensions || FALLBACK_ALLOWED_EXTENSIONS;
+      const maxSize = uploadConfig.maxFileSizeBytes || FALLBACK_MAX_SIZE;
+      const dotIndex = file.name.lastIndexOf(".");
+      const extension = dotIndex >= 0 ? file.name.substring(dotIndex).toLowerCase() : "";
 
-    if (!file) {
-      setErrors((prev) => ({ ...prev, upload: "File is required for upload." }));
-      return;
-    }
+      if (!allowedExtensions.map((item) => item.toLowerCase()).includes(extension)) {
+        setErrors((prev) => ({
+          ...prev,
+          upload: `Invalid file type. Allowed: ${allowedExtensions.join(", ")}`,
+        }));
+        return;
+      }
 
-    const allowedExtensions = uploadConfig.allowedExtensions || FALLBACK_ALLOWED_EXTENSIONS;
-    const maxSize = uploadConfig.maxFileSizeBytes || FALLBACK_MAX_SIZE;
-    const dotIndex = file.name.lastIndexOf(".");
-    const extension = dotIndex >= 0 ? file.name.substring(dotIndex).toLowerCase() : "";
-
-    if (!allowedExtensions.map((item) => item.toLowerCase()).includes(extension)) {
+      if (file.size > maxSize) {
+        setErrors((prev) => ({ ...prev, upload: "File exceeds max size limit (50MB)." }));
+        return;
+      }
+    } else if (!hasTextOnlyBody(formData)) {
       setErrors((prev) => ({
         ...prev,
-        upload: `Invalid file type. Allowed: ${allowedExtensions.join(", ")}`,
+        upload: "Without a file, enter a message (text-only newsletter).",
       }));
-      return;
-    }
-
-    if (file.size > maxSize) {
-      setErrors((prev) => ({ ...prev, upload: "File exceeds max size limit (50MB)." }));
       return;
     }
 
     try {
       setIsUploading(true);
-      const body = new FormData();
-      body.append("file", file);
-      body.append("title", formData.title.trim());
-      if (formData.description) body.append("description", formData.description);
-      if (formData.subject) body.append("subject", formData.subject);
-      if (formData.message) body.append("message", formData.message);
-      body.append("sendType", sendType || "both");
-
+      const body = buildUploadFormData(Boolean(file));
       const data = await newsletterService.uploadNewsletter(body);
-      const uploadedId = data?.newsletter?._id;
-      setNewsletterId(uploadedId || "");
-      setHistoryFilters((prev) => ({ ...prev, newsletterId: uploadedId || prev.newsletterId }));
-      setNewsletters((prev) => {
-        const created = data?.newsletter;
-        if (!created?._id) return prev;
-        return [created, ...prev.filter((item) => item?._id !== created._id)];
-      });
-      toast.success("Newsletter uploaded successfully.");
+      const uploadedId = data?.newsletter?._id || "";
+      persistNewsletterFromResponse(data, uploadedId);
+      toast.success(file ? "Newsletter uploaded successfully." : "Text newsletter saved.");
     } catch (error) {
       setErrors((prev) => ({ ...prev, upload: error.message || "Upload failed." }));
     } finally {
@@ -228,8 +323,11 @@ const Newsletter = () => {
       setErrors((prev) => ({ ...prev, channels: "At least one channel is required." }));
       return;
     }
-    if (!newsletterId) {
-      setErrors((prev) => ({ ...prev, send: "Upload newsletter before sending." }));
+    if (!newsletterId && !file && !hasTextOnlyBody(formData)) {
+      setErrors((prev) => ({
+        ...prev,
+        send: "Add a file or enter a message before sending.",
+      }));
       return;
     }
 
@@ -262,17 +360,34 @@ const Newsletter = () => {
 
     try {
       setIsSending(true);
+      let activeNewsletterId = newsletterId;
+      if (!activeNewsletterId) {
+        const body = buildUploadFormData(Boolean(file));
+        const uploadData = await newsletterService.uploadNewsletter(body);
+        activeNewsletterId = uploadData?.newsletter?._id || "";
+        if (!activeNewsletterId) {
+          throw new Error(
+            "Could not save newsletter without a file. Your server may require an attachment—try uploading a file."
+          );
+        }
+        persistNewsletterFromResponse(uploadData, activeNewsletterId);
+      }
+
       const payload = {
-        newsletterId,
+        newsletterId: activeNewsletterId,
         recipientIds: validRecipients.map((person) => person?._id || person?.userId || person?.id),
         sendType,
-        subject: formData.subject || formData.title,
-        message: formData.message || "",
+        subject: deriveEmailSubject(),
+        message: messageTrim(),
       };
       const data = await newsletterService.sendNewsletter(payload);
       setSendSummary(data?.summary || null);
       setSendResults(Array.isArray(data?.results) ? data.results : []);
       setSenderDetails(data?.senderDetails || null);
+      setSendWhatsappSandbox({
+        active: Boolean(data?.whatsappSandboxActive),
+        notice: data?.whatsappSandboxNotice || "",
+      });
       setLastSendPayload(payload);
       toast.success("Newsletter send process completed.");
       setHistoryPage(1);
@@ -306,6 +421,10 @@ const Newsletter = () => {
       setSendSummary(data?.summary || null);
       setSendResults(Array.isArray(data?.results) ? data.results : []);
       setSenderDetails(data?.senderDetails || null);
+      setSendWhatsappSandbox({
+        active: Boolean(data?.whatsappSandboxActive),
+        notice: data?.whatsappSandboxNotice || "",
+      });
       toast.success("Retried failed deliveries.");
       setHistoryPage(1);
     } catch (error) {
@@ -320,12 +439,17 @@ const Newsletter = () => {
     setSendType(nextSendType || getSendTypeFromChannels(nextChannels));
   };
 
+  const handleTwilioStatusFetch = async (messageSid) =>
+    newsletterService.getTwilioMessageStatus(messageSid);
+
   return (
     <div className="space-y-5 pb-6">
       <div className="rounded-xl bg-white p-4 shadow-sm">
         <h2 className="text-lg font-semibold text-gray-800">Newsletter</h2>
         <p className="text-sm text-gray-500">
-          Upload file, select AgentCustomer recipients, choose Email/WhatsApp, send in bulk, and track delivery history.
+          Upload an attachment (optional for text-only), pick AgentCustomer recipients, choose Email or WhatsApp, send
+          in bulk, and review delivery history. WhatsApp rows can check Twilio live status when a message SID is
+          returned.
         </p>
       </div>
 
@@ -346,12 +470,14 @@ const Newsletter = () => {
           <NewsletterSendPanel
             onSend={handleSend}
             onRetryFailed={handleRetryFailed}
+            onTwilioStatusFetch={handleTwilioStatusFetch}
             isSending={isSending}
             canSend={!sendPanelDisabled}
             summary={sendSummary}
             results={sendResults}
             senderDetails={senderDetails}
             error={errors.send}
+            whatsappSandboxBanner={whatsappSandboxBanner}
           />
         </div>
       </div>
