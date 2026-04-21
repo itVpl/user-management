@@ -142,9 +142,19 @@ const SearchableDropdown = ({
 
 const AllCustomer = () => {
   const navigate = useNavigate();
+  const tableScrollRef = React.useRef(null);
+  const tableScrollLoggedRef = React.useRef(false);
+  const tableScrollInteractionLoggedRef = React.useRef(false);
+  const [scrollIndicator, setScrollIndicator] = useState({
+    visible: false,
+    thumbHeight: 0,
+    thumbTop: 0
+  });
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [sourceTypeFilter, setSourceTypeFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
@@ -171,22 +181,120 @@ const AllCustomer = () => {
   const [loadingRequests, setLoadingRequests] = useState(false);
 
   useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm.trim());
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  useEffect(() => {
     fetchCustomers();
+  }, [sourceTypeFilter, debouncedSearch]);
+
+  useEffect(() => {
     fetchSalesUsers();
     fetchAllEmployees();
   }, []);
+
+  useEffect(() => {
+    if (loading) return;
+    const el = tableScrollRef.current;
+    if (!el) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/01cd5b68-26c1-4c97-920c-7e9e5a0b39b0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'pre-fix',hypothesisId:'H3',location:'AllCustomer.jsx:table-scroll-area',message:'Table scroll container missing after load',data:{loading,customersLength:customers.length,currentPage},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      return;
+    }
+
+    if (tableScrollLoggedRef.current) return;
+    tableScrollLoggedRef.current = true;
+    const computed = window.getComputedStyle(el);
+
+    let hideScrollbarRuleFound = false;
+    let hideScrollbarRuleCount = 0;
+    for (const sheet of Array.from(document.styleSheets)) {
+      let rules;
+      try {
+        rules = sheet.cssRules;
+      } catch {
+        continue;
+      }
+      for (const rule of Array.from(rules || [])) {
+        const cssText = String(rule.cssText || '');
+        if (cssText.includes('*::-webkit-scrollbar') && cssText.includes('display: none')) {
+          hideScrollbarRuleFound = true;
+          hideScrollbarRuleCount += 1;
+        }
+      }
+    }
+
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/01cd5b68-26c1-4c97-920c-7e9e5a0b39b0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'pre-fix',hypothesisId:'H1',location:'AllCustomer.jsx:table-scroll-area',message:'Scrollbar rule and overflow diagnostics',data:{overflowY:computed.overflowY,overflowX:computed.overflowX,clientHeight:el.clientHeight,scrollHeight:el.scrollHeight,clientWidth:el.clientWidth,scrollWidth:el.scrollWidth,hasVerticalOverflow:el.scrollHeight>el.clientHeight,hasHorizontalOverflow:el.scrollWidth>el.clientWidth,hideScrollbarRuleFound,hideScrollbarRuleCount},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+  }, [loading, customers.length, currentPage]);
+
+  const updateTableScrollIndicator = React.useCallback(() => {
+    const el = tableScrollRef.current;
+    if (!el) {
+      setScrollIndicator({ visible: false, thumbHeight: 0, thumbTop: 0 });
+      return;
+    }
+
+    const maxScrollableY = el.scrollHeight - el.clientHeight;
+    if (maxScrollableY <= 0) {
+      setScrollIndicator({ visible: false, thumbHeight: 0, thumbTop: 0 });
+      return;
+    }
+
+    const minThumbHeight = 36;
+    const proportionalThumbHeight = (el.clientHeight / el.scrollHeight) * el.clientHeight;
+    const thumbHeight = Math.max(minThumbHeight, Math.min(el.clientHeight, proportionalThumbHeight));
+    const maxThumbTop = Math.max(0, el.clientHeight - thumbHeight);
+    const thumbTop = maxThumbTop * (el.scrollTop / maxScrollableY);
+
+    setScrollIndicator({
+      visible: true,
+      thumbHeight,
+      thumbTop
+    });
+  }, []);
+
+  useEffect(() => {
+    updateTableScrollIndicator();
+    window.addEventListener('resize', updateTableScrollIndicator);
+    return () => window.removeEventListener('resize', updateTableScrollIndicator);
+  }, [updateTableScrollIndicator, loading, customers.length, currentPage, searchTerm, sourceTypeFilter, selectedCreatedBy]);
+
+  const handleTableScrollDebug = (e) => {
+    updateTableScrollIndicator();
+    if (tableScrollInteractionLoggedRef.current) return;
+    tableScrollInteractionLoggedRef.current = true;
+    const el = e.currentTarget;
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/01cd5b68-26c1-4c97-920c-7e9e5a0b39b0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'pre-fix',hypothesisId:'H2',location:'AllCustomer.jsx:onScroll',message:'User scrolled customer table container',data:{scrollTop:el.scrollTop,maxScrollableY:Math.max(0,el.scrollHeight-el.clientHeight),scrollLeft:el.scrollLeft,maxScrollableX:Math.max(0,el.scrollWidth-el.clientWidth)},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+  };
 
   const fetchCustomers = async () => {
     setLoading(true);
     try {
       const response = await axios.get(
-        `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/shippers`,
-        { headers: API_CONFIG.getAuthHeaders() }
+        `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/department/customers`,
+        {
+          headers: API_CONFIG.getAuthHeaders(),
+          params: {
+            sourceType: sourceTypeFilter,
+            ...(debouncedSearch ? { search: debouncedSearch } : {})
+          }
+        }
       );
       
       if (response.data && response.data.success) {
-        // Sort by createdAt descending (newest first)
-        const sortedData = response.data.data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        // Sort by latest addedAt/createdAt first
+        const apiCustomers = response.data.customers || [];
+        const sortedData = apiCustomers.sort(
+          (a, b) => new Date(b.addedAt || b.createdAt || 0) - new Date(a.addedAt || a.createdAt || 0)
+        );
         setCustomers(sortedData);
       } else {
         console.error('Failed to fetch customers: API success false');
@@ -197,6 +305,29 @@ const AllCustomer = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const getCustomerId = (customer) => customer?._id || customer?.userId || customer?.id;
+
+  const isCustomerNew = (customer) => {
+    if (!customer) return false;
+    if (customer.isNew === true) return true;
+    if (customer.isNew === false) return false;
+
+    const customerId = getCustomerId(customer);
+    if (!customerId) return false;
+
+    // Fallback for report API rows that don't send `isNew`:
+    // treat recent entries as new until manually viewed locally.
+    const viewedKey = `allCustomerViewed:${customerId}`;
+    if (localStorage.getItem(viewedKey) === '1') return false;
+
+    const addedAt = customer.addedAt || customer.createdAt;
+    if (!addedAt) return false;
+
+    const ageMs = Date.now() - new Date(addedAt).getTime();
+    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+    return ageMs >= 0 && ageMs <= sevenDaysMs;
   };
 
   // Mark customer as viewed
@@ -232,8 +363,20 @@ const AllCustomer = () => {
 
   // Handle customer name click to mark as viewed
   const handleCustomerNameClick = async (customer) => {
-    // Mark as viewed if it's a new customer
-    if (customer.isNew === true) {
+    const customerId = getCustomerId(customer);
+    if (!customerId || !isCustomerNew(customer)) return;
+
+    localStorage.setItem(`allCustomerViewed:${customerId}`, '1');
+    setCustomers(prev =>
+      prev.map(c =>
+        String(getCustomerId(c)) === String(customerId)
+          ? { ...c, isNew: false }
+          : c
+      )
+    );
+
+    // Keep old backend behavior where `_id`-based endpoint exists.
+    if (customer?._id) {
       await markCustomerAsViewed(customer._id);
     }
   };
@@ -501,12 +644,17 @@ const AllCustomer = () => {
 
   const filteredCustomers = customers.filter((customer) => {
     // Search filter
-    const matchesSearch = !searchTerm || 
-      customer.compName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customer.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customer.mc_dot_no?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customer.addedBy?.employeeName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customer.addedBy?.empId?.toLowerCase().includes(searchTerm.toLowerCase());
+    const q = searchTerm.toLowerCase();
+    const matchesSearch = !q ||
+      customer.compName?.toLowerCase().includes(q) ||
+      customer.companyName?.toLowerCase().includes(q) ||
+      customer.personName?.toLowerCase().includes(q) ||
+      customer.email?.toLowerCase().includes(q) ||
+      customer.phoneNo?.toLowerCase().includes(q) ||
+      customer.mc_dot_no?.toLowerCase().includes(q) ||
+      customer.eventName?.toLowerCase().includes(q) ||
+      customer.addedBy?.employeeName?.toLowerCase().includes(q) ||
+      customer.addedBy?.empId?.toLowerCase().includes(q);
     
     // Filter by Created By (match by empId)
     const matchesCreatedBy = !selectedCreatedBy || 
@@ -692,6 +840,19 @@ const AllCustomer = () => {
   </div>
 </div>
 
+          {/* Customer Type Filter */}
+          <div className="relative flex-1 w-full">
+            <select
+              value={sourceTypeFilter}
+              onChange={(e) => setSourceTypeFilter(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-white text-gray-700 font-medium hover:border-gray-300 transition-colors text-base focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+            >
+              <option value="all">All Sources</option>
+              <option value="regular">Regular Only</option>
+              <option value="upcoming_event">Event Based</option>
+            </select>
+          </div>
+
           {/* Created By Filter */}
           <div className="relative flex-1 w-full">
             <SearchableDropdown
@@ -734,8 +895,9 @@ const AllCustomer = () => {
         </div>
       ) : (
         <>
-        <div className="bg-white rounded-2xl border border-gray-200 p-4 overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="bg-white rounded-2xl border border-gray-200 p-4 overflow-visible">
+        <div className="relative">
+        <div ref={tableScrollRef} onScroll={handleTableScrollDebug} className="table-scroll-area scrollbar-show do-report-table-outer-scroll overflow-x-auto overflow-y-scroll max-h-[62vh] pr-3">
           <table className="min-w-full text-sm text-gray-700 border-separate border-spacing-y-3">
             <thead>
               <tr className="bg-gray-50">
@@ -769,13 +931,13 @@ const AllCustomer = () => {
                       <div className="flex items-center gap-2">
                           <div className="flex items-center gap-2 flex-1">
                               <div 
-                                className={`font-medium text-gray-700 ${customer.isNew === true ? 'cursor-pointer hover:text-blue-600 transition-colors' : ''}`}
+                                className={`font-medium text-gray-700 ${isCustomerNew(customer) ? 'cursor-pointer hover:text-blue-600 transition-colors' : ''}`}
                                 onClick={() => handleCustomerNameClick(customer)}
-                                title={customer.isNew === true ? 'Click to mark as viewed' : ''}
+                                title={isCustomerNew(customer) ? 'Click to mark as viewed' : ''}
                               >
                                 {customer.compName}
                               </div>
-                              {customer.isNew === true && (
+                              {isCustomerNew(customer) && (
                                 <span 
                                   className="new-indicator" 
                                   title="New customer - Click name to view"
@@ -860,6 +1022,18 @@ const AllCustomer = () => {
               )}
             </tbody>
           </table>
+        </div>
+        {scrollIndicator.visible && (
+          <div className="pointer-events-none absolute top-0 right-0 h-full w-2 rounded-full bg-slate-200/90">
+            <div
+              className="absolute left-0 right-0 rounded-full bg-slate-500"
+              style={{
+                height: `${scrollIndicator.thumbHeight}px`,
+                transform: `translateY(${scrollIndicator.thumbTop}px)`
+              }}
+            />
+          </div>
+        )}
         </div>
         </div>
 
@@ -1508,6 +1682,41 @@ const AllCustomer = () => {
         .new-indicator:hover {
           transform: scale(1.2);
           transition: all 0.3s ease;
+        }
+
+        .table-scroll-area {
+          scrollbar-width: thin !important;
+          scrollbar-color: #94a3b8 #f1f5f9 !important;
+          scrollbar-gutter: stable both-edges;
+          -ms-overflow-style: auto !important;
+        }
+
+        .table-scroll-area::-webkit-scrollbar {
+          -webkit-appearance: none !important;
+          display: block !important;
+          width: 12px !important;
+          height: 10px !important;
+        }
+
+        .table-scroll-area::-webkit-scrollbar:vertical {
+          width: 12px !important;
+          display: block !important;
+        }
+
+        .table-scroll-area::-webkit-scrollbar-track {
+          background: #f1f5f9 !important;
+          border-radius: 999px !important;
+        }
+
+        .table-scroll-area::-webkit-scrollbar-thumb {
+          background: #94a3b8 !important;
+          border-radius: 999px !important;
+          border: 2px solid #f1f5f9 !important;
+          min-height: 36px !important;
+        }
+
+        .table-scroll-area::-webkit-scrollbar-thumb:hover {
+          background: #64748b !important;
         }
       `}</style>
     </div>
