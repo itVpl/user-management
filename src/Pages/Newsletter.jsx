@@ -442,30 +442,52 @@ const Newsletter = () => {
   const handleTwilioStatusFetch = async (messageSid) =>
     newsletterService.getTwilioMessageStatus(messageSid);
 
+  const recipientLookup = useMemo(() => {
+    const map = {};
+    (recipients || []).forEach((r) => {
+      const id = r?._id || r?.userId || r?.id;
+      if (!id) return;
+      const name = (r.personName || "Unnamed").trim();
+      const contact = [r.email, r.whatsappNumber, r.contactNumber].find((x) => x && String(x).trim());
+      const label = contact ? `${name} · ${String(contact).trim()}` : name;
+      map[id] = label;
+      map[String(id)] = label;
+    });
+    return map;
+  }, [recipients]);
+
   return (
-    <div className="space-y-5 pb-6">
-      <div className="rounded-xl bg-white p-4 shadow-sm">
-        <h2 className="text-lg font-semibold text-gray-800">Newsletter</h2>
-        <p className="text-sm text-gray-500">
-          Upload an attachment (optional for text-only), pick AgentCustomer recipients, choose Email or WhatsApp, send
-          in bulk, and review delivery history. WhatsApp rows can check Twilio live status when a message SID is
-          returned.
-        </p>
-      </div>
+    <div className="min-h-[60vh] bg-gradient-to-b from-slate-100/90 via-slate-50/80 to-slate-100/60 pb-12 pt-1">
+      <div className="mx-auto max-w-6xl space-y-8 px-3 sm:px-4 lg:px-6">
+        <header className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white px-5 py-6 shadow-sm ring-1 ring-slate-900/5 sm:px-8 sm:py-7">
+          <p className="text-xs font-semibold uppercase tracking-wider text-blue-600">Bulk messaging</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Newsletter</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600">
+            Compose your message, choose who receives it, pick Email and/or WhatsApp, then send. Delivery history and
+            Twilio status (when the API returns a valid message SID) stay on this page.
+          </p>
+        </header>
 
-      <div className="grid gap-5 lg:grid-cols-2">
-        <NewsletterUploadForm
-          formData={formData}
-          file={file}
-          uploadConfig={uploadConfig}
-          onFieldChange={handleFieldChange}
-          onFileChange={setFile}
-          onUpload={handleUpload}
-          isUploading={isUploading}
-          errors={errors}
-        />
+        <section className="grid gap-6 lg:grid-cols-2">
+          <NewsletterUploadForm
+            formData={formData}
+            file={file}
+            uploadConfig={uploadConfig}
+            onFieldChange={handleFieldChange}
+            onFileChange={setFile}
+            onUpload={handleUpload}
+            isUploading={isUploading}
+            errors={errors}
+          />
+          <RecipientSelector
+            recipients={recipients}
+            selectedRecipientIds={selectedRecipientIds}
+            onChange={setSelectedRecipientIds}
+            error={errors.recipients}
+          />
+        </section>
 
-        <div className="space-y-5">
+        <section className="grid gap-6 lg:grid-cols-2">
           <SendChannelSelector channels={channels} onChange={handleChannelChange} error={errors.channels} />
           <NewsletterSendPanel
             onSend={handleSend}
@@ -478,29 +500,23 @@ const Newsletter = () => {
             senderDetails={senderDetails}
             error={errors.send}
             whatsappSandboxBanner={whatsappSandboxBanner}
+            recipientLookup={recipientLookup}
           />
-        </div>
+        </section>
+
+        <NewsletterHistoryTable
+          rows={historyRows}
+          newsletters={newsletters}
+          filters={historyFilters}
+          onFilterChange={(key, value) => {
+            setHistoryFilters((prev) => ({ ...prev, [key]: value }));
+            setHistoryPage(1);
+          }}
+          page={historyPage}
+          onPageChange={setHistoryPage}
+          totalPages={historyTotalPages}
+        />
       </div>
-
-      <RecipientSelector
-        recipients={recipients}
-        selectedRecipientIds={selectedRecipientIds}
-        onChange={setSelectedRecipientIds}
-        error={errors.recipients}
-      />
-
-      <NewsletterHistoryTable
-        rows={historyRows}
-        newsletters={newsletters}
-        filters={historyFilters}
-        onFilterChange={(key, value) => {
-          setHistoryFilters((prev) => ({ ...prev, [key]: value }));
-          setHistoryPage(1);
-        }}
-        page={historyPage}
-        onPageChange={setHistoryPage}
-        totalPages={historyTotalPages}
-      />
     </div>
   );
 };
