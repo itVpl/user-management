@@ -95,6 +95,7 @@ const DOAndSchedulingReport = lazy(() => import("./Components/Report/DOAndSchedu
 const FinalChargesReport = lazy(() => import("./Components/Report/FinalChargesReport.jsx"));
 const CallDataReports = lazy(() => import("./Components/Report/CallDataReports.jsx"));
 const AddCustomerReport = lazy(() => import("./Components/Report/AddCustomerReport.jsx"));
+const AddAgentReport = lazy(() => import("./Components/Report/AddAgentReport.jsx"));
 const Invoices = lazy(() => import("./Components/Accountant/Invoices.jsx"));
 const CheckInvoice = lazy(() => import("./Components/Sales/CheckInvoice.jsx"));
 const AssignLoad = lazy(() => import("./Components/CMT-Manager/AssignLoad.jsx"));
@@ -741,6 +742,7 @@ function App() {
           <Route path="final-charges-report" element={<FinalChargesReport />} />
           <Route path="analytics/call-data-reports" element={<CallDataReports />} />
           <Route path="add-customer-report" element={<AddCustomerReport />} />
+          <Route path="reports/add-agent" element={<AddAgentReport />} />
           <Route path="Invoices" element={<Invoices />} />
           <Route path="CheckInvoice" element={<CheckInvoice />} />
           <Route path="AssignLoad" element={<AssignLoad />} />

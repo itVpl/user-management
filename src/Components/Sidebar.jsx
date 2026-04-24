@@ -199,7 +199,8 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Call Records (Id)",
       "Report Analysis",
       "DO Report",
-      "Add Customer Report"
+      "Add Customer Report",
+      "Add Agent Report"
     ],
     "System Administration": [
       "Manage Module"
@@ -349,7 +350,8 @@ const DEPARTMENT_MODULE_CATEGORIES = {
     "Sales Reports": [
       "Sales Dept Report",
       "Follow Up Report",
-      "DO Report"
+      "DO Report",
+      "Add Agent Report"
     ],
     "Common Reports": [
       "Call Data Reports",
@@ -596,6 +598,7 @@ const menuItems = [
   { name: "Assigned Rate Request", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/assigned-rate-request" },
   { name: "Call Data Reports", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/analytics/call-data-reports" },
   { name: "Add Customer Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/add-customer-report" },
+  { name: "Add Agent Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/reports/add-agent" },
   { name: "Sub Company", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/SubCompanies" },
   { name: "Docs Upload", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/docs-upload" },
   
@@ -747,6 +750,7 @@ const REPORT_NAMES = [
   "Call Data",
   "Call Data Reports",
   "Add Customer Report",
+  "Add Agent Report",
   "Call Records (Id)",
   "Report Analysis",
   "Emp Login Report",
@@ -781,7 +785,8 @@ const DEPARTMENT_REPORTS = {
     "Sales Dept Report",
     "Follow Up Report",
     "DO Report",
-    "Add Customer Report"
+    "Add Customer Report",
+    "Add Agent Report"
   ],
   "Finance": [
     "Receivable Report",
@@ -806,6 +811,7 @@ const DEPARTMENT_REPORTS = {
   "Common": [
     "Call Data Reports",
     "Add Customer Report",
+    // "Add Agent Report",
     "Call Data",
     "Call Records (Id)",
     "Report Analysis",
