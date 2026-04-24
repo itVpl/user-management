@@ -313,8 +313,7 @@ function SalesDayDispositionModal({ customers, dispositions, loading, onClose, o
                       <td className="px-3 py-2">{c.city || '—'}</td>
                       <td className="px-3 py-2">{c.state || '—'}</td>
                       <td className="px-3 py-2 align-top">
-                        {/* Disposition field UI commented out as requested */}
-                        {/* <div className="flex flex-col gap-1 max-w-[200px]">
+                        <div className="flex flex-col gap-1 max-w-[200px]">
                           <select
                             className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm w-full"
                             value={c.salesDayDisposition || ''}
@@ -338,8 +337,7 @@ function SalesDayDispositionModal({ customers, dispositions, loading, onClose, o
                               setDispositionNotesById((m) => ({ ...m, [c._id]: e.target.value }))
                             }
                           />
-                        </div> */}
-                        <span className="text-xs text-gray-500">—</span>
+                        </div>
                       </td>
                       <td className="px-3 py-2">
                         <button
