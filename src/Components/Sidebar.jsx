@@ -34,12 +34,54 @@ import {
   ArrowDown,
   ArrowUp
 } from "../assets/image";
+import { Mail } from "lucide-react";
 import logo from "../assets/logo_vpower.png";
 import LogoutConfirmationModal from "./LogoutConfirmationModal";
 import { useUnreadCount } from "../contexts/UnreadCountContext";
 import sharedSocketService from "../services/sharedSocketService";
 import API_CONFIG from "../config/api";
 import SidebarFlyout from "./SidebarFlyout";
+
+const GMAIL_POPUP_REF_KEY = "__gmailDesktopWindowRef";
+const GMAIL_ACCOUNTS_STORAGE_KEY = "__gmailDesktopAccounts";
+const ACCOUNT_LABELS_STORAGE_KEY = "__gmailDesktopAccountLabels";
+const DEFAULT_GMAIL_ACCOUNTS = [
+  { id: "acc1", label: "Account 1", mailU: 0 },
+  { id: "acc2", label: "Account 2", mailU: 1 },
+  { id: "acc3", label: "Account 3", mailU: 2 },
+];
+
+const normalizeGmailAccounts = (raw) => {
+  if (!Array.isArray(raw) || raw.length === 0) return DEFAULT_GMAIL_ACCOUNTS;
+  return raw.map((item, index) => {
+    const label = typeof item?.label === "string" ? item.label.trim() : "";
+    const mailU = Number.isInteger(item?.mailU) ? item.mailU : index;
+    return {
+      id: item?.id || `acc${index + 1}`,
+      label: label || `Account ${index + 1}`,
+      mailU,
+    };
+  });
+};
+
+const loadGmailAccounts = () => {
+  try {
+    const savedAccounts = localStorage.getItem(GMAIL_ACCOUNTS_STORAGE_KEY);
+    if (savedAccounts) {
+      return normalizeGmailAccounts(JSON.parse(savedAccounts));
+    }
+    const legacyLabels = JSON.parse(localStorage.getItem(ACCOUNT_LABELS_STORAGE_KEY) || "{}");
+    return DEFAULT_GMAIL_ACCOUNTS.map((slot) => {
+      const label = typeof legacyLabels?.[slot.id] === "string" ? legacyLabels[slot.id].trim() : "";
+      return {
+        ...slot,
+        label: label || slot.label,
+      };
+    });
+  } catch {
+    return DEFAULT_GMAIL_ACCOUNTS;
+  }
+};
 
 // Department-specific Module Categories
 const DEPARTMENT_MODULE_CATEGORIES = {
@@ -817,6 +859,8 @@ const categorizeReportsByDepartment = (reportItems) => {
 
 const Sidebar = () => {
   const [isExpanded, setIsExpanded] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
   const sidebarRef = useRef(null);
   const [filteredMenuItems, setFilteredMenuItems] = useState([]);
   const [departmentMenuItems, setDepartmentMenuItems] = useState([]);
@@ -853,6 +897,9 @@ const Sidebar = () => {
   const [activeBreakType, setActiveBreakType] = useState("");
   /** Countdown for the active break session (HH:MM:SS), not daily quota */
   const [breakSessionSecondsLeft, setBreakSessionSecondsLeft] = useState(null);
+  const [gmailDropdownOpen, setGmailDropdownOpen] = useState(false);
+  const [gmailEditMode, setGmailEditMode] = useState(false);
+  const [gmailAccounts, setGmailAccounts] = useState(() => loadGmailAccounts());
   const breakTickRef = useRef(null);
 
   // Flyout menu states
@@ -862,6 +909,56 @@ const Sidebar = () => {
   
   const location = useLocation();
   const { getTotalUnreadCount, hasUnreadMessages, unreadCounts, groupUnreadCounts } = useUnreadCount();
+  const getGmailWindowName = (accountId) => `gmailDesktopWindow_${accountId}`;
+  const getAccountLabel = (accountId) =>
+    gmailAccounts.find((a) => a.id === accountId)?.label || "Account";
+  const gmailUrlForSlot = (accountId) => {
+    const slot = gmailAccounts.find((a) => a.id === accountId);
+    const u = Number.isInteger(slot?.mailU) ? slot.mailU : 0;
+    return `https://mail.google.com/mail/u/${u}/#inbox`;
+  };
+
+  const handleOpenGmailAccount = (accountId) => {
+    const popupMap = window[GMAIL_POPUP_REF_KEY] || {};
+    const existingPopup = popupMap[accountId];
+    if (existingPopup && !existingPopup.closed) {
+      existingPopup.focus();
+      return;
+    }
+
+    const features = [
+      "popup=yes",
+      "resizable=yes",
+      "scrollbars=yes",
+      "width=1520",
+      "height=720",
+      "left=330",
+      "top=225",
+    ].join(",");
+    const popup = window.open(
+      gmailUrlForSlot(accountId),
+      getGmailWindowName(accountId),
+      features,
+    );
+    if (popup) {
+      if (!window[GMAIL_POPUP_REF_KEY]) window[GMAIL_POPUP_REF_KEY] = {};
+      window[GMAIL_POPUP_REF_KEY][accountId] = popup;
+      popup.focus();
+      setGmailDropdownOpen(false);
+      setGmailEditMode(false);
+    }
+  };
+
+  const saveAccountLabels = (nextLabels) => {
+    const sanitized = normalizeGmailAccounts(nextLabels);
+    setGmailAccounts(sanitized);
+    localStorage.setItem(GMAIL_ACCOUNTS_STORAGE_KEY, JSON.stringify(sanitized));
+    const legacyLabels = sanitized.reduce((acc, slot) => {
+      acc[slot.id] = slot.label;
+      return acc;
+    }, {});
+    localStorage.setItem(ACCOUNT_LABELS_STORAGE_KEY, JSON.stringify(legacyLabels));
+  };
   
   // Helper function for time formatting
   const formatTime = (totalSeconds) => {
@@ -1114,6 +1211,10 @@ const Sidebar = () => {
   });
 
   const toggleSidebar = () => {
+    if (isMobile) {
+      setIsMobileOpen((prev) => !prev);
+      return;
+    }
     try {
       const el = sidebarRef.current;
       const rect = el ? el.getBoundingClientRect() : { left: 48 }; // left-12 ≈ 48px
@@ -1124,6 +1225,12 @@ const Sidebar = () => {
       window.dispatchEvent(new CustomEvent('sidebar-offset-change', { detail: targetOffset }));
     } catch {}
     setIsExpanded((prev) => !prev);
+  };
+
+  const closeMobileSidebar = () => {
+    if (isMobile) {
+      setIsMobileOpen(false);
+    }
   };
 
   const handleLogoutClick = () => {
@@ -1209,6 +1316,13 @@ const Sidebar = () => {
     const update = () => {
       const el = sidebarRef.current;
       if (!el) return;
+      const mobile = window.innerWidth < 1024;
+      setIsMobile(mobile);
+      if (mobile) {
+        document.documentElement.style.setProperty("--sidebar-offset", "0px");
+        window.dispatchEvent(new CustomEvent("sidebar-offset-change", { detail: 0 }));
+        return;
+      }
       const rect = el.getBoundingClientRect();
       const offset = Math.max(0, Math.round(rect.left + rect.width));
       document.documentElement.style.setProperty('--sidebar-offset', `${offset}px`);
@@ -1233,6 +1347,27 @@ const Sidebar = () => {
   // Close flyout when navigating to other pages
   useEffect(() => {
     handleFlyoutClose();
+    closeMobileSidebar();
+    setDropdownOpen(false);
+    setGmailDropdownOpen(false);
+    setGmailEditMode(false);
+
+    if (location.pathname !== "/browser") {
+      const ref = window.__gmailDesktopWindowRef;
+      if (ref && typeof ref === "object") {
+        Object.keys(ref).forEach((key) => {
+          const popup = ref[key];
+          if (popup && typeof popup.close === "function" && !popup.closed) {
+            try {
+              popup.close();
+            } catch {
+              // Ignore popup close errors.
+            }
+          }
+          ref[key] = null;
+        });
+      }
+    }
   }, [location.pathname]);
 
   useEffect(() => {
@@ -1818,8 +1953,13 @@ const Sidebar = () => {
         const saved = localStorage.getItem("themePrefs");
         const parsed = saved ? JSON.parse(saved) : {};
         if (parsed.sidebarActive) setActiveBgColor(parsed.sidebarActive);
+        const savedAccounts = localStorage.getItem(GMAIL_ACCOUNTS_STORAGE_KEY);
+        if (savedAccounts) {
+          setGmailAccounts(normalizeGmailAccounts(JSON.parse(savedAccounts)));
+        }
       } catch {}
     };
+    onStorage();
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
   }, []);
@@ -1846,6 +1986,10 @@ const Sidebar = () => {
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (!e.target.closest("#break-dropdown")) setDropdownOpen(false);
+      if (!e.target.closest("#gmail-dropdown")) {
+        setGmailDropdownOpen(false);
+        setGmailEditMode(false);
+      }
     };
     document.addEventListener("click", handleClickOutside);
     return () => document.removeEventListener("click", handleClickOutside);
@@ -1868,7 +2012,10 @@ const Sidebar = () => {
   // Show loading state
   if (loading) {
     return (
-      <div ref={sidebarRef} className={`fixed top-4 left-20 h-[800px] bg-white border border-gray-300 rounded-xl shadow-lg z-50 flex flex-col justify-between transition-all duration-300 ${isExpanded ? "w-64" : "w-16"}`}>
+      <div
+        ref={sidebarRef}
+        className={`fixed top-2 left-2 md:top-4 md:left-12 h-[calc(100vh-1rem)] md:h-[calc(100vh-2rem)] bg-white border border-gray-300 rounded-xl shadow-lg z-40 flex flex-col justify-between transition-all duration-300 ${isExpanded ? "w-64" : "w-16"}`}
+      >
         <div className="p-4">
           <img src={logo} alt="Logo" className={`${isExpanded ? "w-24 h-10" : "w-23 h-10 mx-auto"}`} />
         </div>
@@ -1881,9 +2028,35 @@ const Sidebar = () => {
 
   return (
     <>
+      {isMobile && (
+        <button
+          type="button"
+          onClick={() => setIsMobileOpen(true)}
+          className="fixed top-4 left-4 z-[60] flex h-10 w-10 items-center justify-center rounded-lg border border-gray-300 bg-white shadow-md lg:hidden"
+          aria-label="Open sidebar"
+        >
+          <svg className="h-5 w-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+      )}
+
+      {isMobile && isMobileOpen && (
+        <button
+          type="button"
+          className="fixed inset-0 z-[54] bg-black/40 lg:hidden"
+          onClick={closeMobileSidebar}
+          aria-label="Close sidebar backdrop"
+        />
+      )}
+
       <div
         ref={sidebarRef}
-        className={`fixed top-4 left-12 h-[886px] bg-white border border-gray-300 rounded-xl shadow-lg z-50 flex flex-col transition-all duration-300 ${isExpanded ? "w-64" : "w-16"}`}
+        className={`fixed z-40 bg-white border border-gray-300 shadow-lg flex flex-col transition-all duration-300 ${
+          isMobile
+            ? `${isMobileOpen ? "translate-x-0" : "-translate-x-full"} top-0 left-0 h-screen w-[280px] rounded-none border-l-0 border-y-0`
+            : `top-2 left-2 md:top-4 md:left-12 h-[calc(100vh-1rem)] md:h-[calc(100vh-2rem)] rounded-xl ${isExpanded ? "w-64" : "w-16"}`
+        }`}
       >
         <div className="flex-none">
           <div className="p-4 relative flex items-center justify-between">
@@ -1892,25 +2065,38 @@ const Sidebar = () => {
               alt="Logo" 
               className={`${isExpanded ? "w-24 h-10" : "w-8 h-8 mx-auto object-contain"}`} 
             />
-            <button 
-              onClick={toggleSidebar} 
-              className="absolute -right-3 top-1/2 transform -translate-y-1/2 bg-white border border-gray-300 rounded-full p-2 shadow-md z-10 hover:bg-gray-50 transition-colors cursor-pointer"
-            >
-              {isExpanded ? (
-                <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            {!isMobile ? (
+              <button
+                onClick={toggleSidebar}
+                className="absolute -right-3 top-1/2 transform -translate-y-1/2 bg-white border border-gray-300 rounded-full p-2 shadow-md z-10 hover:bg-gray-50 transition-colors cursor-pointer"
+              >
+                {isExpanded ? (
+                  <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                )}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={closeMobileSidebar}
+                className="rounded-md border border-gray-300 p-2 text-gray-600 hover:bg-gray-50"
+                aria-label="Close sidebar"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
-              ) : (
-                <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              )}
-            </button>
+              </button>
+            )}
           </div>
         </div>
 
           {/* Scrollable Menu Section */}
-          <div className="overflow-y-auto h-[640px] px-1 pr-2 scrollbar-hide">
+          <div className="flex-1 min-h-0 overflow-y-auto sidebar-scrollbar px-1 pr-2">
             <nav className={`flex flex-col gap-1 text-sm ${isExpanded ? "items-start" : "items-center"}`}>
               {/* VPL100 - Show only Docs Upload */}
               {isVPL100 ? (
@@ -2316,6 +2502,116 @@ const Sidebar = () => {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {!isVPL100 && (
+            <div className="relative mb-1" id="gmail-dropdown">
+              <button
+                type="button"
+                onClick={() => setGmailDropdownOpen((prev) => !prev)}
+                className={`sidebar-item w-full flex items-center gap-3 p-3 text-gray-700 cursor-pointer transition-all ${isExpanded ? "mx-0" : "justify-center"}`}
+              >
+                <Mail className="w-5 h-5 text-red-500" />
+                <span className={`${isExpanded ? "inline" : "hidden"} font-medium flex-1 text-left`}>
+                  Gmail
+                </span>
+                {isExpanded && (
+                  <img
+                    src={gmailDropdownOpen ? ArrowUp : ArrowDown}
+                    alt="Toggle Gmail accounts"
+                    className="w-4 h-4"
+                  />
+                )}
+              </button>
+              {gmailDropdownOpen && isExpanded && (
+                <div className="absolute bottom-full left-0 right-0 mb-2 bg-white rounded-lg shadow-lg py-2 animate-fade-in z-50 border border-gray-200">
+                  <div className="flex items-center justify-between px-3 pb-2 border-b border-gray-100">
+                    <span className="text-xs font-semibold text-gray-500">Gmail Accounts</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (gmailEditMode) {
+                          saveAccountLabels(gmailAccounts);
+                        }
+                        setGmailEditMode((prev) => !prev);
+                      }}
+                      className="text-xs font-medium text-blue-600 hover:text-blue-700"
+                    >
+                      {gmailEditMode ? "Done" : "Edit"}
+                    </button>
+                  </div>
+                  <div className="pt-1">
+                    {gmailAccounts.map((account, index) =>
+                      gmailEditMode ? (
+                        <div key={account.id} className="px-3 py-1.5">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={account.label}
+                              onChange={(e) =>
+                                setGmailAccounts((prev) =>
+                                  prev.map((item) =>
+                                    item.id === account.id
+                                      ? { ...item, label: e.target.value }
+                                      : item,
+                                  ),
+                                )
+                              }
+                              onBlur={() => saveAccountLabels(gmailAccounts)}
+                              className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-700 focus:border-blue-500 focus:outline-none"
+                              placeholder={`Account ${index + 1}`}
+                            />
+                            {gmailAccounts.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  saveAccountLabels(
+                                    gmailAccounts.filter((item) => item.id !== account.id),
+                                  )
+                                }
+                                className="text-xs font-medium text-red-600 hover:text-red-700"
+                                title="Remove account"
+                              >
+                                Remove
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          key={account.id}
+                          type="button"
+                          onClick={() => handleOpenGmailAccount(account.id)}
+                          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        >
+                          {getAccountLabel(account.id)}
+                        </button>
+                      ),
+                    )}
+                    {gmailEditMode && (
+                      <div className="px-3 pt-1">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            saveAccountLabels([
+                              ...gmailAccounts,
+                              {
+                                id: `acc${Date.now()}`,
+                                label: `Account ${gmailAccounts.length + 1}`,
+                                mailU: gmailAccounts.length,
+                              },
+                            ])
+                          }
+                          className="w-full rounded-md border border-dashed border-blue-300 px-2 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50"
+                        >
+                          + Add Account
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

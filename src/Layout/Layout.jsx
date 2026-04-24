@@ -44,8 +44,18 @@ const Layout = () => {
   const [pendingDecisionCount, setPendingDecisionCount] = useState(0);
   const [notificationShown, setNotificationShown] = useState(false);
   const [dinnerLoginPrompt, setDinnerLoginPrompt] = useState(null);
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth < 1024 : false
+  );
   const location = useLocation();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handleResize = () => setIsMobile(window.innerWidth < 1024);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   useEffect(() => {
     const token = sessionStorage.getItem("token") || localStorage.getItem("token");
@@ -268,7 +278,11 @@ const Layout = () => {
       {!isVPL100 && <Topbar />}
       <main
         className={`${isVPL100 ? 'mr-5 pt-4 pr-4 pb-4' : 'mr-5 pt-24 pr-4 pb-4'}`}
-        style={{ marginLeft: 'var(--sidebar-offset, 296px)', paddingLeft: '8px', transition: 'margin-left 250ms ease' }}
+        style={{
+          marginLeft: isMobile ? "0px" : "var(--sidebar-offset, 296px)",
+          paddingLeft: isMobile ? "0px" : "8px",
+          transition: "margin-left 250ms ease",
+        }}
       > 
         <Outlet />
       </main>
