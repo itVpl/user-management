@@ -21,6 +21,18 @@ import {
   selectError
 } from '../../store/slices/truckerReportSlice';
 
+/** Same `documents` keys as TruckerDocuments / API `pendingRequiredDocKeys`. */
+const TRUCKER_DOC_FIELD_ORDER = [
+  { key: 'brokeragePacket', defaultLabel: 'Brokerage packet' },
+  { key: 'carrierPartnerAgreement', defaultLabel: 'Carrier Partner Agreement' },
+  { key: 'w9Form', defaultLabel: 'W-9 form' },
+  { key: 'mcAuthority', defaultLabel: 'MC authority' },
+  { key: 'safetyLetter', defaultLabel: 'Safety letter' },
+  { key: 'bankingInfo', defaultLabel: 'Banking information' },
+  { key: 'inspectionLetter', defaultLabel: 'Inspection letter' },
+  { key: 'insurance', defaultLabel: 'Insurance' },
+];
+
 export default function TruckerReport() {
   const [searchParams] = useSearchParams();
   const dispatch = useAppDispatch();
@@ -248,6 +260,265 @@ export default function TruckerReport() {
     return 'bg-blue-100 text-blue-700';
   };
 
+  /** First defined value wins (includes `null`). Checks camelCase + snake_case + nested user/documents/driver + loose top-level key match. */
+  const docsVerifiedRaw = (trucker) => {
+    if (!trucker || typeof trucker !== 'object') return undefined;
+    const candidates = [
+      trucker.docsVerified,
+      trucker.docs_verified,
+      trucker.documents?.docsVerified,
+      trucker.documents?.docs_verified,
+      trucker.user?.docsVerified,
+      trucker.user?.docs_verified,
+      trucker.driver?.docsVerified,
+      trucker.driver?.docs_verified,
+    ];
+    for (const x of candidates) {
+      if (x !== undefined) return x;
+    }
+    const looseKey = Object.keys(trucker).find(
+      (k) => k.replace(/_/g, '').toLowerCase() === 'docsverified'
+    );
+    if (looseKey !== undefined && trucker[looseKey] !== undefined) {
+      return trucker[looseKey];
+    }
+    return undefined;
+  };
+
+  /** Aligns with TruckerDocuments: boolean, number, or strings like "unverified" / "verified". Only **missing** field → Unverified. */
+  const docsVerifiedBadge = (trucker) => {
+    let v = docsVerifiedRaw(trucker);
+    const unverifiedCls = 'bg-gray-100 text-gray-800 border border-gray-200';
+    if (v === undefined) {
+      return { label: 'Unverified', className: unverifiedCls };
+    }
+    if (v === null || v === '') {
+      return { label: 'Unverified', className: unverifiedCls };
+    }
+    if (typeof v === 'boolean') {
+      return v
+        ? { label: 'Verified', className: 'bg-green-100 text-green-800 border border-green-200' }
+        : { label: 'Unverified', className: unverifiedCls };
+    }
+    if (typeof v === 'number') {
+      if (v === 1) return { label: 'Verified', className: 'bg-green-100 text-green-800 border border-green-200' };
+      if (v === 0) return { label: 'Unverified', className: unverifiedCls };
+      v = String(v);
+    }
+    const s = String(v).trim().toLowerCase();
+    if (!s) return { label: 'Unverified', className: unverifiedCls };
+    const verified = new Set(['true', '1', 'verified', 'yes', 'approved', 'complete', 'completed', 'done']);
+    const unverified = new Set(['false', '0', 'no', 'unverified', 'not_verified', 'not verified', 'rejected', 'denied']);
+    const pending = new Set(['pending', 'in_progress', 'in progress', 'processing', 'submitted', 'review', 'under_review', 'under review']);
+    if (verified.has(s)) return { label: 'Verified', className: 'bg-green-100 text-green-800 border border-green-200' };
+    if (pending.has(s)) {
+      const label = String(v)
+        .replace(/_/g, ' ')
+        .split(/\s+/)
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+        .join(' ');
+      return { label: label || 'Pending', className: 'bg-amber-100 text-amber-900 border border-amber-200' };
+    }
+    if (unverified.has(s)) return { label: 'Unverified', className: unverifiedCls };
+    return {
+      label: String(v).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+      className: 'bg-slate-100 text-slate-700 border border-slate-200',
+    };
+  };
+
+  const isDocsVerifiedUnverified = (trucker) => docsVerifiedBadge(trucker).label === 'Unverified';
+
+  const hasDocFileValue = (...vals) =>
+    vals.some((v) => {
+      if (v == null || v === false) return false;
+      if (typeof v === 'boolean') return v;
+      const t = String(v).trim();
+      return t !== '' && t !== 'null' && t !== 'undefined';
+    });
+
+  const normDocLabel = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+
+  const inferDocKeyFromLabel = (labelText) => {
+    const n = normDocLabel(labelText);
+    if (!n) return null;
+    const scored = TRUCKER_DOC_FIELD_ORDER.map(({ key, defaultLabel }) => {
+      const dn = normDocLabel(defaultLabel);
+      let score = 0;
+      if (n === dn) score = 4;
+      else if (n.includes(dn) || dn.includes(n)) score = 2;
+      else if (n === normDocLabel(key)) score = 1;
+      return { key, score, len: dn.length };
+    }).filter((x) => x.score > 0);
+    scored.sort((a, b) => b.score - a.score || b.len - a.len);
+    return scored[0]?.key ?? null;
+  };
+
+  const hasUploadedForDocKey = (trucker, key) =>
+    hasDocFileValue(trucker?.documents?.[key], trucker?.[`${key}Url`], trucker?.[key]);
+
+  /** Match API label text to uploaded file fields (same shapes as TruckerDocuments). */
+  const isTruckerDocLabelUploaded = (trucker, labelText) => {
+    if (!trucker || typeof trucker !== 'object') return false;
+    const nn = normDocLabel(labelText);
+    if (!nn) return false;
+
+    if (nn.includes('brokerage') || (nn.includes('packet') && !nn.includes('carrier'))) {
+      return hasUploadedForDocKey(trucker, 'brokeragePacket');
+    }
+    if (nn.includes('carrier') || nn.includes('partner')) {
+      return hasUploadedForDocKey(trucker, 'carrierPartnerAgreement');
+    }
+    if (nn.includes('w9') || nn.includes('w9form')) {
+      return hasUploadedForDocKey(trucker, 'w9Form');
+    }
+    if ((nn.includes('mc') && nn.includes('author')) || nn === 'mcauthority') {
+      return hasUploadedForDocKey(trucker, 'mcAuthority');
+    }
+    if (nn.includes('safety')) {
+      return hasUploadedForDocKey(trucker, 'safetyLetter');
+    }
+    if (nn.includes('bank')) {
+      return hasUploadedForDocKey(trucker, 'bankingInfo');
+    }
+    if (nn.includes('inspect')) {
+      return hasUploadedForDocKey(trucker, 'inspectionLetter');
+    }
+    if (nn.includes('insur')) {
+      return hasUploadedForDocKey(trucker, 'insurance');
+    }
+    return false;
+  };
+
+  const getPendingRequiredDocArray = (trucker) => {
+    if (!trucker || typeof trucker !== 'object') return [];
+    const candidates = [
+      trucker.pendingRequiredDocLabels,
+      trucker.pending_required_doc_labels,
+      trucker.documents?.pendingRequiredDocLabels,
+      trucker.documents?.pending_required_doc_labels,
+      trucker.user?.pendingRequiredDocLabels,
+      trucker.user?.pending_required_doc_labels,
+      trucker.driver?.pendingRequiredDocLabels,
+      trucker.driver?.pending_required_doc_labels,
+    ];
+    for (const x of candidates) {
+      if (x !== undefined) return Array.isArray(x) ? x : [];
+    }
+    const looseKey = Object.keys(trucker).find(
+      (k) => k.replace(/_/g, '').toLowerCase() === 'pendingrequireddoclabels'
+    );
+    if (looseKey !== undefined && trucker[looseKey] !== undefined && Array.isArray(trucker[looseKey])) {
+      return trucker[looseKey];
+    }
+    return [];
+  };
+
+  const getPendingRequiredDocKeysArray = (trucker) => {
+    if (!trucker || typeof trucker !== 'object') return [];
+    const candidates = [
+      trucker.pendingRequiredDocKeys,
+      trucker.pending_required_doc_keys,
+      trucker.documents?.pendingRequiredDocKeys,
+      trucker.documents?.pending_required_doc_keys,
+      trucker.user?.pendingRequiredDocKeys,
+      trucker.user?.pending_required_doc_keys,
+      trucker.driver?.pendingRequiredDocKeys,
+      trucker.driver?.pending_required_doc_keys,
+    ];
+    for (const x of candidates) {
+      if (x !== undefined) {
+        return Array.isArray(x) ? x.map((k) => String(k || '').trim()).filter(Boolean) : [];
+      }
+    }
+    const looseKey = Object.keys(trucker).find(
+      (k) => k.replace(/_/g, '').toLowerCase() === 'pendingrequireddockeys'
+    );
+    if (looseKey !== undefined && trucker[looseKey] !== undefined && Array.isArray(trucker[looseKey])) {
+      return trucker[looseKey].map((k) => String(k || '').trim()).filter(Boolean);
+    }
+    return [];
+  };
+
+  /**
+   * Rows = union(pendingRequiredDocKeys, any doc key that has a file in `documents` / root URLs).
+   * Label = parallel pendingRequiredDocLabels[i] when key matches pendingKeys[i], else default.
+   * Uploaded = real file on that key (so brokerage shows green even if not in pending arrays).
+   */
+  const getPendingRequiredDocDisplayRows = (trucker) => {
+    const knownKeySet = new Set(TRUCKER_DOC_FIELD_ORDER.map((c) => c.key));
+    const pendingKeys = getPendingRequiredDocKeysArray(trucker).filter((k) => knownKeySet.has(k));
+
+    const rawLabelArr = getPendingRequiredDocArray(trucker);
+    const pendingLabels = rawLabelArr
+      .map((e) => {
+        if (e != null && typeof e === 'object' && !Array.isArray(e)) {
+          return String(e.label ?? e.name ?? e.title ?? e.docLabel ?? e.doc ?? '').trim();
+        }
+        return String(e ?? '').trim();
+      })
+      .filter(Boolean);
+
+    const keysToShow = new Set();
+    pendingKeys.forEach((k) => keysToShow.add(k));
+    TRUCKER_DOC_FIELD_ORDER.forEach(({ key }) => {
+      if (hasUploadedForDocKey(trucker, key)) keysToShow.add(key);
+    });
+
+    if (pendingKeys.length === 0 && pendingLabels.length > 0) {
+      pendingLabels.forEach((lbl) => {
+        const inferred = inferDocKeyFromLabel(lbl);
+        if (inferred) keysToShow.add(inferred);
+      });
+      TRUCKER_DOC_FIELD_ORDER.forEach(({ key }) => {
+        if (hasUploadedForDocKey(trucker, key)) keysToShow.add(key);
+      });
+    }
+
+    const labelForKey = (key) => {
+      const cfg = TRUCKER_DOC_FIELD_ORDER.find((c) => c.key === key);
+      const def = cfg?.defaultLabel ?? key;
+      const idx = pendingKeys.indexOf(key);
+      if (idx >= 0 && pendingLabels[idx]) return pendingLabels[idx];
+      return def;
+    };
+
+    if (keysToShow.size > 0) {
+      return TRUCKER_DOC_FIELD_ORDER.filter(({ key }) => keysToShow.has(key)).map(({ key }) => ({
+        label: labelForKey(key),
+        uploaded: hasUploadedForDocKey(trucker, key),
+      }));
+    }
+
+    const uploadedStatusFromEntry = (entry) => {
+      if (!entry || typeof entry !== 'object') return null;
+      if (entry.uploaded === true || entry.isUploaded === true || entry.is_uploaded === true || entry.hasFile === true) {
+        return true;
+      }
+      if (entry.uploaded === false || entry.isUploaded === false) return false;
+      const st = String(entry.status ?? entry.state ?? '').trim().toLowerCase();
+      if (['uploaded', 'complete', 'completed', 'done', 'present', 'ok'].includes(st)) return true;
+      if (['missing', 'pending', 'required', 'not_uploaded', 'not uploaded'].includes(st)) return false;
+      return null;
+    };
+
+    return rawLabelArr
+      .map((entry) => {
+        if (entry != null && typeof entry === 'object' && !Array.isArray(entry)) {
+          const label = String(
+            entry.label ?? entry.name ?? entry.title ?? entry.docLabel ?? entry.doc ?? ''
+          ).trim();
+          if (!label) return null;
+          const fromApi = uploadedStatusFromEntry(entry);
+          const uploaded = fromApi !== null ? fromApi : isTruckerDocLabelUploaded(trucker, label);
+          return { label, uploaded };
+        }
+        const label = String(entry ?? '').trim();
+        if (!label) return null;
+        return { label, uploaded: isTruckerDocLabelUploaded(trucker, label) };
+      })
+      .filter(Boolean);
+  };
+
   const handleDocumentPreview = (documentUrl, documentName) => {
     setSelectedDocument({ url: documentUrl, name: documentName });
   };
@@ -263,12 +534,24 @@ export default function TruckerReport() {
       return;
     }
 
-    const headers = ["Company Name", "MC/DOT No", "Email", "Phone", "City", "State", "Status", "Created Date", "Added By"];
+    const headers = [
+      'Company Name',
+      'MC/DOT No',
+      'Email',
+      'Phone',
+      'City',
+      'State',
+      'Status',
+      'Docs verified',
+      'Pending required docs',
+      'Created Date',
+      'Added By',
+    ];
     const createdStr = (t) => {
       const d = t?.createdAt ?? t?.created_at;
       return d ? new Date(d).toLocaleDateString() : 'N/A';
     };
-    const rows = dataToExport.map(trucker => [
+    const rows = dataToExport.map((trucker) => [
       `"${trucker.compName || 'N/A'}"`,
       `"${trucker.mc_dot_no || 'N/A'}"`,
       `"${trucker.email || 'N/A'}"`,
@@ -276,8 +559,15 @@ export default function TruckerReport() {
       `"${trucker.city || 'N/A'}"`,
       `"${trucker.state || 'N/A'}"`,
       `"${trucker.status || 'N/A'}"`,
+      `"${docsVerifiedBadge(trucker).label}"`,
+      `"${(isDocsVerifiedUnverified(trucker)
+        ? getPendingRequiredDocDisplayRows(trucker)
+            .map((r) => (r.uploaded ? `${r.label} [uploaded]` : r.label))
+            .join('; ')
+        : ''
+      ).replace(/"/g, '""')}"`,
       `"${createdStr(trucker)}"`,
-      `"${trucker.addedBy?.employeeName || 'System'}"`
+      `"${trucker.addedBy?.employeeName || 'System'}"`,
     ]);
 
     let csvContent = [
@@ -706,11 +996,18 @@ export default function TruckerReport() {
                   <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Email</th>
                   <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Phone</th>
                   <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Status</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base min-w-[140px]">Docs verified</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base min-w-[200px]">Pending required docs</th>
                   <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Created</th>
                 </tr>
               </thead>
               <tbody>
-                {currentTruckers.map((trucker) => (
+                {currentTruckers.map((trucker) => {
+                  const dvBadge = docsVerifiedBadge(trucker);
+                  const dvRaw = docsVerifiedRaw(trucker);
+                  const pendingDocRows = getPendingRequiredDocDisplayRows(trucker);
+                  const showPendingDocs = isDocsVerifiedUnverified(trucker) && pendingDocRows.length > 0;
+                  return (
                   <tr key={trucker.userId} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                     <td className="py-4 px-4">
                       <span className="text-sm text-gray-600 font-medium">{trucker.userId?.slice(-6) || 'N/A'}</span>
@@ -742,6 +1039,38 @@ export default function TruckerReport() {
                           trucker.status || 'Pending'}
                       </span>
                     </td>
+                    <td className="py-4 px-4 align-top">
+                      <span
+                        className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${dvBadge.className}`}
+                        title={dvRaw != null ? String(dvRaw) : 'unverified'}
+                      >
+                        {dvBadge.label}
+                      </span>
+                    </td>
+                    <td className="py-4 px-4 align-top text-sm text-gray-700">
+                      {showPendingDocs ? (
+                        <ul className="space-y-1 list-none max-w-md">
+                          {pendingDocRows.map((row, idx) => (
+                            <li
+                              key={`${trucker.userId}-pd-${idx}`}
+                              className={`flex gap-2 text-xs leading-snug items-start ${
+                                row.uploaded ? 'text-green-700 font-medium' : 'text-red-700 font-medium'
+                              }`}
+                            >
+                              <span
+                                className={row.uploaded ? 'text-green-600 shrink-0 mt-0.5' : 'text-red-500 shrink-0 mt-0.5'}
+                                aria-hidden
+                              >
+                                •
+                              </span>
+                              <span>{row.label}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <span className="text-xs text-gray-400">—</span>
+                      )}
+                    </td>
                     <td className="py-4 px-4">
                       <div>
                         <p className="text-sm text-gray-800">{new Date(trucker.createdAt).toLocaleDateString()}</p>
@@ -749,7 +1078,8 @@ export default function TruckerReport() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           )}

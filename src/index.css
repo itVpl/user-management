@@ -136,6 +136,33 @@ body::-webkit-scrollbar {
   background: rgba(0, 0, 0, 0.35) !important;
 }
 
+/* Sidebar specific scrollbar: slimmer and cleaner */
+.sidebar-scrollbar {
+  -ms-overflow-style: auto !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(59, 130, 246, 0.55) rgba(226, 232, 240, 0.45) !important;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar {
+  display: block !important;
+  width: 6px !important;
+  height: 6px !important;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-track {
+  background: rgba(226, 232, 240, 0.45) !important;
+  border-radius: 9999px !important;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.65), rgba(37, 99, 235, 0.75)) !important;
+  border-radius: 9999px !important;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(37, 99, 235, 0.85), rgba(29, 78, 216, 0.9)) !important;
+}
+
 /*
  * Visible horizontal scroll for wide data tables (beats global * scrollbar hiding).
  * Use class "do-report-scroll-x" on the overflow-x container.

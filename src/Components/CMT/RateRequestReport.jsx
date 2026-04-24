@@ -169,6 +169,68 @@ const fullLoadId = (value, fallback = "N/A") => {
   return String(value);
 };
 
+/** Load reference from API (camelCase / snake_case / nested). */
+const getLoadRef = (load) =>
+  load?.loadRef ??
+  load?.loadReference ??
+  load?.load_ref ??
+  "";
+
+const getTruckersLinkedByLoadRef = (load) => {
+  const v =
+    load?.truckersLinkedByLoadRef ??
+    load?.truckers_linked_by_load_ref;
+  return Array.isArray(v) ? v : [];
+};
+
+const renderTruckerLinkedItem = (t, index) => {
+  if (t == null) return null;
+  if (typeof t === "string" || typeof t === "number") {
+    return (
+      <div
+        key={`tl-${index}`}
+        className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-gray-800"
+      >
+        {String(t)}
+      </div>
+    );
+  }
+  if (typeof t === "object") {
+    const title =
+      t.compName ||
+      t.name ||
+      t.companyName ||
+      t.email ||
+      t._id ||
+      t.userId ||
+      `Trucker ${index + 1}`;
+    return (
+      <div
+        key={t._id || t.userId || `tl-${index}`}
+        className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-gray-800 space-y-1"
+      >
+        <p className="font-semibold text-gray-900">{title}</p>
+        {t.email && (
+          <p className="text-gray-600">
+            <span className="text-gray-500">Email:</span> {t.email}
+          </p>
+        )}
+        {t.mc_dot_no && (
+          <p className="text-gray-600">
+            <span className="text-gray-500">MC/DOT:</span> {t.mc_dot_no}
+          </p>
+        )}
+        {t.phoneNo && (
+          <p className="text-gray-600">
+            <span className="text-gray-500">Phone:</span> {t.phoneNo}
+          </p>
+        )}
+      </div>
+    );
+  }
+  return null;
+};
+
 const normalizeIsoOffset = (str) =>
   typeof str === "string"
     ? str.replace(/([+-]\d{2})(\d{2})$/, "$1:$2")
@@ -964,6 +1026,9 @@ const RateRequestReport = () => {
                     S.NO
                   </th>
                   <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                    LOAD REF
+                  </th>
+                  <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
                     ORIGIN
                   </th>
                   <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
@@ -992,7 +1057,7 @@ const RateRequestReport = () => {
               <tbody>
                 {currentLoads.length === 0 ? (
                   <tr>
-                    <td colSpan="9" className="px-6 py-12 text-center">
+                    <td colSpan="10" className="px-6 py-12 text-center">
                       <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                       <p className="text-gray-500 text-lg">
                         {filters.userId || filters.loadType
@@ -1009,12 +1074,17 @@ const RateRequestReport = () => {
                 ) : (
                   currentLoads.map((load, index) => (
                     <tr
-                      key={load.loadId}
+                      key={load._id || load.loadId || getLoadRef(load) || index}
                       className="bg-white hover:bg-gray-100 transition-colors"
                     >
                       <td className="px-5 py-3 border-y border-gray-200 first:rounded-l-xl first:border-l first:border-gray-200">
                         <span className="font-medium text-gray-700">
                           {index + 1}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3 border-y border-gray-200">
+                        <span className="font-medium text-gray-700 break-all max-w-[160px] inline-block">
+                          {getLoadRef(load) || "N/A"}
                         </span>
                       </td>
                       <td className="px-5 py-3 border-y border-gray-200">
@@ -1262,9 +1332,9 @@ const RateRequestReport = () => {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <p className="text-sm text-gray-600">Load ID</p>
-                    <p className="font-medium text-gray-800">
-                      {selectedLoad.loadId || "N/A"}
+                    <p className="text-sm text-gray-600">Load Ref</p>
+                    <p className="font-medium text-gray-800 break-all">
+                      {getLoadRef(selectedLoad) || "N/A"}
                     </p>
                   </div>
                   <div>
@@ -1331,6 +1401,32 @@ const RateRequestReport = () => {
                     </p>
                   </div>
                 </div>
+              </div>
+
+              {/* Truckers linked by load ref */}
+              <div className="bg-gradient-to-br from-slate-50 to-indigo-50 rounded-2xl p-6 border border-slate-100">
+                <div className="flex items-center gap-2 mb-4">
+                  <Truck className="text-indigo-600" size={20} />
+                  <h3 className="text-lg font-bold text-gray-800">
+                    Truckers linked by load ref
+                  </h3>
+                  {getTruckersLinkedByLoadRef(selectedLoad).length > 0 && (
+                    <span className="bg-indigo-100 text-indigo-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
+                      {getTruckersLinkedByLoadRef(selectedLoad).length}
+                    </span>
+                  )}
+                </div>
+                {getTruckersLinkedByLoadRef(selectedLoad).length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {getTruckersLinkedByLoadRef(selectedLoad).map((t, idx) =>
+                      renderTruckerLinkedItem(t, idx),
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-600 bg-white/80 rounded-lg border border-slate-200 px-4 py-3">
+                    No truckers linked for this load ref.
+                  </p>
+                )}
               </div>
 
               {/* Origin & Destination */}

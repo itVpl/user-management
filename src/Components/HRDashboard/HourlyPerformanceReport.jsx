@@ -4,7 +4,7 @@ import { toast } from 'react-toastify';
 import * as XLSX from 'xlsx';
 import {
   getHourlyCheckinReport,
-  getHourlyCheckinReportForEmployee,
+  getHourlyCheckinById,
 } from '../../services/hourlyCheckinReportService';
 import API_CONFIG from '../../config/api';
 import {
@@ -19,7 +19,6 @@ import {
   Download,
   BarChart3,
   Eye,
-  X,
   Paperclip,
 } from 'lucide-react';
 
@@ -123,6 +122,9 @@ const EXCLUDED_DETAIL_MODAL_KEYS = new Set([
   'employeeName',
   'employee_name',
   'department',
+  /** CMT hourly payload; not shown in View per product request */
+  'noOfCalls',
+  'no_of_calls',
 ]);
 
 /** Keys that may hold one path, comma-separated paths, or an array */
@@ -378,6 +380,14 @@ function formatCellForColumn(val, colKey) {
 /** Human-readable column title for table / Excel */
 function labelFromKey(k) {
   if (!k) return '';
+  if (k === '_cmtAssignReassignCount') return 'Assign / Reassign Count';
+  if (k === '_cmtAssignReassignRefs') return 'Assign / Reassign Refs';
+  if (k === '_salesNoOfCalls') return 'Sales — No. of calls';
+  if (k === '_salesLoadPostedCount') return 'Sales — Load posted (count)';
+  if (k === '_salesLoadPostedRefs') return 'Sales — Load posted (refs)';
+  if (k === '_salesDeliveryOrderCount') return 'Sales — Delivery order (count)';
+  if (k === '_salesDeliveryOrderRefs') return 'Sales — Delivery order (refs)';
+  if (k === '_salesCustomerAdded') return 'Sales — Customers added';
   const spaced = k.replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2');
   return spaced.replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -418,6 +428,96 @@ function sortRowsByHourBucket(rowsIn) {
   });
 }
 
+/** CMT metrics on a check-in row (same shape as hourly check-in payload). */
+function getCmtMetrics(row) {
+  const m = row?.metrics?.cmt ?? row?.metrics?.CMT ?? row?.cmtMetrics;
+  return m && typeof m === 'object' ? m : null;
+}
+
+function getNoOfLoadAssignOrReassign(row) {
+  const cmt = getCmtMetrics(row);
+  const block =
+    cmt?.noOfLoadAssignOrReassign ?? cmt?.no_of_load_assign_or_reassign ?? null;
+  if (!block || typeof block !== 'object') return null;
+  const count =
+    typeof block.count === 'number' ? block.count : Number(block.count) || 0;
+  const refs = Array.isArray(block.refs) ? block.refs : [];
+  return { count, refs };
+}
+
+function getDepartmentFromRow(row) {
+  if (!row || typeof row !== 'object') return '';
+  const d = row.department ?? row.dept ?? row?.employee?.department;
+  return d != null ? String(d).trim() : '';
+}
+
+function getSalesMetrics(row) {
+  const m = row?.metrics?.sales ?? row?.metrics?.Sales;
+  return m && typeof m === 'object' ? m : null;
+}
+
+function parseCountRefsBlock(block) {
+  if (!block || typeof block !== 'object') return null;
+  const count =
+    typeof block.count === 'number' ? block.count : Number(block.count) || 0;
+  const refs = Array.isArray(block.refs) ? block.refs : [];
+  return { count, refs };
+}
+
+/** Show Sales metrics block when department is Sales or payload includes metrics.sales */
+function shouldShowSalesMetricsInDetail(row) {
+  if (getSalesMetrics(row)) return true;
+  return /^sales$/i.test(getDepartmentFromRow(row));
+}
+
+/** Show CMT assign/reassign fields when department is CMT or payload includes metrics.cmt */
+function shouldShowCmtMetricsInDetail(row) {
+  if (getCmtMetrics(row)) return true;
+  return /^cmt$/i.test(getDepartmentFromRow(row));
+}
+
+/** Flatten metrics.sales for the check-in detail grid (Sales dept). */
+function enrichSalesDetailFields(row) {
+  if (!shouldShowSalesMetricsInDetail(row)) return {};
+  const s = getSalesMetrics(row);
+  const posted = s ? parseCountRefsBlock(s.noOfLoadPosted ?? s.no_of_load_posted) : null;
+  const delivery = s ? parseCountRefsBlock(s.noOfDeliveryOrder ?? s.no_of_delivery_order) : null;
+  const calls =
+    s && (typeof s.noOfCalls === 'number' || (s.noOfCalls != null && s.noOfCalls !== ''))
+      ? String(s.noOfCalls)
+      : '—';
+  const customers =
+    s && (typeof s.noOfCustomerAdded === 'number' || (s.noOfCustomerAdded != null && s.noOfCustomerAdded !== ''))
+      ? String(s.noOfCustomerAdded)
+      : '—';
+  return {
+    _salesNoOfCalls: calls,
+    _salesLoadPostedCount: posted ? String(posted.count) : '—',
+    _salesLoadPostedRefs: posted?.refs?.length ? posted.refs.join(', ') : '—',
+    _salesDeliveryOrderCount: delivery ? String(delivery.count) : '—',
+    _salesDeliveryOrderRefs: delivery?.refs?.length ? delivery.refs.join(', ') : '—',
+    _salesCustomerAdded: customers,
+  };
+}
+
+/** View modal: omit CMT noOfCalls (not shown per product request). */
+function stripNoOfCallsFromCmtMetrics(row) {
+  if (!row || typeof row !== 'object') return row;
+  const m = row.metrics;
+  if (!m || typeof m !== 'object') return row;
+  const nextMetrics = { ...m };
+  const strip = (block) => {
+    if (!block || typeof block !== 'object') return block;
+    const next = { ...block };
+    delete next.noOfCalls;
+    delete next.no_of_calls;
+    return next;
+  };
+  if (m.cmt != null && typeof m.cmt === 'object') nextMetrics.cmt = strip(m.cmt);
+  if (m.CMT != null && typeof m.CMT === 'object') nextMetrics.CMT = strip(m.CMT);
+  return { ...row, metrics: nextMetrics };
+}
+
 function buildColumnKeysFromRows(rowList, { detailModal = false } = {}) {
   const excluded = new Set([
     ...EXCLUDED_COLUMN_KEYS,
@@ -444,12 +544,23 @@ function buildColumnKeysFromRows(rowList, { detailModal = false } = {}) {
     'employeeName',
     'department',
     'responseText',
+    ...(detailModal
+      ? [
+          '_salesNoOfCalls',
+          '_salesLoadPostedCount',
+          '_salesLoadPostedRefs',
+          '_salesDeliveryOrderCount',
+          '_salesDeliveryOrderRefs',
+          '_salesCustomerAdded',
+        ]
+      : []),
     'status',
     'checkedIn',
     'checked_in',
     'note',
     'createdAt',
     'submittedAt',
+    ...(detailModal ? ['_cmtAssignReassignCount', '_cmtAssignReassignRefs'] : []),
   ];
   const ordered = [];
   preferred.forEach((p) => {
@@ -460,6 +571,47 @@ function buildColumnKeysFromRows(rowList, { detailModal = false } = {}) {
   });
   const visible = ordered.filter((k) => !excluded.has(k));
   return visible.length ? visible : ['_raw'];
+}
+
+/** View modal: long fields span both columns in the box grid */
+const CHECKIN_DETAIL_FULL_WIDTH_KEYS = new Set([
+  'responseText',
+  'note',
+  '_cmtAssignReassignRefs',
+  '_salesLoadPostedRefs',
+  '_salesDeliveryOrderRefs',
+]);
+
+function HourlyCheckinDetailFieldGrid({ row, columnKeys }) {
+  if (!row || !columnKeys?.length) return null;
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {columnKeys.map((col) => {
+        const raw = row[col];
+        const display = raw !== undefined ? formatCellForColumn(raw, col) : '—';
+        const fullWidth = CHECKIN_DETAIL_FULL_WIDTH_KEYS.has(col);
+        return (
+          <div
+            key={col}
+            className={
+              fullWidth
+                ? 'sm:col-span-2 bg-white rounded-xl p-4 border border-blue-100 shadow-sm'
+                : 'bg-white rounded-xl p-4 border border-blue-100 shadow-sm'
+            }
+          >
+            <p className="text-sm text-gray-600">{labelFromKey(col)}</p>
+            <p
+              className={`mt-1 font-semibold text-gray-900 text-sm break-words ${
+                fullWidth ? 'whitespace-pre-wrap leading-relaxed' : ''
+              }`}
+            >
+              {display}
+            </p>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 export default function HourlyPerformanceReport() {
@@ -629,13 +781,26 @@ export default function HourlyPerformanceReport() {
   /** Main-table row that opened View — used to merge rejection paths if drill-down API omits them */
   const [detailClickedRow, setDetailClickedRow] = useState(null);
   const [detailSubject, setDetailSubject] = useState({ empId: '', name: '' });
-  const [detailDeptMismatch, setDetailDeptMismatch] = useState(false);
 
   const detailRowsEnriched = useMemo(
     () =>
-      detailRows.map((drow) =>
-        mergeRejectionFieldsFromMain(drow, rows, detailClickedRow)
-      ),
+      detailRows.map((drow) => {
+        const merged = stripNoOfCallsFromCmtMetrics(
+          mergeRejectionFieldsFromMain(drow, rows, detailClickedRow)
+        );
+        const ar = getNoOfLoadAssignOrReassign(merged);
+        const cmtExtras = shouldShowCmtMetricsInDetail(merged)
+          ? {
+              _cmtAssignReassignCount: ar ? String(ar.count) : '—',
+              _cmtAssignReassignRefs: ar?.refs?.length ? ar.refs.join(', ') : '—',
+            }
+          : {};
+        return {
+          ...merged,
+          ...cmtExtras,
+          ...enrichSalesDetailFields(merged),
+        };
+      }),
     [detailRows, rows, detailClickedRow]
   );
 
@@ -644,63 +809,47 @@ export default function HourlyPerformanceReport() {
     [detailRowsEnriched]
   );
 
+  /**
+   * View: only the clicked row — GET /api/v1/hourly-checkin/:checkinId for that row’s _id
+   * so metrics.cmt (e.g. noOfLoadAssignOrReassign) matches the detail API.
+   */
   const openEmployeeHourlyDetail = useCallback(
     async (row) => {
-      const emp = getEmpIdFromRow(row);
-      if (!emp) {
-        toast.error('This row has no employee id (empId).');
+      const checkinId = row?._id ?? row?.id;
+      if (!checkinId) {
+        toast.error('This row has no check-in id.');
         return;
       }
+      const emp = getEmpIdFromRow(row);
       setDetailSubject({
-        empId: emp,
+        empId: emp || '—',
         name: getEmployeeNameFromRow(row) || '—',
       });
       setDetailClickedRow(row);
       setDetailOpen(true);
       setDetailLoading(true);
       setDetailRows([]);
-      setDetailDeptMismatch(false);
-      try {
-        const params = {};
-        if (department) params.department = department;
-        if (dateMode === 'single') {
-          params.date = singleDate;
-        } else if (dateMode === 'range') {
-          if (startDate && endDate) {
-            if (startDate > endDate) {
-              toast.error('Start date must be on or before end date.');
-              setDetailLoading(false);
-              return;
-            }
-            params.startDate = startDate;
-            params.endDate = endDate;
-          }
-        }
-        params.sortDir = 'asc';
 
-        const res = await getHourlyCheckinReportForEmployee(emp, params);
-        const meta = extractMetaFromReportResponse(res);
-        setDetailDeptMismatch(!!meta?.departmentFilterMismatch);
-        const list = extractRows(res);
-        setDetailRows(sortRowsByHourBucket(list));
-      } catch (err) {
-        if (err.status === 403) {
-          toast.error(err?.message || 'You do not have permission to load this report.');
-        } else if (err.status === 404) {
-          toast.error(
-            err?.message ||
-              'Hourly Performance Report is unavailable. Ensure the module exists, is active, and is assigned to your account.'
-          );
-        } else {
-          toast.error(err?.message || 'Failed to load hourly detail');
-        }
-        setDetailRows([]);
-        setDetailDeptMismatch(false);
+      try {
+        const res = await getHourlyCheckinById(checkinId);
+        const detail =
+          res && typeof res === 'object' && res.data != null && typeof res.data === 'object'
+            ? res.data
+            : res;
+        const merged =
+          detail && typeof detail === 'object' && !Array.isArray(detail)
+            ? { ...row, ...detail }
+            : row;
+        setDetailRows([mergeRejectionFieldsFromMain(merged, rows, row)]);
+      } catch (e) {
+        console.warn('[HourlyPerformanceReport] check-in detail fetch failed', checkinId, e);
+        toast.error(e?.message || 'Failed to load check-in');
+        setDetailRows([mergeRejectionFieldsFromMain(row, rows, row)]);
       } finally {
         setDetailLoading(false);
       }
     },
-    [department, dateMode, singleDate, startDate, endDate]
+    [rows]
   );
 
   const exportToExcel = useCallback(() => {
@@ -1028,165 +1177,144 @@ export default function HourlyPerformanceReport() {
         )}
       </div>
 
-      {/* Employee hourly drill-down */}
+      {/* Check-in view — layout aligned with Sales DeliveryOrder view modal */}
       {detailOpen && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-[1px]"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="hourly-detail-title"
-          onClick={() => {
-            setDetailOpen(false);
-            setDetailDeptMismatch(false);
-            setDetailClickedRow(null);
-          }}
-        >
+        <>
           <div
-            className={`w-full max-w-5xl max-h-[88vh] flex flex-col overflow-hidden ${vplSurfaceClass}`}
-            style={vplSurfaceStyle}
-            onClick={(e) => e.stopPropagation()}
+            className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="hourly-detail-title"
+            onClick={() => {
+              setDetailOpen(false);
+              setDetailClickedRow(null);
+            }}
           >
-            <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-gray-200 bg-gray-50/80">
-              <div className="min-w-0">
-                <h2 id="hourly-detail-title" className="text-lg font-bold text-gray-900">
-                  Hourly breakdown
-                </h2>
-                <p className="text-sm text-gray-600 mt-1">
-                  <span className="font-semibold text-gray-800">{detailSubject.name}</span>
-                  <span className="text-gray-400 mx-2">·</span>
-                  <span className="font-mono text-xs bg-white px-2 py-0.5 rounded border border-gray-200">
-                    {detailSubject.empId}
-                  </span>
-                </p>
-                <p className="text-xs text-gray-500 mt-2">
-                  Same date filters as the main report; rows sorted by hour bucket.
-                </p>
+            <div
+              className="bg-white rounded-3xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto"
+              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header — same pattern as DeliveryOrder.jsx Employee DO modal */}
+              <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-6 rounded-t-3xl">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center shrink-0">
+                      <Clock className="text-white" size={24} />
+                    </div>
+                    <div className="min-w-0">
+                      <h2 id="hourly-detail-title" className="text-xl font-bold truncate">
+                        Hourly check-in
+                      </h2>
+                      <p className="text-blue-100 truncate">
+                        {detailSubject.name}
+                        {detailSubject.empId && detailSubject.empId !== '—' ? (
+                          <span className="text-white/90"> · {detailSubject.empId}</span>
+                        ) : null}
+                      </p>
+                      <p className="text-blue-100/90 text-sm mt-1">Check-in detail</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDetailOpen(false);
+                      setDetailClickedRow(null);
+                    }}
+                    className="text-white hover:text-gray-200 text-2xl font-bold leading-none shrink-0 ml-2"
+                    aria-label="Close"
+                  >
+                    ×
+                  </button>
+                </div>
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setDetailOpen(false);
-                  setDetailDeptMismatch(false);
-                  setDetailClickedRow(null);
-                }}
-                className="shrink-0 p-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-600"
-                aria-label="Close"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
 
-            <div className="flex-1 overflow-y-auto px-4 py-4 md:px-5">
-              {detailLoading && (
-                <div className="flex justify-center py-16">
-                  <div className="w-10 h-10 border-4 border-[#0078D4] border-t-transparent rounded-full animate-spin" />
-                </div>
-              )}
-              {!detailLoading && detailRows.length === 0 && detailDeptMismatch && (
-                <div
-                  className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
-                  role="status"
-                >
-                  This employee’s department does not match the selected department filter. No hourly rows
-                  are returned for this combination.
-                </div>
-              )}
-              {!detailLoading && detailRows.length === 0 && !detailDeptMismatch && (
-                <p className="text-center text-gray-500 py-12">No hourly rows for this employee in this filter.</p>
-              )}
-              {!detailLoading && detailRows.length > 0 && (
-                <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
-                  <table className="min-w-full text-sm">
-                    <thead>
-                      <tr className="bg-gray-50 text-left text-xs font-bold text-gray-700 uppercase tracking-wide border-b border-gray-200">
-                        {detailColumns.map((col) => (
-                          <th key={col} className="px-3 py-2.5 whitespace-nowrap">
-                            {labelFromKey(col)}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {detailRowsEnriched.map((drow, dIdx) => {
-                        const rowKey = drow._id ?? drow.id ?? dIdx;
-                        const paths = collectRejectionAttachmentPaths(drow);
-                        return (
-                          <Fragment key={rowKey}>
-                            <tr className="border-b border-gray-100 hover:bg-blue-50/40">
-                              {detailColumns.map((col) => (
-                                <td
-                                  key={col}
-                                  className="px-3 py-2 text-gray-800 whitespace-nowrap max-w-[min(280px,40vw)] truncate"
-                                >
-                                  {drow[col] !== undefined
-                                    ? formatCellForColumn(drow[col], col)
-                                    : '—'}
-                                </td>
-                              ))}
-                            </tr>
-                            {paths.length > 0 && (
-                              <tr className="bg-slate-50/90 border-b border-gray-100">
-                                <td
-                                  colSpan={detailColumns.length}
-                                  className="px-3 py-3 align-top"
-                                >
-                                  <div className="flex flex-wrap items-start gap-2">
-                                    <span className="inline-flex items-center gap-1 text-xs font-bold text-slate-600 uppercase tracking-wide shrink-0 mt-0.5">
-                                      <Paperclip className="h-3.5 w-3.5" />
-                                      Rejection attachments
-                                    </span>
-                                    <div className="flex flex-wrap gap-4 min-w-0 flex-1">
-                                      {paths.map((raw, ai) => {
-                                        const resolved = resolveHourlyAttachmentUrl(raw);
-                                        if (isNonWebFilePath(raw)) {
-                                          return (
-                                            <div
-                                              key={`${rowKey}-p-${ai}`}
-                                              className="text-xs text-amber-900 bg-amber-50 rounded-lg px-3 py-2 border border-amber-200 max-w-lg"
-                                            >
-                                              <span className="font-semibold block mb-1">
-                                                Path not previewable in browser
-                                              </span>
-                                              <code className="break-all text-[11px] leading-snug">
-                                                {raw}
-                                              </code>
-                                            </div>
-                                          );
-                                        }
-                                        if (!resolved) {
-                                          return (
-                                            <span
-                                              key={`${rowKey}-p-${ai}`}
-                                              className="text-xs text-gray-600 break-all"
-                                            >
-                                              {raw}
-                                            </span>
-                                          );
-                                        }
-                                        return (
-                                          <HourlyRejectionAttachmentBlock
-                                            key={`${rowKey}-p-${ai}`}
-                                            resolved={resolved}
-                                            pathsLength={paths.length}
-                                            ai={ai}
-                                          />
-                                        );
-                                      })}
-                                    </div>
-                                  </div>
-                                </td>
-                              </tr>
-                            )}
-                          </Fragment>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+              <div className="p-6 space-y-6">
+                {!detailLoading && detailRows.length === 0 && (
+                  <p className="text-center text-gray-500 py-12">Nothing to show for this check-in.</p>
+                )}
+
+                {!detailLoading && detailRows.length > 0 && (
+                  <div className="space-y-6">
+                    {detailRowsEnriched.map((drow, dIdx) => {
+                      const rowKey = drow._id ?? drow.id ?? dIdx;
+                      const paths = collectRejectionAttachmentPaths(drow);
+                      return (
+                        <Fragment key={rowKey}>
+                          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6">
+                            <div className="flex items-center gap-2 mb-4">
+                              <BarChart3 className="text-blue-600" size={20} />
+                              <h3 className="text-lg font-bold text-gray-800">Check-in data</h3>
+                            </div>
+                            <HourlyCheckinDetailFieldGrid row={drow} columnKeys={detailColumns} />
+                          </div>
+                          {paths.length > 0 && (
+                            <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-2xl p-6 border border-slate-200">
+                              <div className="flex items-center gap-2 mb-4">
+                                <Paperclip className="text-slate-600" size={20} />
+                                <h3 className="text-lg font-bold text-gray-800">Rejection attachments</h3>
+                              </div>
+                              <div className="flex flex-wrap gap-4 min-w-0">
+                                {paths.map((raw, ai) => {
+                                  const resolved = resolveHourlyAttachmentUrl(raw);
+                                  if (isNonWebFilePath(raw)) {
+                                    return (
+                                      <div
+                                        key={`${rowKey}-p-${ai}`}
+                                        className="text-xs text-amber-900 bg-white rounded-xl px-4 py-3 border border-amber-200 shadow-sm max-w-lg"
+                                      >
+                                        <span className="font-semibold block mb-1">
+                                          Path not previewable in browser
+                                        </span>
+                                        <code className="break-all text-[11px] leading-snug">{raw}</code>
+                                      </div>
+                                    );
+                                  }
+                                  if (!resolved) {
+                                    return (
+                                      <span
+                                        key={`${rowKey}-p-${ai}`}
+                                        className="text-xs text-gray-700 bg-white rounded-xl px-4 py-3 border border-slate-200 break-all shadow-sm"
+                                      >
+                                        {raw}
+                                      </span>
+                                    );
+                                  }
+                                  return (
+                                    <HourlyRejectionAttachmentBlock
+                                      key={`${rowKey}-p-${ai}`}
+                                      resolved={resolved}
+                                      pathsLength={paths.length}
+                                      ai={ai}
+                                    />
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </Fragment>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+
+          {detailLoading && (
+            <div
+              className="fixed inset-0 backdrop-blur-sm bg-black/30 z-[60] flex justify-center items-center"
+              role="status"
+              aria-live="polite"
+            >
+              <div className="bg-white rounded-2xl p-8 shadow-2xl flex flex-col items-center gap-4">
+                <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                <p className="text-lg font-semibold text-gray-800">Loading check-in…</p>
+                <p className="text-sm text-gray-600">Please wait while we fetch the complete data</p>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

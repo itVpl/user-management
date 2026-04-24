@@ -4,6 +4,7 @@
  *
  * - GET /api/v1/hourly-checkin/report
  * - GET /api/v1/hourly-checkin/report/employee/:empId  (path empId wins over query empId)
+ * - GET /api/v1/hourly-checkin/:checkinId — single check-in (metrics, full fields)
  */
 import API_CONFIG from '../config/api';
 
@@ -96,6 +97,16 @@ export const getHourlyCheckinReport = async (params = {}) => {
  * @param {string} empId — business employee code
  * @param {Object} params — same filters as main report except do not pass empId in query for identity (optional query ignored for id)
  */
+/**
+ * Single hourly check-in by Mongo id (full document incl. metrics.cmt).
+ * GET /api/v1/hourly-checkin/:checkinId
+ */
+export const getHourlyCheckinById = async (checkinId) => {
+  const id = encodeURIComponent(String(checkinId ?? '').trim());
+  if (!id) throw new Error('checkinId is required');
+  return apiFetch(`/api/v1/hourly-checkin/${id}`);
+};
+
 export const getHourlyCheckinReportForEmployee = async (empId, params = {}) => {
   const enc = encodeURIComponent(String(empId ?? '').trim());
   const {
@@ -144,5 +155,6 @@ export const getHourlyCheckinMyHistory = async (params = {}) => {
 export default {
   getHourlyCheckinReport,
   getHourlyCheckinReportForEmployee,
+  getHourlyCheckinById,
   getHourlyCheckinMyHistory,
 };

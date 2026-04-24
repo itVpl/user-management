@@ -7,6 +7,12 @@ import {
 } from "../../services/hourlyCheckinService";
 
 const ENABLED_DEPARTMENTS = new Set(["Sales", "CMT", "HR"]);
+const BLOCKED_EMP_IDS = new Set(["1234", "VPL001", "VPL002", "VPL003"]);
+
+const normalizeEmpId = (value) =>
+  String(value || "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
 
 const getAuthToken = () =>
   localStorage.getItem("authToken") ||
@@ -134,6 +140,8 @@ export default function HourlyCheckinPopup() {
     const token = getAuthToken();
     if (!token) return false;
     const user = getUserData();
+    const empId = normalizeEmpId(user?.empId || user?.employeeId);
+    if (BLOCKED_EMP_IDS.has(empId)) return false;
     const dept =
       typeof user?.department === "string"
         ? user.department
