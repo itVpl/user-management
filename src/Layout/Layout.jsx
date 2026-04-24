@@ -13,6 +13,7 @@ import { useAssignmentNotification } from "../hooks/useAssignmentNotification";
 import API_CONFIG from "../config/api.js";
 import { DINNER_THALI_LOGIN_PROMPT_KEY } from "../constants/dinnerThaliLoginPrompt";
 import DinnerThaliLoginPromptModal from "../Components/DinnerThali/DinnerThaliLoginPromptModal";
+import SalesDayAgentHourlyDispositionPrompt from "../Components/Sales/SalesDayAgentHourlyDispositionPrompt.jsx";
 import { 
   Settings, 
   BarChart3, 
@@ -285,6 +286,7 @@ const Layout = () => {
         }}
       > 
         <Outlet />
+        <SalesDayAgentHourlyDispositionPrompt />
       </main>
 
       {/* Employee Review Notification for Superadmin - Fixed at bottom right */}

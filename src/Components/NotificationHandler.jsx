@@ -10,6 +10,54 @@ import {
   isStoredUserCmtDepartment,
 } from '../utils/loadImportantDateReminder';
 
+/**
+ * Sales day-shift Add Agent follow-up reminders use the same socket `notification` event as chat
+ * (sendGlobalNotification / type individual). Detect them so they can appear in the TopBar bell
+ * instead of only as chat-style toasts.
+ */
+function isSalesDayAgentFollowUpReminder(data) {
+  if (!data || typeof data !== 'object') return false;
+  const m = data.meta && typeof data.meta === 'object' ? data.meta : {};
+  if (m.salesDayAgentFollowUp === true || m.salesDayFollowUp === true) return true;
+  if (m.agentCustomerId && (m.sourceType === 'sales_day_import' || m.sourceType === 'sales_day')) return true;
+  const tags = [
+    data.notificationType,
+    data.notificationKind,
+    data.category,
+    data.kind,
+    m.notificationType,
+    m.category,
+  ]
+    .filter(Boolean)
+    .map((s) => String(s).toLowerCase());
+  if (tags.some((t) => t.includes('sales_day') || t.includes('salesday') || t.includes('agent_customer'))) return true;
+  if ((m.nextFollowUpAt || m.remindAt || data.nextFollowUpAt) && m.sourceType === 'sales_day_import') return true;
+  const blob = `${data.title || ''} ${data.body || ''}`.toLowerCase();
+  if (
+    (blob.includes('follow-up') || blob.includes('follow up')) &&
+    (blob.includes('add agent') || blob.includes('sales day') || blob.includes('day shift'))
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function normalizeSalesDayInboxItem(data) {
+  const m = data.meta && typeof data.meta === 'object' ? { ...data.meta } : {};
+  const id = data._id || data.id || data.messageId || `sd-${Date.now()}`;
+  return {
+    ...data,
+    _id: id,
+    id,
+    type: 'sales_day_follow_up',
+    title: data.title || 'Follow-up reminder',
+    body: data.body || '',
+    createdAt: data.createdAt || data.timestamp || new Date().toISOString(),
+    meta: m,
+    read: false,
+  };
+}
+
 const NotificationHandler = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -275,7 +323,22 @@ const NotificationHandler = () => {
   // Handle notification click navigation
   const handleNotificationClick = useCallback((notificationData) => {
     window.focus();
-    
+
+    if (isSalesDayAgentFollowUpReminder(notificationData)) {
+      const m = notificationData.meta && typeof notificationData.meta === 'object' ? notificationData.meta : {};
+      const cid =
+        m.agentCustomerId ||
+        m.customerId ||
+        notificationData.agentCustomerId ||
+        notificationData.customerId;
+      navigate(
+        cid
+          ? `/AddAgent?customerId=${encodeURIComponent(String(cid))}`
+          : '/AddAgent',
+      );
+      return;
+    }
+
     switch (notificationData.type) {
       case 'individual':
         // Navigate to individual chat page
@@ -524,6 +587,24 @@ const NotificationHandler = () => {
       setTimeout(() => {
         notificationProcessedRef.current.delete(notificationKey);
       }, 30000);
+
+      // Sales day Add Agent follow-up due — show in TopBar bell (not chat unread / not chat toast stack)
+      if (isSalesDayAgentFollowUpReminder(notificationData)) {
+        try {
+          window.dispatchEvent(
+            new CustomEvent('salesDayFollowUpInbox', {
+              detail: normalizeSalesDayInboxItem(notificationData),
+            }),
+          );
+        } catch (e) {
+          console.warn('salesDayFollowUpInbox dispatch failed', e);
+        }
+        showBrowserNotification(notificationData);
+        if (shouldShowNotification(notificationData)) {
+          playNotificationSound();
+        }
+        return;
+      }
 
       // Important-date reminders: same socket `notification` event (incl. deliverPendingNotifications replay)
       if (isReminder) {

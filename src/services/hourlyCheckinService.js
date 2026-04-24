@@ -2,6 +2,11 @@ import axios from "axios";
 
 const BASE = "/api/v1/hourly-checkin";
 
+/**
+ * Polls hourly check-in eligibility. For Sales `day_shift`, the server may return
+ * `salesDayShiftExempt: true` and `eligibleForHourlyCheckin: false` — UI must not open the
+ * hourly popup or call submit (see HourlyCheckinPopup).
+ */
 export async function getHourlyCheckinStatus(params = {}) {
   const res = await axios.get(`${BASE}/status`, { params });
   return res.data;

@@ -70,6 +70,7 @@ const AllDOAssignedCMT = lazy(() => import("./Components/Sales/AllDOAssignedCMT.
 const TeamRating = lazy(() => import("./Components/Sales/TeamRating.jsx"));
 const DailyFollowUp = lazy(() => import("./Pages/DailyFollowUp.jsx"));
 const AddCustomer = lazy(() => import("./Components/Sales/AddCustomer.jsx"));
+const AddAgent = lazy(() => import("./Components/Sales/AddAgent.jsx"));
 const AssignAgent = lazy(() => import("./Components/Dashboard/AssignAgent.jsx"));
 const CarrierDocs = lazy(() => import("./Components/CMT/CarrierDocs.jsx"));
 const DoDetails = lazy(() => import("./Components/CMT/DODetails.jsx"));
@@ -141,7 +142,7 @@ const MyHourlyCheckinHistory = lazy(() => import("./Pages/HourlyCheckin/MyHourly
 const HourlyCheckinReport = lazy(() => import("./Pages/HourlyCheckin/HourlyCheckinReport.jsx"));
 const PublicEmployeeTest = lazy(() => import("./Components/EmployeeTest/PublicEmployeeTest.jsx"));
 const EmployeeTestAdmin = lazy(() => import("./Components/EmployeeTest/EmployeeTestAdmin.jsx"));
-const InAppBrowser = lazy(() => import("./Pages/InAppBrowser.jsx"));
+const Newsletter = lazy(() => import("./Pages/Newsletter.jsx"));
 
 
 // Chat Message System Imports - keep as regular imports (needed globally)
@@ -709,6 +710,7 @@ function App() {
           <Route path="team-rating" element={<TeamRating />} />
           <Route path="daily-follow-up" element={<DailyFollowUp />} />
           <Route path="AddCustomer" element={<AddCustomer />} />
+          <Route path="AddAgent" element={<AddAgent />} />
           <Route path="ImportCarrierEmails" element={<ImportCarrierEmails />} />
           <Route path="AssignAgent" element={<AssignAgent />} />
           <Route path="CarrierDocs" element={<CarrierDocs />} />
@@ -783,7 +785,7 @@ function App() {
           <Route path="employee-test/take" element={<PublicEmployeeTest />} />
           <Route path="employee-test" element={<Navigate to="/employee-test/take" replace />} />
           <Route path="employee-test/admin" element={<EmployeeTestAdmin />} />
-          <Route path="browser" element={<InAppBrowser />} />
+          <Route path="newsletter" element={<Newsletter />} />
           
           {/* QA (Quality Assurance) Routes */}
           <Route path="qa/dashboard" element={<QADashboard />} />

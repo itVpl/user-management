@@ -28,6 +28,8 @@ const Topbar = () => {
   /** Full follow-up payload (notification item) for read-only details modal */
   const [followUpDetailModal, setFollowUpDetailModal] = useState(null);
   const seenFollowUpIdsRef = useRef(new Set());
+  /** Sales day Add Agent follow-up reminders (socket `notification` → NotificationHandler → this list). */
+  const [salesDayInbox, setSalesDayInbox] = useState([]);
 
   const [chatModalState, setChatModalState] = useState({
     isOpen: false,
@@ -412,6 +414,34 @@ const Topbar = () => {
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    const onSalesDayInbox = (e) => {
+      const d = e?.detail;
+      if (!d || !(d._id || d.id)) return;
+      const nid = String(d._id || d.id);
+      setSalesDayInbox((prev) => {
+        if (prev.some((x) => String(x._id || x.id) === nid)) return prev;
+        return [{ ...d, read: false }, ...prev].slice(0, 50);
+      });
+    };
+    window.addEventListener("salesDayFollowUpInbox", onSalesDayInbox);
+    return () => window.removeEventListener("salesDayFollowUpInbox", onSalesDayInbox);
+  }, []);
+
+  const salesDayBellUnread = salesDayInbox.filter((x) => !x.read).length;
+  const bellBadgeCount = unreadCount + followUpNotifications.length + salesDayBellUnread;
+
+  const openSalesDayFollowUpFromBell = (item) => {
+    setNotificationOpen(false);
+    const m = item?.meta && typeof item.meta === "object" ? item.meta : {};
+    const cid = m.agentCustomerId || m.customerId || item.customerId;
+    navigate(
+      cid ? `/AddAgent?customerId=${encodeURIComponent(String(cid))}` : "/AddAgent",
+    );
+    const nid = String(item._id || item.id);
+    setSalesDayInbox((prev) => prev.filter((x) => String(x._id || x.id) !== nid));
+  };
+
   /** Realtime follow-up due (room user_<empId>); polling remains fallback. */
   useEffect(() => {
     const handler = (payload) => {
@@ -654,7 +684,7 @@ const Topbar = () => {
                 </React.Fragment>
               );
             })
-          ) : userDepartment !== 'hr' && userDepartment !== 'finance' ? (
+          ) : userDepartment && userDepartment !== 'hr' && userDepartment !== 'finance' ? (
             // Fallback static icons when no checklist data (not for HR)
             <>
               <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
@@ -691,9 +721,9 @@ const Topbar = () => {
                 alt="Notifications"
                 className="w-9 h-9 cursor-pointer hover:scale-110 transition-transform duration-200"
               />
-              {(unreadCount + followUpNotifications.length) > 0 && (
+              {bellBadgeCount > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 min-w-[1.125rem] h-[1.125rem] px-0.5 bg-blue-500 rounded-full text-white text-[10px] flex items-center justify-center">
-                  {(unreadCount + followUpNotifications.length) > 99 ? '99+' : (unreadCount + followUpNotifications.length)}
+                  {bellBadgeCount > 99 ? "99+" : bellBadgeCount}
                 </span>
               )}
             </div>
@@ -702,9 +732,13 @@ const Topbar = () => {
               <div className="absolute right-0 top-12 w-80 bg-white rounded-lg shadow-xl py-2 z-50 animate-fade-in border border-gray-100 max-h-[80vh] overflow-y-auto">
                 <div className="px-4 py-2 border-b border-gray-100 flex justify-between items-center bg-gray-50">
                   <h3 className="font-semibold text-gray-700">Notifications</h3>
-                  {notifications.length > 0 && (
-                    <button 
-                      onClick={clearAllNotifications}
+                  {(notifications.length > 0 || salesDayInbox.length > 0) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        clearAllNotifications();
+                        setSalesDayInbox([]);
+                      }}
                       className="text-xs text-blue-600 hover:text-blue-800 font-medium"
                     >
                       Clear All
@@ -712,7 +746,9 @@ const Topbar = () => {
                   )}
                 </div>
                 
-                {(notifications.length === 0 && followUpNotifications.length === 0) ? (
+                {notifications.length === 0 &&
+                followUpNotifications.length === 0 &&
+                salesDayInbox.length === 0 ? (
                   <div className="px-4 py-8 text-center text-gray-500 text-sm">
                     No new notifications
                   </div>
@@ -740,6 +776,38 @@ const Topbar = () => {
                         </p>
                         <p className="text-xs text-gray-500 line-clamp-2">
                           {item?.body || "A scheduled follow-up reminder is due now."}
+                        </p>
+                      </div>
+                    ))}
+                    {salesDayInbox.map((item, idx) => (
+                      <div
+                        key={`salesday-fu-${item._id || item.id || idx}`}
+                        className="px-4 py-3 hover:bg-indigo-50 cursor-pointer border-b border-gray-50 transition-colors"
+                        onClick={() => openSalesDayFollowUpFromBell(item)}
+                      >
+                        <div className="flex justify-between items-start mb-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-indigo-600 text-xs">📋</span>
+                            <span className="font-medium text-indigo-800 text-sm">
+                              {item?.title || "Add Agent follow-up"}
+                            </span>
+                          </div>
+                          <span className="text-xs text-gray-400">
+                            {new Date(item.createdAt || Date.now()).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-800 font-medium truncate">
+                          {item?.meta?.personName ||
+                            item?.meta?.companyName ||
+                            item?.meta?.customerName ||
+                            item?.meta?.contactPerson ||
+                            "Lead"}
+                        </p>
+                        <p className="text-xs text-gray-500 line-clamp-2">
+                          {item?.body || "Scheduled follow-up is due. Open Add Agent to update disposition."}
                         </p>
                       </div>
                     ))}

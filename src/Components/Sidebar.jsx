@@ -143,13 +143,15 @@ const DEPARTMENT_MODULE_CATEGORIES = {
   "Sales": {
     "Customer Management": [
       "Add Customer",
+      "Add Agent",
       "All Customers",
       "All Leads",
       "Customer Loads",
       "Assign Agent"
     ],
     "Communication": [
-      "Import Carrier Emails"
+      "Import Carrier Emails",
+      
     ],
     "Documents": [
       "Shipper",
@@ -332,12 +334,14 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Rate Approved",
       "Delivery Order",
       "Add Customer",
+      "Add Agent",
       "All Customers",
       "Trucker Assign",
       "Daily Task",
       "Tracking",
       "Load By Location",
-      "Import Carrier Emails"
+      "Import Carrier Emails",
+      "News Letter"
     ],
     "Company Management": [
       "Sub Company"
@@ -496,6 +500,7 @@ const menuItems = [
   { name: "Call Data", icon: BlueCall, whiteIcon: WhiteCall, path: "/call-dashboard" },
   { name: "Chat", icon: ChatBlue, whiteIcon: ChatWhite, path: "/Chat" },
   { name: "Email", icon: BlueInbox, whiteIcon: WhiteInbox, path: "/Inbox" },
+  { name: "News Letter", icon: BlueInbox, whiteIcon: WhiteInbox, path: "/newsletter" },
   { name: "Import Carrier Emails", icon: BlueInbox, whiteIcon: WhiteInbox, path: "/ImportCarrierEmails" },
   { name: "Revenue & Satatistics", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/AgentRevenueStatistics" },
   { name: "Employee Hygiene", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/EmployeeHygiene" },
@@ -547,6 +552,7 @@ const menuItems = [
   { name: "Tier 1 Leads", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/tier1-leads" },
   { name: "All Sales TL", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/all-sales-tl" },
   { name: "Add Customer", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/AddCustomer" },
+  { name: "Add Agent", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/AddAgent" },
   { name: "All Customers", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/allcustomer" },
   { name: "Assign Agent", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/AssignAgent" },
   { name: "DO Details", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/DODetails" },
@@ -595,6 +601,9 @@ const menuItems = [
   
   
 ];
+
+// Keep sidebar module data stable across route remounts in SPA navigation.
+let sidebarStateCache = null;
 
 /** Keep "Tracker" at top level: immediately after Dashboard (outer sidebar, not inside dept flyout). */
 const BREAK_TYPES = ["Bio break", "Smoking/Tea Break", "Dinner break"]; // POST /api/v1/break/start { breakType }
@@ -862,22 +871,38 @@ const Sidebar = () => {
   const [isMobile, setIsMobile] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const sidebarRef = useRef(null);
-  const [filteredMenuItems, setFilteredMenuItems] = useState([]);
-  const [departmentMenuItems, setDepartmentMenuItems] = useState([]);
-  const [departmentCategories, setDepartmentCategories] = useState({});
-  const [allDepartmentCategories, setAllDepartmentCategories] = useState({}); // For universal_user: stores all dept categories
+  const [filteredMenuItems, setFilteredMenuItems] = useState(
+    () => sidebarStateCache?.filteredMenuItems || []
+  );
+  const [departmentMenuItems, setDepartmentMenuItems] = useState(
+    () => sidebarStateCache?.departmentMenuItems || []
+  );
+  const [departmentCategories, setDepartmentCategories] = useState(
+    () => sidebarStateCache?.departmentCategories || {}
+  );
+  const [allDepartmentCategories, setAllDepartmentCategories] = useState(
+    () => sidebarStateCache?.allDepartmentCategories || {}
+  ); // For universal_user: stores all dept categories
   const [isDepartmentMenuOpen, setIsDepartmentMenuOpen] = useState(false);
   const [openCategories, setOpenCategories] = useState({});
   const [isReportsOpen, setIsReportsOpen] = useState(true);
   const [reportMenuItems, setReportMenuItems] = useState([]);
   const [reportCategories, setReportCategories] = useState({}); // Department-wise report categories
   const [showLogoutModal, setShowLogoutModal] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [userDepartment, setUserDepartment] = useState(null);
+  const [loading, setLoading] = useState(() => !sidebarStateCache);
+  const [userDepartment, setUserDepartment] = useState(
+    () => sidebarStateCache?.userDepartment ?? null
+  );
   /** HR / profile department (not overwritten when universal user gets first flyout dept) — for Tracker label */
-  const [userAssignedDepartment, setUserAssignedDepartment] = useState("");
-  const [userRole, setUserRole] = useState(null); // Store user role
-  const [isVPL100, setIsVPL100] = useState(false); // Track if user is VPL100
+  const [userAssignedDepartment, setUserAssignedDepartment] = useState(
+    () => sidebarStateCache?.userAssignedDepartment || ""
+  );
+  const [userRole, setUserRole] = useState(
+    () => sidebarStateCache?.userRole ?? null
+  ); // Store user role
+  const [isVPL100, setIsVPL100] = useState(
+    () => sidebarStateCache?.isVPL100 || false
+  ); // Track if user is VPL100
   
   // Time Display and Break/Meeting states
   const [loginTime, setLoginTime] = useState(() => {
@@ -1372,6 +1397,12 @@ const Sidebar = () => {
 
   useEffect(() => {
     const fetchModules = async () => {
+      // Reuse cached sidebar state to avoid loader flicker on route switches.
+      if (sidebarStateCache) {
+        setLoading(false);
+        return;
+      }
+
       // Declare variables in outer scope so they're accessible in catch block
       let department = "";
       let role = "";
@@ -1419,7 +1450,13 @@ const Sidebar = () => {
         setUserRole(role); // Set role early so it's available everywhere
         const hasDepartmentCategories = getDepartmentCategories(department, role) !== null;
 
-        const allowedModuleIds = user?.allowedModules?.map(String) || [];
+        const allowedModuleIds = (user?.allowedModules || [])
+          .map((m) => {
+            if (m == null) return '';
+            if (typeof m === 'object') return String(m._id || m.id || '');
+            return String(m);
+          })
+          .filter(Boolean);
         console.log("👤 User role:", role, "Is universal_user:", isUniversalUser, "Is superadmin:", isSuperAdmin);
         console.log("👤 User allowed modules (IDs):", allowedModuleIds);
         console.log("👤 User allowed modules (count):", allowedModuleIds.length);
@@ -1490,6 +1527,9 @@ const Sidebar = () => {
             const moduleAliases = {
               "all rate request": ["rate request"],
               "rate suggestion": ["rate request"],
+              // Menu "Add Customer" (path /AddCustomer) ↔ Module Master "Add Agent" / day-shift import
+              "add customer": ["add agent", "sales day agent", "sales add agent"],
+              "add agent": ["add customer", "sales day agent", "sales add agent"],
               // Backend module name is "Tracker"; allow legacy "Trucker" if ever used
               tracker: ["trucker"],
             // Menu label "CMT Comparison Report" — match older modulemasters names / typo
@@ -1499,7 +1539,7 @@ const Sidebar = () => {
               "c m t  comparison  reportt",
             ],  
           };
-          const matchedMenus = menuItems.filter((item) => {
+          let matchedMenus = menuItems.filter((item) => {
             const match = activeModules.some((mod) => {
               const modName = normalizeForMatch(mod.name);  
               const modLabel = normalizeForMatch(mod.label);
@@ -1522,6 +1562,16 @@ const Sidebar = () => {
               console.log(`❌ No match found for menu item: "${item.name}"`);
             }
             return match;
+          });
+
+          const deptStr =
+            typeof user?.department === 'string' ? user.department : user?.department?.name || '';
+          const salesDept = /^sales$/i.test(deptStr.trim()) || deptStr.toLowerCase().includes('sales');
+          const salesDayShift = salesDept && user?.salesShiftTiming === 'day_shift';
+          matchedMenus = matchedMenus.filter((item) => {
+            if (item.name === 'Add Agent') return salesDayShift;
+            if (item.name === 'Add Customer') return !salesDayShift;
+            return true;
           });
 
           console.log("✅ Final filtered menu items:", matchedMenus.map(m => m.name));
@@ -1908,6 +1958,35 @@ const Sidebar = () => {
 
     fetchModules();
   }, []);
+
+  // Persist computed sidebar state in memory for fast remounts.
+  useEffect(() => {
+    if (loading) return;
+    sidebarStateCache = {
+      filteredMenuItems,
+      departmentMenuItems,
+      departmentCategories,
+      allDepartmentCategories,
+      reportMenuItems,
+      reportCategories,
+      userDepartment,
+      userAssignedDepartment,
+      userRole,
+      isVPL100,
+    };
+  }, [
+    loading,
+    filteredMenuItems,
+    departmentMenuItems,
+    departmentCategories,
+    allDepartmentCategories,
+    reportMenuItems,
+    reportCategories,
+    userDepartment,
+    userAssignedDepartment,
+    userRole,
+    isVPL100,
+  ]);
 
   // Auto-expand department dropdown and relevant category if current location matches any department module path
   useEffect(() => {
