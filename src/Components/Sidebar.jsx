@@ -199,7 +199,8 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Call Records (Id)",
       "Report Analysis",
       "DO Report",
-      "Add Customer Report"
+      "Add Customer Report",
+      "Add Agent Report"
     ],
     "System Administration": [
       "Manage Module"
@@ -349,7 +350,8 @@ const DEPARTMENT_MODULE_CATEGORIES = {
     "Sales Reports": [
       "Sales Dept Report",
       "Follow Up Report",
-      "DO Report"
+      "DO Report",
+      "Add Agent Report"
     ],
     "Common Reports": [
       "Call Data Reports",
@@ -596,6 +598,7 @@ const menuItems = [
   { name: "Assigned Rate Request", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/assigned-rate-request" },
   { name: "Call Data Reports", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/analytics/call-data-reports" },
   { name: "Add Customer Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/add-customer-report" },
+  { name: "Add Agent Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/reports/add-agent" },
   { name: "Sub Company", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/SubCompanies" },
   { name: "Docs Upload", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/docs-upload" },
   
@@ -747,6 +750,7 @@ const REPORT_NAMES = [
   "Call Data",
   "Call Data Reports",
   "Add Customer Report",
+  "Add Agent Report",
   "Call Records (Id)",
   "Report Analysis",
   "Emp Login Report",
@@ -781,7 +785,8 @@ const DEPARTMENT_REPORTS = {
     "Sales Dept Report",
     "Follow Up Report",
     "DO Report",
-    "Add Customer Report"
+    "Add Customer Report",
+    "Add Agent Report"
   ],
   "Finance": [
     "Receivable Report",
@@ -806,6 +811,7 @@ const DEPARTMENT_REPORTS = {
   "Common": [
     "Call Data Reports",
     "Add Customer Report",
+    // "Add Agent Report",
     "Call Data",
     "Call Records (Id)",
     "Report Analysis",
@@ -2581,116 +2587,6 @@ const Sidebar = () => {
                   </div>
                 )}
               </div>
-            </div>
-          )}
-
-          {!isVPL100 && (
-            <div className="relative mb-1" id="gmail-dropdown">
-              <button
-                type="button"
-                onClick={() => setGmailDropdownOpen((prev) => !prev)}
-                className={`sidebar-item w-full flex items-center gap-3 p-3 text-gray-700 cursor-pointer transition-all ${isExpanded ? "mx-0" : "justify-center"}`}
-              >
-                <Mail className="w-5 h-5 text-red-500" />
-                <span className={`${isExpanded ? "inline" : "hidden"} font-medium flex-1 text-left`}>
-                  Gmail
-                </span>
-                {isExpanded && (
-                  <img
-                    src={gmailDropdownOpen ? ArrowUp : ArrowDown}
-                    alt="Toggle Gmail accounts"
-                    className="w-4 h-4"
-                  />
-                )}
-              </button>
-              {gmailDropdownOpen && isExpanded && (
-                <div className="absolute bottom-full left-0 right-0 mb-2 bg-white rounded-lg shadow-lg py-2 animate-fade-in z-50 border border-gray-200">
-                  <div className="flex items-center justify-between px-3 pb-2 border-b border-gray-100">
-                    <span className="text-xs font-semibold text-gray-500">Gmail Accounts</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (gmailEditMode) {
-                          saveAccountLabels(gmailAccounts);
-                        }
-                        setGmailEditMode((prev) => !prev);
-                      }}
-                      className="text-xs font-medium text-blue-600 hover:text-blue-700"
-                    >
-                      {gmailEditMode ? "Done" : "Edit"}
-                    </button>
-                  </div>
-                  <div className="pt-1">
-                    {gmailAccounts.map((account, index) =>
-                      gmailEditMode ? (
-                        <div key={account.id} className="px-3 py-1.5">
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="text"
-                              value={account.label}
-                              onChange={(e) =>
-                                setGmailAccounts((prev) =>
-                                  prev.map((item) =>
-                                    item.id === account.id
-                                      ? { ...item, label: e.target.value }
-                                      : item,
-                                  ),
-                                )
-                              }
-                              onBlur={() => saveAccountLabels(gmailAccounts)}
-                              className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-700 focus:border-blue-500 focus:outline-none"
-                              placeholder={`Account ${index + 1}`}
-                            />
-                            {gmailAccounts.length > 1 && (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  saveAccountLabels(
-                                    gmailAccounts.filter((item) => item.id !== account.id),
-                                  )
-                                }
-                                className="text-xs font-medium text-red-600 hover:text-red-700"
-                                title="Remove account"
-                              >
-                                Remove
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      ) : (
-                        <button
-                          key={account.id}
-                          type="button"
-                          onClick={() => handleOpenGmailAccount(account.id)}
-                          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                        >
-                          {getAccountLabel(account.id)}
-                        </button>
-                      ),
-                    )}
-                    {gmailEditMode && (
-                      <div className="px-3 pt-1">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            saveAccountLabels([
-                              ...gmailAccounts,
-                              {
-                                id: `acc${Date.now()}`,
-                                label: `Account ${gmailAccounts.length + 1}`,
-                                mailU: gmailAccounts.length,
-                              },
-                            ])
-                          }
-                          className="w-full rounded-md border border-dashed border-blue-300 px-2 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50"
-                        >
-                          + Add Account
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
