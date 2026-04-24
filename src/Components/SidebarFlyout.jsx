@@ -32,6 +32,7 @@ const getMenuIcon = (itemName) => {
     'News Letter': Mail,
     'Daily Follow-Up': Clock,
     'Add Customer': UserPlus,
+    'Add Agent': UserPlus,
     'Add Customer Report': BarChart3,
     'All Customer': Users,
     'All Customers': Users,

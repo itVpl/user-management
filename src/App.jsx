@@ -70,6 +70,7 @@ const AllDOAssignedCMT = lazy(() => import("./Components/Sales/AllDOAssignedCMT.
 const TeamRating = lazy(() => import("./Components/Sales/TeamRating.jsx"));
 const DailyFollowUp = lazy(() => import("./Pages/DailyFollowUp.jsx"));
 const AddCustomer = lazy(() => import("./Components/Sales/AddCustomer.jsx"));
+const AddAgent = lazy(() => import("./Components/Sales/AddAgent.jsx"));
 const AssignAgent = lazy(() => import("./Components/Dashboard/AssignAgent.jsx"));
 const CarrierDocs = lazy(() => import("./Components/CMT/CarrierDocs.jsx"));
 const DoDetails = lazy(() => import("./Components/CMT/DODetails.jsx"));
@@ -709,6 +710,7 @@ function App() {
           <Route path="team-rating" element={<TeamRating />} />
           <Route path="daily-follow-up" element={<DailyFollowUp />} />
           <Route path="AddCustomer" element={<AddCustomer />} />
+          <Route path="AddAgent" element={<AddAgent />} />
           <Route path="ImportCarrierEmails" element={<ImportCarrierEmails />} />
           <Route path="AssignAgent" element={<AssignAgent />} />
           <Route path="CarrierDocs" element={<CarrierDocs />} />

@@ -101,6 +101,7 @@ const DEPARTMENT_MODULE_CATEGORIES = {
   "Sales": {
     "Customer Management": [
       "Add Customer",
+      "Add Agent",
       "All Customers",
       "All Leads",
       "Customer Loads",
@@ -291,6 +292,7 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Rate Approved",
       "Delivery Order",
       "Add Customer",
+      "Add Agent",
       "All Customers",
       "Trucker Assign",
       "Daily Task",
@@ -508,6 +510,7 @@ const menuItems = [
   { name: "Tier 1 Leads", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/tier1-leads" },
   { name: "All Sales TL", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/all-sales-tl" },
   { name: "Add Customer", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/AddCustomer" },
+  { name: "Add Agent", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/AddAgent" },
   { name: "All Customers", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/allcustomer" },
   { name: "Assign Agent", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/AssignAgent" },
   { name: "DO Details", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/DODetails" },
@@ -1312,7 +1315,13 @@ const Sidebar = () => {
         setUserRole(role); // Set role early so it's available everywhere
         const hasDepartmentCategories = getDepartmentCategories(department, role) !== null;
 
-        const allowedModuleIds = user?.allowedModules?.map(String) || [];
+        const allowedModuleIds = (user?.allowedModules || [])
+          .map((m) => {
+            if (m == null) return '';
+            if (typeof m === 'object') return String(m._id || m.id || '');
+            return String(m);
+          })
+          .filter(Boolean);
         console.log("👤 User role:", role, "Is universal_user:", isUniversalUser, "Is superadmin:", isSuperAdmin);
         console.log("👤 User allowed modules (IDs):", allowedModuleIds);
         console.log("👤 User allowed modules (count):", allowedModuleIds.length);
@@ -1383,6 +1392,9 @@ const Sidebar = () => {
             const moduleAliases = {
               "all rate request": ["rate request"],
               "rate suggestion": ["rate request"],
+              // Menu "Add Customer" (path /AddCustomer) ↔ Module Master "Add Agent" / day-shift import
+              "add customer": ["add agent", "sales day agent", "sales add agent"],
+              "add agent": ["add customer", "sales day agent", "sales add agent"],
               // Backend module name is "Tracker"; allow legacy "Trucker" if ever used
               tracker: ["trucker"],
             // Menu label "CMT Comparison Report" — match older modulemasters names / typo
@@ -1392,7 +1404,7 @@ const Sidebar = () => {
               "c m t  comparison  reportt",
             ],  
           };
-          const matchedMenus = menuItems.filter((item) => {
+          let matchedMenus = menuItems.filter((item) => {
             const match = activeModules.some((mod) => {
               const modName = normalizeForMatch(mod.name);  
               const modLabel = normalizeForMatch(mod.label);
@@ -1415,6 +1427,16 @@ const Sidebar = () => {
               console.log(`❌ No match found for menu item: "${item.name}"`);
             }
             return match;
+          });
+
+          const deptStr =
+            typeof user?.department === 'string' ? user.department : user?.department?.name || '';
+          const salesDept = /^sales$/i.test(deptStr.trim()) || deptStr.toLowerCase().includes('sales');
+          const salesDayShift = salesDept && user?.salesShiftTiming === 'day_shift';
+          matchedMenus = matchedMenus.filter((item) => {
+            if (item.name === 'Add Agent') return salesDayShift;
+            if (item.name === 'Add Customer') return !salesDayShift;
+            return true;
           });
 
           console.log("✅ Final filtered menu items:", matchedMenus.map(m => m.name));

@@ -128,6 +128,7 @@ export default function HourlyCheckinPopup() {
   const pollRef = useRef(null);
   const autoMetricsRef = useRef(null);
   const lastOpenedBucketRef = useRef("");
+  const hourlyExemptRef = useRef(false);
 
   const eligible = useMemo(() => {
     const token = getAuthToken();
@@ -141,12 +142,33 @@ export default function HourlyCheckinPopup() {
   }, []);
 
   const pollStatus = async ({ allowOpen = true, includeAutoMetrics = false } = {}) => {
+    if (hourlyExemptRef.current) return;
     try {
       const res = await getHourlyCheckinStatus(
         includeAutoMetrics ? { includeAutoMetrics: true } : {},
       );
       const data = res?.data || null;
       setStatus(data);
+
+      const user = getUserData();
+      const dept =
+        typeof user?.department === "string"
+          ? user.department
+          : user?.department?.name || "";
+      const salesDept = /sales/i.test((dept || "").trim());
+      const clientDayShift = salesDept && user?.salesShiftTiming === "day_shift";
+      const salesDayExempt =
+        data?.salesDayShiftExempt === true ||
+        (clientDayShift && data?.eligibleForHourlyCheckin === false);
+      if (salesDayExempt) {
+        hourlyExemptRef.current = true;
+        setOpen(false);
+        if (pollRef.current) {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
+        }
+        return;
+      }
 
       const bucketKey = data?.currentHourStart || "";
       const shouldOpen =
