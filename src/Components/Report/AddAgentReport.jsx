@@ -236,7 +236,7 @@ export default function AddAgentReport() {
       const list = extractCreatorArray(res?.data);
       const options = creatorsToOptions(list);
       setEmployeeOptions(options);
-    } catch (error) {
+    } catch (error) { 
       setEmployeeOptions([]);
       handleApiError(
         error,
@@ -276,19 +276,19 @@ export default function AddAgentReport() {
         if (query.endDate) params.endDate = query.endDate;
       }
 
-      const res = await axios.get(
-        `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/reports/add-agent`,
-        { ...getAuthConfig(), params },
-      );
+        const res = await axios.get(
+          `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/reports/add-agent`,
+          { ...getAuthConfig(), params },
+        );
 
-      const payload = res?.data;
-      const data = payload?.data || {};
-      const p = data?.pagination || {};
-      const rawRows = Array.isArray(data?.rows) ? data.rows : [];
+        const payload = res?.data;
+        const data = payload?.data || {};
+        const p = data?.pagination || {};
+        const rawRows = Array.isArray(data?.rows) ? data.rows : [];
 
-      setReportMeta({
-        reportName: data?.reportName || "Add Agent Report",
-        generatedBy: data?.generatedBy || null,
+        setReportMeta({
+          reportName: data?.reportName || "Add Agent Report",
+          generatedBy: data?.generatedBy || null,
         module: payload?.module || null,
         filters: data?.filters || null,
         eligibleCreators: Array.isArray(data?.eligibleCreators)
