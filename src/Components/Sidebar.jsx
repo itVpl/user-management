@@ -41,6 +41,7 @@ import { useUnreadCount } from "../contexts/UnreadCountContext";
 import sharedSocketService from "../services/sharedSocketService";
 import API_CONFIG from "../config/api";
 import SidebarFlyout from "./SidebarFlyout";
+import { isEmployeeActiveForHandoff } from "../utils/salesDayAgentEligibility";
 
 const GMAIL_POPUP_REF_KEY = "__gmailDesktopWindowRef";
 const GMAIL_ACCOUNTS_STORAGE_KEY = "__gmailDesktopAccounts";
@@ -149,6 +150,7 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Customer Loads",
       "Assign Agent"
     ],
+    "Shift handoff": ["Shift Image Handoff", "My Assigned Images"],
     "Communication": [
       "Import Carrier Emails",
       
@@ -342,7 +344,9 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Tracking",
       "Load By Location",
       "Import Carrier Emails",
-      "News Letter"
+      "News Letter",
+      "Shift Image Handoff",
+      "My Assigned Images"
     ],
     "Company Management": [
       "Sub Company"
@@ -555,6 +559,8 @@ const menuItems = [
   { name: "All Sales TL", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/all-sales-tl" },
   { name: "Add Customer", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/AddCustomer" },
   { name: "Add Agent", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/AddAgent" },
+  { name: "Shift Image Handoff", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/sales/shift-image-handoff" },
+  { name: "My Assigned Images", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/sales/my-assigned-images" },
   { name: "All Customers", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/allcustomer" },
   { name: "Assign Agent", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/AssignAgent" },
   { name: "DO Details", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/DODetails" },
@@ -1579,6 +1585,16 @@ const Sidebar = () => {
             if (item.name === 'Add Customer') return !salesDayShift;
             return true;
           });
+
+          const salesActive = salesDept && isEmployeeActiveForHandoff(user);
+          const shiftHandoffItem = menuItems.find((i) => i.name === 'Shift Image Handoff');
+          const myAssignedItem = menuItems.find((i) => i.name === 'My Assigned Images');
+          if (salesActive && shiftHandoffItem && !matchedMenus.some((m) => m.name === 'Shift Image Handoff')) {
+            matchedMenus = [...matchedMenus, shiftHandoffItem];
+          }
+          if (salesActive && myAssignedItem && !matchedMenus.some((m) => m.name === 'My Assigned Images')) {
+            matchedMenus = [...matchedMenus, myAssignedItem];
+          }
 
           console.log("✅ Final filtered menu items:", matchedMenus.map(m => m.name));
           console.log("❌ Unmatched active modules:", activeModules.filter(mod => 

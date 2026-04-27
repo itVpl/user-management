@@ -71,6 +71,8 @@ const TeamRating = lazy(() => import("./Components/Sales/TeamRating.jsx"));
 const DailyFollowUp = lazy(() => import("./Pages/DailyFollowUp.jsx"));
 const AddCustomer = lazy(() => import("./Components/Sales/AddCustomer.jsx"));
 const AddAgent = lazy(() => import("./Components/Sales/AddAgent.jsx"));
+const ShiftImageHandoff = lazy(() => import("./Components/Sales/ShiftImageHandoff.jsx"));
+const MyAssignedImages = lazy(() => import("./Components/Sales/MyAssignedImages.jsx"));
 const AssignAgent = lazy(() => import("./Components/Dashboard/AssignAgent.jsx"));
 const CarrierDocs = lazy(() => import("./Components/CMT/CarrierDocs.jsx"));
 const DoDetails = lazy(() => import("./Components/CMT/DODetails.jsx"));
@@ -712,6 +714,8 @@ function App() {
           <Route path="daily-follow-up" element={<DailyFollowUp />} />
           <Route path="AddCustomer" element={<AddCustomer />} />
           <Route path="AddAgent" element={<AddAgent />} />
+          <Route path="sales/shift-image-handoff" element={<ShiftImageHandoff />} />
+          <Route path="sales/my-assigned-images" element={<MyAssignedImages />} />
           <Route path="ImportCarrierEmails" element={<ImportCarrierEmails />} />
           <Route path="AssignAgent" element={<AssignAgent />} />
           <Route path="CarrierDocs" element={<CarrierDocs />} />

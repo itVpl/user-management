@@ -4,7 +4,8 @@
 
 export function getUserFromStorage() {
   try {
-    const raw = sessionStorage.getItem('user') || localStorage.getItem('user');
+    // Match App.jsx / TopBar: localStorage first (some sessions only persist here)
+    const raw = localStorage.getItem('user') || sessionStorage.getItem('user');
     if (!raw) return null;
     return JSON.parse(raw);
   } catch {
@@ -15,9 +16,19 @@ export function getUserFromStorage() {
 export function getDepartmentString(user) {
   if (!user) return '';
   const d = user.department;
-  if (typeof d === 'string') return d.trim();
-  if (d && typeof d === 'object' && typeof d.name === 'string') return d.name.trim();
+  if (typeof d === 'string' && d.trim()) return d.trim();
+  if (d && typeof d === 'object' && typeof d.name === 'string' && d.name.trim()) return d.name.trim();
+  const alt = user.departmentName || user.designation || user.position || user.role;
+  if (typeof alt === 'string' && alt.trim()) return alt.trim();
   return '';
+}
+
+/** Login payload often omits `status`; treat missing like other screens (e.g. Manage User). */
+export function isEmployeeActiveForHandoff(user) {
+  if (!user) return false;
+  const s = String(user.status ?? '').trim().toLowerCase();
+  if (s === '' || s === 'undefined') return true;
+  return s === 'active';
 }
 
 export function isSalesDepartment(user) {
