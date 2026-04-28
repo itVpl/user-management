@@ -12,7 +12,12 @@ const REPORT_BASE = `${API_CONFIG.BASE_URL}/api/v1/analytics/8x8`;
 
 /** Caller names shown in “All caller aliases” even if not returned from active employees (e.g. Triton line). */
 const STATIC_REPORT_CALLER_ALIASES = [
-  { label: "Identifica LLC", value: "Identifica LLC", empId: "static-identifica-llc" },
+  {
+    label: "Identifica LLC",
+    value: "Identifica LLC",
+    empId: "static-identifica-llc",
+    mobileNo: "",
+  },
 ];
 
 const mergeStaticReportCallerAliases = (fromApi) => {
@@ -66,6 +71,7 @@ const formatOneOnOneFieldValue = (key, value) => {
 
 const EMPTY_DETAILS = {
   customerName: "",
+  contactNumber: "",
   emailAddress: "",
   address: "",
   contactPerson: "",
@@ -161,6 +167,7 @@ const getAuthConfig = () => {
 
 const toBool = (val) => val === true || val === "true";
 const toMinutes = (ms) => (Number(ms || 0) / 60000).toFixed(2);
+const toHoursFromMinutes = (minutes) => (Number(minutes || 0) / 60).toFixed(2);
 
 /** Normalized receiver line from report row (matches backend: calleeNumber / receiverNumber or callee.phoneNumber). */
 const getCalleeReceiverNumber = (record) =>
@@ -185,6 +192,8 @@ const CallDataReports = () => {
     filters: {
       ...getTodayRange(),
       callerName: "",
+      callerMobileNo: "",
+      callerEmpId: "",
       category: "",
       page: 1,
       limit: 10,
@@ -218,6 +227,8 @@ const CallDataReports = () => {
   const dateDropdownRef = useRef(null);
   const callerDropdownRef = useRef(null);
   const categoryDropdownRef = useRef(null);
+  const activeReportAbortRef = useRef(null);
+  const latestReportRequestRef = useRef(0);
 
   const activeRecord = useMemo(
     () => state.records.find((r) => r.callId === followUpModal.callId) || null,
@@ -282,6 +293,7 @@ const CallDataReports = () => {
             label: display,
             value: display,
             empId: emp?.empId || emp?._id || "",
+            mobileNo: emp?.mobileNo || emp?.phoneNo || emp?.phone || "",
           };
         })
         .filter((item) => item.value)
@@ -334,6 +346,13 @@ const CallDataReports = () => {
   };
 
   const fetchReport = async (incomingFilters) => {
+    if (activeReportAbortRef.current) {
+      activeReportAbortRef.current.abort();
+    }
+    const controller = new AbortController();
+    activeReportAbortRef.current = controller;
+    const requestId = latestReportRequestRef.current + 1;
+    latestReportRequestRef.current = requestId;
     const filters = incomingFilters || state.filters;
     const page = Math.max(1, Number(filters.page || 1));
     const limit = 10;
@@ -344,6 +363,8 @@ const CallDataReports = () => {
         if (filters.from) params.set("from", filters.from);
         if (filters.to) params.set("to", filters.to);
         if (filters.callerName?.trim()) params.set("callerName", filters.callerName.trim());
+        if (filters.callerMobileNo?.trim()) params.set("mobileNo", filters.callerMobileNo.trim());
+        if (filters.callerEmpId?.trim()) params.set("empId", filters.callerEmpId.trim());
         if (filters.category?.trim()) params.set("category", filters.category.trim());
         params.set("pageSize", String(requestedLimit));
         params.set("page", String(requestedPage));
@@ -354,12 +375,19 @@ const CallDataReports = () => {
       const requestPayload = async (requestedPage, requestedLimit) => {
         const params = buildParams(requestedPage, requestedLimit);
         try {
-          const reportRes = await axios.get(`${REPORT_BASE}/call-records/report?${params.toString()}`, getAuthConfig());
+          const reportRes = await axios.get(`${REPORT_BASE}/call-records/report?${params.toString()}`, {
+            ...getAuthConfig(),
+            signal: controller.signal,
+          });
           return reportRes?.data || {};
         } catch (primaryErr) {
+          if (primaryErr?.code === "ERR_CANCELED") throw primaryErr;
           if (primaryErr?.response?.status === 404) throw primaryErr;
           console.warn("Primary report API failed, trying filter API:", primaryErr);
-          const filterRes = await axios.get(`${REPORT_BASE}/call-records/filter?${params.toString()}`, getAuthConfig());
+          const filterRes = await axios.get(`${REPORT_BASE}/call-records/filter?${params.toString()}`, {
+            ...getAuthConfig(),
+            signal: controller.signal,
+          });
           return filterRes?.data || {};
         }
       };
@@ -390,16 +418,26 @@ const CallDataReports = () => {
       ) || 0;
       if (totalPagesFromApi > 1 && totalFromApi > nextRecords.length) {
         const pageFetchLimit = apiLimit > 0 ? apiLimit : 100;
-        for (let p = 2; p <= totalPagesFromApi; p += 1) {
-          const pagePayload = await requestPayload(p, pageFetchLimit);
-          const pageRecords = Array.isArray(pagePayload?.data)
-            ? pagePayload.data
-            : Array.isArray(pagePayload?.records)
-              ? pagePayload.records
-              : [];
-          if (!pageRecords.length) break;
-          nextRecords = [...nextRecords, ...pageRecords];
-          if (nextRecords.length >= totalFromApi) break;
+        const pageNumbers = [];
+        for (let p = 2; p <= totalPagesFromApi; p += 1) pageNumbers.push(p);
+        const pagePayloads = await Promise.all(
+          pageNumbers.map(async (p) => ({
+            page: p,
+            payload: await requestPayload(p, pageFetchLimit),
+          }))
+        );
+        pagePayloads
+          .sort((a, b) => a.page - b.page)
+          .forEach(({ payload }) => {
+            const pageRecords = Array.isArray(payload?.data)
+              ? payload.data
+              : Array.isArray(payload?.records)
+                ? payload.records
+                : [];
+            if (pageRecords.length) nextRecords = [...nextRecords, ...pageRecords];
+          });
+        if (nextRecords.length > totalFromApi) {
+          nextRecords = nextRecords.slice(0, totalFromApi);
         }
       }
       const computedSummary = {
@@ -444,6 +482,9 @@ const CallDataReports = () => {
         }, {})
       );
 
+      if (requestId !== latestReportRequestRef.current || controller.signal.aborted) {
+        return;
+      }
       setState((prev) => ({
         ...prev,
         loading: false,
@@ -462,6 +503,12 @@ const CallDataReports = () => {
       }));
       setDrafts({});
     } catch (error) {
+      if (error?.code === "ERR_CANCELED" || controller.signal.aborted) {
+        return;
+      }
+      if (requestId !== latestReportRequestRef.current) {
+        return;
+      }
       console.error("Call report fetch failed:", error);
       const status = error?.response?.status;
       const apiMessage = error?.response?.data?.message;
@@ -486,6 +533,10 @@ const CallDataReports = () => {
         error: "Failed to load call report",
       }));
       toast.error("Failed to load call report");
+    } finally {
+      if (activeReportAbortRef.current === controller) {
+        activeReportAbortRef.current = null;
+      }
     }
   };
 
@@ -567,7 +618,15 @@ const CallDataReports = () => {
   };
 
   const handleReset = async () => {
-    const defaults = { ...getTodayRange(), callerName: "", category: "", page: 1, limit: 10 };
+    const defaults = {
+      ...getTodayRange(),
+      callerName: "",
+      callerMobileNo: "",
+      callerEmpId: "",
+      category: "",
+      page: 1,
+      limit: 10,
+    };
     setDatePreset("today");
     setTableSearchText("");
     setState((prev) => ({ ...prev, filters: defaults }));
@@ -1145,7 +1204,15 @@ const CallDataReports = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    updateFilter("callerName", "");
+                    const next = {
+                      ...state.filters,
+                      callerName: "",
+                      callerMobileNo: "",
+                      callerEmpId: "",
+                      page: 1,
+                    };
+                    setState((prev) => ({ ...prev, filters: next }));
+                    fetchReport(next);
                     setCallerDropdownOpen(false);
                   }}
                   className={`mt-2 w-full h-10 px-3 rounded-lg text-left ${
@@ -1163,7 +1230,15 @@ const CallDataReports = () => {
                         key={`caller-${option.empId}-${option.value}`}
                         type="button"
                         onClick={() => {
-                          updateFilter("callerName", option.value);
+                          const next = {
+                            ...state.filters,
+                            callerName: option.value || "",
+                            callerMobileNo: option.mobileNo ? String(option.mobileNo).trim() : "",
+                            callerEmpId: option.empId ? String(option.empId).trim() : "",
+                            page: 1,
+                          };
+                          setState((prev) => ({ ...prev, filters: next }));
+                          fetchReport(next);
                           setCallerDropdownOpen(false);
                         }}
                         className={`w-full h-10 px-3 rounded-lg text-left ${
@@ -1311,7 +1386,7 @@ const CallDataReports = () => {
                 <div>Total Calls</div>
                 <div>Answered</div>
                 <div>Missed</div>
-                <div>Talk Time (min)</div>
+                <div>Talk Time (Hrs)</div>
                 <div>Categorized</div>
                 <div>Follow-up</div>
               </div>
@@ -1336,7 +1411,7 @@ const CallDataReports = () => {
                     <div className="tabular-nums text-base">{emp.totalCalls || 0}</div>
                     <div className="tabular-nums text-base">{emp.answeredCalls || 0}</div>
                     <div className="tabular-nums text-base">{emp.missedCalls || 0}</div>
-                    <div className="tabular-nums text-lg font-semibold text-gray-900">{emp.totalTalkTimeMinutes || 0}</div>
+                    <div className="tabular-nums text-base">{toHoursFromMinutes(emp.totalTalkTimeMinutes)}</div>
                     <div className="tabular-nums text-base">{emp.categorizedCalls || 0}</div>
                     <div className="tabular-nums text-base">{emp.followUpCount || 0}</div>
                   </div>
