@@ -35,6 +35,84 @@ export default function TargetReports() {
     );
   }
 
+  const toTwo = (num) => Number(num || 0).toFixed(2);
+  const formatHoursToReadable = (hours) => {
+    const safeHours = Number(hours || 0);
+    const h = Math.floor(safeHours);
+    const m = Math.round((safeHours - h) * 60);
+    return `${h}h ${m}m`;
+  };
+
+  const fetchEmployeeTalkTimeHours = async (employee, date) => {
+    const callerName = String(employee?.aliasName || employee?.employeeName || "").trim();
+    const mobileNo = String(employee?.mobileNo || "").trim();
+    const empId = String(employee?.empId || "").trim();
+    if (!callerName && !mobileNo && !empId) return 0;
+
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/api/v1/analytics/8x8/call-records/report?from=${encodeURIComponent(date)}&to=${encodeURIComponent(date)}&callerName=${encodeURIComponent(callerName)}&mobileNo=${encodeURIComponent(mobileNo)}&empId=${encodeURIComponent(empId)}&pageSize=1500&page=1&limit=1500`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      );
+      const payload = await res.json();
+      const totalTalkTimeMS = Number(payload?.summary?.totalTalkTimeMS || 0);
+      return totalTalkTimeMS > 0 ? totalTalkTimeMS / 3600000 : 0;
+    } catch (error) {
+      console.warn(`Talktime report fetch failed for ${employee?.empId || employee?.employeeName || 'employee'}`, error);
+      return Number(employee?.targets?.talkTime?.current || 0);
+    }
+  };
+
+  const enrichReportWithLiveTalktime = async (reportData, date) => {
+    if (!reportData || !Array.isArray(reportData.employees)) return reportData;
+    const enrichedEmployees = await Promise.all(
+      reportData.employees.map(async (employee) => {
+        const talkTimeHours = await fetchEmployeeTalkTimeHours(employee, date);
+        return {
+          ...employee,
+          talkTime: {
+            ...(employee.talkTime || {}),
+            formatted: formatHoursToReadable(talkTimeHours),
+          },
+          targets: {
+            ...(employee.targets || {}),
+            talkTime: {
+              ...(employee.targets?.talkTime || {}),
+              current: talkTimeHours,
+            },
+          },
+        };
+      })
+    );
+
+    const totalTalkTimeHours = enrichedEmployees.reduce(
+      (sum, emp) => sum + Number(emp?.targets?.talkTime?.current || 0),
+      0
+    );
+    const avgTalkTimeHours = enrichedEmployees.length ? totalTalkTimeHours / enrichedEmployees.length : 0;
+
+    return {
+      ...reportData,
+      employees: enrichedEmployees,
+      summary: {
+        ...(reportData.summary || {}),
+        targets: {
+          ...(reportData.summary?.targets || {}),
+          talkTime: {
+            ...(reportData.summary?.targets?.talkTime || {}),
+            total: Number(toTwo(totalTalkTimeHours)),
+            avg: Number(toTwo(avgTalkTimeHours)),
+          },
+        },
+      },
+    };
+  };
+
 
   // Fetch Sales Report
   const fetchSalesReport = async (date) => {
@@ -52,7 +130,8 @@ export default function TargetReports() {
 
 
       if (data.success) {
-        setSalesData(data.data);
+        const enrichedData = await enrichReportWithLiveTalktime(data.data, date);
+        setSalesData(enrichedData);
       } else {
         alertify.error(data.message || 'Failed to fetch sales report');
       }
@@ -81,7 +160,8 @@ export default function TargetReports() {
 
 
       if (data.success) {
-        setCmtData(data.data);
+        const enrichedData = await enrichReportWithLiveTalktime(data.data, date);
+        setCmtData(enrichedData);
       } else {
         alertify.error(data.message || 'Failed to fetch CMT report');
       }
@@ -326,8 +406,7 @@ export default function TargetReports() {
                       </td>
                       <td className="py-4 px-6">
                         <div>
-                          <div className="font-medium text-gray-800">{employee.talkTime.formatted}</div>
-                          <div className="text-xs text-gray-500">
+                          <div className="font-medium text-gray-800">
                             {employee.targets.talkTime.current.toFixed(2)}/{employee.targets.talkTime.required}h
                           </div>
                         </div>
