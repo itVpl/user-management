@@ -36,6 +36,44 @@ const getToken = () =>
   sessionStorage.getItem("token") ||
   localStorage.getItem("token");
 
+const getLoggedInEmpId = () =>
+  sessionStorage.getItem("empId") || localStorage.getItem("empId") || "";
+
+const MT_POCONO_COMPANY = "MT. POCONO TRANSPORTATION INC";
+const ONBOARD_COMPANY_OPTIONS = [
+  "V Power Logistics",
+  "IDENTIFICA LLC",
+  MT_POCONO_COMPANY,
+];
+
+const normalizeCompany = (value) => String(value || "").trim().toLowerCase();
+
+const readCompanyField = (...values) => {
+  for (const value of values) {
+    if (value !== null && value !== undefined && String(value).trim() !== "") {
+      return value;
+    }
+  }
+  return "";
+};
+
+const readOnboardCompany = (obj) =>
+  readCompanyField(
+    obj?.onboardCompany,
+    obj?.onBoardCompany,
+    obj?.onboard_company,
+    obj?.onboardingCompany,
+    obj?.companyOnboard,
+  );
+
+const readAssignedCompany = (obj) =>
+  readCompanyField(
+    obj?.assignedCompany,
+    obj?.assigned_company,
+    obj?.companyAssigned,
+    obj?.assignCompany,
+  );
+
 const getAuthConfig = () => {
   const token = getToken();
   return {
@@ -179,9 +217,13 @@ const METRIC_RANGE_EMPTY = {
 
 export default function AddCustomerReport() {
   const navigate = useNavigate();
+  const loggedInEmpId = (getLoggedInEmpId() || "").trim().toUpperCase();
+  const isVpl077User = loggedInEmpId === "VPL077";
   const [filters, setFilters] = useState({
     search: "",
     addedByEmpId: "",
+    onboardCompany: isVpl077User ? MT_POCONO_COMPANY : "",
+    assignedCompany: "",
   });
   const [_reportMeta, setReportMeta] = useState(null);
   const [rows, setRows] = useState([]);
@@ -423,7 +465,14 @@ export default function AddCustomerReport() {
           label: `${emp?.employeeName || emp?.name || "Unknown"} (${emp?.empId || "-"})`,
           value: emp?.empId || "",
         }))
-        .filter((x) => x.value);
+        .filter(
+          (x) =>
+            x.value &&
+            !(
+              isVpl077User &&
+              normalizeCompany(x.label).includes(normalizeCompany("Rishi Jyoti"))
+            ),
+        );
       setEmployeeOptions(options);
     } catch (error) {
       setEmployeeOptions([]);
@@ -431,7 +480,7 @@ export default function AddCustomerReport() {
     } finally {
       setLoadingEmployees(false);
     }
-  }, [handleApiError]);
+  }, [handleApiError, isVpl077User]);
 
   const hasMetricDateFilter = useMemo(
     () =>
@@ -464,6 +513,9 @@ export default function AddCustomerReport() {
         };
         if (filters.search.trim()) params.search = filters.search.trim();
         if (filters.addedByEmpId) params.addedByEmpId = filters.addedByEmpId;
+        if (filters.assignedCompany) params.assignedCompany = filters.assignedCompany;
+        if (isVpl077User) params.onboardCompany = MT_POCONO_COMPANY;
+        else if (filters.onboardCompany) params.onboardCompany = filters.onboardCompany;
 
         const res = await axios.get(
           `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/reports/add-customer`,
@@ -477,6 +529,28 @@ export default function AddCustomerReport() {
         const data = payload?.data || {};
         const p = data?.pagination || {};
         const rawRows = Array.isArray(data?.rows) ? data.rows : [];
+        const scopedRows = rawRows.filter((row) => {
+          if (
+            filters.onboardCompany &&
+            normalizeCompany(readOnboardCompany(row)) !==
+              normalizeCompany(filters.onboardCompany)
+          ) {
+            return false;
+          }
+          if (
+            isVpl077User &&
+            normalizeCompany(readOnboardCompany(row)) !== normalizeCompany(MT_POCONO_COMPANY)
+          ) {
+            return false;
+          }
+          if (
+            filters.assignedCompany &&
+            normalizeCompany(readAssignedCompany(row)) !== normalizeCompany(filters.assignedCompany)
+          ) {
+            return false;
+          }
+          return true;
+        });
         setReportMeta({
           reportName: data?.reportName || "Add Customer Report",
           generatedBy: data?.generatedBy || null,
@@ -484,7 +558,7 @@ export default function AddCustomerReport() {
         });
 
         if (useClientMetric) {
-          const filtered = filterRowsByMetricDates(rawRows, metricDates);
+          const filtered = filterRowsByMetricDates(scopedRows, metricDates);
           setMetricFilteredRows(filtered);
           setRows([]);
           const nextLimit = Number(limit) || DEFAULT_LIMIT;
@@ -500,10 +574,10 @@ export default function AddCustomerReport() {
           });
         } else {
           setMetricFilteredRows(null);
-          setRows(rawRows);
+          setRows(scopedRows);
           const nextPage = Number(page) || 1;
           const nextLimit = Number(p.limit ?? limit) || DEFAULT_LIMIT;
-          const nextTotal = Number(p.total ?? 0) || 0;
+          const nextTotal = scopedRows.length;
           const nextTotalPages = Math.max(1, Math.ceil(nextTotal / nextLimit));
           setPagination({
             page: Math.min(nextPage, nextTotalPages),
@@ -520,7 +594,7 @@ export default function AddCustomerReport() {
         setLoading(false);
       }
     },
-    [filters, pagination.limit, handleApiError, hasMetricDateFilter, metricDates],
+    [filters, pagination.limit, handleApiError, hasMetricDateFilter, metricDates, isVpl077User],
   );
 
   const isClientMetricMode = metricFilteredRows != null;
@@ -587,6 +661,8 @@ export default function AddCustomerReport() {
     setFilters({
       search: "",
       addedByEmpId: "",
+      onboardCompany: isVpl077User ? MT_POCONO_COMPANY : "",
+      assignedCompany: "",
     });
     setAddedByDdQuery("");
     setAddedByDdOpen(false);
@@ -663,6 +739,21 @@ export default function AddCustomerReport() {
       String(opt.label).toLowerCase().includes(q),
     );
   }, [addedByDdQuery, employeeOptions]);
+  const onboardCompanyOptions = useMemo(() => {
+    if (isVpl077User) return [MT_POCONO_COMPANY];
+    return ONBOARD_COMPANY_OPTIONS;
+  }, [isVpl077User]);
+  const assignedCompanyOptions = useMemo(() => {
+    const sourceRows = metricFilteredRows ?? rows;
+    const unique = Array.from(
+      new Set(
+        sourceRows
+          .map((r) => readAssignedCompany(r))
+          .filter((x) => x && x !== "-"),
+      ),
+    );
+    return unique.sort((a, b) => String(a).localeCompare(String(b)));
+  }, [metricFilteredRows, rows]);
   const limitSelectedLabel = useMemo(() => {
     const found = LIMIT_OPTIONS.find(
       (n) => Number(n) === Number(pagination.limit),
@@ -856,6 +947,45 @@ export default function AddCustomerReport() {
                     )}
                   </div>
                 </div>
+              </div>
+
+              <div className="min-w-[220px] max-w-[280px] shrink-0 relative">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  OnBoard Company
+                </label>
+                <select
+                  value={filters.onboardCompany}
+                  onChange={(e) => onFilterChange("onboardCompany", e.target.value)}
+                  disabled={isVpl077User}
+                  className="w-full px-4 h-[45px] border border-gray-200 rounded-lg bg-white text-gray-700 font-medium hover:border-gray-300 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:bg-gray-100"
+                >
+                  {!isVpl077User && <option value="">All Companies</option>}
+                  {onboardCompanyOptions.map((company) => (
+                    <option key={company} value={company}>
+                      {company}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="min-w-[220px] max-w-[280px] shrink-0 relative">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Assigned Company
+                </label>
+                <select
+                  value={filters.assignedCompany}
+                  onChange={(e) =>
+                    onFilterChange("assignedCompany", e.target.value)
+                  }
+                  className="w-full px-4 h-[45px] border border-gray-200 rounded-lg bg-white text-gray-700 font-medium hover:border-gray-300 transition-colors cursor-pointer"
+                >
+                  <option value="">All Companies</option>
+                  {assignedCompanyOptions.map((company) => (
+                    <option key={company} value={company}>
+                      {company}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div
@@ -1594,6 +1724,20 @@ export default function AddCustomerReport() {
                                 )}
                               </p>
                             </div>
+                          </div>
+                          <div className="sm:col-span-2">
+                            <p className="text-sm text-gray-600">On Board Company</p>
+                            <p className="font-medium text-gray-800 break-words">
+                              {readValue(
+                                detailData?.onboardCompany,
+                                detailData?.onBoardCompany,
+                                detailData?.onboard_company,
+                                detailData?.onboardingCompany,
+                                detailsModal.row?.onboardCompany,
+                                detailsModal.row?.onBoardCompany,
+                                detailsModal.row?.onboard_company,
+                              )}
+                            </p>
                           </div>
                         </div>
                       </div>

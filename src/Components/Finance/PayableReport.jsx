@@ -15,8 +15,56 @@ const fmtMoney = (v) => (typeof v === "number" ? v.toFixed(2) : "0.00");
 const fmtDateTime = (d) => (d ? new Date(d).toLocaleString() : "—");
 const isImageUrl = (url = "") => /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(url);
 const isPdfUrl = (url = "") => /\.pdf$/i.test(url);
+const MT_POCONO_COMPANY = 'MT. POCONO TRANSPORTATION INC';
+const normalizeText = (v) => String(v || '').trim().toLowerCase();
+const getLoggedInEmpId = () => {
+  const direct =
+    sessionStorage.getItem('empId') ||
+    localStorage.getItem('empId') ||
+    sessionStorage.getItem('employeeId') ||
+    localStorage.getItem('employeeId');
+  if (direct) return String(direct).trim();
+
+  const stores = [sessionStorage, localStorage];
+  const keys = ['user', 'employee', 'profile', 'authUser', 'userData'];
+  for (const store of stores) {
+    for (const key of keys) {
+      const raw = store.getItem(key);
+      if (!raw) continue;
+      try {
+        const obj = JSON.parse(raw);
+        const nested =
+          obj?.empId ||
+          obj?.employeeId ||
+          obj?.employee?.empId ||
+          obj?.employee?.employeeId ||
+          obj?.user?.empId ||
+          obj?.user?.employeeId;
+        if (nested) return String(nested).trim();
+      } catch {
+        // ignore bad JSON
+      }
+    }
+  }
+  return '';
+};
+const getOrderCompanyName = (order) =>
+  String(
+    order?.addDispature ||
+      order?.addDispatcher ||
+      order?.assignedCompany ||
+      order?.onboardCompany ||
+      order?.onBoardCompany ||
+      order?.companyName ||
+      order?.billTo ||
+      '',
+  ).trim();
+const isMtPoconoOrder = (order) =>
+  normalizeText(getOrderCompanyName(order)) === normalizeText(MT_POCONO_COMPANY);
 
 const PayableReport = () => {
+  const loggedInEmpId = normalizeText(getLoggedInEmpId());
+  const isVpl077User = loggedInEmpId === 'vpl077';
   const [dos, setDos] = useState([]);
   const [loading, setLoading] = useState(true); // Set to true to show loading on mount
   const [searchTerm, setSearchTerm] = useState('');
@@ -41,6 +89,8 @@ const PayableReport = () => {
   });
   const [showPresetMenu, setShowPresetMenu] = useState(false);
   const [showCustomRange, setShowCustomRange] = useState(false);
+  const [companyFilter, setCompanyFilter] = useState(isVpl077User ? MT_POCONO_COMPANY : '');
+  const [companies, setCompanies] = useState([]);
 
   // Presets
   const presets = {
@@ -74,7 +124,7 @@ const PayableReport = () => {
   // Auto-fetch data on component mount and when date range changes
   useEffect(() => {
     fetchAllDOs();
-  }, [range]);
+  }, [range, companyFilter]);
 
   const fetchAllDOs = async () => {
     try {
@@ -89,6 +139,11 @@ const PayableReport = () => {
         params.startDate = ymd(range.startDate);
         params.endDate = ymd(range.endDate);
       }
+      if (isVpl077User) {
+        params.addDispature = MT_POCONO_COMPANY;
+      } else if (companyFilter && companyFilter.trim()) {
+        params.addDispature = companyFilter.trim();
+      }
       
       const response = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/do/do/carrier-payment-report`, {
         params,
@@ -102,7 +157,10 @@ const PayableReport = () => {
         // Combine paid and unpaid DOs - ensure arrays
         const paidDOs = Array.isArray(response.data.paidDOs?.all) ? response.data.paidDOs.all : [];
         const unpaidDOs = Array.isArray(response.data.unpaidDOs?.all) ? response.data.unpaidDOs.all : [];
-        const allDOs = [...paidDOs, ...unpaidDOs];
+        let allDOs = [...paidDOs, ...unpaidDOs];
+        if (isVpl077User) {
+          allDOs = allDOs.filter(isMtPoconoOrder);
+        }
         
         const transformedDOs = allDOs.map(order => {
           // Transform the API response to match component structure
@@ -145,6 +203,7 @@ const PayableReport = () => {
             doNum: order.loadNo || '',
             clientName: order.billTo || '',
             carrierName: order.carrierName || '',
+            companyName: getOrderCompanyName(order),
             carrierFees: order.carrierFeesAmount || order.totalCarrierFees || 0,
             createdAt: new Date(order.createdAt || order.date).toISOString().split('T')[0],
             createdBySalesUser: '',
@@ -175,9 +234,20 @@ const PayableReport = () => {
         });
 
         setDos(transformedDOs);
+        const uniqueCompanies = Array.from(
+          new Set(
+            transformedDOs
+              .map((o) => String(o.companyName || '').trim())
+              .filter(Boolean),
+          ),
+        ).sort((a, b) => a.localeCompare(b));
+        setCompanies(
+          isVpl077User ? [MT_POCONO_COMPANY] : uniqueCompanies,
+        );
+        if (isVpl077User) setCompanyFilter(MT_POCONO_COMPANY);
         
         // Set statistics from API response summary
-        if (response.data.summary) {
+        if (response.data.summary && !isVpl077User) {
           const stats = {
             total: response.data.summary.totalDOs || 0,
             paid: response.data.summary.paidCount || 0,
@@ -188,8 +258,10 @@ const PayableReport = () => {
           console.log('Setting statistics:', stats);
           console.log('API summary:', response.data.summary);
           setStatistics(stats);
-        } else {
+        } else if (!isVpl077User) {
           console.warn('No summary found in API response:', response.data);
+        } else {
+          setStatistics({});
         }
       }
     } catch (error) {
@@ -234,9 +306,23 @@ const PayableReport = () => {
         return doDate >= start && doDate <= end;
       });
     }
+    // Filter by company
+    if (companyFilter && companyFilter.trim()) {
+      filtered = filtered.filter((deliveryOrder) =>
+        normalizeText(deliveryOrder.companyName) === normalizeText(companyFilter),
+      );
+    }
     
     return filtered;
-  }, [dos, searchTerm, range, remarkFilter]);
+  }, [dos, searchTerm, range, remarkFilter, companyFilter]);
+
+  const dashboardStats = useMemo(() => {
+    const total = filteredDOs.length;
+    const paid = filteredDOs.filter((d) => String(d?.paymentStatus || '').toLowerCase() === 'paid').length;
+    const unpaid = Math.max(0, total - paid);
+    const notOk = filteredDOs.filter((d) => d?.paymentRemark?.status === 'not_okay').length;
+    return { total, paid, unpaid, notOk };
+  }, [filteredDOs]);
 
   // Update Payment Remark function
   const updatePaymentRemark = async (doId, newStatus, notes = '') => {
@@ -321,7 +407,7 @@ const PayableReport = () => {
   // Reset to first page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, range]);
+  }, [searchTerm, range, companyFilter, remarkFilter]);
 
   // Helper function to format date
   const formatDate = (dateString) => {
@@ -450,7 +536,7 @@ const PayableReport = () => {
               </div>
               <div>
                 <p className="text-sm text-gray-600">Total DO</p>
-                <p className="text-xl font-bold text-gray-800">{statistics.total || dos.length}</p>
+                <p className="text-xl font-bold text-gray-800">{dashboardStats.total}</p>
               </div>
             </div>
           </div>
@@ -463,7 +549,7 @@ const PayableReport = () => {
               </div>
               <div>
                 <p className="text-sm text-gray-600">Paid</p>
-                <p className="text-xl font-bold text-green-600">{statistics.paid ?? 0}</p>
+                <p className="text-xl font-bold text-green-600">{dashboardStats.paid}</p>
               </div>
             </div>
           </div>
@@ -476,7 +562,7 @@ const PayableReport = () => {
               </div>
               <div>
                 <p className="text-sm text-gray-600">Unpaid</p>
-                <p className="text-xl font-bold text-red-600">{statistics.unpaid ?? 0}</p>
+                <p className="text-xl font-bold text-red-600">{dashboardStats.unpaid}</p>
               </div>
             </div>
           </div>
@@ -490,7 +576,7 @@ const PayableReport = () => {
               <div>
                 <p className="text-sm text-gray-600">Not OK</p>
                 <p className="text-xl font-bold text-orange-600">
-                  {dos.filter(d => d.paymentRemark?.status === 'not_okay').length}
+                  {dashboardStats.notOk}
                 </p>
               </div>
             </div>
@@ -521,6 +607,27 @@ const PayableReport = () => {
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
+          </div>
+
+          {/* Company Filter */}
+          <div className="relative">
+            <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 z-10" size={18} />
+            <select
+              value={companyFilter}
+              onChange={(e) => setCompanyFilter(e.target.value)}
+              className="w-[250px] pl-9 pr-8 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none cursor-pointer disabled:cursor-not-allowed disabled:bg-gray-100"
+              disabled={isVpl077User}
+            >
+              {!isVpl077User && <option value="">All Companies</option>}
+              {companies.map((company) => (
+                <option key={company} value={company}>
+                  {company}
+                </option>
+              ))}
+            </select>
+            <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
+              <span className="text-gray-400">▼</span>
+            </div>
           </div>
 
           {/* Date Range Picker */}

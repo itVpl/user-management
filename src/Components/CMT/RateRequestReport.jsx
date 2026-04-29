@@ -301,6 +301,11 @@ const getReportAuthToken = () =>
   sessionStorage.getItem("token") ||
   localStorage.getItem("token");
 
+const getLoggedInEmpId = () =>
+  sessionStorage.getItem("empId") ||
+  localStorage.getItem("empId") ||
+  "";
+
 /**
  * Rate Request Report Component for CMT Users (Similar to EmptyTruckLocation Design)
  */
@@ -345,10 +350,14 @@ const RateRequestReport = () => {
   };
   const ymd = (d) => format(d, "yyyy-MM-dd"); // "YYYY-MM-DD"
 
+  const loggedInEmpId = (getLoggedInEmpId() || "").trim().toUpperCase();
+  const isVpl077User = loggedInEmpId === "VPL077";
+  const MT_POCONO_COMPANY = "MT. POCONO TRANSPORTATION INC";
+
   const [filters, setFilters] = useState({
     userId: "",
     loadType: "",
-    assignedCompany: "",
+    assignedCompany: isVpl077User ? MT_POCONO_COMPANY : "",
     cmtEmpId: "",
   });
   const [showDetailsModal, setShowDetailsModal] = useState(false);
@@ -515,7 +524,7 @@ const RateRequestReport = () => {
     setFilters({
       userId: "",
       loadType: "",
-      assignedCompany: "",
+      assignedCompany: isVpl077User ? MT_POCONO_COMPANY : "",
       cmtEmpId: "",
     });
     setRange({
@@ -633,7 +642,12 @@ const RateRequestReport = () => {
     );
   };
 
-  const filteredLoads = loads.filter((load) => {
+  const scopedLoads = useMemo(() => {
+    if (!isVpl077User) return loads;
+    return loads.filter((load) => load.assignedCompany === MT_POCONO_COMPANY);
+  }, [loads, isVpl077User]);
+
+  const filteredLoads = scopedLoads.filter((load) => {
     if (filters.userId && load.postedBy?.empId !== filters.userId) return false;
     if (filters.loadType && load.loadType !== filters.loadType) return false;
     if (
@@ -675,9 +689,39 @@ const RateRequestReport = () => {
     return true;
   });
 
+  const cardStats = useMemo(() => {
+    const totalLoadsPosted = filteredLoads.length;
+    const totalBidsReceived = filteredLoads.reduce(
+      (sum, load) => sum + (Number(load?.bidCount) || 0),
+      0,
+    );
+    const loadsWithBids = filteredLoads.filter(
+      (load) => (Number(load?.bidCount) || 0) > 0,
+    ).length;
+    const loadsWithoutBids = Math.max(0, totalLoadsPosted - loadsWithBids);
+    return {
+      totalLoadsPosted,
+      totalBidsReceived,
+      loadsWithBids,
+      loadsWithoutBids,
+    };
+  }, [filteredLoads]);
+
   const uniqueLoadTypes = [
-    ...new Set(loads.map((load) => load.loadType).filter(Boolean)),
+    ...new Set(scopedLoads.map((load) => load.loadType).filter(Boolean)),
   ];
+
+  const assignedCompanyOptions = isVpl077User
+    ? [{ value: MT_POCONO_COMPANY, label: MT_POCONO_COMPANY }]
+    : [
+        { value: "", label: "ALL" },
+        { value: "V Power Logistics", label: "V Power Logistics" },
+        { value: "IDENTIFICA LLC", label: "IDENTIFICA LLC" },
+        {
+          value: MT_POCONO_COMPANY,
+          label: MT_POCONO_COMPANY,
+        },
+      ];
 
   // Pagination calculations
   const totalPages = Math.ceil(filteredLoads.length / itemsPerPage);
@@ -736,6 +780,14 @@ const RateRequestReport = () => {
     setCurrentPage(1);
   }, [filters.userId, filters.loadType, filters.assignedCompany, filters.cmtEmpId, range]);
 
+  const hasActiveFilters = Boolean(
+    filters.userId ||
+      filters.loadType ||
+      filters.assignedCompany ||
+      filters.cmtEmpId ||
+      searchTerm.trim(),
+  );
+
   const cmtDeepLinkLabel = useMemo(() => {
     const id = (filters.cmtEmpId || "").trim();
     if (!id) return null;
@@ -762,7 +814,7 @@ const RateRequestReport = () => {
               <div>
                 <p className="text-xl font-medium text-gray-700">Total Loads</p>
                 <p className="mt-4 text-2xl font-bold text-gray-900">
-                  {summary?.totalLoadsPosted || 0}
+                  {cardStats.totalLoadsPosted}
                 </p>
               </div>
               <div className="w-11 h-11 bg-blue-50 rounded-full flex items-center justify-center">
@@ -775,7 +827,7 @@ const RateRequestReport = () => {
               <div>
                 <p className="text-xl font-medium text-gray-700">Total Bids</p>
                 <p className="mt-4 text-2xl font-bold text-gray-900">
-                  {summary?.totalBidsReceived || 0}
+                  {cardStats.totalBidsReceived}
                 </p>
               </div>
               <div className="w-11 h-11 bg-green-50 rounded-full flex items-center justify-center">
@@ -790,7 +842,7 @@ const RateRequestReport = () => {
                   Loads with Bids
                 </p>
                 <p className="mt-4 text-2xl font-bold text-gray-900">
-                  {summary?.loadsWithBids || 0}
+                  {cardStats.loadsWithBids}
                 </p>
               </div>
               <div className="w-11 h-11 bg-purple-50 rounded-full flex items-center justify-center">
@@ -803,7 +855,7 @@ const RateRequestReport = () => {
               <div>
                 <p className="text-xl font-medium text-gray-700">No Bids</p>
                 <p className="mt-4 text-2xl font-bold text-gray-900">
-                  {summary?.loadsWithoutBids || 0}
+                  {cardStats.loadsWithoutBids}
                 </p>
               </div>
               <div className="w-11 h-11 bg-orange-50 rounded-full flex items-center justify-center">
@@ -893,10 +945,17 @@ const RateRequestReport = () => {
                 }
                 options={[
                   { value: "", label: "All Users" },
-                  ...salesUsers.map((user) => ({
-                    value: user.empId,
-                    label: `${user.employeeName} (${user.empId})`,
-                  })),
+                  ...salesUsers
+                    .filter(
+                      (user) =>
+                        String(user?.employeeName || "")
+                          .trim()
+                          .toLowerCase() !== "rishi jyoti",
+                    )
+                    .map((user) => ({
+                      value: user.empId,
+                      label: `${user.employeeName} (${user.empId})`,
+                    })),
                 ]}
                 placeholder="Select User"
                 disabled={loadingSalesUsers}
@@ -942,18 +1001,11 @@ const RateRequestReport = () => {
                     target: { name: "assignedCompany", value },
                   })
                 }
-                options={[
-                  { value: "", label: "ALL" },
-                  { value: "V Power Logistics", label: "V Power Logistics" },
-                  { value: "IDENTIFICA LLC", label: "IDENTIFICA LLC" },
-                  {
-                    value: "MT. POCONO TRANSPORTATION INC",
-                    label: "MT. POCONO TRANSPORTATION INC",
-                  },
-                ]}
+                options={assignedCompanyOptions}
                 placeholder="Select Company"
                 searchPlaceholder="Search company..."
                 className="w-full"
+                disabled={isVpl077User}
               />
             </div>
 
@@ -1239,8 +1291,8 @@ const RateRequestReport = () => {
             Showing {startIndex + 1} to{" "}
             {Math.min(endIndex, filteredLoads.length)} of {filteredLoads.length}{" "}
             loads
-            {filters.userId || filters.loadType
-              ? ` (filtered from ${loads.length} total)`
+            {hasActiveFilters
+              ? ` (filtered from ${scopedLoads.length} total)`
               : ""}
           </div>
           <div className="flex gap-3 items-center flex-wrap">

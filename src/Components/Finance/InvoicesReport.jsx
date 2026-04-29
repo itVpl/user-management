@@ -13,8 +13,55 @@ import { addDays, format } from 'date-fns';
 // Utility functions
 const fmtMoney = (v) => (typeof v === "number" ? v.toFixed(2) : "0.00");
 const fmtDateTime = (d) => (d ? new Date(d).toLocaleString() : "—");
+const MT_POCONO_COMPANY = 'MT. POCONO TRANSPORTATION INC';
+const normalizeText = (v) => String(v || '').trim().toLowerCase();
+const getLoggedInEmpId = () => {
+  const direct =
+    sessionStorage.getItem('empId') ||
+    localStorage.getItem('empId') ||
+    sessionStorage.getItem('employeeId') ||
+    localStorage.getItem('employeeId');
+  if (direct) return String(direct).trim();
+
+  const stores = [sessionStorage, localStorage];
+  const keys = ['user', 'employee', 'profile', 'authUser', 'userData'];
+  for (const store of stores) {
+    for (const key of keys) {
+      const raw = store.getItem(key);
+      if (!raw) continue;
+      try {
+        const obj = JSON.parse(raw);
+        const nested =
+          obj?.empId ||
+          obj?.employeeId ||
+          obj?.employee?.empId ||
+          obj?.employee?.employeeId ||
+          obj?.user?.empId ||
+          obj?.user?.employeeId;
+        if (nested) return String(nested).trim();
+      } catch {
+        // ignore bad JSON
+      }
+    }
+  }
+  return '';
+};
+const matchesMtPocono = (order) => {
+  const companyCandidates = [
+    order?.addDispature,
+    order?.addDispatcher,
+    order?.assignedCompany,
+    order?.onboardCompany,
+    order?.onBoardCompany,
+    order?.companyName,
+  ];
+  if (companyCandidates.some((v) => normalizeText(v) === normalizeText(MT_POCONO_COMPANY))) return true;
+  return false;
+};
 
 const InvoicesReport = () => {
+  const loggedInEmpId = normalizeText(getLoggedInEmpId());
+  const isVpl077User = loggedInEmpId === 'vpl077';
   const [dos, setDos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -41,7 +88,7 @@ const InvoicesReport = () => {
   const [showCustomRange, setShowCustomRange] = useState(false);
   
   // Company/Dispatcher filter state (addDispature)
-  const [companyFilter, setCompanyFilter] = useState('');
+  const [companyFilter, setCompanyFilter] = useState(isVpl077User ? MT_POCONO_COMPANY : '');
   const [companies, setCompanies] = useState([]);
   const [loadingCompanies, setLoadingCompanies] = useState(false);
 
@@ -96,7 +143,12 @@ const InvoicesReport = () => {
         const companiesList = response.data.data?.companies || [];
         // Sort companies alphabetically
         companiesList.sort((a, b) => (a || '').localeCompare(b || ''));
-        setCompanies(companiesList);
+        if (isVpl077User) {
+          setCompanies([MT_POCONO_COMPANY]);
+          setCompanyFilter(MT_POCONO_COMPANY);
+        } else {
+          setCompanies(companiesList);
+        }
       }
     } catch (err) {
       console.error('Error loading companies:', err);
@@ -110,7 +162,7 @@ const InvoicesReport = () => {
   // Fetch companies on component mount
   useEffect(() => {
     fetchCompanies();
-  }, []);
+  }, [isVpl077User]);
 
   useEffect(() => {
     fetchAllDOs();
@@ -131,7 +183,9 @@ const InvoicesReport = () => {
       }
       
       // Add company/dispatcher filter if specified (addDispature - supports partial matching)
-      if (companyFilter && companyFilter.trim()) {
+      if (isVpl077User) {
+        params.addDispature = MT_POCONO_COMPANY;
+      } else if (companyFilter && companyFilter.trim()) {
         params.addDispature = companyFilter.trim();
       }
       
@@ -147,7 +201,10 @@ const InvoicesReport = () => {
         // Combine paid and unpaid DOs - ensure arrays
         const paidDOs = Array.isArray(response.data.paidDOs?.all) ? response.data.paidDOs.all : [];
         const unpaidDOs = Array.isArray(response.data.unpaidDOs?.all) ? response.data.unpaidDOs.all : [];
-        const allDOs = [...paidDOs, ...unpaidDOs];
+        let allDOs = [...paidDOs, ...unpaidDOs];
+        if (isVpl077User) {
+          allDOs = allDOs.filter(matchesMtPocono);
+        }
         
         const transformedDOs = allDOs.map(order => {
           // Transform the API response to match component structure
@@ -227,7 +284,7 @@ const InvoicesReport = () => {
         setDos(transformedDOs);
         
         // Set statistics from API response summary
-        if (response.data.summary) {
+        if (response.data.summary && !isVpl077User) {
           const stats = {
             total: response.data.summary.totalDOs || 0,
             paid: response.data.summary.paidCount || 0,
@@ -238,8 +295,22 @@ const InvoicesReport = () => {
           console.log('Setting statistics:', stats);
           console.log('API summary:', response.data.summary);
           setStatistics(stats);
-        } else {
+        } else if (!isVpl077User) {
           console.warn('No summary found in API response:', response.data);
+        } else {
+          // Recompute summary for scoped VPL077 dataset only.
+          const scopedStats = {
+            total: transformedDOs.length,
+            paid: transformedDOs.filter((x) => x.paymentStatus === 'paid').length,
+            unpaid: transformedDOs.filter((x) => x.paymentStatus !== 'paid').length,
+            paidTotalAmount: transformedDOs
+              .filter((x) => x.paymentStatus === 'paid')
+              .reduce((sum, x) => sum + (Number(x.totalAmount) || 0), 0),
+            unpaidTotalAmount: transformedDOs
+              .filter((x) => x.paymentStatus !== 'paid')
+              .reduce((sum, x) => sum + (Number(x.totalAmount) || 0), 0)
+          };
+          setStatistics(scopedStats);
         }
       }
     } catch (error) {
@@ -287,6 +358,14 @@ const InvoicesReport = () => {
     
     return filtered;
   }, [dos, searchTerm, range, remarkFilter]);
+
+  const dashboardStats = useMemo(() => {
+    const total = filteredDOs.length;
+    const paid = filteredDOs.filter((d) => String(d?.paymentStatus || '').toLowerCase() === 'paid').length;
+    const unpaid = Math.max(0, total - paid);
+    const notOk = filteredDOs.filter((d) => d?.shipperPaymentRemark?.status === 'not_okay').length;
+    return { total, paid, unpaid, notOk };
+  }, [filteredDOs]);
 
   // Update Shipper Payment Remark function
   const updateShipperPaymentRemark = async (doId, newStatus, notes = '') => {
@@ -507,7 +586,7 @@ const InvoicesReport = () => {
               </div>
               <div>
                 <p className="text-sm text-gray-600">Total DO</p>
-                <p className="text-xl font-bold text-gray-800">{statistics.total || dos.length}</p>
+                <p className="text-xl font-bold text-gray-800">{dashboardStats.total}</p>
               </div>
             </div>
           </div>
@@ -520,7 +599,7 @@ const InvoicesReport = () => {
               </div>
               <div>
                 <p className="text-sm text-gray-600">Paid</p>
-                <p className="text-xl font-bold text-green-600">{statistics.paid ?? 0}</p>
+                <p className="text-xl font-bold text-green-600">{dashboardStats.paid}</p>
               </div>
             </div>
           </div>
@@ -533,7 +612,7 @@ const InvoicesReport = () => {
               </div>
               <div>
                 <p className="text-sm text-gray-600">Unpaid</p>
-                <p className="text-xl font-bold text-red-600">{statistics.unpaid ?? 0}</p>
+                <p className="text-xl font-bold text-red-600">{dashboardStats.unpaid}</p>
               </div>
             </div>
           </div>
@@ -547,7 +626,7 @@ const InvoicesReport = () => {
               <div>
                 <p className="text-sm text-gray-600">Not OK</p>
                 <p className="text-xl font-bold text-orange-600">
-                  {dos.filter(d => d.shipperPaymentRemark?.status === 'not_okay').length}
+                  {dashboardStats.notOk}
                 </p>
               </div>
             </div>
@@ -588,9 +667,9 @@ const InvoicesReport = () => {
               value={companyFilter}
               onChange={(e) => setCompanyFilter(e.target.value)}
               className="w-[250px] pl-9 pr-8 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none cursor-pointer"
-              disabled={loadingCompanies}
+              disabled={loadingCompanies || isVpl077User}
             >
-              <option value="">All Companies</option>
+              {!isVpl077User && <option value="">All Companies</option>}
               {companies.map((company) => (
                 <option key={company} value={company}>
                   {company}
