@@ -168,6 +168,8 @@ const getAuthConfig = () => {
 const toBool = (val) => val === true || val === "true";
 const toMinutes = (ms) => (Number(ms || 0) / 60000).toFixed(2);
 const toHoursFromMinutes = (minutes) => (Number(minutes || 0) / 60).toFixed(2);
+const toMinutesFromMs = (ms) => (Number(ms || 0) / 60000).toFixed(2);
+const toHoursFromMs = (ms) => (Number(ms || 0) / 3600000).toFixed(2);
 
 /** Normalized receiver line from report row (matches backend: calleeNumber / receiverNumber or callee.phoneNumber). */
 const getCalleeReceiverNumber = (record) =>
@@ -451,6 +453,9 @@ const CallDataReports = () => {
         totalTalkTimeMinutes: Math.floor(
           nextRecords.reduce((sum, r) => sum + Number(r.talkTimeMS || 0), 0) / 60000
         ),
+        totalTalkTimeMinutesDisplay: toMinutesFromMs(
+          nextRecords.reduce((sum, r) => sum + Number(r.talkTimeMS || 0), 0)
+        ),
         followUpCount: nextRecords.filter((r) => toBool(r.followUp)).length,
         categorizedCalls: nextRecords.filter((r) => Boolean(String(r.category || "").trim())).length,
       };
@@ -482,6 +487,32 @@ const CallDataReports = () => {
         }, {})
       );
 
+      const summaryPayload = firstPayload.summary || computedSummary;
+      const normalizedSummary = {
+        ...summaryPayload,
+        totalTalkTimeMinutesDisplay:
+          summaryPayload?.totalTalkTimeMS != null
+            ? toMinutesFromMs(summaryPayload.totalTalkTimeMS)
+            : computedSummary.totalTalkTimeMinutesDisplay,
+        totalTalkTimeHoursDisplay:
+          summaryPayload?.totalTalkTimeMS != null
+            ? toHoursFromMs(summaryPayload.totalTalkTimeMS)
+            : toHoursFromMinutes(
+                summaryPayload?.totalTalkTimeMinutes ?? computedSummary.totalTalkTimeMinutes
+              ),
+      };
+      const employeeSummarySource =
+        Array.isArray(firstPayload.employeeSummary) && firstPayload.employeeSummary.length
+          ? firstPayload.employeeSummary
+          : computedEmployeeSummary;
+      const normalizedEmployeeSummary = employeeSummarySource.map((emp) => ({
+        ...emp,
+        totalTalkTimeHoursDisplay:
+          emp?.totalTalkTimeMS != null
+            ? toHoursFromMs(emp.totalTalkTimeMS)
+            : toHoursFromMinutes(emp.totalTalkTimeMinutes),
+      }));
+
       if (requestId !== latestReportRequestRef.current || controller.signal.aborted) {
         return;
       }
@@ -494,10 +525,8 @@ const CallDataReports = () => {
           limit,
         },
         reportFilters: firstPayload.filters ?? null,
-        summary: firstPayload.summary || computedSummary,
-        employeeSummary: Array.isArray(firstPayload.employeeSummary) && firstPayload.employeeSummary.length
-          ? firstPayload.employeeSummary
-          : computedEmployeeSummary,
+        summary: normalizedSummary,
+        employeeSummary: normalizedEmployeeSummary,
         records: nextRecords,
         error: null,
       }));
@@ -938,8 +967,10 @@ const CallDataReports = () => {
         },
         {
           key: "talkTime",
-          title: "Talk Time (min)",
-          value: state.summary.totalTalkTimeMinutes || 0,
+          title: "Talk Time (Hrs)",
+          value:
+            state.summary.totalTalkTimeHoursDisplay ??
+            toHoursFromMinutes(state.summary.totalTalkTimeMinutes || 0),
           iconBg: "bg-amber-50",
           iconColor: "text-amber-600",
           icon: (
@@ -1411,7 +1442,9 @@ const CallDataReports = () => {
                     <div className="tabular-nums text-base">{emp.totalCalls || 0}</div>
                     <div className="tabular-nums text-base">{emp.answeredCalls || 0}</div>
                     <div className="tabular-nums text-base">{emp.missedCalls || 0}</div>
-                    <div className="tabular-nums text-base">{toHoursFromMinutes(emp.totalTalkTimeMinutes)}</div>
+                    <div className="tabular-nums text-base">
+                      {emp.totalTalkTimeHoursDisplay ?? toHoursFromMinutes(emp.totalTalkTimeMinutes)}
+                    </div>
                     <div className="tabular-nums text-base">{emp.categorizedCalls || 0}</div>
                     <div className="tabular-nums text-base">{emp.followUpCount || 0}</div>
                   </div>

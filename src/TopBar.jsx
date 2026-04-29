@@ -62,6 +62,47 @@ const Topbar = () => {
   }, []);
 
   // Helper function to format department name
+  const normalizeChecklistTalktimeHours = (item) => {
+    if (!item || typeof item !== "object") return 0;
+    const asNumber = (v) => {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : 0;
+    };
+    if (item.totalTalkTimeMS != null) return asNumber(item.totalTalkTimeMS) / 3600000;
+    if (item.talkTimeMS != null) return asNumber(item.talkTimeMS) / 3600000;
+    if (item.totalTalkTimeMinutes != null) return asNumber(item.totalTalkTimeMinutes) / 60;
+    if (item.minutes != null) return asNumber(item.minutes) / 60;
+    if (item.hours != null) return asNumber(item.hours);
+    if (item.actual != null) return asNumber(item.actual);
+    return 0;
+  };
+  const fetchReportTalktimeHours = async ({ aliasName, mobileNo, empId, token, date }) => {
+    if (!aliasName || !token || !date) return null;
+    try {
+      const res = await axios.get(`${BASE_8X8}/call-records/report`, {
+        params: {
+          from: date,
+          to: date,
+          callerName: aliasName,
+          mobileNo: mobileNo || "",
+          empId: empId || "",
+          pageSize: 1500,
+          page: 1,
+          limit: 1500,
+        },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+      const totalTalkTimeMS = Number(res?.data?.summary?.totalTalkTimeMS || 0);
+      return Number.isFinite(totalTalkTimeMS) ? totalTalkTimeMS / 3600000 : null;
+    } catch (err) {
+      console.warn("Topbar talktime report fetch failed:", err);
+      return null;
+    }
+  };
+
   const formatDepartmentName = (dept) => {
     if (!dept) return 'Employee';
     
@@ -173,6 +214,8 @@ const Topbar = () => {
 
       const userData = JSON.parse(userString);
       const empId = userData?.empId || userData?.employeeId;
+      const aliasName = userData?.aliasName || "";
+      const mobileNo = userData?.mobileNo || "";
 
       try {
         
@@ -185,6 +228,13 @@ const Topbar = () => {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         };
+        const reportTalktimeHours = await fetchReportTalktimeHours({
+          aliasName,
+          mobileNo,
+          empId,
+          token,
+          date: today,
+        });
 
         // Use dedicated checklist API endpoints
         const checklistEndpoint = userDepartment === 'sales' 
@@ -218,7 +268,7 @@ const Topbar = () => {
             ];
 
             tooltips = [
-              `Talktime: ${(checklist.talktime4Hours?.hours || 0).toFixed(2)} hrs (Target: ${checklist.talktime4Hours?.required || 4} hrs)`,
+              `Talktime: ${(reportTalktimeHours ?? normalizeChecklistTalktimeHours(checklist.talktime4Hours)).toFixed(2)} hrs (Target: ${checklist.talktime4Hours?.required || 4} hrs)`,
               `Loads Created: ${checklist.threePlusLoadSubmitted?.count || 0} (Target: ${checklist.threePlusLoadSubmitted?.required || 3}+)`,
               checklist.attendance?.status 
                 ? 'Attendance: Present' 
@@ -261,7 +311,7 @@ const Topbar = () => {
             ];
 
             tooltips = [
-              `Talktime: ${(checklist.talktime3Hours?.hours || 0).toFixed(2)} hrs (Target: ${checklist.talktime3Hours?.required || 3} hrs)`,
+              `Talktime: ${(reportTalktimeHours ?? normalizeChecklistTalktimeHours(checklist.talktime3Hours)).toFixed(2)} hrs (Target: ${checklist.talktime3Hours?.required || 3} hrs)`,
               `Truckers Added: ${checklist.onePlusTruckerAdded?.count || 0} (Target: ${checklist.onePlusTruckerAdded?.required || 1}+)`,
               hasLogin ? 'Attendance: Present' : 'Attendance: Not marked',
               `Bids Submitted: ${checklist.threePlusBidPosted?.count || 0} (Target: ${checklist.threePlusBidPosted?.required || 3}+)`
