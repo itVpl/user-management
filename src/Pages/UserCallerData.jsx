@@ -103,6 +103,7 @@ const formatDuration = (ms) => {
   const s = String(seconds % 60).padStart(2, "0");
   return `${h}:${m}:${s}`;
 };
+const formatHours = (ms) => (Number(ms || 0) / 3600000).toFixed(2);
 
 // ---- Status helpers ----
 const normalizeCallStatus = (rec, alias) => {
@@ -381,7 +382,7 @@ const UserCallDashboard = () => {
     missed: 0,
     incoming: 0,
     outgoing: 0,
-    totalTalkTime: "00:00:00",
+    totalTalkTime: "0.00",
   });
 
   // Category dropdown options from GET category-options (CMT lists come from API; unresolved CMT team → 400)
@@ -406,25 +407,38 @@ const UserCallDashboard = () => {
   // Notification state
   const [notification, setNotification] = useState({ show: false, message: '', type: 'info' });
 
-  const fetchData = async (alias, date) => {
-    const start = new Date(`${date}T00:00:00`);
-    const isToday = date === new Date().toISOString().split("T")[0];
-    const end = isToday ? new Date() : new Date(`${date}T23:59:59`);
-
-    const from = formatDateTime(start);
-    const to = formatDateTime(end);
+  const fetchData = async (alias, date, user = {}) => {
+    const from = date;
+    const to = date;
+    const mobileNo = String(user?.mobileNo || "").trim();
+    const empId = String(user?.empId ?? user?.empID ?? user?.employeeId ?? "").trim();
 
     try {
       const recordsBase = getCallRecordsBase();
       const res = await axios.get(
-        `${recordsBase}/call-records/filter`,
+        `${recordsBase}/call-records/report`,
         {
-          params: { callerName: alias, calleeName: alias, from, to },
+          params: {
+            callerName: alias,
+            mobileNo,
+            empId,
+            from,
+            to,
+            pageSize: 1500,
+            page: 1,
+            limit: 1500,
+          },
           headers: getAuthHeaders(),
         }
       );
 
-      const rawData = res.data?.data || [];
+      const payload = res?.data || {};
+      const summary = payload?.summary || null;
+      const rawData = Array.isArray(payload?.data)
+        ? payload.data
+        : Array.isArray(payload?.records)
+          ? payload.records
+          : [];
       if (rawData.length === 0) {
         setRecords([]);
         setCategories({});
@@ -434,7 +448,7 @@ const UserCallDashboard = () => {
           missed: 0,
           incoming: 0,
           outgoing: 0,
-          totalTalkTime: "00:00:00",
+          totalTalkTime: "0.00",
         });
         return;
       }
@@ -488,7 +502,10 @@ const UserCallDashboard = () => {
         };
       });
 
-      const total = transformed.length;
+      const total = Number(summary?.totalCalls ?? transformed.length);
+      const totalTalkTimeMSFromSummary = Number(summary?.totalTalkTimeMS ?? totalTalkTimeMS);
+      const answeredFromSummary = Number(summary?.answeredCalls ?? answered);
+      const missedFromSummary = Number(summary?.missedCalls ?? missed);
 
       // Fetch saved category/followUp for these callIds
       const callIds = transformed.map((r) => r.callId).filter(Boolean);
@@ -517,11 +534,11 @@ const UserCallDashboard = () => {
       setRecords(transformed);
       setStats({
         total,
-        answered,
-        missed,
+        answered: answeredFromSummary,
+        missed: missedFromSummary,
         incoming,
         outgoing,
-        totalTalkTime: formatDuration(totalTalkTimeMS),
+        totalTalkTime: formatHours(totalTalkTimeMSFromSummary),
       });
     } catch (err) {
       console.error("❌ API Error fetching filtered calls:", err);
@@ -933,7 +950,7 @@ const UserCallDashboard = () => {
       console.warn("❌ aliasName missing in user object");
       return;
     }
-    fetchData(alias, selectedDate);
+    fetchData(alias, selectedDate, user);
   }, [selectedDate]);
 
   return (
@@ -1028,7 +1045,7 @@ const UserCallDashboard = () => {
             </div>
             <div className="p-4 border-r border-gray-200">
               <p className="text-3xl font-bold text-yellow-500">{stats.totalTalkTime}</p>
-              <p className="text-sm text-gray-500">Talk Time</p>
+              <p className="text-sm text-gray-500">Talk Time (Hrs)</p>
             </div>
             <div className="p-4">
               <p className="text-3xl font-bold text-green-500">{stats.total}</p>

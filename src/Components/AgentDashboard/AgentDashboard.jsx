@@ -153,39 +153,69 @@ const Dashboard = () => {
       const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0);
       const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
       
-      // Format dates as YYYY-MM-DD HH:mm:ss (local time)
+      // Format as YYYY-MM-DD for report API filters.
       const formatDate = (date) => {
         const year = date.getFullYear();
         const month = String(date.getMonth() + 1).padStart(2, '0');
         const day = String(date.getDate()).padStart(2, '0');
-        const hours = String(date.getHours()).padStart(2, '0');
-        const minutes = String(date.getMinutes()).padStart(2, '0');
-        const seconds = String(date.getSeconds()).padStart(2, '0');
-        return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+        return `${year}-${month}-${day}`;
       };
       
       const from = formatDate(startOfDay);
       const to = formatDate(endOfDay);
+      const mobileNo = user.mobileNo || "";
+      const empId = user.empId || "";
 
       try {
         const token = sessionStorage.getItem("token") || localStorage.getItem("token");
         const response = await axios.get(
-          `${API_CONFIG.BASE_URL}/api/v1/analytics/8x8/call-records/filter`,
+          `${API_CONFIG.BASE_URL}/api/v1/analytics/8x8/call-records/report`,
           {
-            params: { callerName: alias, calleeName: alias, from, to },
+            params: {
+              callerName: alias,
+              mobileNo,
+              empId,
+              from,
+              to,
+              pageSize: 1500,
+              page: 1,
+              limit: 1500,
+            },
             withCredentials: true,
             headers: { Authorization: `Bearer ${token}` }
           }
         );
 
-        // Check if response.data is an array, if not, try to get the correct property
+        const payload = response?.data || {};
+        const summary = payload?.summary || null;
+
+        if (summary && typeof summary === "object") {
+          const total = Number(summary.totalCalls || 0);
+          const answered = Number(summary.answeredCalls || 0);
+          const missed = Number(summary.missedCalls || 0);
+          const totalDuration = Number(summary.totalTalkTimeMS || 0);
+          const averageDuration = total ? (totalDuration / total).toFixed(2) : 0;
+
+          setCallStats({
+            total,
+            answered,
+            noAnswer: missed,
+            totalDuration,
+            averageDuration,
+            emails: 4, // placeholder
+            conversionRate: total ? ((answered / total) * 100).toFixed(2) : 0,
+          });
+          return;
+        }
+
+        // Fallback: compute from records if summary is not present.
         let records = [];
-        if (Array.isArray(response.data)) {
-          records = response.data;
-        } else if (response.data && Array.isArray(response.data.records)) {
-          records = response.data.records;
-        } else if (response.data && Array.isArray(response.data.data)) {
-          records = response.data.data;
+        if (Array.isArray(payload)) {
+          records = payload;
+        } else if (Array.isArray(payload.records)) {
+          records = payload.records;
+        } else if (Array.isArray(payload.data)) {
+          records = payload.data;
         } else {
 
           records = [];
