@@ -11,7 +11,7 @@ import 'react-toastify/dist/ReactToastify.css';
 // Searchable Select Component
 const SearchableSelect = React.memo(function SearchableSelect({
   name, label, placeholder, icon = null, required = false,
-  value, onChange, onBlur, error, options = [], inputRef = null,
+  value, onChange, onBlur, error, options = [], inputRef = null, showLabel = true,
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -28,8 +28,12 @@ const SearchableSelect = React.memo(function SearchableSelect({
 
   const selectedLabel = useMemo(() => {
     if (!value) return '';
-    const option = options.find(opt => (typeof opt === 'string' ? opt : opt.value) === value);
-    return typeof option === 'string' ? option : option?.label || '';
+    const normalizedValue = String(value).trim().toLowerCase();
+    const option = options.find(opt => {
+      const optionValue = typeof opt === 'string' ? opt : opt.value;
+      return String(optionValue).trim().toLowerCase() === normalizedValue;
+    });
+    return typeof option === 'string' ? option : option?.label || value;
   }, [value, options]);
 
   useEffect(() => {
@@ -54,9 +58,11 @@ const SearchableSelect = React.memo(function SearchableSelect({
 
   return (
     <div className="w-full" ref={selectRef}>
-      <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor={name}>
-        {label} {required && <span className="text-red-500">*</span>}
-      </label>
+      {showLabel && (
+        <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor={name}>
+          {label} {required && <span className="text-red-500">*</span>}
+        </label>
+      )}
       <div className="relative">
         {icon && <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 z-10 pointer-events-none">{icon}</div>}
         <button
@@ -244,7 +250,7 @@ function getLaneDetailsList(cust) {
   return [];
 }
 
-const CustomerTable = React.memo(function CustomerTable({ customers, onAction, onLaneDetailsSaved }) {
+const CustomerTable = React.memo(function CustomerTable({ customers, onAction, onEdit, onLaneDetailsSaved }) {
   const [page, setPage] = useState(1);
   const pageSize = 50;
   const [viewModal, setViewModal] = useState({ open: false, customer: null, data: null, loading: false });
@@ -957,6 +963,12 @@ const CustomerTable = React.memo(function CustomerTable({ customers, onAction, o
                     >
                       {/* <MessageSquare size={12} /> */}
                       Follow Up
+                    </button>
+                    <button
+                      onClick={() => onEdit?.(cust)}
+                      className="px-4 py-1 font-medium rounded-md transition-colors border border-amber-300 text-amber-700 hover:bg-amber-50"
+                    >
+                      Edit
                     </button>
                     <button
                       onClick={() => onAction?.(cust)}
@@ -1981,10 +1993,22 @@ const AddCustomer = () => {
     'MT. POCONO TRANSPORTATION INC'
   ];
 
+  const normalizeOnboardCompany = useCallback((value) => {
+    if (!value) return '';
+    const normalizedInput = String(value).trim().toLowerCase();
+    const matched = onboardCompanyOptions.find(
+      (option) => option.trim().toLowerCase() === normalizedInput
+    );
+    return matched || String(value).trim();
+  }, [onboardCompanyOptions]);
+
 
   const [formData, setFormData] = useState(initialForm);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [editTarget, setEditTarget] = useState(null);
+  const isEditMode = Boolean(editTarget);
+
 
 
   // field refs for focusing
@@ -2000,6 +2024,7 @@ const AddCustomer = () => {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filterType, setFilterType] = useState('total'); // 'all' | 'total' | 'today'
+  const [onboardCompanyFilter, setOnboardCompanyFilter] = useState('all');
   const [sourceTypeFilter, setSourceTypeFilter] = useState('all'); // 'all' | 'regular'
 
   // Date range filter
@@ -2209,19 +2234,23 @@ const AddCustomer = () => {
   const validateAll = useCallback((data) => {
     const newErrors = {};
     Object.entries(validators).forEach(([k, fn]) => {
+      if (isEditMode && (k === 'password' || k === 'confirmPassword')) return;
       const msg = fn(data[k], data);
       if (msg) newErrors[k] = msg;
     });
     // duplicate email (front-end)
     if (!newErrors.email && data.email) {
+      const editId = editTarget?.userId || editTarget?._id || editTarget?.id;
       const exists = customers.some(
-        c => (c?.email || '').trim().toLowerCase() === data.email.trim().toLowerCase()
+        c =>
+          (c?.email || '').trim().toLowerCase() === data.email.trim().toLowerCase() &&
+          String(c?.userId || c?._id || c?.id || '') !== String(editId || '')
       );
       if (exists) newErrors.email = 'Already registered the customer with this email id.';
     }
     setErrors(newErrors);
     return newErrors;
-  }, [customers]);
+  }, [customers, isEditMode, editTarget]);
 
 
   const focusField = (fieldName) => {
@@ -2251,9 +2280,81 @@ const AddCustomer = () => {
   }, []);
 
 
-  const handleOpen = () => setOpen(true);
+  const handleOpen = () => {
+    setEditTarget(null);
+    setFormData(initialForm);
+    setErrors({});
+    setOpen(true);
+  };
+
+  const handleEditOpen = useCallback(async (customer) => {
+    const customerId = customer?.userId || customer?._id || customer?.id;
+    let latestCustomer = customer;
+
+    if (customerId) {
+      try {
+        const token = getToken();
+        if (token) {
+          const res = await axios.get(
+            `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/${customerId}`,
+            {
+              headers: { Authorization: `Bearer ${token}` },
+              withCredentials: true
+            }
+          );
+          if (res?.data?.success && res?.data?.data) {
+            latestCustomer = res.data.data;
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to fetch full customer details for edit:', err);
+      }
+    }
+
+    setEditTarget(latestCustomer);
+    setErrors({});
+    setShowPassword(false);
+    setShowConfirm(false);
+    setFormData({
+      ...initialForm,
+      compName: latestCustomer?.compName || latestCustomer?.companyName || '',
+      mc_dot_no: latestCustomer?.mc_dot_no || latestCustomer?.mcDotNo || '',
+      phoneNo: latestCustomer?.phoneNo || latestCustomer?.contactNumber || latestCustomer?.mobile || '',
+      email: latestCustomer?.email || '',
+      onboardCompany: normalizeOnboardCompany(
+        latestCustomer?.onboardCompany ||
+        latestCustomer?.onBoardCompany ||
+        latestCustomer?.onboard_company ||
+        latestCustomer?.onboardingCompany ||
+        latestCustomer?.companyOnboard ||
+        ''
+      ),
+      compAdd:
+        latestCustomer?.compAdd ||
+        latestCustomer?.companyAddress ||
+        latestCustomer?.company_address ||
+        latestCustomer?.address ||
+        latestCustomer?.comp_address ||
+        '',
+      country: latestCustomer?.country || '',
+      state: latestCustomer?.state || '',
+      city: latestCustomer?.city || '',
+      zipcode:
+        latestCustomer?.zipcode ||
+        latestCustomer?.zipCode ||
+        latestCustomer?.zip ||
+        latestCustomer?.postalCode ||
+        latestCustomer?.postal_code ||
+        '',
+      password: '',
+      confirmPassword: ''
+    });
+    setOpen(true);
+  }, [normalizeOnboardCompany]);
+
   const handleClose = () => {
     setOpen(false);
+    setEditTarget(null);
     setFormData(initialForm);
     setErrors({});
     setShowPassword(true);
@@ -2278,8 +2379,11 @@ const AddCustomer = () => {
     }
 
 
+    const editId = editTarget?.userId || editTarget?._id || editTarget?.id;
     const exists = customers.some(
-      c => (c?.email || '').trim().toLowerCase() === formData.email.trim().toLowerCase()
+      c =>
+        (c?.email || '').trim().toLowerCase() === formData.email.trim().toLowerCase() &&
+        String(c?.userId || c?._id || c?.id || '') !== String(editId || '')
     );
     if (exists) {
       setErrors(prev => ({ ...prev, email: 'Already registered the customer with this email id.' }));
@@ -2305,18 +2409,34 @@ const AddCustomer = () => {
         })
       );
 
-      const res = await axios.post(
-        `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/department/add-customer`,
-        cleanedData,
-        { 
-          headers: { Authorization: `Bearer ${token}` },
-          withCredentials: true // 🔥 CRITICAL: Required for Safari/iOS cross-site cookies
-        }
-      );
+      let res;
+      if (isEditMode) {
+        const editCustomerId = editTarget?.userId || editTarget?._id || editTarget?.id;
+        const updatePayload = { ...cleanedData };
+        delete updatePayload.password;
+        delete updatePayload.confirmPassword;
+        res = await axios.patch(
+          `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/update/${editCustomerId}`,
+          updatePayload,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+            withCredentials: true // 🔥 CRITICAL: Required for Safari/iOS cross-site cookies
+          }
+        );
+      } else {
+        res = await axios.post(
+          `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/department/add-customer`,
+          cleanedData,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+            withCredentials: true // 🔥 CRITICAL: Required for Safari/iOS cross-site cookies
+          }
+        );
+      }
 
 
       if (res?.data?.success) {
-        toast.success('Customer Created successfully!.');
+        toast.success(isEditMode ? 'Customer updated successfully!' : 'Customer Created successfully!.');
         handleClose();
         await fetchAllCustomers();
         await fetchTodayStats();
@@ -2393,6 +2513,22 @@ const AddCustomer = () => {
         return dt >= start && dt <= end;
       });
     }
+
+    // Apply onboard company filter
+    if (onboardCompanyFilter !== 'all') {
+      const selectedOnboardCompany = onboardCompanyFilter.trim().toLowerCase();
+      filtered = filtered.filter((c) => {
+        const customerOnboardCompany = (
+          c?.onboardCompany ||
+          c?.onBoardCompany ||
+          c?.onboard_company ||
+          c?.onboardingCompany ||
+          c?.companyOnboard ||
+          ''
+        ).trim().toLowerCase();
+        return customerOnboardCompany === selectedOnboardCompany;
+      });
+    }
    
     // Apply search filter
     const q = debouncedSearch.trim().toLowerCase();
@@ -2416,7 +2552,7 @@ const AddCustomer = () => {
     }
    
     return filtered;
-  }, [customers, debouncedSearch, filterType, dateRange.startDate, dateRange.endDate]);
+  }, [customers, debouncedSearch, filterType, dateRange.startDate, dateRange.endDate, onboardCompanyFilter]);
 
 
   /* ---------- BLACKLIST / REMOVE ACTION (Modal + API) ---------- */
@@ -2620,15 +2756,33 @@ const AddCustomer = () => {
               className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent text-base transition-all"
             />
           </div>
-          <div className="relative shrink-0 w-[190px]">
-            <select
+          <div className="relative shrink-0 w-[250px]">
+            <SearchableSelect
+              name="onboardCompanyFilter"
+              label="On Board Company"
+              showLabel={false}
+              placeholder="On Board Company"
+              value={onboardCompanyFilter}
+              onChange={(e) => setOnboardCompanyFilter(e.target.value)}
+              options={[
+                { label: 'On Board Company', value: 'all' },
+                ...onboardCompanyOptions.map((company) => ({ label: company, value: company }))
+              ]}
+            />
+          </div>
+          <div className="relative shrink-0 w-[220px]">
+            <SearchableSelect
+              name="sourceTypeFilter"
+              label="All Sources"
+              showLabel={false}
+              placeholder="All Sources"
               value={sourceTypeFilter}
               onChange={(e) => setSourceTypeFilter(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-white text-gray-700 font-medium hover:border-gray-300 transition-colors text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
-            >
-              <option value="all">All Sources</option>
-              <option value="regular">Regular Only</option>
-            </select>
+              options={[
+                { label: 'All Sources', value: 'all' },
+                { label: 'Regular Only', value: 'regular' }
+              ]}
+            />
           </div>
           <div className="relative shrink-0 w-[240px]" ref={dateRangeMenuRef}>
             <button
@@ -2679,10 +2833,10 @@ const AddCustomer = () => {
 
 
       {/* Table hidden while modal open */}
-      {!open && <CustomerTable customers={filteredCustomers} onAction={openAction} onLaneDetailsSaved={handleLaneDetailsSaved} />}
+      {!open && <CustomerTable customers={filteredCustomers} onAction={openAction} onEdit={handleEditOpen} onLaneDetailsSaved={handleLaneDetailsSaved} />}
 
 
-      {/* Add Modal */}
+      {/* Add/Edit Modal */}
       {open && (
         <div
           className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4"
@@ -2701,8 +2855,8 @@ const AddCustomer = () => {
                     <User className="text-white" size={24} />
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold">Add New Customer</h2>
-                    <p className="text-blue-100">Enter customer information below</p>
+                    <h2 className="text-xl font-bold">{isEditMode ? 'Edit Customer' : 'Add New Customer'}</h2>
+                    <p className="text-blue-100">{isEditMode ? 'Update customer information below' : 'Enter customer information below'}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -2750,7 +2904,6 @@ const AddCustomer = () => {
                       error={errors.mc_dot_no}
                       inputRef={el => (fieldRefs.current.mc_dot_no = el)}
                     />
-
 
                     <Input
                       name="compAdd"
@@ -2840,7 +2993,8 @@ const AddCustomer = () => {
                     />
                   </div>
 
-                  {/* Password Fields - 2 fields per row */}
+                  {/* Password Fields - shown only while creating customer */}
+                  {!isEditMode && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                     <Input
                       name="password"
@@ -2895,6 +3049,7 @@ const AddCustomer = () => {
                       inputRef={el => (fieldRefs.current.confirmPassword = el)}
                     />
                   </div>
+                  )}
               </div>
 
 
@@ -3008,12 +3163,12 @@ const AddCustomer = () => {
                   {loading ? (
                     <>
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      Creating...
+                      {isEditMode ? 'Updating...' : 'Creating...'}
                     </>
                   ) : (
                     <>
-                      <PlusCircle className="w-5 h-5" />
-                      Create Customer
+                      {isEditMode ? <FileText className="w-5 h-5" /> : <PlusCircle className="w-5 h-5" />}
+                      {isEditMode ? 'Update Customer' : 'Create Customer'}
                     </>
                   )}
                 </button>
