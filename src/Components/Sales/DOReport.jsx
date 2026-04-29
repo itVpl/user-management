@@ -45,6 +45,9 @@ import {
   selectCurrentAddDispature,
 } from "../../store/slices/doReportSlice";
 
+const DEFAULT_COMPANY_FOR_VPL077 = "MT. POCONO TRANSPORTATION INC";
+const DEFAULT_COMPANY_EMP_ID = "VPL077";
+
 // Searchable Dropdown Component
 const SearchableDropdown = ({
   value,
@@ -182,6 +185,19 @@ const SearchableDropdown = ({
 };
 
 export default function DOReport() {
+  const getLoggedInEmpId = () => {
+    try {
+      const rawUser = sessionStorage.getItem("user") || localStorage.getItem("user");
+      if (!rawUser) return "";
+      const parsedUser = JSON.parse(rawUser);
+      return String(parsedUser?.empId || parsedUser?.EmpID || "").trim();
+    } catch {
+      return "";
+    }
+  };
+  const loggedInEmpId = getLoggedInEmpId();
+  const isDefaultCompanyUser = loggedInEmpId.toUpperCase() === DEFAULT_COMPANY_EMP_ID;
+
   // ⬇️ put these near the top-level states
   const MAX_DOC_MB = 10;
   const ALLOWED_MIME = [
@@ -2195,11 +2211,18 @@ export default function DOReport() {
     }
   };
 
+  useEffect(() => {
+    if (isDefaultCompanyUser && !selectedCompany) {
+      dispatch(setAddDispature(DEFAULT_COMPANY_FOR_VPL077));
+    }
+  }, [dispatch, isDefaultCompanyUser, selectedCompany]);
+
   // Initial load - fetch all data once (only if no active search)
   useEffect(() => {
     // Only fetch orders on initial load if there's no active search
     // Otherwise, the search useEffect will handle it
-    if (!activeSearchTerm) {
+    const waitingForDefaultCompany = isDefaultCompanyUser && !selectedCompany;
+    if (!activeSearchTerm && !waitingForDefaultCompany) {
       fetchOrders();
     }
     fetchDispatchers();
@@ -2931,6 +2954,11 @@ export default function DOReport() {
       label: "MT. POCONO TRANSPORTATION INC",
     },
   ];
+  const companyFilterOptions = isDefaultCompanyUser
+    ? companyOptions.filter(
+        (option) => option.value === DEFAULT_COMPANY_FOR_VPL077,
+      )
+    : companyOptions;
 
   // Handle form input changes
   const handleInputChange = (e) => {
@@ -7045,7 +7073,7 @@ export default function DOReport() {
                 }}
                 options={[
                   { value: "", label: "Select Company" },
-                  ...companyOptions,
+                  ...companyFilterOptions,
                 ]}
                 placeholder="Select Company"
                 searchPlaceholder="Search company..."
@@ -7115,7 +7143,11 @@ export default function DOReport() {
                 onClick={() => {
                   setSearchFieldType("loadNumber");
                   setSelectedCreatedBy("");
-                  dispatch(setAddDispature(null));
+                  dispatch(
+                    setAddDispature(
+                      isDefaultCompanyUser ? DEFAULT_COMPANY_FOR_VPL077 : null,
+                    ),
+                  );
                   dispatch(clearCache());
                   clearDateFilter();
                   setSearchTerm("");
@@ -8712,17 +8744,7 @@ export default function DOReport() {
                     <SearchableDropdown
                       value={formData.company || ""}
                       onChange={handleCompanyChange}
-                      options={[
-                        {
-                          value: "V Power Logistics",
-                          label: "V Power Logistics",
-                        },
-                        { value: "IDENTIFICA LLC", label: "IDENTIFICA LLC" },
-                        {
-                          value: "MT. POCONO TRANSPORTATION INC",
-                          label: "MT. POCONO TRANSPORTATION INC",
-                        },
-                      ]}
+                      options={companyFilterOptions}
                       placeholder="Select Company"
                       searchPlaceholder="Search companies..."
                       className={errors.company ? "border-red-500" : ""}
