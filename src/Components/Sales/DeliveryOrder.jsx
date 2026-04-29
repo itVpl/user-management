@@ -15,6 +15,9 @@ import 'react-date-range/dist/theme/default.css';
 import { DateRange } from 'react-date-range';
 import { addDays, format } from 'date-fns';
 
+const DEFAULT_COMPANY_FOR_VPL077 = 'MT. POCONO TRANSPORTATION INC';
+const DEFAULT_COMPANY_EMP_ID = 'VPL077';
+
 // Searchable Dropdown Component
 const SearchableDropdown = ({
   value,
@@ -152,6 +155,19 @@ const SearchableDropdown = ({
 };
 
 export default function DeliveryOrder() {
+  const getLoggedInEmpId = () => {
+    try {
+      const rawUser = sessionStorage.getItem('user') || localStorage.getItem('user');
+      if (!rawUser) return '';
+      const parsedUser = JSON.parse(rawUser);
+      return String(parsedUser?.empId || parsedUser?.EmpID || '').trim();
+    } catch {
+      return '';
+    }
+  };
+  const loggedInEmpId = getLoggedInEmpId();
+  const isDefaultCompanyUser = loggedInEmpId.toUpperCase() === DEFAULT_COMPANY_EMP_ID;
+
   // ⬇️ put these near the top-level states
   const MAX_DOC_MB = 10;
   const ALLOWED_MIME = [
@@ -453,13 +469,24 @@ export default function DeliveryOrder() {
       setLoadingShippers(true);
       const token = sessionStorage.getItem("token") || localStorage.getItem("token");
 
-      // Prefer your API base URL
-      const res = await axios.get(
-        `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/shippers`,
-        { headers: { 'Authorization': `Bearer ${token}` } }
-      );
+      const shipperUrl = isDefaultCompanyUser
+        ? `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/shippers/by-onboard-company/mt-pocono`
+        : `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/shippers`;
+      const res = await axios.get(shipperUrl, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
 
-      const list = (res.data?.data || []).filter(x => (x.userType === 'shipper') && (x.status === 'approved'));
+      const rawList = Array.isArray(res.data?.data) ? res.data.data : [];
+      const list = (isDefaultCompanyUser
+        ? rawList
+        : rawList.filter(x => (x.userType === 'shipper') && (x.status === 'approved'))
+      )
+        .map((x) => ({
+          ...x,
+          _id: x?._id || x?.shipper_id || x?.shipperId || '',
+          compName: x?.compName || x?.name || '',
+        }))
+        .filter((x) => String(x.compName || '').trim() !== '');
 
       // Sort by company name (safe)
       list.sort((a, b) => (a.compName || '').localeCompare(b.compName || ''));
@@ -1269,6 +1296,15 @@ export default function DeliveryOrder() {
       [name]: value
     }));
   };
+
+  const companyOptions = [
+    { value: 'V Power Logistics', label: 'V Power Logistics' },
+    { value: 'IDENTIFICA LLC', label: 'IDENTIFICA LLC' },
+    { value: 'MT. POCONO TRANSPORTATION INC', label: 'MT. POCONO TRANSPORTATION INC' }
+  ];
+  const companyFilterOptions = isDefaultCompanyUser
+    ? companyOptions.filter((option) => option.value === DEFAULT_COMPANY_FOR_VPL077)
+    : companyOptions;
 
   // Handle company selection
   const handleCompanyChange = (value) => {
@@ -5966,11 +6002,7 @@ const handleUpdateOrder = async (e) => {
                     <SearchableDropdown
                       value={formData.company || ''}
                       onChange={handleCompanyChange}
-                      options={[
-                        { value: 'V Power Logistics', label: 'V Power Logistics' },
-                        { value: 'IDENTIFICA LLC', label: 'IDENTIFICA LLC' },
-                        { value: 'MT. POCONO TRANSPORTATION INC', label: 'MT. POCONO TRANSPORTATION INC' }
-                      ]}
+                      options={companyFilterOptions}
                       placeholder="Select Company"
                       searchPlaceholder="Search companies..."
                       className={errors.company ? 'border-red-500' : ''}

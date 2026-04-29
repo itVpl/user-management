@@ -78,8 +78,12 @@ const Topbar = () => {
   };
   const fetchReportTalktimeHours = async ({ aliasName, mobileNo, empId, token, date }) => {
     if (!aliasName || !token || !date) return null;
+    const analyticsBase =
+      String(empId || "").trim() === "VPL059"
+        ? `${API_CONFIG.BASE_URL}/api/v1/analytics/8x8-triton`
+        : `${API_CONFIG.BASE_URL}/api/v1/analytics/8x8`;
     try {
-      const res = await axios.get(`${BASE_8X8}/call-records/report`, {
+      const res = await axios.get(`${analyticsBase}/call-records/report`, {
         params: {
           from: date,
           to: date,
