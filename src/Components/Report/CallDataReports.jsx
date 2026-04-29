@@ -462,10 +462,16 @@ const CallDataReports = () => {
 
       const computedEmployeeSummary = Object.values(
         nextRecords.reduce((acc, record) => {
-          const employeeName = record.callerName || record.calleeName || "Unknown";
-          if (!acc[employeeName]) {
-            acc[employeeName] = {
+          const empId = String(record?.employee?.empId || "").trim();
+          const employeeName =
+            String(record?.employee?.aliasName || record?.callerName || record?.employee?.employeeName || record?.calleeName || "Unknown").trim() ||
+            "Unknown";
+          const rowKey = empId || employeeName.toLowerCase();
+          if (!acc[rowKey]) {
+            acc[rowKey] = {
               employeeName,
+              empId: empId || undefined,
+              mobileNo: record?.employee?.mobileNo || undefined,
               totalCalls: 0,
               answeredCalls: 0,
               missedCalls: 0,
@@ -475,7 +481,7 @@ const CallDataReports = () => {
               categorizedCalls: 0,
             };
           }
-          const row = acc[employeeName];
+          const row = acc[rowKey];
           row.totalCalls += 1;
           row.totalTalkTimeMS += Number(record.talkTimeMS || 0);
           row.totalTalkTimeMinutes = Math.floor(row.totalTalkTimeMS / 60000);
@@ -487,26 +493,17 @@ const CallDataReports = () => {
         }, {})
       );
 
-      const summaryPayload = firstPayload.summary || computedSummary;
       const normalizedSummary = {
-        ...summaryPayload,
-        totalTalkTimeMinutesDisplay:
-          summaryPayload?.totalTalkTimeMS != null
-            ? toMinutesFromMs(summaryPayload.totalTalkTimeMS)
-            : computedSummary.totalTalkTimeMinutesDisplay,
-        totalTalkTimeHoursDisplay:
-          summaryPayload?.totalTalkTimeMS != null
-            ? toHoursFromMs(summaryPayload.totalTalkTimeMS)
-            : toHoursFromMinutes(
-                summaryPayload?.totalTalkTimeMinutes ?? computedSummary.totalTalkTimeMinutes
-              ),
+        ...computedSummary,
+        totalTalkTimeMinutesDisplay: toMinutesFromMs(computedSummary.totalTalkTimeMS),
+        totalTalkTimeHoursDisplay: toHoursFromMs(computedSummary.totalTalkTimeMS),
       };
-      const employeeSummarySource =
-        Array.isArray(firstPayload.employeeSummary) && firstPayload.employeeSummary.length
-          ? firstPayload.employeeSummary
-          : computedEmployeeSummary;
-      const normalizedEmployeeSummary = employeeSummarySource.map((emp) => ({
+      const normalizedEmployeeSummary = computedEmployeeSummary.map((emp) => ({
         ...emp,
+        totalTalkTimeMinutesDisplay:
+          emp?.totalTalkTimeMS != null
+            ? toMinutesFromMs(emp.totalTalkTimeMS)
+            : Number(emp?.totalTalkTimeMinutes || 0).toFixed(2),
         totalTalkTimeHoursDisplay:
           emp?.totalTalkTimeMS != null
             ? toHoursFromMs(emp.totalTalkTimeMS)
@@ -967,7 +964,7 @@ const CallDataReports = () => {
         },
         {
           key: "talkTime",
-          title: "Talk Time (Hrs)",
+          title: "Talk Time (Decimal Hrs)",
           value:
             state.summary.totalTalkTimeHoursDisplay ??
             toHoursFromMinutes(state.summary.totalTalkTimeMinutes || 0),
@@ -1096,6 +1093,9 @@ const CallDataReports = () => {
             Export
           </button>
         </div>
+        <p className="text-xs text-gray-500">
+          Talk time totals use raw <code>talkTimeMS</code> aggregation; row values are display-rounded decimals.
+        </p>
       </div>
 
 
@@ -1417,7 +1417,7 @@ const CallDataReports = () => {
                 <div>Total Calls</div>
                 <div>Answered</div>
                 <div>Missed</div>
-                <div>Talk Time (Hrs)</div>
+                <div>Talk Time (Decimal Min)</div>
                 <div>Categorized</div>
                 <div>Follow-up</div>
               </div>
@@ -1442,9 +1442,7 @@ const CallDataReports = () => {
                     <div className="tabular-nums text-base">{emp.totalCalls || 0}</div>
                     <div className="tabular-nums text-base">{emp.answeredCalls || 0}</div>
                     <div className="tabular-nums text-base">{emp.missedCalls || 0}</div>
-                    <div className="tabular-nums text-base">
-                      {emp.totalTalkTimeHoursDisplay ?? toHoursFromMinutes(emp.totalTalkTimeMinutes)}
-                    </div>
+                    <div className="tabular-nums text-base">{emp.totalTalkTimeMinutesDisplay ?? Number(emp.totalTalkTimeMinutes || 0).toFixed(2)}</div>
                     <div className="tabular-nums text-base">{emp.categorizedCalls || 0}</div>
                     <div className="tabular-nums text-base">{emp.followUpCount || 0}</div>
                   </div>
@@ -1467,7 +1465,7 @@ const CallDataReports = () => {
                 <div>Phone No.</div>
                 <div>Direction</div>
                 <div>Answered</div>
-                <div>Talk Time (min)</div>
+                <div>Talk Time (Decimal Min)</div>
                 <div>Category</div>
                 <div>Follow Up</div>
                 <div>Details</div>
