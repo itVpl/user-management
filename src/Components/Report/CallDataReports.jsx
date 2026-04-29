@@ -8,7 +8,21 @@ import {
   CMT_ADD_LOAD_REFERENCE_DISPOSITION,
 } from "../../constants/cmtCallDispositionLabels";
 
-const REPORT_BASE = `${API_CONFIG.BASE_URL}/api/v1/analytics/8x8`;
+const REPORT_BASE_8X8 = `${API_CONFIG.BASE_URL}/api/v1/analytics/8x8`;
+const REPORT_BASE_TRITON = `${API_CONFIG.BASE_URL}/api/v1/analytics/8x8-triton`;
+const TRITON_REPORT_EMP_IDS = new Set(["VPL059"]);
+
+const getReportBaseForCurrentUser = () => {
+  try {
+    const raw = sessionStorage.getItem("user") || localStorage.getItem("user");
+    if (!raw) return REPORT_BASE_8X8;
+    const u = JSON.parse(raw);
+    const empId = String(u?.empId ?? u?.empID ?? u?.employeeId ?? "").trim();
+    return TRITON_REPORT_EMP_IDS.has(empId) ? REPORT_BASE_TRITON : REPORT_BASE_8X8;
+  } catch {
+    return REPORT_BASE_8X8;
+  }
+};
 
 /** Caller names shown in “All caller aliases” even if not returned from active employees (e.g. Triton line). */
 const STATIC_REPORT_CALLER_ALIASES = [
@@ -166,10 +180,16 @@ const getAuthConfig = () => {
 };
 
 const toBool = (val) => val === true || val === "true";
-const toMinutes = (ms) => (Number(ms || 0) / 60000).toFixed(2);
 const toHoursFromMinutes = (minutes) => (Number(minutes || 0) / 60).toFixed(2);
 const toMinutesFromMs = (ms) => (Number(ms || 0) / 60000).toFixed(2);
 const toHoursFromMs = (ms) => (Number(ms || 0) / 3600000).toFixed(2);
+const toMinuteSecondFromMinutes = (minutes) => {
+  const totalSeconds = Math.max(0, Math.round(Number(minutes || 0) * 60));
+  const fullMinutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${fullMinutes}:${String(seconds).padStart(2, "0")}`;
+};
+const toMinuteSecondFromMs = (ms) => toMinuteSecondFromMinutes(Number(ms || 0) / 60000);
 
 /** Normalized receiver line from report row (matches backend: calleeNumber / receiverNumber or callee.phoneNumber). */
 const getCalleeReceiverNumber = (record) =>
@@ -264,8 +284,9 @@ const CallDataReports = () => {
         String(storedUser?.department || "")
           .trim()
           .toLowerCase() === "cmt";
+      const reportBase = getReportBaseForCurrentUser();
 
-      const res = await axios.get(`${REPORT_BASE}/call-records/category-options`, getAuthConfig());
+      const res = await axios.get(`${reportBase}/call-records/category-options`, getAuthConfig());
       let options = res?.data?.data || res?.data?.options || [];
       if (!Array.isArray(options)) options = [];
       if (isCmt && options.length > 0) {
@@ -358,6 +379,7 @@ const CallDataReports = () => {
     const filters = incomingFilters || state.filters;
     const page = Math.max(1, Number(filters.page || 1));
     const limit = 10;
+    const reportBase = getReportBaseForCurrentUser();
     setState((prev) => ({ ...prev, loading: true, error: null }));
     try {
       const buildParams = (requestedPage, requestedLimit) => {
@@ -377,7 +399,7 @@ const CallDataReports = () => {
       const requestPayload = async (requestedPage, requestedLimit) => {
         const params = buildParams(requestedPage, requestedLimit);
         try {
-          const reportRes = await axios.get(`${REPORT_BASE}/call-records/report?${params.toString()}`, {
+          const reportRes = await axios.get(`${reportBase}/call-records/report?${params.toString()}`, {
             ...getAuthConfig(),
             signal: controller.signal,
           });
@@ -386,7 +408,7 @@ const CallDataReports = () => {
           if (primaryErr?.code === "ERR_CANCELED") throw primaryErr;
           if (primaryErr?.response?.status === 404) throw primaryErr;
           console.warn("Primary report API failed, trying filter API:", primaryErr);
-          const filterRes = await axios.get(`${REPORT_BASE}/call-records/filter?${params.toString()}`, {
+          const filterRes = await axios.get(`${reportBase}/call-records/filter?${params.toString()}`, {
             ...getAuthConfig(),
             signal: controller.signal,
           });
@@ -693,7 +715,7 @@ const CallDataReports = () => {
         record.callerName,
         record.direction,
         record.answered,
-        toMinutes(record.talkTimeMS),
+        toMinuteSecondFromMs(record.talkTimeMS),
         merged.category,
         toBool(merged.followUp) ? "yes true follow up" : "no false",
         record.employee?.empId,
@@ -861,7 +883,8 @@ const CallDataReports = () => {
     };
 
     try {
-      const res = await axios.put(`${REPORT_BASE}/call-records/${record.callId}/category`, body, getAuthConfig());
+      const reportBase = getReportBaseForCurrentUser();
+      const res = await axios.put(`${reportBase}/call-records/${record.callId}/category`, body, getAuthConfig());
       if (!res?.data?.success) {
         throw new Error(res?.data?.message || "Failed to update category/follow-up");
       }
@@ -1417,7 +1440,7 @@ const CallDataReports = () => {
                 <div>Total Calls</div>
                 <div>Answered</div>
                 <div>Missed</div>
-                <div>Talk Time (Decimal Min)</div>
+                <div>Talk Time (MM:SS)</div>
                 <div>Categorized</div>
                 <div>Follow-up</div>
               </div>
@@ -1442,7 +1465,11 @@ const CallDataReports = () => {
                     <div className="tabular-nums text-base">{emp.totalCalls || 0}</div>
                     <div className="tabular-nums text-base">{emp.answeredCalls || 0}</div>
                     <div className="tabular-nums text-base">{emp.missedCalls || 0}</div>
-                    <div className="tabular-nums text-base">{emp.totalTalkTimeMinutesDisplay ?? Number(emp.totalTalkTimeMinutes || 0).toFixed(2)}</div>
+                    <div className="tabular-nums text-base">
+                      {toMinuteSecondFromMinutes(
+                        emp.totalTalkTimeMinutesDisplay ?? Number(emp.totalTalkTimeMinutes || 0)
+                      )}
+                    </div>
                     <div className="tabular-nums text-base">{emp.categorizedCalls || 0}</div>
                     <div className="tabular-nums text-base">{emp.followUpCount || 0}</div>
                   </div>
@@ -1465,7 +1492,7 @@ const CallDataReports = () => {
                 <div>Phone No.</div>
                 <div>Direction</div>
                 <div>Answered</div>
-                <div>Talk Time (Decimal Min)</div>
+                <div>Talk Time (MM:SS)</div>
                 <div>Category</div>
                 <div>Follow Up</div>
                 <div>Details</div>
@@ -1525,7 +1552,9 @@ const CallDataReports = () => {
                       </div>
                       <div className="text-base">{record.direction || "-"}</div>
                       <div className="text-base">{record.answered || "-"}</div>
-                      <div className="text-lg font-semibold tabular-nums text-gray-900">{toMinutes(record.talkTimeMS)}</div>
+                      <div className="text-lg font-semibold tabular-nums text-gray-900">
+                        {toMinuteSecondFromMs(record.talkTimeMS)}
+                      </div>
                       <div className="min-w-0 text-base text-gray-900">
                         <span className="block truncate" title={String(merged.category || "").trim() || undefined}>
                           {String(merged.category || "").trim() || "—"}

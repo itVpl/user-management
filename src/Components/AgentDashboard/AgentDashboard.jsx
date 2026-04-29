@@ -165,11 +165,15 @@ const Dashboard = () => {
       const to = formatDate(endOfDay);
       const mobileNo = user.mobileNo || "";
       const empId = user.empId || "";
+      const analyticsBase =
+        String(empId).trim() === "VPL059"
+          ? `${API_CONFIG.BASE_URL}/api/v1/analytics/8x8-triton`
+          : `${API_CONFIG.BASE_URL}/api/v1/analytics/8x8`;
 
       try {
         const token = sessionStorage.getItem("token") || localStorage.getItem("token");
         const response = await axios.get(
-          `${API_CONFIG.BASE_URL}/api/v1/analytics/8x8/call-records/report`,
+          `${analyticsBase}/call-records/report`,
           {
             params: {
               callerName: alias,

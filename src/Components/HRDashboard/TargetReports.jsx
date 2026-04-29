@@ -48,10 +48,14 @@ export default function TargetReports() {
     const mobileNo = String(employee?.mobileNo || "").trim();
     const empId = String(employee?.empId || "").trim();
     if (!callerName && !mobileNo && !empId) return 0;
+    const analyticsBase =
+      empId === "VPL059"
+        ? `${API_BASE_URL}/api/v1/analytics/8x8-triton`
+        : `${API_BASE_URL}/api/v1/analytics/8x8`;
 
     try {
       const res = await fetch(
-        `${API_BASE_URL}/api/v1/analytics/8x8/call-records/report?from=${encodeURIComponent(date)}&to=${encodeURIComponent(date)}&callerName=${encodeURIComponent(callerName)}&mobileNo=${encodeURIComponent(mobileNo)}&empId=${encodeURIComponent(empId)}&pageSize=1500&page=1&limit=1500`,
+        `${analyticsBase}/call-records/report?from=${encodeURIComponent(date)}&to=${encodeURIComponent(date)}&callerName=${encodeURIComponent(callerName)}&mobileNo=${encodeURIComponent(mobileNo)}&empId=${encodeURIComponent(empId)}&pageSize=1500&page=1&limit=1500`,
         {
           method: 'GET',
           headers: {

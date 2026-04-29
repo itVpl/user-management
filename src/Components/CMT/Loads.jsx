@@ -36,6 +36,9 @@ import alertify from "alertifyjs";
 
 import "alertifyjs/build/css/alertify.css";
 
+const DEFAULT_COMPANY_FOR_VPL077 = "MT. POCONO TRANSPORTATION INC";
+const DEFAULT_COMPANY_EMP_ID = "VPL077";
+
 const fullLoadId = (value, fallback = "N/A") => {
   if (!value) return fallback;
   if (typeof value === "object") return value._id || value.id || fallback;
@@ -210,6 +213,33 @@ const SearchableDropdown = ({
 };
 
 export default function Loads() {
+  const getLoggedInEmpId = () => {
+    try {
+      const rawUser = sessionStorage.getItem("user") || localStorage.getItem("user");
+      if (!rawUser) return "";
+      const parsedUser = JSON.parse(rawUser);
+      return String(parsedUser?.empId || parsedUser?.EmpID || "").trim();
+    } catch {
+      return "";
+    }
+  };
+  const loggedInEmpId = getLoggedInEmpId();
+  const isDefaultCompanyUser =
+    loggedInEmpId.toUpperCase() === DEFAULT_COMPANY_EMP_ID;
+  const companyOptions = [
+    { value: "V Power Logistics", label: "V Power Logistics" },
+    { value: "IDENTIFICA LLC", label: "IDENTIFICA LLC" },
+    {
+      value: "MT. POCONO TRANSPORTATION INC",
+      label: "MT. POCONO TRANSPORTATION INC",
+    },
+  ];
+  const companyDropdownOptions = isDefaultCompanyUser
+    ? companyOptions.filter(
+        (option) => option.value === DEFAULT_COMPANY_FOR_VPL077,
+      )
+    : companyOptions;
+
   const [searchParams, setSearchParams] = useSearchParams();
   const openedLoadFromUrlRef = React.useRef(null);
   const handleViewLoadRef = React.useRef(null);
@@ -5421,22 +5451,7 @@ export default function Loads() {
                           <SearchableDropdown
                             value={loadForm.company || ""}
                             onChange={handleCompanyChange}
-                            options={[
-                              {
-                                value: "V Power Logistics",
-                                label: "V Power Logistics",
-                              },
-
-                              {
-                                value: "IDENTIFICA LLC",
-                                label: "IDENTIFICA LLC",
-                              },
-
-                              {
-                                value: "MT. POCONO TRANSPORTATION INC",
-                                label: "MT. POCONO TRANSPORTATION INC",
-                              },
-                            ]}
+                            options={companyDropdownOptions}
                             placeholder="Select Company"
                             searchPlaceholder="Search companies..."
                             className={
@@ -8277,22 +8292,7 @@ export default function Loads() {
                           <SearchableDropdown
                             value={loadForm.company || ""}
                             onChange={handleCompanyChange}
-                            options={[
-                              {
-                                value: "V Power Logistics",
-                                label: "V Power Logistics",
-                              },
-
-                              {
-                                value: "IDENTIFICA LLC",
-                                label: "IDENTIFICA LLC",
-                              },
-
-                              {
-                                value: "MT. POCONO TRANSPORTATION INC",
-                                label: "MT. POCONO TRANSPORTATION INC",
-                              },
-                            ]}
+                            options={companyDropdownOptions}
                             placeholder="Select Company"
                             searchPlaceholder="Search companies..."
                             className={
