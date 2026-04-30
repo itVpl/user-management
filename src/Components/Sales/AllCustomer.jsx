@@ -156,7 +156,7 @@ const AllCustomer = () => {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [sourceTypeFilter, setSourceTypeFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   // Created By Filter State
   const [selectedCreatedBy, setSelectedCreatedBy] = useState('');
@@ -665,12 +665,23 @@ const AllCustomer = () => {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedCreatedBy]);
+  }, [searchTerm, selectedCreatedBy, sourceTypeFilter]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [itemsPerPage]);
 
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = filteredCustomers.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(filteredCustomers.length / itemsPerPage);
+  const totalPages = Math.max(1, Math.ceil(filteredCustomers.length / itemsPerPage) || 1);
+
+  useEffect(() => {
+    setCurrentPage((p) => {
+      const tp = Math.max(1, Math.ceil(filteredCustomers.length / itemsPerPage) || 1);
+      return p > tp ? tp : p;
+    });
+  }, [filteredCustomers.length, itemsPerPage]);
 
   const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
@@ -1035,61 +1046,90 @@ const AllCustomer = () => {
           </div>
         )}
         </div>
-        </div>
 
-        {/* Pagination */}
         {filteredCustomers.length > 0 && (
-            <div className="flex justify-between items-center mt-2 px-4">
-            <div className="text-sm text-gray-600">
-                Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredCustomers.length)} of {filteredCustomers.length} customers
-                {searchTerm && ` (filtered from ${customers.length} total)`}
+          <div className="mt-4 pt-4 border-t border-gray-200 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between px-1">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+              <p className="text-sm text-gray-600">
+                Showing{' '}
+                <span className="font-medium text-gray-800">{indexOfFirstItem + 1}</span>
+                {'–'}
+                <span className="font-medium text-gray-800">
+                  {Math.min(indexOfLastItem, filteredCustomers.length)}
+                </span>
+                {' of '}
+                <span className="font-medium text-gray-800">{filteredCustomers.length}</span>
+                {filteredCustomers.length === 1 ? ' customer' : ' customers'}
+                {searchTerm && (
+                  <span className="text-gray-500"> ({customers.length} loaded)</span>
+                )}
+              </p>
+              <label className="flex items-center gap-2 text-sm text-gray-600">
+                <span className="whitespace-nowrap">Rows per page</span>
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm font-medium text-gray-800 bg-white hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                >
+                  {[5, 10, 25, 50].map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
-            {totalPages > 1 && (
-            <div className="flex gap-2 items-center">
-                <button
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
                 onClick={() => paginate(currentPage - 1)}
                 disabled={currentPage === 1}
-                className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900"
-                >
+                className="flex items-center gap-1 px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm font-medium text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+              >
                 <ChevronLeft size={16} />
                 Previous
-                </button>
-                <div className="flex gap-1">
+              </button>
+              <div className="flex gap-1 items-center">
                 {getPageNumbers().map((page, index) => {
                   if (page === 'ellipsis') {
                     return (
-                      <span key={`ellipsis-${index}`} className="w-8 h-8 flex items-center justify-center text-gray-400">
-                        ...
+                      <span
+                        key={`ellipsis-${index}`}
+                        className="w-8 h-8 flex items-center justify-center text-gray-400 text-sm"
+                      >
+                        …
                       </span>
                     );
                   }
                   return (
                     <button
+                      type="button"
                       key={page}
                       onClick={() => paginate(page)}
-                      className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${
+                      className={`min-w-[2rem] h-8 px-1 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${
                         currentPage === page
-                          ? 'border border-gray-900 text-gray-900 bg-white'
-                          : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                          ? 'border border-gray-900 text-gray-900 bg-gray-50 shadow-sm'
+                          : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50 border border-transparent'
                       }`}
                     >
                       {page}
                     </button>
                   );
                 })}
-                </div>
-                <button
+              </div>
+              <button
+                type="button"
                 onClick={() => paginate(currentPage + 1)}
                 disabled={currentPage === totalPages}
-                className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900"
-                >
+                className="flex items-center gap-1 px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm font-medium text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+              >
                 Next
                 <ChevronRight size={16} />
-                </button>
+              </button>
             </div>
-            )}
-            </div>
+          </div>
         )}
+        </div>
         </>
       )}
 
