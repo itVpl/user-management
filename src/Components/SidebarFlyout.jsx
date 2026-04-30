@@ -50,7 +50,9 @@ const getMenuIcon = (itemName) => {
     'Emp Login Report': BarChart3,
     'All Leads': Users,
     'Customer Loads': Package,
-    'Assign Agent': UserPlus
+    'Assign Agent': UserPlus,
+    'Rate Request Team': TrendingUp,
+    'Scheduling Team': Calendar,
   };
   
   return iconMap[itemName] || FileText;

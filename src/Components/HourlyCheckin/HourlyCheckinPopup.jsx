@@ -7,7 +7,14 @@ import {
 } from "../../services/hourlyCheckinService";
 
 const ENABLED_DEPARTMENTS = new Set(["Sales", "CMT", "HR"]);
-const BLOCKED_EMP_IDS = new Set(["1234", "VPL001", "VPL002", "VPL003"]);
+const BLOCKED_EMP_IDS = new Set([
+  "1234",
+  "VPL001",
+  "VPL002",
+  "VPL003",
+  "VPL005",
+  "VPL077",
+]);
 
 const normalizeEmpId = (value) =>
   String(value || "")

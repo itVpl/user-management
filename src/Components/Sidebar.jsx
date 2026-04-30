@@ -88,58 +88,29 @@ const loadGmailAccounts = () => {
 const DEPARTMENT_MODULE_CATEGORIES = {
   "HR": {
     "User Management": ["Manage Users", "Users Permissions"],
-    "Reports": [
-      "Break Report",
-      "Hourly Performance Report",
-      "Target Reports",
-      "CMT Comparison Report",
-      "Sales Dept Report",
-      "DO Report",
-      "DO and Scheduling Report",
-      "Call Data Reports",
-      "Follow Up Report",
-      "Trucker Report",
-      "Rate Request Report",
-      "Call Records (Id)",
-      "Call Data",
-      "HR Call Reports",
-      "Report Analysis",
-      "Emp Login Report"
-    ],
-    "Attendance & Leave": [
-      "Attendance Leave",
-      "Emp Leaves"
-    ],
-    "Payroll": ["Pay Rolls", "Salary Modification"],
-    "Documents": [
-      "HR Document Verification",
-      "Employee Documents",
-      "Employees Hygine",
-      "Employee Hygiene",
-      "Docs Upload"
-    ],
-    "Recruitment": ["Candidate Shortlist", "Employee Feedback", "Employee Feedback Report", "Employee Review", "Monthly Performance Reviews", "Employee Test", "Employee Test Admin"],
-    "Office Management": [
-      "Office Inventory",
-      "Office Expenses",
-      "Dinner Status",
-      "Dinner Thali"
-    ],
     "Tasks": [
-      "Task",
-      "Task Schedule",
       "Daily Task",
       "Weekly Target Setup",
-      "My Target",
+      "Task",
       "TO-DO List"
     ],
-    "Team Management": [
-      "Team",
-      "Team Rating"
+    "Documents": [
+      "Employee Hygiene",
+      "HR Document Verification",
+      "Employees Hygine",
+      "Docs Upload"
     ],
-    "System Administration": [
-      "Manage Module"
-    ]
+    "Payroll": ["Pay Rolls"],
+    "Attendance & Leave": ["Attendance Leave", "Emp Leaves"],
+    "Team Management": ["Team"],
+    "Recruitment": [
+      "Candidate Shortlist",
+      "Employee Review",
+      "Employee Test",
+      "Employee Test Admin",
+      "Monthly Performance Reviews"
+    ],
+    "Office Management": ["Office Expenses", "Office Inventory"]
   },
   "Sales": {
     "Customer Management": [
@@ -195,15 +166,6 @@ const DEPARTMENT_MODULE_CATEGORIES = {
     "Company Management": [
       "Sub Company"
     ],
-    "Reports": [
-      "Call Data Reports",
-      "Call Data",
-      "Call Records (Id)",
-      "Report Analysis",
-      "DO Report",
-      "Add Customer Report",
-      "Add Agent Report"
-    ],
     "System Administration": [
       "Manage Module"
     ]
@@ -212,9 +174,6 @@ const DEPARTMENT_MODULE_CATEGORIES = {
     "Financial Management": [
       "Accounts Receivable",
       "Accounts Payable",
-      "Receivable Report",
-      "Payable Report",
-      "DO Report",
       "Finance Dashboard"
     ],
     "Accounting": [
@@ -222,14 +181,6 @@ const DEPARTMENT_MODULE_CATEGORIES = {
     ],
     "Inventory": [
       "Inventry"
-    ],
-    "Reports": [
-      "Call Data Reports",
-      "Finance Dashboard",
-      "Call Data",
-      "Call Records (Id)",
-      "Report Analysis",
-      "Emp Login Report"
     ],
     "System Administration": [
       "Manage Module"
@@ -253,17 +204,6 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Carrier Docs",
       "Carrier Approval",
       "Add Trucker Drivers"
-    ],
-    "Reports": [
-      "CMT Comparison Report",
-      "Trucker Report",
-      "Rate Request Report",
-      "DO Report",
-      "Call Data Reports",
-      "Call Records (Id)",
-      "Call Data",
-      "Report Analysis",
-      "Emp Login Report"
     ],
     "Rate Management": [
       "Rate Request",
@@ -301,7 +241,7 @@ const DEPARTMENT_MODULE_CATEGORIES = {
   // Universal User Department Categories (with Reports included)
   "CMT_UNIVERSAL": {
     "CMT Modules": [
-      "Trucker Report",
+      // "Trucker Report",
       "DO Details",
       "Rate Request",
       "Trukers",
@@ -312,22 +252,6 @@ const DEPARTMENT_MODULE_CATEGORIES = {
     "Common Modules": [
       "Dinner Status",
       "Dinner Thali"
-    ],
-    "CMT Reports": [
-      "CMT Comparison Report",
-      "Trucker Report",
-      "Rate Request Report",
-      "DO Report",
-      "DO and Scheduling Report",
-      "All DO Assigned CMT",
-      "Assigned Rate Request"
-    ],
-    "Common Reports": [
-      "Call Data Reports",
-      "Call Data",
-      "Call Records (Id)",
-      "Report Analysis",
-      "Team Rating"
     ]
   },
   "Sales_UNIVERSAL": {
@@ -350,44 +274,17 @@ const DEPARTMENT_MODULE_CATEGORIES = {
     ],
     "Company Management": [
       "Sub Company"
-    ],
-    "Sales Reports": [
-      "Sales Dept Report",
-      "Follow Up Report",
-      "DO Report",
-      "Add Agent Report"
-    ],
-    "Common Reports": [
-      "Call Data Reports",
-      "Call Data",
-      "Call Records (Id)",
-      "Report Analysis",
-      "Team Rating"
     ]
   },
   "Finance_UNIVERSAL": {
     "Finance Modules": [
       "Accounts Receivable",
       "Accounts Payable",
-      "Receivable Report",
-      "Payable Report",
       "Employee Hygiene"
     ],
     "Common Modules": [
       "Dinner Status",
       "Dinner Thali"
-    ],
-    "Finance Reports": [
-      "Receivable Report",
-      "Payable Report",
-      "DO Report"
-    ],
-    "Common Reports": [
-      "Call Data Reports",
-      "Call Data",
-      "Call Records (Id)",
-      "Report Analysis",
-      "Team Rating"
     ]
   },
   "QA": {
@@ -784,15 +681,18 @@ const DEPARTMENT_REPORTS = {
     "Trucker Report",
     "Rate Request Report",
     "DO Report",
+    "DO and Scheduling Report",
     "All DO Assigned CMT",
-    "Assigned Rate Request"
+    "Assigned Rate Request",
+    "Team Rating"
   ],
   "Sales": [
     "Sales Dept Report",
     "Follow Up Report",
     "DO Report",
     "Add Customer Report",
-    "Add Agent Report"
+    "Add Agent Report",
+    "Team Rating"
   ],
   "Finance": [
     "Receivable Report",
@@ -820,8 +720,7 @@ const DEPARTMENT_REPORTS = {
     // "Add Agent Report",
     "Call Data",
     "Call Records (Id)",
-    "Report Analysis",
-    "Team Rating"
+    "Report Analysis"
   ]
 };
 
@@ -1822,9 +1721,14 @@ const Sidebar = () => {
               }
               
               // Separate reports from other menus - only include reports that user has permission for
-              const reports = matchedMenus.filter(item => 
-                REPORT_NAMES.includes(item.name)
-              );
+              const deptLower = String(department ?? "").toLowerCase();
+              const reports = matchedMenus.filter((item) => {
+                if (!REPORT_NAMES.includes(item.name)) return false;
+                // HR / CMT / Sales / Finance: items already under department flyout should not duplicate in Reports
+                if (["hr", "cmt", "sales", "finance"].includes(deptLower) && allDeptModuleNames.includes(item.name))
+                  return false;
+                return true;
+              });
               
               // Categorize reports by department
               const categorizedReports = categorizeReportsByDepartment(reports);
