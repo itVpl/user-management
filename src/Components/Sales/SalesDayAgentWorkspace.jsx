@@ -530,8 +530,13 @@ function BrowsePanel({ onGoImport }) {
       const data = await fetchSalesDayList(params);
       if (data?.success) {
         setCustomers(data.customers || data.rows || []);
-        const t = data.total ?? data.count ?? data.totalCount;
-        setTotal(typeof t === 'number' ? t : (data.customers || []).length);
+        const t =
+          data.total ??
+          data.count ??
+          data.totalCount ??
+          data.pagination?.total ??
+          data.pagination?.count;
+        setTotal(typeof t === 'number' ? t : (data.customers || data.rows || []).length);
       }
     } catch (e) {
       toast.error(e?.response?.data?.message || 'Could not load list');
@@ -561,6 +566,13 @@ function BrowsePanel({ onGoImport }) {
   }, [loadList]);
 
   const totalPages = Math.max(1, Math.ceil((total || 0) / limit));
+  const visibleFrom = total > 0 ? (page - 1) * limit + 1 : 0;
+  const visibleTo = Math.min(page * limit, total);
+  const pageButtons = useMemo(() => {
+    if (totalPages <= 1) return [];
+    const pages = new Set([1, totalPages, page - 1, page, page + 1]);
+    return [...pages].filter((p) => p >= 1 && p <= totalPages).sort((a, b) => a - b);
+  }, [page, totalPages]);
 
   const openFollowUpEditor = (row) => {
     const pre = getFollowUpPrefillFromCustomer(row);
@@ -902,9 +914,19 @@ function BrowsePanel({ onGoImport }) {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between text-sm text-gray-600 pt-1">
           <span className="font-medium text-gray-700">
             Page {page} of {totalPages}{' '}
-            <span className="font-normal text-gray-500">({total} rows)</span>
+            <span className="font-normal text-gray-500">
+              ({visibleFrom}-{visibleTo} of {total} rows)
+            </span>
           </span>
           <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={page <= 1}
+              className="px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+              onClick={() => setPage(1)}
+            >
+              First
+            </button>
             <button
               type="button"
               disabled={page <= 1}
@@ -913,6 +935,24 @@ function BrowsePanel({ onGoImport }) {
             >
               Prev
             </button>
+            {pageButtons.map((p, idx) => (
+              <React.Fragment key={p}>
+                {idx > 0 && p - pageButtons[idx - 1] > 1 && (
+                  <span className="px-1 self-center text-gray-400 select-none">…</span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setPage(p)}
+                  className={`min-w-10 px-3 py-2 rounded-xl border text-sm font-semibold transition-colors ${
+                    p === page
+                      ? 'border-blue-600 bg-blue-600 text-white'
+                      : 'border-gray-200 bg-white text-gray-800 hover:bg-gray-50'
+                  }`}
+                >
+                  {p}
+                </button>
+              </React.Fragment>
+            ))}
             <button
               type="button"
               disabled={page >= totalPages}
@@ -920,6 +960,14 @@ function BrowsePanel({ onGoImport }) {
               onClick={() => setPage((p) => p + 1)}
             >
               Next
+            </button>
+            <button
+              type="button"
+              disabled={page >= totalPages}
+              className="px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+              onClick={() => setPage(totalPages)}
+            >
+              Last
             </button>
           </div>
         </div>
