@@ -183,14 +183,13 @@ const toBool = (val) => val === true || val === "true";
 const toHoursFromMinutes = (minutes) => (Number(minutes || 0) / 60).toFixed(2);
 const toMinutesFromMs = (ms) => (Number(ms || 0) / 60000).toFixed(2);
 const toHoursFromMs = (ms) => (Number(ms || 0) / 3600000).toFixed(2);
-const toMinuteSecondFromMinutes = (minutes) => {
-  const totalSeconds = Math.max(0, Math.round(Number(minutes || 0) * 60));
-  const fullMinutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${fullMinutes}:${String(seconds).padStart(2, "0")}`;
+const toHHMMSSFromMs = (ms) => {
+  const totalSeconds = Math.max(0, Math.floor(Number(ms || 0) / 1000));
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 };
-const toMinuteSecondFromMs = (ms) => toMinuteSecondFromMinutes(Number(ms || 0) / 60000);
-
 /** Normalized receiver line from report row (matches backend: calleeNumber / receiverNumber or callee.phoneNumber). */
 const getCalleeReceiverNumber = (record) =>
   record?.receiverNumber ??
@@ -508,6 +507,7 @@ const CallDataReports = () => {
         ...computedSummary,
         totalTalkTimeMinutesDisplay: toMinutesFromMs(computedSummary.totalTalkTimeMS),
         totalTalkTimeHoursDisplay: toHoursFromMs(computedSummary.totalTalkTimeMS),
+        totalTalkTimeHMSDisplay: toHHMMSSFromMs(computedSummary.totalTalkTimeMS),
       };
       const normalizedEmployeeSummary = computedEmployeeSummary.map((emp) => ({
         ...emp,
@@ -704,7 +704,7 @@ const CallDataReports = () => {
         record.callerName,
         record.direction,
         record.answered,
-        toMinuteSecondFromMs(record.talkTimeMS),
+        toHHMMSSFromMs(record.talkTimeMS),
         merged.category,
         toBool(merged.followUp) ? "yes true follow up" : "no false",
         record.employee?.empId,
@@ -976,10 +976,14 @@ const CallDataReports = () => {
         },
         {
           key: "talkTime",
-          title: "Talk Time (Decimal Hrs)",
+          title: "Talk Time (HH:MM:SS)",
           value:
-            state.summary.totalTalkTimeHoursDisplay ??
-            toHoursFromMinutes(state.summary.totalTalkTimeMinutes || 0),
+            state.summary.totalTalkTimeHMSDisplay ??
+            toHHMMSSFromMs(
+              state.summary.totalTalkTimeMS != null && state.summary.totalTalkTimeMS !== ""
+                ? Number(state.summary.totalTalkTimeMS)
+                : Number(state.summary.totalTalkTimeMinutes || 0) * 60000
+            ),
           iconBg: "bg-amber-50",
           iconColor: "text-amber-600",
           icon: (
@@ -1106,7 +1110,7 @@ const CallDataReports = () => {
           </button>
         </div>
         <p className="text-xs text-gray-500">
-          Talk time totals use raw <code>talkTimeMS</code> aggregation; row values are display-rounded decimals.
+          Talk time totals use raw <code>talkTimeMS</code> aggregation; on-screen values are shown as HH:MM:SS.
         </p>
       </div>
 
@@ -1429,7 +1433,7 @@ const CallDataReports = () => {
                 <div>Total Calls</div>
                 <div>Answered</div>
                 <div>Missed</div>
-                <div>Talk Time (MM:SS)</div>
+                <div>Talk Time (HH:MM:SS)</div>
                 <div>Categorized</div>
                 <div>Follow-up</div>
               </div>
@@ -1455,8 +1459,10 @@ const CallDataReports = () => {
                     <div className="tabular-nums text-base">{emp.answeredCalls || 0}</div>
                     <div className="tabular-nums text-base">{emp.missedCalls || 0}</div>
                     <div className="tabular-nums text-base">
-                      {toMinuteSecondFromMinutes(
-                        emp.totalTalkTimeMinutesDisplay ?? Number(emp.totalTalkTimeMinutes || 0)
+                      {toHHMMSSFromMs(
+                        emp.totalTalkTimeMS != null && emp.totalTalkTimeMS !== ""
+                          ? Number(emp.totalTalkTimeMS)
+                          : Number(emp.totalTalkTimeMinutes || 0) * 60000
                       )}
                     </div>
                     <div className="tabular-nums text-base">{emp.categorizedCalls || 0}</div>
@@ -1481,7 +1487,7 @@ const CallDataReports = () => {
                 <div>Phone No.</div>
                 <div>Direction</div>
                 <div>Answered</div>
-                <div>Talk Time (MM:SS)</div>
+                <div>Talk Time (HH:MM:SS)</div>
                 <div>Category</div>
                 <div>Follow Up</div>
                 <div>Details</div>
@@ -1542,7 +1548,7 @@ const CallDataReports = () => {
                       <div className="text-base">{record.direction || "-"}</div>
                       <div className="text-base">{record.answered || "-"}</div>
                       <div className="text-lg font-semibold tabular-nums text-gray-900">
-                        {toMinuteSecondFromMs(record.talkTimeMS)}
+                        {toHHMMSSFromMs(record.talkTimeMS)}
                       </div>
                       <div className="min-w-0 text-base text-gray-900">
                         <span className="block truncate" title={String(merged.category || "").trim() || undefined}>
