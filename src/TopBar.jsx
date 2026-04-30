@@ -76,35 +76,64 @@ const Topbar = () => {
     if (item.actual != null) return asNumber(item.actual);
     return 0;
   };
-  const fetchReportTalktimeHours = async ({ aliasName, mobileNo, empId, token, date }) => {
+
+  const formatMsToHHMMSS = (ms) => {
+    const totalSeconds = Math.max(0, Math.floor(Number(ms || 0) / 1000));
+    const h = Math.floor(totalSeconds / 3600);
+    const m = Math.floor((totalSeconds % 3600) / 60);
+    const s = totalSeconds % 60;
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  };
+
+  /** Same as Sales Follow up Tracker: `/call-records/filter` + caller/callee + full-day range. Returns total ms or null. */
+  const fetchFilterTalktimeMs = async ({ aliasName, empId, token, date }) => {
     if (!aliasName || !token || !date) return null;
     const analyticsBase =
       String(empId || "").trim() === "VPL059"
         ? `${API_CONFIG.BASE_URL}/api/v1/analytics/8x8-triton`
         : `${API_CONFIG.BASE_URL}/api/v1/analytics/8x8`;
+    const from = `${date} 00:00:00`;
+    const to = `${date} 23:59:59`;
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const headers = {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    };
+    if (tz) headers["X-Time-Zone"] = tz;
     try {
-      const res = await axios.get(`${analyticsBase}/call-records/report`, {
+      const res = await axios.get(`${analyticsBase}/call-records/filter`, {
         params: {
-          from: date,
-          to: date,
           callerName: aliasName,
-          mobileNo: mobileNo || "",
-          empId: empId || "",
-          pageSize: 1500,
-          page: 1,
-          limit: 1500,
+          calleeName: aliasName,
+          from,
+          to,
         },
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
+        headers,
       });
-      const totalTalkTimeMS = Number(res?.data?.summary?.totalTalkTimeMS || 0);
-      return Number.isFinite(totalTalkTimeMS) ? totalTalkTimeMS / 3600000 : null;
+      const payload = res?.data || {};
+      let ms = Number(payload?.summary?.totalTalkTimeMS ?? 0);
+      if (!Number.isFinite(ms)) ms = 0;
+      const rows = Array.isArray(payload?.data)
+        ? payload.data
+        : Array.isArray(payload?.records)
+          ? payload.records
+          : [];
+      if (ms <= 0 && rows.length) {
+        ms = rows.reduce((sum, r) => sum + Number(r?.talkTimeMS || 0), 0);
+      }
+      return Number.isFinite(ms) ? ms : null;
     } catch (err) {
-      console.warn("Topbar talktime report fetch failed:", err);
+      console.warn("Topbar talktime filter fetch failed:", err);
       return null;
     }
+  };
+
+  const talktimeTooltipLine = (reportMs, checklistItem, defaultTargetHrs) => {
+    const required = checklistItem?.required ?? defaultTargetHrs;
+    const fallbackMs = normalizeChecklistTalktimeHours(checklistItem) * 3600000;
+    const ms =
+      reportMs != null && Number.isFinite(reportMs) && reportMs >= 0 ? reportMs : fallbackMs;
+    return `Talktime: ${formatMsToHHMMSS(ms)} (Target: ${required} hrs)`;
   };
 
   const formatDepartmentName = (dept) => {
@@ -209,7 +238,11 @@ const Topbar = () => {
     }
 
     const fetchChecklistData = async () => {
-      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+      const token =
+        sessionStorage.getItem("authToken") ||
+        localStorage.getItem("authToken") ||
+        sessionStorage.getItem("token") ||
+        localStorage.getItem("token");
       const userString = localStorage.getItem("user") || sessionStorage.getItem("user");
 
       if (!token || !userString) {
@@ -219,7 +252,6 @@ const Topbar = () => {
       const userData = JSON.parse(userString);
       const empId = userData?.empId || userData?.employeeId;
       const aliasName = userData?.aliasName || "";
-      const mobileNo = userData?.mobileNo || "";
 
       try {
         
@@ -232,9 +264,8 @@ const Topbar = () => {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         };
-        const reportTalktimeHours = await fetchReportTalktimeHours({
+        const reportTalktimeMs = await fetchFilterTalktimeMs({
           aliasName,
-          mobileNo,
           empId,
           token,
           date: today,
@@ -272,7 +303,7 @@ const Topbar = () => {
             ];
 
             tooltips = [
-              `Talktime: ${(reportTalktimeHours ?? normalizeChecklistTalktimeHours(checklist.talktime4Hours)).toFixed(2)} hrs (Target: ${checklist.talktime4Hours?.required || 4} hrs)`,
+              talktimeTooltipLine(reportTalktimeMs, checklist.talktime4Hours, 4),
               `Loads Created: ${checklist.threePlusLoadSubmitted?.count || 0} (Target: ${checklist.threePlusLoadSubmitted?.required || 3}+)`,
               checklist.attendance?.status 
                 ? 'Attendance: Present' 
@@ -315,7 +346,7 @@ const Topbar = () => {
             ];
 
             tooltips = [
-              `Talktime: ${(reportTalktimeHours ?? normalizeChecklistTalktimeHours(checklist.talktime3Hours)).toFixed(2)} hrs (Target: ${checklist.talktime3Hours?.required || 3} hrs)`,
+              talktimeTooltipLine(reportTalktimeMs, checklist.talktime3Hours, 3),
               `Truckers Added: ${checklist.onePlusTruckerAdded?.count || 0} (Target: ${checklist.onePlusTruckerAdded?.required || 1}+)`,
               hasLogin ? 'Attendance: Present' : 'Attendance: Not marked',
               `Bids Submitted: ${checklist.threePlusBidPosted?.count || 0} (Target: ${checklist.threePlusBidPosted?.required || 3}+)`
@@ -331,11 +362,11 @@ const Topbar = () => {
           if (userDepartment === 'sales') {
             setChecklistItems(shouldHideRating ? ['blank', 'blank', 'blank'] : ['blank', 'blank', 'blank', 'blank']);
             setChecklistTooltips(shouldHideRating ? [
-              'Talktime: 0.0 hrs (Target: 3+ hrs)',
+              'Talktime: 00:00:00 (Target: 3+ hrs)',
               'Loads Created: 0 (Target: 3+)',
               'Attendance: Not marked'
             ] : [
-              'Talktime: 0.0 hrs (Target: 3+ hrs)',
+              'Talktime: 00:00:00 (Target: 3+ hrs)',
               'Loads Created: 0 (Target: 3+)',
               'Attendance: Not marked',
               'Manager Rating: Pending'
@@ -343,7 +374,7 @@ const Topbar = () => {
           } else {
             setChecklistItems(['blank', 'blank', 'blank', 'blank']);
             setChecklistTooltips([
-              'Talktime: 0.0 hrs (Target: 3 hrs)',
+              'Talktime: 00:00:00 (Target: 3 hrs)',
               'Truckers Added: 0 (Target: 1+)',
               'Attendance: Not marked',
               'Bids Submitted: 0 (Target: 3+)'
@@ -357,11 +388,11 @@ const Topbar = () => {
          if (userDepartment === 'sales') {
            setChecklistItems(shouldHideRating ? ['blank', 'blank', 'blank'] : ['blank', 'blank', 'blank', 'blank']);
            setChecklistTooltips(shouldHideRating ? [
-             'Talktime: 0.0 hrs (Target: 3+ hrs)',
+             'Talktime: 00:00:00 (Target: 3+ hrs)',
              'Loads Created: 0 (Target: 3+)',
              'Attendance: Not marked'
            ] : [
-             'Talktime: 0.0 hrs (Target: 3+ hrs)',
+             'Talktime: 00:00:00 (Target: 3+ hrs)',
              'Loads Created: 0 (Target: 3+)',
              'Attendance: Not marked',
              'Manager Rating: Pending'
@@ -369,7 +400,7 @@ const Topbar = () => {
          } else if (userDepartment === 'cmt') {
            setChecklistItems(['blank', 'blank', 'blank', 'blank']);
            setChecklistTooltips([
-             'Talktime: 0.0 hrs (Target: 3 hrs)',
+             'Talktime: 00:00:00 (Target: 3 hrs)',
              'Truckers Added: 0 (Target: 1+)',
              'Attendance: Not marked',
              'Bids Submitted: 0 (Target: 3+)'

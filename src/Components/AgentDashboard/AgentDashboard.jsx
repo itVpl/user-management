@@ -13,6 +13,38 @@ import API_CONFIG from '../../config/api';
 import MyAssignedTruckersWidget from '../Dashboard/MyAssignedTruckersWidget';
 // import firstIcon from "../../assets/Icon.svg"
 
+/** Same semantics as Tracker (`UserCallerData.jsx`) so dashboard totals match Sales Follow up Tracker. */
+const normalizeCallStatusForDashboard = (rec) => {
+  const talkMs = Number(rec.talkTimeMS || 0);
+  const last = (rec.lastLegDisposition || "").toLowerCase();
+  const direction = (rec.direction || "").toLowerCase();
+
+  if (talkMs > 0 || last === "answered") return "Answered";
+
+  if (direction === "incoming") return "Missed";
+  if (direction === "outgoing") return "Not-Connected";
+
+  if (last === "connected") return "Connected";
+
+  if (["busy", "no answer", "declined", "voicemail", "canceled", "cancelled", "abandoned"].includes(last)) {
+    return "Not-Connected";
+  }
+
+  return "Not-Connected";
+};
+
+const getTrackerAlignedAuthHeaders = () => {
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const token =
+    sessionStorage.getItem("authToken") ||
+    localStorage.getItem("authToken") ||
+    sessionStorage.getItem("token") ||
+    localStorage.getItem("token");
+  const h = { Authorization: `Bearer ${token}` };
+  if (tz) h["X-Time-Zone"] = tz;
+  return h;
+};
+
 const Dashboard = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('Dashboard');
@@ -133,86 +165,47 @@ const Dashboard = () => {
 
   useEffect(() => {
     const fetchCallRecords = async () => {
-      // Get user object from sessionStorage and extract aliasName
-      const userStr = sessionStorage.getItem('user');
-      if (!userStr) {
+      // Get user object from sessionStorage and extract aliasName (same as Tracker)
+      const userStr = sessionStorage.getItem("user") || localStorage.getItem("user");
+      if (!userStr) return;
 
+      let user;
+      try {
+        user = JSON.parse(userStr);
+      } catch {
         return;
       }
-      
-      const user = JSON.parse(userStr);
+
       const alias = user.aliasName;
-      
-      if (!alias) {
+      if (!alias) return;
 
-        return;
-      }
-
-      // Get today's date range in local timezone (not UTC)
-      const today = new Date();
-      const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0);
-      const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
-      
-      // Format as YYYY-MM-DD for report API filters.
-      const formatDate = (date) => {
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-      };
-      
-      const from = formatDate(startOfDay);
-      const to = formatDate(endOfDay);
-      const mobileNo = user.mobileNo || "";
-      const empId = user.empId || "";
+      const empId = String(user?.empId ?? user?.empID ?? user?.employeeId ?? "").trim();
       const analyticsBase =
-        String(empId).trim() === "VPL059"
+        empId === "VPL059"
           ? `${API_CONFIG.BASE_URL}/api/v1/analytics/8x8-triton`
           : `${API_CONFIG.BASE_URL}/api/v1/analytics/8x8`;
 
+      const today = new Date();
+      const y = today.getFullYear();
+      const m = String(today.getMonth() + 1).padStart(2, "0");
+      const d = String(today.getDate()).padStart(2, "0");
+      const dateStr = `${y}-${m}-${d}`;
+      const from = `${dateStr} 00:00:00`;
+      const to = `${dateStr} 23:59:59`;
+
       try {
-        const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-        const response = await axios.get(
-          `${analyticsBase}/call-records/report`,
-          {
-            params: {
-              callerName: alias,
-              mobileNo,
-              empId,
-              from,
-              to,
-              pageSize: 1500,
-              page: 1,
-              limit: 1500,
-            },
-            withCredentials: true,
-            headers: { Authorization: `Bearer ${token}` }
-          }
-        );
+        const response = await axios.get(`${analyticsBase}/call-records/filter`, {
+          params: {
+            callerName: alias,
+            calleeName: alias,
+            from,
+            to,
+          },
+          withCredentials: true,
+          headers: getTrackerAlignedAuthHeaders(),
+        });
 
         const payload = response?.data || {};
-        const summary = payload?.summary || null;
-
-        if (summary && typeof summary === "object") {
-          const total = Number(summary.totalCalls || 0);
-          const answered = Number(summary.answeredCalls || 0);
-          const missed = Number(summary.missedCalls || 0);
-          const totalDuration = Number(summary.totalTalkTimeMS || 0);
-          const averageDuration = total ? (totalDuration / total).toFixed(2) : 0;
-
-          setCallStats({
-            total,
-            answered,
-            noAnswer: missed,
-            totalDuration,
-            averageDuration,
-            emails: 4, // placeholder
-            conversionRate: total ? ((answered / total) * 100).toFixed(2) : 0,
-          });
-          return;
-        }
-
-        // Fallback: compute from records if summary is not present.
         let records = [];
         if (Array.isArray(payload)) {
           records = payload;
@@ -220,28 +213,46 @@ const Dashboard = () => {
           records = payload.records;
         } else if (Array.isArray(payload.data)) {
           records = payload.data;
-        } else {
-
-          records = [];
         }
 
+        if (records.length === 0) {
+          setCallStats({
+            total: 0,
+            answered: 0,
+            noAnswer: 0,
+            totalDuration: 0,
+            averageDuration: 0,
+            emails: 4,
+            conversionRate: 0,
+          });
+          return;
+        }
+
+        let answered = 0;
+        let missed = 0;
+        let totalDuration = 0;
+
+        records.forEach((r) => {
+          totalDuration += Number(r.talkTimeMS || 0);
+          const norm = normalizeCallStatusForDashboard(r);
+          if (norm === "Answered") answered++;
+          if (norm === "Missed") missed++;
+        });
+
         const total = records.length;
-        const answered = records.filter(r => r.answered === 'Answered').length;
-        const missed = records.filter(r => r.answered === 'No Answer' || r.answered === 'Busy' || r.answered === 'Failed').length;
-        const totalDuration = records.reduce((sum, r) => sum + (r.talkTimeMS || 0), 0);
         const averageDuration = total ? (totalDuration / total).toFixed(2) : 0;
 
         setCallStats({
           total,
           answered,
-          noAnswer: missed, // Changed to missed for clarity
+          noAnswer: missed,
           totalDuration,
           averageDuration,
-          emails: 4, // placeholder
-          conversionRate: ((answered / total) * 100).toFixed(2) || 0,
+          emails: 4,
+          conversionRate: total ? ((answered / total) * 100).toFixed(2) : 0,
         });
       } catch (err) {
-        console.error('Failed to fetch call records:', err);
+        console.error("Failed to fetch call records:", err);
       }
     };
 

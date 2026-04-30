@@ -398,22 +398,11 @@ const CallDataReports = () => {
 
       const requestPayload = async (requestedPage, requestedLimit) => {
         const params = buildParams(requestedPage, requestedLimit);
-        try {
-          const reportRes = await axios.get(`${reportBase}/call-records/report?${params.toString()}`, {
-            ...getAuthConfig(),
-            signal: controller.signal,
-          });
-          return reportRes?.data || {};
-        } catch (primaryErr) {
-          if (primaryErr?.code === "ERR_CANCELED") throw primaryErr;
-          if (primaryErr?.response?.status === 404) throw primaryErr;
-          console.warn("Primary report API failed, trying filter API:", primaryErr);
-          const filterRes = await axios.get(`${reportBase}/call-records/filter?${params.toString()}`, {
-            ...getAuthConfig(),
-            signal: controller.signal,
-          });
-          return filterRes?.data || {};
-        }
+        const filterRes = await axios.get(`${reportBase}/call-records/filter?${params.toString()}`, {
+          ...getAuthConfig(),
+          signal: controller.signal,
+        });
+        return filterRes?.data || {};
       };
 
       const firstPayload = await requestPayload(1, 1500);
