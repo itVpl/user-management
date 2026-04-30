@@ -513,6 +513,7 @@ let sidebarStateCache = null;
 
 /** Keep "Tracker" at top level: immediately after Dashboard (outer sidebar, not inside dept flyout). */
 const BREAK_TYPES = ["Bio break", "Smoking/Tea Break", "Dinner break"]; // POST /api/v1/break/start { breakType }
+const MEETING_TIMER_SECONDS = 15 * 60;
 
 /** GET /api/v1/break/remaining — daily pool (not per break type). */
 function parseBreakRemainingPayload(payload) {
@@ -825,8 +826,10 @@ const Sidebar = () => {
   /** Daily break pool from GET /api/v1/break/remaining */
   const [breakRemaining, setBreakRemaining] = useState(null);
   const [onMeeting, setOnMeeting] = useState(false);
-  const [meetingTime, setMeetingTime] = useState(0);
-  const [meetingIntervalId, setMeetingIntervalId] = useState(null);
+  const [meetingRemainingSeconds, setMeetingRemainingSeconds] = useState(MEETING_TIMER_SECONDS);
+  const [meetingLogId, setMeetingLogId] = useState("");
+  const [meetingEmpId, setMeetingEmpId] = useState("");
+  const [timeoutEmailTriggered, setTimeoutEmailTriggered] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [breakLoading, setBreakLoading] = useState(false);
   const [meetingLoading, setMeetingLoading] = useState(false);
@@ -837,6 +840,7 @@ const Sidebar = () => {
   const [gmailEditMode, setGmailEditMode] = useState(false);
   const [gmailAccounts, setGmailAccounts] = useState(() => loadGmailAccounts());
   const breakTickRef = useRef(null);
+  const timeoutEmailInFlightRef = useRef(false);
 
   // Flyout menu states
   const [flyoutOpen, setFlyoutOpen] = useState(false);
@@ -957,6 +961,33 @@ const Sidebar = () => {
       }
     } catch {
       /* ignore — sidebar should still work */
+    }
+  }, []);
+
+  const getAuthConfig = useCallback(() => {
+    const token =
+      sessionStorage.getItem("token") ||
+      localStorage.getItem("token") ||
+      sessionStorage.getItem("authToken") ||
+      localStorage.getItem("authToken");
+
+    return {
+      withCredentials: true,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    };
+  }, []);
+
+  const getCurrentEmpId = useCallback(() => {
+    try {
+      const user = JSON.parse(
+        localStorage.getItem("user") || sessionStorage.getItem("user") || "{}",
+      );
+      return user?.empId || user?.employeeId || "";
+    } catch {
+      return "";
     }
   }, []);
 
@@ -1112,19 +1143,121 @@ const Sidebar = () => {
     }
   };
 
-  const handleMeetingToggle = () => {
-    if (onMeeting) {
-      clearInterval(meetingIntervalId);
-      setOnMeeting(false);
-    } else {
-      setOnMeeting(true);
-      const intervalId = setInterval(() => {
-        setMeetingTime((prev) => prev + 1);
-      }, 1000);
-      setMeetingIntervalId(intervalId);
+  const triggerTimeoutEmail = useCallback(async () => {
+    if (timeoutEmailInFlightRef.current || timeoutEmailTriggered) return;
+    if (!meetingEmpId || !meetingLogId) return;
+
+    timeoutEmailInFlightRef.current = true;
+    const payload = {
+      empId: meetingEmpId,
+      meetingLogId,
+    };
+
+    try {
+      await axios.post(
+        `${API_CONFIG.BASE_URL}/api/v1/meeting/timeout-email`,
+        payload,
+        getAuthConfig(),
+      );
+      setTimeoutEmailTriggered(true);
+    } catch (err) {
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+        await axios.post(
+          `${API_CONFIG.BASE_URL}/api/v1/meeting/timeout-email`,
+          payload,
+          getAuthConfig(),
+        );
+        setTimeoutEmailTriggered(true);
+      } catch (retryErr) {
+        const msg = retryErr?.response?.data?.message || err?.response?.data?.message || "Failed to send timeout email after retry.";
+        if (String(msg).toLowerCase().includes("employee email not found")) {
+          alert("Employee email missing. Contact admin.");
+        } else {
+          alert(msg);
+        }
+      }
+    } finally {
+      timeoutEmailInFlightRef.current = false;
     }
-    setDropdownOpen(false);
-  };
+  }, [getAuthConfig, meetingEmpId, meetingLogId, timeoutEmailTriggered]);
+
+  const handleStartMeeting = useCallback(async () => {
+    const empId = getCurrentEmpId();
+    if (!empId) {
+      alert("Employee ID not found. Please login again.");
+      return;
+    }
+    try {
+      setMeetingLoading(true);
+      const res = await axios.post(
+        `${API_CONFIG.BASE_URL}/api/v1/meeting/start`,
+        { empId },
+        getAuthConfig(),
+      );
+      if (res?.data?.success) {
+        setOnMeeting(true);
+        setMeetingEmpId(empId);
+        setMeetingLogId(res.data.meetingLogId || "");
+        setMeetingRemainingSeconds(MEETING_TIMER_SECONDS);
+        setTimeoutEmailTriggered(false);
+      } else {
+        alert(res?.data?.message || "Meeting start failed.");
+      }
+    } catch (err) {
+      alert(err?.response?.data?.message || "Meeting start failed.");
+    } finally {
+      setMeetingLoading(false);
+      setDropdownOpen(false);
+    }
+  }, [getAuthConfig, getCurrentEmpId]);
+
+  const handleEndMeeting = useCallback(async () => {
+    if (!meetingEmpId) {
+      setOnMeeting(false);
+      setMeetingRemainingSeconds(MEETING_TIMER_SECONDS);
+      setMeetingLogId("");
+      setTimeoutEmailTriggered(false);
+      setDropdownOpen(false);
+      return;
+    }
+
+    try {
+      setMeetingLoading(true);
+      await axios.post(
+        `${API_CONFIG.BASE_URL}/api/v1/meeting/end`,
+        { empId: meetingEmpId },
+        getAuthConfig(),
+      );
+    } catch (err) {
+      alert(err?.response?.data?.message || "Meeting end failed.");
+    } finally {
+      setOnMeeting(false);
+      setMeetingRemainingSeconds(MEETING_TIMER_SECONDS);
+      setMeetingLogId("");
+      setMeetingEmpId("");
+      setTimeoutEmailTriggered(false);
+      timeoutEmailInFlightRef.current = false;
+      setMeetingLoading(false);
+      setDropdownOpen(false);
+    }
+  }, [getAuthConfig, meetingEmpId]);
+
+  useEffect(() => {
+    if (!onMeeting) return;
+    if (meetingRemainingSeconds <= 0) return;
+    const timer = setInterval(() => {
+      setMeetingRemainingSeconds((prev) => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [onMeeting, meetingRemainingSeconds]);
+
+  useEffect(() => {
+    if (!onMeeting) return;
+    if (meetingRemainingSeconds !== 0) return;
+    if (timeoutEmailTriggered) return;
+    triggerTimeoutEmail();
+  }, [meetingRemainingSeconds, onMeeting, timeoutEmailTriggered, triggerTimeoutEmail]);
   // Make these reactive by recalculating when unreadCounts or groupUnreadCounts change
   const totalUnreadCount = useMemo(() => {
     const count = getTotalUnreadCount();
@@ -2476,11 +2609,11 @@ const Sidebar = () => {
                       <span>Meeting</span>
                       {onMeeting ? (
                         <span className="text-blue-600 font-semibold">
-                          {formatTime(meetingTime)}
+                          {formatTime(meetingRemainingSeconds)}
                         </span>
                       ) : (
                         <button
-                          onClick={handleMeetingToggle}
+                          onClick={handleStartMeeting}
                           disabled={meetingLoading}
                           className="text-xs bg-blue-200 px-2 py-1 rounded-full flex items-center gap-1"
                         >
@@ -2497,10 +2630,11 @@ const Sidebar = () => {
                     {onMeeting && (
                       <div className="px-4 py-1">
                         <button
-                          onClick={handleMeetingToggle}
-                          className="w-full bg-red-100 text-red-700 text-xs py-1 rounded"
+                          onClick={handleEndMeeting}
+                          disabled={meetingLoading}
+                          className="w-full bg-red-100 text-red-700 text-xs py-1 rounded disabled:opacity-50"
                         >
-                          End Meeting
+                          {meetingLoading ? "Ending..." : "End Meeting"}
                         </button>
                       </div>
                     )}

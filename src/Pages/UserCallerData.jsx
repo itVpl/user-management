@@ -103,7 +103,15 @@ const formatDuration = (ms) => {
   const s = String(seconds % 60).padStart(2, "0");
   return `${h}:${m}:${s}`;
 };
-const formatHours = (ms) => (Number(ms || 0) / 3600000).toFixed(2);
+
+/** Total talk time for summary metric in HH:MM:SS. */
+const formatTalkTimeHMS = (ms) => {
+  const totalSeconds = Math.max(0, Math.floor(Number(ms || 0) / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+};
 
 // ---- Status helpers ----
 const normalizeCallStatus = (rec, alias) => {
@@ -382,7 +390,7 @@ const UserCallDashboard = () => {
     missed: 0,
     incoming: 0,
     outgoing: 0,
-    totalTalkTime: "0.00",
+    totalTalkTime: "00:00:00",
   });
 
   // Category dropdown options from GET category-options (CMT lists come from API; unresolved CMT team → 400)
@@ -407,26 +415,20 @@ const UserCallDashboard = () => {
   // Notification state
   const [notification, setNotification] = useState({ show: false, message: '', type: 'info' });
 
-  const fetchData = async (alias, date, user = {}) => {
-    const from = date;
-    const to = date;
-    const mobileNo = String(user?.mobileNo || "").trim();
-    const empId = String(user?.empId ?? user?.empID ?? user?.employeeId ?? "").trim();
+  const fetchData = async (alias, date) => {
+    const from = `${date} 00:00:00`;
+    const to = `${date} 23:59:59`;
 
     try {
       const recordsBase = getCallRecordsBase();
       const res = await axios.get(
-        `${recordsBase}/call-records/report`,
+        `${recordsBase}/call-records/filter`,
         {
           params: {
             callerName: alias,
-            mobileNo,
-            empId,
+            calleeName: alias,
             from,
             to,
-            pageSize: 1500,
-            page: 1,
-            limit: 1500,
           },
           headers: getAuthHeaders(),
         }
@@ -448,7 +450,7 @@ const UserCallDashboard = () => {
           missed: 0,
           incoming: 0,
           outgoing: 0,
-          totalTalkTime: "0.00",
+          totalTalkTime: "00:00:00",
         });
         return;
       }
@@ -538,7 +540,7 @@ const UserCallDashboard = () => {
         missed: missedFromSummary,
         incoming,
         outgoing,
-        totalTalkTime: formatHours(totalTalkTimeMSFromSummary),
+        totalTalkTime: formatTalkTimeHMS(totalTalkTimeMSFromSummary),
       });
     } catch (err) {
       console.error("❌ API Error fetching filtered calls:", err);
@@ -950,7 +952,7 @@ const UserCallDashboard = () => {
       console.warn("❌ aliasName missing in user object");
       return;
     }
-    fetchData(alias, selectedDate, user);
+    fetchData(alias, selectedDate);
   }, [selectedDate]);
 
   return (
@@ -1045,7 +1047,7 @@ const UserCallDashboard = () => {
             </div>
             <div className="p-4 border-r border-gray-200">
               <p className="text-3xl font-bold text-yellow-500">{stats.totalTalkTime}</p>
-              <p className="text-sm text-gray-500">Talk Time (Hrs)</p>
+              <p className="text-sm text-gray-500">Talk Time (HH:MM:SS)</p>
             </div>
             <div className="p-4">
               <p className="text-3xl font-bold text-green-500">{stats.total}</p>
