@@ -10,19 +10,6 @@ import {
 
 const REPORT_BASE_8X8 = `${API_CONFIG.BASE_URL}/api/v1/analytics/8x8`;
 const REPORT_BASE_TRITON = `${API_CONFIG.BASE_URL}/api/v1/analytics/8x8-triton`;
-const TRITON_REPORT_EMP_IDS = new Set(["VPL059"]);
-
-const getReportBaseForCurrentUser = () => {
-  try {
-    const raw = sessionStorage.getItem("user") || localStorage.getItem("user");
-    if (!raw) return REPORT_BASE_8X8;
-    const u = JSON.parse(raw);
-    const empId = String(u?.empId ?? u?.empID ?? u?.employeeId ?? "").trim();
-    return TRITON_REPORT_EMP_IDS.has(empId) ? REPORT_BASE_TRITON : REPORT_BASE_8X8;
-  } catch {
-    return REPORT_BASE_8X8;
-  }
-};
 
 /** Caller names shown in “All caller aliases” even if not returned from active employees (e.g. Triton line). */
 const STATIC_REPORT_CALLER_ALIASES = [
@@ -241,7 +228,7 @@ const CallDataReports = () => {
   }));
   const [employeeOptions, setEmployeeOptions] = useState([]);
   const [drafts, setDrafts] = useState({});
-  const [followUpModal, setFollowUpModal] = useState({ open: false, callId: null });
+  const [followUpModal, setFollowUpModal] = useState({ open: false, rowUid: null });
   const [oneOnOneModal, setOneOnOneModal] = useState({ open: false, record: null });
   const [oneOnOneFeedbackText, setOneOnOneFeedbackText] = useState("");
   const [submittingOneOnOne, setSubmittingOneOnOne] = useState(false);
@@ -264,12 +251,13 @@ const CallDataReports = () => {
   const latestReportRequestRef = useRef(0);
 
   const activeRecord = useMemo(
-    () => state.records.find((r) => r.callId === followUpModal.callId) || null,
-    [state.records, followUpModal.callId]
+    () => state.records.find((r) => r._rowUid === followUpModal.rowUid) || null,
+    [state.records, followUpModal.rowUid]
   );
 
   const mergeDraft = (record) => {
-    const draft = drafts[record.callId];
+    const draftKey = record._rowUid ?? record.callId;
+    const draft = drafts[draftKey];
     if (!draft) return record;
     return {
       ...record,
@@ -295,11 +283,21 @@ const CallDataReports = () => {
         String(storedUser?.department || "")
           .trim()
           .toLowerCase() === "cmt";
-      const reportBase = getReportBaseForCurrentUser();
-
-      const res = await axios.get(`${reportBase}/call-records/category-options`, getAuthConfig());
-      let options = res?.data?.data || res?.data?.options || [];
-      if (!Array.isArray(options)) options = [];
+      const extractOpts = (res) => {
+        let o = res?.data?.data || res?.data?.options || [];
+        if (!Array.isArray(o)) o = [];
+        return o;
+      };
+      const [res8, resT] = await Promise.all([
+        axios
+          .get(`${REPORT_BASE_8X8}/call-records/category-options`, getAuthConfig())
+          .catch(() => null),
+        axios
+          .get(`${REPORT_BASE_TRITON}/call-records/category-options`, getAuthConfig())
+          .catch(() => null),
+      ]);
+      let options = [...new Set([...extractOpts(res8), ...extractOpts(resT)])];
+      options.sort((a, b) => String(a).localeCompare(String(b)));
       if (isCmt && options.length > 0) {
         if (!options.includes(CMT_ADD_LOAD_REFERENCE_DISPOSITION)) {
           options = [...options, CMT_ADD_LOAD_REFERENCE_DISPOSITION];
@@ -390,7 +388,6 @@ const CallDataReports = () => {
     const filters = incomingFilters || state.filters;
     const page = Math.max(1, Number(filters.page || 1));
     const limit = 10;
-    const reportBase = getReportBaseForCurrentUser();
     setState((prev) => ({ ...prev, loading: true, error: null }));
     try {
       const buildParams = (requestedPage, requestedLimit) => {
@@ -407,63 +404,108 @@ const CallDataReports = () => {
         return params;
       };
 
-      const requestPayload = async (requestedPage, requestedLimit) => {
-        const params = buildParams(requestedPage, requestedLimit);
-        const filterRes = await axios.get(`${reportBase}/call-records/filter?${params.toString()}`, {
-          ...getAuthConfig(),
-          signal: controller.signal,
-        });
-        return filterRes?.data || {};
+      const fetchAllPagesFromBase = async (baseUrl) => {
+        const requestPayload = async (requestedPage, requestedLimit) => {
+          const params = buildParams(requestedPage, requestedLimit);
+          const filterRes = await axios.get(`${baseUrl}/call-records/filter?${params.toString()}`, {
+            ...getAuthConfig(),
+            signal: controller.signal,
+          });
+          return filterRes?.data || {};
+        };
+
+        let firstPayload;
+        try {
+          firstPayload = await requestPayload(1, 1500);
+        } catch (err) {
+          console.warn(`call-records/filter failed (${baseUrl}):`, err);
+          return { records: [], firstPayload: null };
+        }
+
+        if (!firstPayload?.success) {
+          return { records: [], firstPayload };
+        }
+
+        const firstPageRecords = Array.isArray(firstPayload.data)
+          ? firstPayload.data
+          : Array.isArray(firstPayload.records)
+            ? firstPayload.records
+            : [];
+
+        let acc = [...firstPageRecords];
+        const totalFromApi = Number(
+          firstPayload?.pagination?.total ??
+          firstPayload?.pagination?.totalRecords ??
+          firstPayload?.total ??
+          acc.length
+        ) || acc.length;
+        const totalPagesFromApi = Number(firstPayload?.pagination?.totalPages || 0);
+        const apiLimit = Number(
+          firstPayload?.pagination?.limit ??
+          firstPayload?.pagination?.pageSize ??
+          acc.length
+        ) || 0;
+        if (totalPagesFromApi > 1 && totalFromApi > acc.length) {
+          const pageFetchLimit = apiLimit > 0 ? apiLimit : 100;
+          const pageNumbers = [];
+          for (let p = 2; p <= totalPagesFromApi; p += 1) pageNumbers.push(p);
+          const pagePayloads = await Promise.all(
+            pageNumbers.map(async (p) => ({
+              page: p,
+              payload: await requestPayload(p, pageFetchLimit),
+            }))
+          );
+          pagePayloads
+            .sort((a, b) => a.page - b.page)
+            .forEach(({ payload }) => {
+              const pageRecords = Array.isArray(payload?.data)
+                ? payload.data
+                : Array.isArray(payload?.records)
+                  ? payload.records
+                  : [];
+              if (pageRecords.length) acc = [...acc, ...pageRecords];
+            });
+          if (acc.length > totalFromApi) {
+            acc = acc.slice(0, totalFromApi);
+          }
+        }
+        return { records: acc, firstPayload };
       };
 
-      const firstPayload = await requestPayload(1, 1500);
-      if (!firstPayload?.success) {
-        throw new Error(firstPayload?.message || "Failed to load call report");
-      }
+      const [r8, rT] = await Promise.all([
+        fetchAllPagesFromBase(REPORT_BASE_8X8),
+        fetchAllPagesFromBase(REPORT_BASE_TRITON),
+      ]);
 
-      const firstPageRecords = Array.isArray(firstPayload.data)
-        ? firstPayload.data
-        : Array.isArray(firstPayload.records)
-          ? firstPayload.records
-          : [];
+      const tag = (rows, base) =>
+        rows.map((r, i) => ({
+          ...r,
+          recordsReportBase: base,
+          _rowUid: `${base}::${r.callId != null && r.callId !== "" ? r.callId : `row-${i}`}`,
+        }));
 
-      let nextRecords = [...firstPageRecords];
-      const totalFromApi = Number(
-        firstPayload?.pagination?.total ??
-        firstPayload?.pagination?.totalRecords ??
-        firstPayload?.total ??
-        nextRecords.length
-      ) || nextRecords.length;
-      const totalPagesFromApi = Number(firstPayload?.pagination?.totalPages || 0);
-      const apiLimit = Number(
-        firstPayload?.pagination?.limit ??
-        firstPayload?.pagination?.pageSize ??
-        nextRecords.length
-      ) || 0;
-      if (totalPagesFromApi > 1 && totalFromApi > nextRecords.length) {
-        const pageFetchLimit = apiLimit > 0 ? apiLimit : 100;
-        const pageNumbers = [];
-        for (let p = 2; p <= totalPagesFromApi; p += 1) pageNumbers.push(p);
-        const pagePayloads = await Promise.all(
-          pageNumbers.map(async (p) => ({
-            page: p,
-            payload: await requestPayload(p, pageFetchLimit),
-          }))
+      let nextRecords = [...tag(r8.records || [], REPORT_BASE_8X8), ...tag(rT.records || [], REPORT_BASE_TRITON)];
+
+      nextRecords.sort((a, b) => {
+        const ta = new Date(a.startTime || 0).getTime();
+        const tb = new Date(b.startTime || 0).getTime();
+        return tb - ta;
+      });
+
+      const mergedReportFilters = r8.firstPayload?.filters ?? rT.firstPayload?.filters ?? null;
+
+      if (
+        nextRecords.length === 0 &&
+        r8.firstPayload &&
+        r8.firstPayload.success === false &&
+        rT.firstPayload &&
+        rT.firstPayload.success === false
+      ) {
+        throw new Error(
+          r8.firstPayload?.message || rT.firstPayload?.message || "Failed to load call report"
         );
-        pagePayloads
-          .sort((a, b) => a.page - b.page)
-          .forEach(({ payload }) => {
-            const pageRecords = Array.isArray(payload?.data)
-              ? payload.data
-              : Array.isArray(payload?.records)
-                ? payload.records
-                : [];
-            if (pageRecords.length) nextRecords = [...nextRecords, ...pageRecords];
-          });
-        if (nextRecords.length > totalFromApi) {
-          nextRecords = nextRecords.slice(0, totalFromApi);
-        }
       }
+
       const computedSummary = {
         totalEmployees: new Set(
           nextRecords.map((r) => r.callerName || r.calleeName || "").filter(Boolean)
@@ -544,7 +586,7 @@ const CallDataReports = () => {
           page,
           limit,
         },
-        reportFilters: firstPayload.filters ?? null,
+        reportFilters: mergedReportFilters,
         summary: normalizedSummary,
         employeeSummary: normalizedEmployeeSummary,
         records: nextRecords,
@@ -884,13 +926,13 @@ const CallDataReports = () => {
     };
 
     try {
-      const reportBase = getReportBaseForCurrentUser();
+      const reportBase = record.recordsReportBase ?? REPORT_BASE_8X8;
       const res = await axios.put(`${reportBase}/call-records/${record.callId}/category`, body, getAuthConfig());
       if (!res?.data?.success) {
         throw new Error(res?.data?.message || "Failed to update category/follow-up");
       }
       toast.success("Call record updated");
-      setFollowUpModal({ open: false, callId: null });
+      setFollowUpModal({ open: false, rowUid: null });
       await fetchReport();
     } catch (error) {
       console.error("Update row failed:", error);
@@ -1519,7 +1561,7 @@ const CallDataReports = () => {
                   const callNoLine = getCallNoFromCallee(merged);
                   return (
                     <div
-                      key={`${record.callId}-${index}`}
+                      key={record._rowUid ?? `${record.callId}-${index}`}
                       className="mt-3 grid grid-cols-[1.5fr_1.2fr_1.2fr_1.2fr_1fr_1fr_1fr_1.3fr_0.8fr_1fr_1fr] gap-4 items-center rounded-xl border border-gray-200 bg-white px-4 py-4 font-medium text-gray-900"
                     >
                       <div className="text-base">{record.startTime ? new Date(record.startTime).toLocaleString() : "-"}</div>
@@ -1571,14 +1613,20 @@ const CallDataReports = () => {
                         <input
                           type="checkbox"
                           checked={toBool(merged.followUp)}
-                          onChange={(e) => updateDraft(record.callId, { followUp: e.target.checked })}
+                          onChange={(e) =>
+                            updateDraft(record._rowUid ?? record.callId, {
+                              followUp: e.target.checked,
+                            })
+                          }
                           className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                         />
                       </div>
                       <div>
                         <button
                           className="h-10 w-full rounded-lg border border-blue-500 bg-white px-3 text-blue-700 hover:bg-blue-500 hover:text-white cursor-pointer"
-                          onClick={() => setFollowUpModal({ open: true, callId: record.callId })}
+                          onClick={() =>
+                            setFollowUpModal({ open: true, rowUid: record._rowUid ?? record.callId })
+                          }
                         >
                           View/Edit
                         </button>
@@ -1678,7 +1726,7 @@ const CallDataReports = () => {
                 <p className="text-blue-100 mt-1">Call ID: {activeRecord.callId}</p>
               </div>
               <button
-                onClick={() => setFollowUpModal({ open: false, callId: null })}
+                onClick={() => setFollowUpModal({ open: false, rowUid: null })}
                 className="h-10 w-10 rounded-xl bg-white/15 text-white border border-white/35 hover:bg-white/25 text-xl leading-none cursor-pointer"
               >
                 ×
@@ -1698,7 +1746,9 @@ const CallDataReports = () => {
                         key={key}
                         value={current}
                         placeholder={placeholder}
-                        onChange={(e) => updateDraftDetails(activeRecord.callId, key, e.target.value)}
+                        onChange={(e) =>
+                          updateDraftDetails(activeRecord._rowUid ?? activeRecord.callId, key, e.target.value)
+                        }
                         className="h-12 px-4 border border-blue-200 rounded-xl bg-slate-50 text-slate-700 placeholder:text-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                       />
                     );
@@ -1720,7 +1770,9 @@ const CallDataReports = () => {
                           key={key}
                           value={current}
                           placeholder={placeholder}
-                          onChange={(e) => updateDraftDetails(activeRecord.callId, key, e.target.value)}
+                          onChange={(e) =>
+                          updateDraftDetails(activeRecord._rowUid ?? activeRecord.callId, key, e.target.value)
+                        }
                           className="h-12 px-4 border border-violet-200 rounded-xl bg-slate-50 text-slate-700 placeholder:text-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                         />
                       );
@@ -1730,7 +1782,7 @@ const CallDataReports = () => {
             </div>
             <div className="px-6 py-4 border-t border-slate-300 bg-slate-200/60 flex justify-end gap-3">
               <button
-                onClick={() => setFollowUpModal({ open: false, callId: null })}
+                onClick={() => setFollowUpModal({ open: false, rowUid: null })}
                 className="cursor-pointer h-11 px-6 rounded-xl border border-slate-300 text-slate-800 font-semibold hover:bg-slate-50"
               >
                 Cancel
