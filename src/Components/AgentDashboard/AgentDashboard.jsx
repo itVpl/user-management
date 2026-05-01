@@ -179,11 +179,9 @@ const Dashboard = () => {
       const alias = user.aliasName;
       if (!alias) return;
 
-      const empId = String(user?.empId ?? user?.empID ?? user?.employeeId ?? "").trim();
-      const analyticsBase =
-        empId === "VPL059"
-          ? `${API_CONFIG.BASE_URL}/api/v1/analytics/8x8-triton`
-          : `${API_CONFIG.BASE_URL}/api/v1/analytics/8x8`;
+      const ident = String(user?.identificaAliasName ?? "").trim();
+      const base8x8 = `${API_CONFIG.BASE_URL}/api/v1/analytics/8x8`;
+      const baseTriton = `${API_CONFIG.BASE_URL}/api/v1/analytics/8x8-triton`;
 
       const today = new Date();
       const y = today.getFullYear();
@@ -193,26 +191,60 @@ const Dashboard = () => {
       const from = `${dateStr} 00:00:00`;
       const to = `${dateStr} 23:59:59`;
 
-      try {
-        const response = await axios.get(`${analyticsBase}/call-records/filter`, {
-          params: {
-            callerName: alias,
-            calleeName: alias,
-            from,
-            to,
-          },
-          withCredentials: true,
-          headers: getTrackerAlignedAuthHeaders(),
-        });
+      const extractRecords = (payload) => {
+        const p = payload || {};
+        if (Array.isArray(p)) return p;
+        if (Array.isArray(p.records)) return p.records;
+        if (Array.isArray(p.data)) return p.data;
+        return [];
+      };
 
-        const payload = response?.data || {};
+      try {
+        const params8 = {
+          callerName: alias,
+          calleeName: alias,
+          from,
+          to,
+        };
+        const req = [
+          axios
+            .get(`${base8x8}/call-records/filter`, {
+              params: params8,
+              withCredentials: true,
+              headers: getTrackerAlignedAuthHeaders(),
+            })
+            .then((r) => r)
+            .catch((err) => {
+              console.warn("Dashboard 8x8 call-records failed:", err);
+              return null;
+            }),
+        ];
+        if (ident) {
+          req.push(
+            axios
+              .get(`${baseTriton}/call-records/filter`, {
+                params: {
+                  callerName: ident,
+                  calleeName: ident,
+                  from,
+                  to,
+                },
+                withCredentials: true,
+                headers: getTrackerAlignedAuthHeaders(),
+              })
+              .then((r) => r)
+              .catch((err) => {
+                console.warn("Dashboard 8x8-triton call-records failed:", err);
+                return null;
+              })
+          );
+        }
+
+        const responses = await Promise.all(req);
         let records = [];
-        if (Array.isArray(payload)) {
-          records = payload;
-        } else if (Array.isArray(payload.records)) {
-          records = payload.records;
-        } else if (Array.isArray(payload.data)) {
-          records = payload.data;
+        for (const response of responses) {
+          if (!response) continue;
+          records = records.concat(extractRecords(response?.data));
         }
 
         if (records.length === 0) {

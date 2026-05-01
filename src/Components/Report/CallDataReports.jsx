@@ -27,9 +27,21 @@ const getReportBaseForCurrentUser = () => {
 /** Caller names shown in “All caller aliases” even if not returned from active employees (e.g. Triton line). */
 const STATIC_REPORT_CALLER_ALIASES = [
   {
+    label: "GARCIA,PERLA",
+    value: "GARCIA,PERLA",
+    empId: "static-garcia-perla",
+    mobileNo: "",
+  },
+  {
     label: "Identifica LLC",
     value: "Identifica LLC",
     empId: "static-identifica-llc",
+    mobileNo: "",
+  },
+  {
+    label: "SAFURI OGBARA",
+    value: "SAFURI OGBARA",
+    empId: "static-safuri-ogbara",
     mobileNo: "",
   },
 ];
