@@ -12,6 +12,7 @@ import {
 } from '../../services/salesDayAgentService';
 import SalesDayCustomerEditModal from './SalesDayCustomerEditModal.jsx';
 import SalesDayAgentManualCustomerForm from './SalesDayAgentManualCustomerForm.jsx';
+import { getSavedDispositionNotesForRow } from '../../utils/salesDayAgentEligibility';
 
 /** Matches server CSV order (§3.2 / §3.3). */
 const IMPORT_FIELDS = [
@@ -585,10 +586,14 @@ function BrowsePanel({ onGoImport }) {
   const onDispositionChange = async (row, value) => {
     if (!value) return;
     if (value === 'follow_up') {
-      setFollowUpModalIsEdit(false);
-      setFollowUp(row);
-      setFollowNotes('');
-      setFollowAt(defaultFollowUpDatetimeLocal());
+      if (row.salesDayDisposition === 'follow_up') {
+        openFollowUpEditor(row);
+      } else {
+        setFollowUpModalIsEdit(false);
+        setFollowUp(row);
+        setFollowNotes('');
+        setFollowAt(defaultFollowUpDatetimeLocal());
+      }
       return;
     }
     setSavingId(row._id);
@@ -604,6 +609,42 @@ function BrowsePanel({ onGoImport }) {
       await loadList();
     } catch (e) {
       toast.error(e?.response?.data?.message || 'Update failed');
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  /** Notes-only save: PATCH runs only when the dropdown changes; users often type notes after picking disposition. */
+  const saveDispositionNotes = async (row) => {
+    const disp = row.salesDayDisposition;
+    if (!disp) {
+      toast.error('Choose a disposition first.');
+      return;
+    }
+    if (disp === 'follow_up') {
+      toast.error('Use the follow-up dialog for follow-up notes.');
+      return;
+    }
+    setSavingId(row._id);
+    const raw =
+      dispositionNotesById[row._id] !== undefined
+        ? dispositionNotesById[row._id]
+        : getSavedDispositionNotesForRow(row);
+    const notes = raw.trim() || undefined;
+    try {
+      await patchSalesDayDisposition(row._id, {
+        disposition: disp,
+        ...(notes ? { notes } : {}),
+      });
+      toast.success('Notes saved');
+      setDispositionNotesById((m) => {
+        const next = { ...m };
+        delete next[row._id];
+        return next;
+      });
+      await loadList();
+    } catch (e) {
+      toast.error(e?.response?.data?.message || 'Save failed');
     } finally {
       setSavingId(null);
     }
@@ -881,16 +922,51 @@ function BrowsePanel({ onGoImport }) {
                           </option>
                         ))}
                       </select>
-                      <input
-                        type="text"
-                        className="border border-gray-200 rounded-lg px-2 py-1.5 text-[11px] w-full bg-white focus:outline-none focus:ring-2 focus:ring-blue-400/30 focus:border-blue-400"
-                        placeholder="Notes (optional)"
-                        value={dispositionNotesById[c._id] ?? ''}
-                        disabled={savingId === c._id}
-                        onChange={(e) =>
-                          setDispositionNotesById((m) => ({ ...m, [c._id]: e.target.value }))
-                        }
-                      />
+                      <div className="flex gap-1 items-stretch">
+                        <input
+                          type="text"
+                          className="border border-gray-200 rounded-lg px-2 py-1.5 text-[11px] min-w-0 flex-1 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400/30 focus:border-blue-400"
+                          placeholder="Notes (optional)"
+                          value={
+                            dispositionNotesById[c._id] !== undefined
+                              ? dispositionNotesById[c._id]
+                              : getSavedDispositionNotesForRow(c)
+                          }
+                          disabled={savingId === c._id}
+                          onChange={(e) =>
+                            setDispositionNotesById((m) => ({ ...m, [c._id]: e.target.value }))
+                          }
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              saveDispositionNotes(c);
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          title="Save note without changing disposition"
+                          disabled={
+                            savingId === c._id ||
+                            !c.salesDayDisposition ||
+                            c.salesDayDisposition === 'follow_up'
+                          }
+                          onClick={() => saveDispositionNotes(c)}
+                          className="shrink-0 px-2 py-1 rounded-lg border border-gray-200 bg-slate-50 text-[10px] font-semibold text-gray-700 hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-slate-50"
+                        >
+                          Save
+                        </button>
+                      </div>
+                      {c.salesDayDisposition === 'follow_up' && (
+                        <button
+                          type="button"
+                          className="text-[10px] text-blue-600 font-semibold text-left hover:underline disabled:opacity-40"
+                          disabled={savingId === c._id}
+                          onClick={() => openFollowUpEditor(c)}
+                        >
+                          Edit follow-up (date &amp; notes)
+                        </button>
+                      )}
                     </div>
                   </td>
                   <td className="px-3 py-2 text-center">
