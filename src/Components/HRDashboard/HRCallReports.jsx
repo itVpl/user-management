@@ -10,8 +10,11 @@ import {
   BarChart3,
   RefreshCw,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
 } from "lucide-react";
+
+const CALLS_PER_PAGE = 10;
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
@@ -35,6 +38,8 @@ export default function HRCallReports() {
   const [statsData, setStatsData] = useState(null);
   const [dailyData, setDailyData] = useState(null);
   const [expandedEmployee, setExpandedEmployee] = useState(null);
+  /** `${empId}::${date}` -> current page (1-based) for nested call tables */
+  const [callListPages, setCallListPages] = useState({});
 
   const fetchReport = async () => {
     setLoading(true);
@@ -298,17 +303,77 @@ export default function HRCallReports() {
                             <div key={day.date} className="rounded-lg border border-gray-200 bg-white p-3 mt-2">
                               <p className="font-medium text-gray-700 mb-2">{day.date}</p>
                               <p className="text-sm text-gray-600">Calls: {day.totalCalls ?? 0}, Emails: {day.totalEmails ?? 0}, Duration: {day.totalCallDurationFormatted ?? day.totalCallDuration ?? 0}</p>
-                              {day.calls?.length > 0 && (
-                                <table className="w-full mt-2 text-sm">
-                                  <thead><tr className="text-left text-gray-500"><th>Name</th><th>Phone</th><th>Purpose</th><th>Duration</th></tr></thead>
-                                  <tbody>
-                                    {day.calls.slice(0, 10).map((c, i) => (
-                                      <tr key={i}><td>{c.name}</td><td>{c.mobileNo}</td><td>{c.purpose}</td><td>{c.durationFormatted ?? c.duration}</td></tr>
-                                    ))}
-                                    {day.calls.length > 10 && <tr><td colSpan={4} className="text-gray-400">+{day.calls.length - 10} more</td></tr>}
-                                  </tbody>
-                                </table>
-                              )}
+                              {day.calls?.length > 0 && (() => {
+                                const calls = day.calls;
+                                const pageKey = `${emp.empId || emp._id || "emp"}::${day.date}`;
+                                const totalPages = Math.max(1, Math.ceil(calls.length / CALLS_PER_PAGE));
+                                const storedPage = callListPages[pageKey] ?? 1;
+                                const page = Math.min(Math.max(1, storedPage), totalPages);
+                                const startIdx = (page - 1) * CALLS_PER_PAGE;
+                                const pageCalls = calls.slice(startIdx, startIdx + CALLS_PER_PAGE);
+                                const from = calls.length === 0 ? 0 : startIdx + 1;
+                                const to = Math.min(startIdx + CALLS_PER_PAGE, calls.length);
+                                const setPage = (next) => {
+                                  setCallListPages((prev) => ({
+                                    ...prev,
+                                    [pageKey]: Math.min(Math.max(1, next), totalPages),
+                                  }));
+                                };
+                                return (
+                                  <>
+                                    <table className="w-full mt-2 text-sm">
+                                      <thead>
+                                        <tr className="text-left text-gray-500">
+                                          <th>Name</th>
+                                          <th>Phone</th>
+                                          <th>Purpose</th>
+                                          <th>Duration</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {pageCalls.map((c, i) => (
+                                          <tr key={`${pageKey}-${startIdx + i}`}>
+                                            <td>{c.name}</td>
+                                            <td>{c.mobileNo}</td>
+                                            <td>{c.purpose}</td>
+                                            <td>{c.durationFormatted ?? c.duration}</td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                    {totalPages > 1 && (
+                                      <div className="flex flex-wrap items-center justify-between gap-2 mt-3 pt-2 border-t border-gray-100 text-xs text-gray-600">
+                                        <span>
+                                          Showing {from}–{to} of {calls.length}
+                                        </span>
+                                        <div className="flex items-center gap-1">
+                                          <button
+                                            type="button"
+                                            onClick={() => setPage(page - 1)}
+                                            disabled={page <= 1}
+                                            className="inline-flex items-center gap-0.5 px-2 py-1 rounded border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none text-gray-700"
+                                          >
+                                            <ChevronLeft className="w-3.5 h-3.5" />
+                                            Prev
+                                          </button>
+                                          <span className="px-2 tabular-nums">
+                                            Page {page} / {totalPages}
+                                          </span>
+                                          <button
+                                            type="button"
+                                            onClick={() => setPage(page + 1)}
+                                            disabled={page >= totalPages}
+                                            className="inline-flex items-center gap-0.5 px-2 py-1 rounded border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none text-gray-700"
+                                          >
+                                            Next
+                                            <ChevronRight className="w-3.5 h-3.5" />
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </>
+                                );
+                              })()}
                             </div>
                           ))}
                         </div>
