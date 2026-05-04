@@ -113,6 +113,9 @@ const DEPARTMENT_MODULE_CATEGORIES = {
     "Office Management": ["Office Expenses", "Office Inventory"]
   },
   "Sales": {
+    "Rate Requests": [
+      "Exporter Rate Requests"
+    ],
     "Customer Management": [
       "Add Customer",
       "Add Agent",
@@ -121,7 +124,7 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Customer Loads",
       "Assign Agent"
     ],
-    "Shift handoff": ["Shift Image Handoff", "My Assigned Images"],
+    "Shift handoff": ["Shift Image Handoff", "My Assigned Images", "Sales Buyer Handoff", "My Incoming Buyers"],
     "Communication": [
       "Import Carrier Emails",
       
@@ -256,6 +259,7 @@ const DEPARTMENT_MODULE_CATEGORIES = {
   },
   "Sales_UNIVERSAL": {
     "Sales Modules": [
+      "Exporter Rate Requests",
       "Daily Follow-Up",
       "Loads",
       "Rate Approved",
@@ -270,7 +274,9 @@ const DEPARTMENT_MODULE_CATEGORIES = {
       "Import Carrier Emails",
       "News Letter",
       "Shift Image Handoff",
-      "My Assigned Images"
+      "My Assigned Images",
+      "Sales Buyer Handoff",
+      "My Incoming Buyers"
     ],
     "Company Management": [
       "Sub Company"
@@ -435,6 +441,7 @@ const menuItems = [
   { name: "Target Reports", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/target-reports" },
   { name: "Employee Target Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/employee-target-report" },
   { name: "Rate Request", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/RateRequest" },
+  { name: "Exporter Rate Requests", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/sales/exporter-rate-requests" },
   { name: "All Rate Request", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/all-rate-request" },
   { name: "Rate Suggestion", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/rate-suggestion" },
   { name: "Rate Approved", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/RateApproved" },
@@ -458,6 +465,8 @@ const menuItems = [
   { name: "Add Agent", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/AddAgent" },
   { name: "Shift Image Handoff", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/sales/shift-image-handoff" },
   { name: "My Assigned Images", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/sales/my-assigned-images" },
+  { name: "Sales Buyer Handoff", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/sales/buyer-handoff" },
+  { name: "My Incoming Buyers", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/sales/my-incoming-buyers" },
   { name: "All Customers", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/allcustomer" },
   { name: "Assign Agent", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/AssignAgent" },
   { name: "DO Details", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/DODetails" },
@@ -1621,11 +1630,24 @@ const Sidebar = () => {
           const salesActive = salesDept && isEmployeeActiveForHandoff(user);
           const shiftHandoffItem = menuItems.find((i) => i.name === 'Shift Image Handoff');
           const myAssignedItem = menuItems.find((i) => i.name === 'My Assigned Images');
+          const buyerHandoffItem = menuItems.find((i) => i.name === 'Sales Buyer Handoff');
+          const incomingBuyersItem = menuItems.find((i) => i.name === 'My Incoming Buyers');
           if (salesActive && shiftHandoffItem && !matchedMenus.some((m) => m.name === 'Shift Image Handoff')) {
             matchedMenus = [...matchedMenus, shiftHandoffItem];
           }
           if (salesActive && myAssignedItem && !matchedMenus.some((m) => m.name === 'My Assigned Images')) {
             matchedMenus = [...matchedMenus, myAssignedItem];
+          }
+          if (
+            salesActive &&
+            salesDayShift &&
+            buyerHandoffItem &&
+            !matchedMenus.some((m) => m.name === 'Sales Buyer Handoff')
+          ) {
+            matchedMenus = [...matchedMenus, buyerHandoffItem];
+          }
+          if (salesActive && incomingBuyersItem && !matchedMenus.some((m) => m.name === 'My Incoming Buyers')) {
+            matchedMenus = [...matchedMenus, incomingBuyersItem];
           }
 
           console.log("✅ Final filtered menu items:", matchedMenus.map(m => m.name));
