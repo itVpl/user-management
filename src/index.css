@@ -170,7 +170,9 @@ body::-webkit-scrollbar {
 .do-report-scroll-x {
   overflow-x: scroll !important;
   overflow-y: hidden;
+  scrollbar-gutter: stable;
   scrollbar-width: auto !important;
+  scrollbar-color: rgba(100, 116, 139, 0.85) rgba(226, 232, 240, 0.9) !important;
   -ms-overflow-style: auto !important;
 }
 
@@ -178,23 +180,24 @@ body::-webkit-scrollbar {
   -webkit-appearance: none !important;
   appearance: none !important;
   display: block !important;
-  height: 8px !important;
-  width: 8px !important;
+  height: 12px !important;
+  width: 12px !important;
 }
 
 .do-report-scroll-x::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.08) !important;
-  border-radius: 6px !important;
+  background: rgba(226, 232, 240, 0.9) !important;
+  border-radius: 9999px !important;
 }
 
 .do-report-scroll-x::-webkit-scrollbar-thumb {
-  background: rgba(59, 130, 246, 0.55) !important;
-  border-radius: 6px !important;
+  background: rgba(100, 116, 139, 0.85) !important;
+  border-radius: 9999px !important;
+  border: 3px solid rgba(226, 232, 240, 0.9) !important;
   min-width: 40px !important;
 }
 
 .do-report-scroll-x::-webkit-scrollbar-thumb:hover {
-  background: rgba(37, 99, 235, 0.75) !important;
+  background: rgba(71, 85, 105, 0.9) !important;
 }
 
 /*

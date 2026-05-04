@@ -398,7 +398,7 @@ function ImportPanel() {
 
           <div>
             <h3 className="text-sm font-semibold text-gray-800 mb-2">Preview (first 8 rows)</h3>
-            <div className="overflow-x-auto border border-gray-200 rounded-xl shadow-sm text-xs">
+            <div className="do-report-scroll-x overflow-x-auto border border-gray-200 rounded-xl shadow-sm text-xs">
               <table className="min-w-full">
                 <thead className="bg-slate-50 text-left sticky top-0 z-10">
                   <tr>
@@ -842,7 +842,7 @@ function BrowsePanel({ onGoImport }) {
           )}
         </div>
       ) : (
-        <div className="overflow-x-auto border border-gray-200 rounded-2xl shadow-sm [scrollbar-width:thin] bg-white">
+        <div className="do-report-scroll-x overflow-x-auto border border-gray-200 rounded-2xl shadow-sm bg-white">
           <table className="min-w-full text-sm">
             <thead className="bg-gradient-to-r from-slate-50 to-blue-50/50 text-left sticky top-0 z-10 shadow-[0_1px_0_0_rgb(226_232_240)]">
               <tr>
