@@ -986,6 +986,12 @@ const ManageUser = () => {
                       <p className="font-semibold text-gray-800">{viewingUser.employeeName}</p>
                     </div>
                     <div className="bg-gray-50 p-3 rounded-lg">
+                      <p className="text-gray-600 text-xs mb-1">Alias Name</p>
+                      <p className="font-semibold text-gray-800">
+                        {(viewingUser.aliasName && String(viewingUser.aliasName).trim()) || '—'}
+                      </p>
+                    </div>
+                    <div className="bg-gray-50 p-3 rounded-lg">
                       <p className="text-gray-600 text-xs mb-1">Department</p>
                       <p className="font-semibold text-gray-800">{viewingUser.department}</p>
                     </div>
@@ -1212,6 +1218,7 @@ const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate })
 
   const [formData, setFormData] = React.useState({
     employeeName: user.employeeName || '',
+    aliasName: user.aliasName || '',
     email: user.email || '',
     mobileNo: user.mobileNo || '',
     alternateNo: user.alternateNo || '',
@@ -1276,7 +1283,7 @@ const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate })
     const { name, value } = e.target;
     let v = value;
 
-    if (['employeeName', 'accountHolderName'].includes(name)) {
+    if (['employeeName', 'accountHolderName', 'aliasName'].includes(name)) {
       v = v.replace(/[^A-Za-z ]/g, '').slice(0, 50); // alphabets + space; max 50
     }
     // Department dropdown: auto-set designation for CMT; for Sales, clear tier (designation from tier)
@@ -1681,6 +1688,20 @@ const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate })
                     className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-green-200 focus:border-green-500 transition-all duration-300"
                   />
                   {errors.employeeName && <p className="text-red-600 text-xs mt-1">{errors.employeeName}</p>}
+                </div>
+
+                {/* Alias Name (optional) */}
+                <div className="space-y-3">
+                  <label className="block text-sm font-bold text-gray-700">Alias Name</label>
+                  <input
+                    name="aliasName"
+                    type="text"
+                    value={formData.aliasName}
+                    onChange={handleInputChange}
+                    maxLength={50}
+                    placeholder="Enter alias name (optional)"
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-green-200 focus:border-green-500 transition-all duration-300"
+                  />
                 </div>
 
                 {/* Email */}

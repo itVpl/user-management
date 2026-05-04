@@ -66,3 +66,18 @@ export function userHasAddAgentModuleSync(user) {
     return tokens.some((t) => n === t || n.includes(t));
   });
 }
+
+/**
+ * Notes text for the optional disposition field: newest log entry matching the row's current disposition.
+ * Skips follow_up (handled in the follow-up modal). Parent draft state overrides when set.
+ */
+export function getSavedDispositionNotesForRow(row) {
+  if (!row?.salesDayDisposition || row.salesDayDisposition === 'follow_up') return '';
+  const want = row.salesDayDisposition;
+  const log = Array.isArray(row.salesDispositionLog) ? row.salesDispositionLog : [];
+  for (let i = log.length - 1; i >= 0; i -= 1) {
+    const e = log[i];
+    if (e && e.disposition === want && typeof e.notes === 'string') return e.notes;
+  }
+  return '';
+}

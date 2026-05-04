@@ -9,6 +9,7 @@ import {
   patchSalesDayDisposition,
 } from '../../services/salesDayAgentService';
 import {
+  getSavedDispositionNotesForRow,
   getUserFromStorage,
   isSalesDayShiftTiming,
   userHasAddAgentModuleSync,
@@ -246,14 +247,36 @@ function SalesDayDispositionModal({ customers, dispositions, loading, onClose, o
   const onSelectDisposition = async (row, value) => {
     if (!value) return;
     if (value === 'follow_up') {
-      setFollowUpModalIsEdit(false);
-      setFollowUp(row);
-      setFollowNotes('');
-      setFollowAt(defaultFollowUpDatetimeLocal());
+      if (row.salesDayDisposition === 'follow_up') {
+        openFollowUpEditor(row);
+      } else {
+        setFollowUpModalIsEdit(false);
+        setFollowUp(row);
+        setFollowNotes('');
+        setFollowAt(defaultFollowUpDatetimeLocal());
+      }
       return;
     }
     const notes = (dispositionNotesById[row._id] ?? '').trim() || undefined;
     await applyDisposition(row._id, value, notes ? { notes } : {});
+  };
+
+  const saveDispositionNotes = async (row) => {
+    const disp = row.salesDayDisposition;
+    if (!disp) {
+      toast.error('Choose a disposition first.');
+      return;
+    }
+    if (disp === 'follow_up') {
+      toast.error('Use the follow-up dialog for follow-up notes.');
+      return;
+    }
+    const raw =
+      dispositionNotesById[row._id] !== undefined
+        ? dispositionNotesById[row._id]
+        : getSavedDispositionNotesForRow(row);
+    const notes = raw.trim() || undefined;
+    await applyDisposition(row._id, disp, notes ? { notes } : {});
   };
 
   const submitFollowUp = async () => {
@@ -327,16 +350,51 @@ function SalesDayDispositionModal({ customers, dispositions, loading, onClose, o
                               </option>
                             ))}
                           </select>
-                          <input
-                            type="text"
-                            className="border border-gray-200 rounded px-2 py-0.5 text-[11px] w-full"
-                            placeholder="Notes (optional)"
-                            value={dispositionNotesById[c._id] ?? ''}
-                            disabled={savingId === c._id}
-                            onChange={(e) =>
-                              setDispositionNotesById((m) => ({ ...m, [c._id]: e.target.value }))
-                            }
-                          />
+                          <div className="flex gap-1 items-stretch">
+                            <input
+                              type="text"
+                              className="border border-gray-200 rounded px-2 py-0.5 text-[11px] min-w-0 flex-1"
+                              placeholder="Notes (optional)"
+                              value={
+                                dispositionNotesById[c._id] !== undefined
+                                  ? dispositionNotesById[c._id]
+                                  : getSavedDispositionNotesForRow(c)
+                              }
+                              disabled={savingId === c._id}
+                              onChange={(e) =>
+                                setDispositionNotesById((m) => ({ ...m, [c._id]: e.target.value }))
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  saveDispositionNotes(c);
+                                }
+                              }}
+                            />
+                            <button
+                              type="button"
+                              title="Save note without changing disposition"
+                              disabled={
+                                savingId === c._id ||
+                                !c.salesDayDisposition ||
+                                c.salesDayDisposition === 'follow_up'
+                              }
+                              onClick={() => saveDispositionNotes(c)}
+                              className="shrink-0 px-1.5 py-0.5 rounded border border-gray-200 bg-slate-50 text-[10px] font-semibold text-gray-700 hover:bg-slate-100 disabled:opacity-40"
+                            >
+                              Save
+                            </button>
+                          </div>
+                          {c.salesDayDisposition === 'follow_up' && (
+                            <button
+                              type="button"
+                              className="text-[10px] text-blue-600 font-semibold text-left hover:underline disabled:opacity-40"
+                              disabled={savingId === c._id}
+                              onClick={() => openFollowUpEditor(c)}
+                            >
+                              Edit follow-up (date &amp; notes)
+                            </button>
+                          )}
                         </div>
                       </td>
                       <td className="px-3 py-2">
