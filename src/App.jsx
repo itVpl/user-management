@@ -73,6 +73,9 @@ const AddCustomer = lazy(() => import("./Components/Sales/AddCustomer.jsx"));
 const AddAgent = lazy(() => import("./Components/Sales/AddAgent.jsx"));
 const ShiftImageHandoff = lazy(() => import("./Components/Sales/ShiftImageHandoff.jsx"));
 const MyAssignedImages = lazy(() => import("./Components/Sales/MyAssignedImages.jsx"));
+const SalesBuyerHandoff = lazy(() => import("./Components/Sales/SalesBuyerHandoff.jsx"));
+const MyIncomingBuyers = lazy(() => import("./Components/Sales/MyIncomingBuyers.jsx"));
+const ExporterRateRequestWorkflow = lazy(() => import("./Components/Sales/ExporterRateRequestWorkflow.jsx"));
 const AssignAgent = lazy(() => import("./Components/Dashboard/AssignAgent.jsx"));
 const CarrierDocs = lazy(() => import("./Components/CMT/CarrierDocs.jsx"));
 const DoDetails = lazy(() => import("./Components/CMT/DODetails.jsx"));
@@ -716,6 +719,9 @@ function App() {
           <Route path="AddAgent" element={<AddAgent />} />
           <Route path="sales/shift-image-handoff" element={<ShiftImageHandoff />} />
           <Route path="sales/my-assigned-images" element={<MyAssignedImages />} />
+          <Route path="sales/buyer-handoff" element={<SalesBuyerHandoff />} />
+          <Route path="sales/my-incoming-buyers" element={<MyIncomingBuyers />} />
+          <Route path="sales/exporter-rate-requests" element={<ExporterRateRequestWorkflow />} />
           <Route path="ImportCarrierEmails" element={<ImportCarrierEmails />} />
           <Route path="AssignAgent" element={<AssignAgent />} />
           <Route path="CarrierDocs" element={<CarrierDocs />} />
