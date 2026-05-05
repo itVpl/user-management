@@ -218,6 +218,7 @@ export default function TodoList() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [statistics, setStatistics] = useState({
     total: 0,
     pending: 0,
@@ -225,7 +226,7 @@ export default function TodoList() {
     cancelled: 0
   });
 
-  const itemsPerPage = 20;
+  const itemsPerPage = 10;
 
   // Form state
   const [formData, setFormData] = useState({
@@ -289,8 +290,8 @@ export default function TodoList() {
       if (categoryFilter !== 'all') {
         params.append('category', categoryFilter);
       }
-      if (searchTerm.trim()) {
-        params.append('search', searchTerm.trim());
+      if (debouncedSearchTerm.trim()) {
+        params.append('search', debouncedSearchTerm.trim());
       }
 
       const response = await axios.get(
@@ -319,12 +320,17 @@ export default function TodoList() {
 
   useEffect(() => {
     fetchTodos();
-  }, [currentPage, statusFilter, priorityFilter, categoryFilter]);
+  }, [currentPage, statusFilter, priorityFilter, categoryFilter, debouncedSearchTerm]);
 
   // Reset to page 1 when filter changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [statusFilter, priorityFilter, categoryFilter]);
+  }, [statusFilter, priorityFilter, categoryFilter, searchTerm]);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearchTerm(searchTerm), 300);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
 
   // Create todo
   const handleCreateTodo = async (e) => {
@@ -648,27 +654,11 @@ export default function TodoList() {
     return pages;
   };
 
-  // Filter todos based on search term (client-side filtering)
-  const filteredTodos = todos.filter(todo => {
-    const term = searchTerm.trim().toLowerCase();
-    if (!term) return true;
-    const title = (todo.title || '').toLowerCase();
-    const description = (todo.description || '').toLowerCase();
-    const category = (todo.category || '').toLowerCase();
-    const status = (todo.status || '').toLowerCase();
-    const priority = (todo.priority || '').toLowerCase();
-    return title.includes(term) || description.includes(term) || category.includes(term) || status.includes(term) || priority.includes(term);
-  });
-
-  // Apply pagination to filtered results
-  const totalFilteredPages = Math.max(1, Math.ceil(filteredTodos.length / itemsPerPage));
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = Math.min(startIndex + itemsPerPage, filteredTodos.length);
-  const paginatedTodos = filteredTodos.slice(startIndex, endIndex);
+  const startIndex = totalItems > 0 ? (currentPage - 1) * itemsPerPage : 0;
+  const endIndex = startIndex + todos.length;
 
   const handlePageChange = (page) => {
-    const maxPage = searchTerm ? totalFilteredPages : totalPages;
-    if (page >= 1 && page <= maxPage) {
+    if (page >= 1 && page <= totalPages) {
       setCurrentPage(page);
     }
   };
@@ -787,7 +777,7 @@ export default function TodoList() {
                     </div>
                   </td>
                 </tr>
-              ) : paginatedTodos.length === 0 ? (
+              ) : todos.length === 0 ? (
                 <tr>
                   <td
                     colSpan="7"
@@ -807,7 +797,7 @@ export default function TodoList() {
                   </td>
                 </tr>
               ) : (
-                paginatedTodos.map((todo) => (
+                todos.map((todo) => (
                   <tr key={todo._id} className="bg-white hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-4 border-y first:border-l border-gray-200 first:rounded-l-lg text-gray-900 font-semibold">
                       {todo.title}
@@ -887,21 +877,21 @@ export default function TodoList() {
       </div>
 
       {/* Pagination */}
-      {filteredTodos.length > 0 && totalFilteredPages > 1 && (
+      {totalItems > 0 && totalPages > 1 && (
         <div className="mt-4 flex justify-between items-center px-4 border border-gray-200 p-2 rounded-xl bg-white">
           <div className="text-sm text-gray-600">
-            Showing {startIndex + 1} to {endIndex} of {filteredTodos.length} tasks
+            Showing {startIndex + 1} to {Math.min(endIndex, totalItems)} of {totalItems} tasks
           </div>
           <div className="flex gap-2 items-center">
             <button
               onClick={() => handlePageChange(currentPage - 1)}
               disabled={currentPage === 1}
-              className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900"
+              className="cursor-pointer flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900"
             >
               Previous
             </button>
             <div className="flex gap-1">
-              {getPageNumbers(totalFilteredPages).map((page, idx, arr) => {
+              {getPageNumbers(totalPages).map((page, idx, arr) => {
                 const showEllipsisBefore = idx > 0 && page - arr[idx - 1] > 1;
                 return (
                   <React.Fragment key={page}>
@@ -910,7 +900,7 @@ export default function TodoList() {
                     )}
                     <button
                       onClick={() => handlePageChange(page)}
-                      className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${
+                      className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-colors cursor-pointer ${
                         currentPage === page
                           ? 'border border-gray-900 text-gray-900 bg-white'
                           : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
@@ -924,8 +914,8 @@ export default function TodoList() {
             </div>
             <button
               onClick={() => handlePageChange(currentPage + 1)}
-              disabled={currentPage === totalFilteredPages}
-              className="flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900"
+              disabled={currentPage === totalPages}
+              className="cursor-pointer flex items-center gap-1 px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors text-base font-medium text-gray-600 hover:text-gray-900"
             >
               Next
             </button>
