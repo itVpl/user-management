@@ -36,7 +36,10 @@ const CALL_DATA_VPL059_DISPOSITIONS = [
   "Other",
 ];
 
-/** Default: `/analytics/8x8` (unchanged). Triton only for ids in CALL_DATA_TRITON_EMP_IDS. */
+/**
+ * Category-options + legacy routing: prefer triton base for known Triton-only employees.
+ * Call data itself always merges `8x8` (aliasName) + optional `8x8-triton` (identificaAliasName).
+ */
 const getCallRecordsBase = () => {
   try {
     const raw = sessionStorage.getItem("user") || localStorage.getItem("user");
@@ -415,33 +418,56 @@ const UserCallDashboard = () => {
   // Notification state
   const [notification, setNotification] = useState({ show: false, message: '', type: 'info' });
 
-  const fetchData = async (alias, date) => {
+  const fetchData = async (alias, date, identificaAliasName) => {
     const from = `${date} 00:00:00`;
     const to = `${date} 23:59:59`;
+    const headers = getAuthHeaders();
+    const ident = String(identificaAliasName ?? "").trim();
+
+    const extractRows = (payload) => {
+      const p = payload || {};
+      if (Array.isArray(p.data)) return p.data;
+      if (Array.isArray(p.records)) return p.records;
+      return [];
+    };
 
     try {
-      const recordsBase = getCallRecordsBase();
-      const res = await axios.get(
-        `${recordsBase}/call-records/filter`,
-        {
-          params: {
-            callerName: alias,
-            calleeName: alias,
-            from,
-            to,
-          },
-          headers: getAuthHeaders(),
-        }
-      );
+      const tasks = [
+        axios
+          .get(`${BASE_8X8}/call-records/filter`, {
+            params: { callerName: alias, calleeName: alias, from, to },
+            headers,
+          })
+          .then((res) => ({ base: BASE_8X8, res }))
+          .catch((err) => {
+            console.warn("8x8 call-records/filter failed:", err);
+            return { base: BASE_8X8, res: null };
+          }),
+      ];
+      if (ident) {
+        tasks.push(
+          axios
+            .get(`${BASE_8X8_TRITON}/call-records/filter`, {
+              params: { callerName: ident, calleeName: ident, from, to },
+              headers,
+            })
+            .then((res) => ({ base: BASE_8X8_TRITON, res }))
+            .catch((err) => {
+              console.warn("8x8-triton call-records/filter failed:", err);
+              return { base: BASE_8X8_TRITON, res: null };
+            })
+        );
+      }
 
-      const payload = res?.data || {};
-      const summary = payload?.summary || null;
-      const rawData = Array.isArray(payload?.data)
-        ? payload.data
-        : Array.isArray(payload?.records)
-          ? payload.records
-          : [];
-      if (rawData.length === 0) {
+      const results = await Promise.all(tasks);
+      const pairs = [];
+      for (const { base, res } of results) {
+        if (!res) continue;
+        const rows = extractRows(res?.data);
+        rows.forEach((record) => pairs.push({ record, base }));
+      }
+
+      if (pairs.length === 0) {
         setRecords([]);
         setCategories({});
         setStats({
@@ -455,7 +481,10 @@ const UserCallDashboard = () => {
         return;
       }
 
-
+      pairs.sort(
+        (a, b) =>
+          new Date(b.record.startTime).getTime() - new Date(a.record.startTime).getTime()
+      );
 
       let totalTalkTimeMS = 0;
       let incoming = 0;
@@ -463,88 +492,78 @@ const UserCallDashboard = () => {
       let answered = 0;
       let missed = 0;
 
-      const transformed = rawData.map((record) => {
-        // Sum talk time
+      const transformed = pairs.map(({ record, base: recordsBase }) => {
         const talkMs = Number(record.talkTimeMS || 0);
         totalTalkTimeMS += talkMs;
 
-        // Direction counts (rely on provider field)
         const dir = (record.direction || "").toLowerCase();
         if (dir === "incoming") incoming++;
         if (dir === "outgoing") outgoing++;
 
-        // Normalize status
         const normStatus = normalizeCallStatus(record, alias);
 
-        // Answered/Missed tallies
         if (normStatus === "Answered") answered++;
         if (normStatus === "Missed") missed++;
 
-        // Display fields
         const dateObj = new Date(record.startTime);
-        const date = dateObj.toLocaleDateString("en-GB"); // dd/mm/yyyy
+        const rowDate = dateObj.toLocaleDateString("en-GB");
         const time = dateObj.toLocaleTimeString("en-US", {
           hour: "2-digit",
           minute: "2-digit",
           hour12: true,
         });
 
-        // Conversion status: talk < 20s -> Open, else Converted
         const conversionStatus = talkMs < 20000 ? "Open" : "Converted";
 
-        // For "Called No" column we’ll keep callee (as in your UI)
         return {
           callId: record.callId,
-          date,
+          date: rowDate,
           callee: record.callee,
           callTime: time,
           callDuration: record.talkTime || formatDuration(talkMs),
           callStatus: normStatus,
           conversionStatus,
+          recordsBase,
         };
       });
 
-      const total = Number(summary?.totalCalls ?? transformed.length);
-      const totalTalkTimeMSFromSummary = Number(summary?.totalTalkTimeMS ?? totalTalkTimeMS);
-      const answeredFromSummary = Number(summary?.answeredCalls ?? answered);
-      const missedFromSummary = Number(summary?.missedCalls ?? missed);
+      const idsByBase = new Map();
+      transformed.forEach((r) => {
+        if (r.callId == null || r.callId === "") return;
+        const id = r.callId;
+        const list = idsByBase.get(r.recordsBase) || [];
+        list.push(id);
+        idsByBase.set(r.recordsBase, list);
+      });
 
-      // Fetch saved category/followUp for these callIds
-      const callIds = transformed.map((r) => r.callId).filter(Boolean);
-      if (callIds.length > 0) {
+      let mergedCats = {};
+      for (const [base, callIds] of idsByBase.entries()) {
+        if (callIds.length === 0) continue;
         try {
-          const catRes = await axios.get(
-            `${recordsBase}/call-records/categories`,
-            {
-              params: { callIds: callIds.join(",") },
-              headers: getAuthHeaders(),
-            }
-          );
+          const catRes = await axios.get(`${base}/call-records/categories`, {
+            params: { callIds: callIds.join(",") },
+            headers: getAuthHeaders(),
+          });
           if (catRes.data?.success && catRes.data?.data) {
-            setCategories(catRes.data.data);
-          } else {
-            setCategories({});
+            mergedCats = { ...mergedCats, ...catRes.data.data };
           }
         } catch (catErr) {
           console.warn("Categories fetch failed:", catErr);
-          setCategories({});
         }
-      } else {
-        setCategories({});
       }
 
+      setCategories(mergedCats);
       setRecords(transformed);
       setStats({
-        total,
-        answered: answeredFromSummary,
-        missed: missedFromSummary,
+        total: transformed.length,
+        answered,
+        missed,
         incoming,
         outgoing,
-        totalTalkTime: formatTalkTimeHMS(totalTalkTimeMSFromSummary),
+        totalTalkTime: formatTalkTimeHMS(totalTalkTimeMS),
       });
     } catch (err) {
       console.error("❌ API Error fetching filtered calls:", err);
-      // keep previous UI; optionally reset
     }
   };
 
@@ -619,9 +638,11 @@ const UserCallDashboard = () => {
 
   const updateCategory = useCallback(async (callId, payload) => {
     if (!callId) return { success: false, error: "Missing call ID" };
+    const base =
+      records.find((r) => String(r.callId) === String(callId))?.recordsBase ?? BASE_8X8;
     try {
       const res = await axios.put(
-        `${getCallRecordsBase()}/call-records/${encodeURIComponent(callId)}/category`,
+        `${base}/call-records/${encodeURIComponent(callId)}/category`,
         payload,
         { headers: getAuthHeaders() }
       );
@@ -653,7 +674,7 @@ const UserCallDashboard = () => {
       console.error("Failed to update category:", e);
       return { success: false, error: msg };
     }
-  }, []);
+  }, [records]);
 
   const onCategoryChange = async (callId, value) => {
     const newCategory = value || null;
@@ -952,7 +973,8 @@ const UserCallDashboard = () => {
       console.warn("❌ aliasName missing in user object");
       return;
     }
-    fetchData(alias, selectedDate);
+    const identificaAliasName = user.identificaAliasName;
+    fetchData(alias, selectedDate, identificaAliasName);
   }, [selectedDate]);
 
   return (
@@ -1145,7 +1167,7 @@ const UserCallDashboard = () => {
                   const showFollowUpBtn = !isVoiceMailDisposition(cat.category);
                   return (
                     <tr
-                      key={r.callId ?? r.date + r.callee + r.callTime}
+                      key={`${r.recordsBase ?? BASE_8X8}::${r.callId ?? r.date + r.callee + r.callTime}`}
                       data-call-id={r.callId != null ? String(r.callId) : undefined}
                       className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${
                         highlightCallId != null && String(highlightCallId) === String(r.callId)

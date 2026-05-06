@@ -1574,7 +1574,13 @@ const Sidebar = () => {
           // Match menu items with active modules by name or label (case insensitive)
           // Also normalize multiple spaces, hyphens, and camelCase (e.g. LeaveApproval -> leave approval) for matching
           const normalizeForMatch = (str) =>
-            (str || '').trim().replace(/\s+/g, ' ').replace(/-/g, ' ').replace(/([A-Z])/g, ' $1').trim().toLowerCase();
+            (str || '')
+              .trim()
+              .replace(/-/g, ' ')
+              .replace(/([A-Z])/g, ' $1')
+              .replace(/\s+/g, ' ')
+              .trim()
+              .toLowerCase();
           // Allow "Dept" <-> "Department"; legacy Mongo names still match via moduleAliases below
           const normalizeDept = (s) => s.replace(/\bdept\b/g, 'department');
             const moduleAliases = {
@@ -1583,6 +1589,17 @@ const Sidebar = () => {
               // Menu "Add Customer" (path /AddCustomer) ↔ Module Master "Add Agent" / day-shift import
               "add customer": ["add agent", "sales day agent", "sales add agent"],
               "add agent": ["add customer", "sales day agent", "sales add agent"],
+              // Accept common backend labels for Emp Login Report module
+              "emp login report": [
+                "employee login report",
+                "employee login reports",
+                "emp login reports",
+                "emp login",
+                "employee login",
+                "employee log in",
+                "login report",
+                "login reports",
+              ],
               // Backend module name is "Tracker"; allow legacy "Trucker" if ever used
               tracker: ["trucker"],
             // Menu label "CMT Comparison Report" — match older modulemasters names / typo
@@ -1600,12 +1617,19 @@ const Sidebar = () => {
               const modNameDept = normalizeDept(modName); 
               const itemNameDept = normalizeDept(itemName); 
               const aliases = moduleAliases[itemName] || [];  
+              const isEmpLoginLooseMatch =
+                itemName === "emp login report" &&
+                (modName.includes("emp login") ||
+                  modLabel.includes("emp login") ||
+                  modName.includes("employee login") ||
+                  modLabel.includes("employee login"));
               
               // Match by name OR label (including Dept/Department variant)
               const isMatch =
                 modName === itemName || modLabel === itemName ||
                 modNameDept === itemNameDept || normalizeDept(modLabel) === itemNameDept ||
-                aliases.includes(modName) || aliases.includes(modLabel);
+                aliases.includes(modName) || aliases.includes(modLabel) ||
+                isEmpLoginLooseMatch;
               if (isMatch) {
                 console.log(`✅ Matched: "${mod.name}"${mod.label ? ` (label: "${mod.label}")` : ''} (ID: ${mod._id}) with menu item "${item.name}"`);
               }

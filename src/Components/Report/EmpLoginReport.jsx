@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { FaArrowLeft, FaDownload } from 'react-icons/fa';
 import { User, Clock, Calendar, Search, Building, CheckCircle, XCircle } from 'lucide-react';
@@ -37,6 +37,33 @@ export default function EmpLoginReport() {
   const [dateFilterApplied, setDateFilterApplied] = useState(false);
   const [showPresetMenu, setShowPresetMenu] = useState(false);
   const [showCustomRange, setShowCustomRange] = useState(false);
+
+  // Keep table rows and export rows in sync with current filters
+  const filteredReportData = useMemo(() => {
+    return reportData.filter((emp) => {
+      const departmentMatch = !selectedDepartment || emp.department === selectedDepartment;
+      const employeeMatch = !selectedEmployeeId || emp.empId === selectedEmployeeId;
+
+      const dateMatch =
+        !dateFilterApplied ||
+        !range.startDate ||
+        !range.endDate ||
+        (emp.dateWiseData || []).some((day) => {
+          const dayDate = new Date(day.date);
+          if (Number.isNaN(dayDate.getTime())) return false;
+          return dayDate >= range.startDate && dayDate <= range.endDate;
+        });
+
+      return departmentMatch && employeeMatch && dateMatch;
+    });
+  }, [
+    reportData,
+    selectedDepartment,
+    selectedEmployeeId,
+    dateFilterApplied,
+    range.startDate,
+    range.endDate
+  ]);
 
   // Presets
   const presets = {
@@ -210,16 +237,112 @@ export default function EmpLoginReport() {
 
   // Export to CSV
   const exportToCSV = () => {
-    if (reportData.length === 0) {
+    if (filteredReportData.length === 0) {
       alertify.warning('No data to export');
       return;
     }
 
-    let csvContent = 'Employee ID,Employee Name,Department,Designation,Total Login Time,Total Sessions\n';
-    
-    reportData.forEach(emp => {
-      csvContent += `"${emp.empId || ''}","${emp.employeeName || ''}","${emp.department || ''}","${emp.designation || ''}","${emp.dateWiseData?.reduce((sum, day) => sum + (day.totalLoginTimeHours || 0), 0).toFixed(2) || 0}h","${emp.dateWiseData?.reduce((sum, day) => sum + (day.totalSessions || 0), 0) || 0}"\n`;
+    const escapeCSV = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+    const headers = [
+      'Employee ID',
+      'Employee Name',
+      'Department',
+      'Designation',
+      'Date',
+      'Day Login Time (Hours)',
+      'Day Sessions',
+      'Session #',
+      'Login Time',
+      'Logout Time',
+      'Session Duration (Hours)',
+      'Session Duration (Minutes)',
+      'Session Status',
+      'Employee Total Login Time',
+      'Employee Total Sessions'
+    ];
+
+    const rows = [headers.map(escapeCSV).join(',')];
+
+    filteredReportData.forEach((emp) => {
+      const employeeTotalLoginTime = (emp.dateWiseData || []).reduce(
+        (sum, day) => sum + (day.totalLoginTimeHours || 0),
+        0
+      );
+      const employeeTotalSessions = (emp.dateWiseData || []).reduce(
+        (sum, day) => sum + (day.totalSessions || 0),
+        0
+      );
+
+      const dayWiseData = Array.isArray(emp.dateWiseData) ? emp.dateWiseData : [];
+      if (dayWiseData.length === 0) {
+        rows.push([
+          emp.empId,
+          emp.employeeName,
+          emp.department,
+          emp.designation,
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          `${employeeTotalLoginTime.toFixed(2)}h`,
+          employeeTotalSessions
+        ].map(escapeCSV).join(','));
+        return;
+      }
+
+      dayWiseData.forEach((day) => {
+        const sessions = Array.isArray(day.sessions) ? day.sessions : [];
+        const formattedDate = day?.date ? format(new Date(day.date), 'yyyy-MM-dd') : '';
+
+        if (sessions.length === 0) {
+          rows.push([
+            emp.empId,
+            emp.employeeName,
+            emp.department,
+            emp.designation,
+            formattedDate,
+            day.totalLoginTimeHours ?? '',
+            day.totalSessions ?? 0,
+            '',
+            '',
+            '',
+            '',
+            '',
+            day.isCurrentlyActive ? 'Active' : 'Inactive',
+            `${employeeTotalLoginTime.toFixed(2)}h`,
+            employeeTotalSessions
+          ].map(escapeCSV).join(','));
+          return;
+        }
+
+        sessions.forEach((session, index) => {
+          rows.push([
+            emp.empId,
+            emp.employeeName,
+            emp.department,
+            emp.designation,
+            formattedDate,
+            day.totalLoginTimeHours ?? '',
+            day.totalSessions ?? 0,
+            index + 1,
+            session.loginTime || '',
+            session.logoutTime || 'Still Active',
+            session.durationInHours ?? session.duration ?? '',
+            session.durationInMinutes ?? '',
+            session.status || (day.isCurrentlyActive ? 'active' : 'completed'),
+            `${employeeTotalLoginTime.toFixed(2)}h`,
+            employeeTotalSessions
+          ].map(escapeCSV).join(','));
+        });
+      });
     });
+
+    const csvContent = rows.join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
@@ -288,7 +411,7 @@ export default function EmpLoginReport() {
         </div>
 
         {/* Export Button */}
-        {reportData.length > 0 && (
+        {filteredReportData.length > 0 && (
           <button
             onClick={exportToCSV}
             className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200 text-sm font-medium"
@@ -480,7 +603,7 @@ export default function EmpLoginReport() {
               </tr>
             </thead>
             <tbody>
-              {reportData.map((emp, index) => {
+              {filteredReportData.map((emp, index) => {
                 const totalLoginTime = emp.dateWiseData?.reduce((sum, day) => sum + (day.totalLoginTimeHours || 0), 0) || 0;
                 const totalSessions = emp.dateWiseData?.reduce((sum, day) => sum + (day.totalSessions || 0), 0) || 0;
                 const isActive = emp.dateWiseData?.some(day => day.isCurrentlyActive) || false;
@@ -527,7 +650,7 @@ export default function EmpLoginReport() {
             </tbody>
           </table>
         </div>
-        {reportData.length === 0 && (
+        {filteredReportData.length === 0 && (
           <div className="text-center py-12">
             <User className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <p className="text-gray-500 text-lg">

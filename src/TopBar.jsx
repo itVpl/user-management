@@ -12,6 +12,7 @@ import { X } from "lucide-react";
 const Topbar = () => {
   const navigate = useNavigate();
   const BASE_8X8 = `${API_CONFIG.BASE_URL}/api/v1/analytics/8x8`;
+  const BASE_8X8_TRITON = `${API_CONFIG.BASE_URL}/api/v1/analytics/8x8-triton`;
 
   const [profileOpen, setProfileOpen] = useState(false);
 
@@ -85,13 +86,9 @@ const Topbar = () => {
     return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   };
 
-  /** Same as Sales Follow up Tracker: `/call-records/filter` + caller/callee + full-day range. Returns total ms or null. */
-  const fetchFilterTalktimeMs = async ({ aliasName, empId, token, date }) => {
+  /** Same as Sales Follow up Tracker: merge `8x8` (aliasName) + optional `8x8-triton` (identificaAliasName). Returns total ms or null. */
+  const fetchFilterTalktimeMs = async ({ aliasName, identificaAliasName, token, date }) => {
     if (!aliasName || !token || !date) return null;
-    const analyticsBase =
-      String(empId || "").trim() === "VPL059"
-        ? `${API_CONFIG.BASE_URL}/api/v1/analytics/8x8-triton`
-        : `${API_CONFIG.BASE_URL}/api/v1/analytics/8x8`;
     const from = `${date} 00:00:00`;
     const to = `${date} 23:59:59`;
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -100,28 +97,70 @@ const Topbar = () => {
       "Content-Type": "application/json",
     };
     if (tz) headers["X-Time-Zone"] = tz;
-    try {
-      const res = await axios.get(`${analyticsBase}/call-records/filter`, {
-        params: {
-          callerName: aliasName,
-          calleeName: aliasName,
-          from,
-          to,
-        },
-        headers,
-      });
-      const payload = res?.data || {};
-      let ms = Number(payload?.summary?.totalTalkTimeMS ?? 0);
+
+    const sumTalkMsFromPayload = (payload) => {
+      const p = payload || {};
+      let ms = Number(p?.summary?.totalTalkTimeMS ?? 0);
       if (!Number.isFinite(ms)) ms = 0;
-      const rows = Array.isArray(payload?.data)
-        ? payload.data
-        : Array.isArray(payload?.records)
-          ? payload.records
+      const rows = Array.isArray(p?.data)
+        ? p.data
+        : Array.isArray(p?.records)
+          ? p.records
           : [];
       if (ms <= 0 && rows.length) {
         ms = rows.reduce((sum, r) => sum + Number(r?.talkTimeMS || 0), 0);
       }
-      return Number.isFinite(ms) ? ms : null;
+      return Number.isFinite(ms) ? ms : 0;
+    };
+
+    const ident = String(identificaAliasName ?? "").trim();
+    try {
+      const tasks = [
+        axios
+          .get(`${BASE_8X8}/call-records/filter`, {
+            params: {
+              callerName: aliasName,
+              calleeName: aliasName,
+              from,
+              to,
+            },
+            headers,
+          })
+          .then((res) => res)
+          .catch((err) => {
+            console.warn("Topbar 8x8 talktime fetch failed:", err);
+            return null;
+          }),
+      ];
+      if (ident) {
+        tasks.push(
+          axios
+            .get(`${BASE_8X8_TRITON}/call-records/filter`, {
+              params: {
+                callerName: ident,
+                calleeName: ident,
+                from,
+                to,
+              },
+              headers,
+            })
+            .then((res) => res)
+            .catch((err) => {
+              console.warn("Topbar 8x8-triton talktime fetch failed:", err);
+              return null;
+            })
+        );
+      }
+
+      const results = await Promise.all(tasks);
+      let totalMs = 0;
+      let anyOk = false;
+      for (const res of results) {
+        if (!res?.data) continue;
+        anyOk = true;
+        totalMs += sumTalkMsFromPayload(res.data);
+      }
+      return anyOk ? totalMs : null;
     } catch (err) {
       console.warn("Topbar talktime filter fetch failed:", err);
       return null;
@@ -252,6 +291,7 @@ const Topbar = () => {
       const userData = JSON.parse(userString);
       const empId = userData?.empId || userData?.employeeId;
       const aliasName = userData?.aliasName || "";
+      const identificaAliasName = userData?.identificaAliasName;
 
       try {
         
@@ -266,7 +306,7 @@ const Topbar = () => {
         };
         const reportTalktimeMs = await fetchFilterTalktimeMs({
           aliasName,
-          empId,
+          identificaAliasName,
           token,
           date: today,
         });

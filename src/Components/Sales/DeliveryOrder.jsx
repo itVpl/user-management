@@ -575,6 +575,7 @@ export default function DeliveryOrder() {
     carrierId: '', // Store carrier ID for API
     equipmentType: '',
     carrierFees: '',
+    moterCargoValue: '',
     totalRates: '',
     bolInformation: '',
 
@@ -1115,6 +1116,7 @@ export default function DeliveryOrder() {
         })),
 
         remarks: src.remarks || '',
+        moterCargoValue: src.moterCargoValue ?? src.motorCargoValue ?? '',
         bols: (src.bols && src.bols.length
           ? src.bols.map(b => ({ bolNo: b.bolNo || '' }))
           : (src.bolInformation ? [{ bolNo: src.bolInformation }] : [{ bolNo: '' }])
@@ -1351,6 +1353,10 @@ export default function DeliveryOrder() {
             carrierName: loadData.assignedTo?.compName || prev.carrierName,
             carrierId: loadData.assignedTo?._id || prev.carrierId,
             equipmentType: loadData.commodity || prev.equipmentType,
+            moterCargoValue:
+              loadData.moterCargoValue ??
+              loadData.motorCargoValue ??
+              prev.moterCargoValue,
             
             // Auto-fill pickup locations
             pickupLocations: loadData.origins && loadData.origins.length > 0 ? 
@@ -1590,6 +1596,7 @@ export default function DeliveryOrder() {
         equipmentType: '',
         totalRates: '',
         carrierFees: '',
+        moterCargoValue: '',
         
         // Reset pickup locations to default single empty entry
         pickupLocations: [{ name: '', portName: '', address: '', city: '', state: '', zipCode: '', weight: '', commodity: '', pickUpDate: '', remarks: '' }],
@@ -2351,11 +2358,13 @@ export default function DeliveryOrder() {
       } : null;
 
       // plain JSON payload (new API format)
+      const cargoValue = Number(String(formData.moterCargoValue ?? '').trim());
       const submitData = {
         empId,
         loadType: formData.loadType || selectedLoadType,
         shipperId: shipperId || '',
         carrierId: carrierId || '',
+        moterCargoValue: cargoValue,
         company: formData.company || formData.addDispature || '',
         addDispature: formData.company || formData.addDispature || '',
         customers: customersWithTotals,
@@ -2398,6 +2407,7 @@ export default function DeliveryOrder() {
         fd.append('loadType', formData.loadType || selectedLoadType);
         fd.append('shipperId', shipperId || '');
         fd.append('carrierId', carrierId || '');
+        fd.append('moterCargoValue', String(cargoValue));
         fd.append('company', formData.company || formData.addDispature || ''); // Company name for both DRAYAGE and OTR
         fd.append('addDispature', formData.company || formData.addDispature || ''); // Also set addDispature field
         fd.append('companyName', formData.company || formData.addDispature || ''); // Company name for both DRAYAGE and OTR
@@ -2529,6 +2539,7 @@ export default function DeliveryOrder() {
           carrierId: '',
           equipmentType: '',
           carrierFees: '',
+          moterCargoValue: '',
           shipperName: '',
           shipperId: '',
           shipmentNo: '',
@@ -2565,9 +2576,9 @@ export default function DeliveryOrder() {
     } catch (error) {
       console.error('Error creating delivery order:', error);
       if (error.response?.data?.message) {
-        alertify.error(`API Error: ${error.response.data.message}`);
+        alertify.error(error.response.data.message);
       } else if (error.response) {
-        alertify.error(`API Error: ${error.response.status} - ${error.response.statusText}`);
+        alertify.error(`${error.response.status} - ${error.response.statusText}`);
       } else if (error.request) {
         alertify.error('Network error. Please check your connection and try again.');
       } else {
@@ -2639,6 +2650,15 @@ const validateForm = (mode = formMode) => {
   if (!formData.carrierName?.trim()) carrierErr.carrierName = 'Carrier Name is required';
   if (!formData.equipmentType?.trim()) carrierErr.equipmentType = 'Equipment Type is required';
   if (!formData.carrierFees && formData.carrierFees !== 0) carrierErr.fees = 'Carrier Fees are required';
+  const cargoRaw = String(formData.moterCargoValue ?? '').trim();
+  if (!cargoRaw) {
+    carrierErr.moterCargoValue = 'Cargo Value is required';
+  } else {
+    const cargoNum = Number(cargoRaw);
+    if (!Number.isFinite(cargoNum) || cargoNum < 0) {
+      carrierErr.moterCargoValue = 'Enter a non-negative number';
+    }
+  }
   next.carrier = carrierErr;
 
   // Shipper Validation
@@ -2773,6 +2793,7 @@ const validateForm = (mode = formMode) => {
       carrierName: '',
       equipmentType: '',
       carrierFees: '',
+      moterCargoValue: '',
       totalRates: '',
 
       // Location Information (formerly Shipper Information)
@@ -3105,6 +3126,7 @@ const validateForm = (mode = formMode) => {
           remarks: '' // 👈
         }],
         remarks: order.remarks || '',
+        moterCargoValue: '',
         bols: [{ bolNo: order.bolInformation || '' }],
         docs: null
       };
@@ -3145,6 +3167,7 @@ const validateForm = (mode = formMode) => {
       carrierName: '',
       equipmentType: '',
       carrierFees: '',
+      moterCargoValue: '',
 
       // Shipper (NO top-level weight)
       shipperName: '',
@@ -6164,7 +6187,7 @@ const handleUpdateOrder = async (e) => {
               {/* Carrier Information Section */}
               <div className="bg-green-50 p-4 rounded-lg">
                 <h3 className="text-lg font-semibold text-green-800 mb-4">Carrier (Trucker) Information</h3>
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-4 gap-4">
                   <div>
                     <SearchableDropdown
                       value={formData.carrierName || ''}
@@ -6241,6 +6264,23 @@ const handleUpdateOrder = async (e) => {
                       placeholder="Carrier Fees * (Click to add charges)"
                     />
                     {errors.carrier?.fees && <p className="text-red-600 text-xs mt-1">{errors.carrier.fees}</p>}
+                  </div>
+
+                  <div>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      name="moterCargoValue"
+                      value={formData.moterCargoValue || ''}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setFormData(prev => ({ ...prev, moterCargoValue: value }));
+                      }}
+                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${errors.carrier?.moterCargoValue ? 'border-red-400' : 'border-gray-300'}`}
+                      placeholder="Cargo Value *"
+                    />
+                    {errors.carrier?.moterCargoValue && <p className="text-red-600 text-xs mt-1">{errors.carrier.moterCargoValue}</p>}
                   </div>
                 </div>
 
@@ -7170,6 +7210,18 @@ const handleUpdateOrder = async (e) => {
                         <div>
                           <p className="text-sm text-gray-600">Total Carrier Fees</p>
                           <p className="font-semibold text-gray-800">${selectedOrder.carrier?.totalCarrierFees || 0}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center">
+                          <DollarSign className="text-amber-600" size={16} />
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">Moter Cargo Value</p>
+                          <p className="font-semibold text-gray-800">
+                            ${Number(selectedOrder?.moterCargoValue ?? selectedOrder?.motorCargoValue ?? 0).toLocaleString()}
+                          </p>
                         </div>
                       </div>
                     </div>

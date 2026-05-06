@@ -259,6 +259,7 @@ export default function AddTruckerForm({ onSuccess }) {
     mc_dot_no: "",
     carrierType: "",
     fleetsize: "",
+    insuranceAmount: "",
     loadRef: "",
     email: "",
     password: "",
@@ -474,6 +475,14 @@ React.useEffect(() => {
           return "Please enter the Fleet Size.";
         break;
       }
+      case "insuranceAmount": {
+        const raw = String(value ?? "").trim();
+        if (!raw) return "Please enter the insurance amount.";
+        const amt = parseFloat(raw);
+        if (!Number.isFinite(amt)) return "Please enter a valid insurance amount.";
+        if (amt < 0) return "Insurance amount cannot be negative.";
+        break;
+      }
       case "email":
         if (!value?.trim()) return "Please enter the email id.";
         if (/\s/.test(value)) return "Please enter the valid email id.";
@@ -515,7 +524,7 @@ React.useEffect(() => {
     });
 
     // Fleet
-    ["mc_dot_no", "carrierType", "fleetsize"].forEach((f) => {
+    ["mc_dot_no", "carrierType", "fleetsize", "insuranceAmount"].forEach((f) => {
       const msg = validateField(f, formData[f]);
       if (msg) newErrors[f] = msg;
     });
@@ -666,6 +675,10 @@ React.useEffect(() => {
         ? parseInt(formData.fleetsize, 10)
         : 0
     );
+    const insAmt = parseFloat(String(formData.insuranceAmount ?? "").trim());
+    if (Number.isFinite(insAmt) && insAmt >= 0) {
+      truckerData.append("insuranceAmount", String(insAmt));
+    }
     truckerData.append("compAdd", formData.compAdd.trim());
     truckerData.append("country", formData.country.trim());
     truckerData.append("state", formData.state.trim());
@@ -764,6 +777,7 @@ React.useEffect(() => {
           mc_dot_no: "",
           carrierType: "",
           fleetsize: "",
+          insuranceAmount: "",
           email: "",
           password: "",
           confirmPassword: "",
@@ -1398,6 +1412,22 @@ React.useEffect(() => {
                 className={fieldClass("fleetsize")}
               />
               {renderError("fleetsize")}
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700">
+                Insurance amount (USD) <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                name="insuranceAmount"
+                placeholder="e.g. 1000000"
+                value={formData.insuranceAmount}
+                onChange={handleChange}
+                className={fieldClass("insuranceAmount")}
+              />
+              {renderError("insuranceAmount")}
             </div>
           </div>
         </div>
