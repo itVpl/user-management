@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { FaArrowLeft, FaDownload, FaEye, FaFileAlt, FaEdit } from 'react-icons/fa';
-import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, Eye, Edit, Upload, Search, ChevronLeft, ChevronRight, Wallet } from 'lucide-react';
+import { User, Mail, Phone, Building, FileText, CheckCircle, XCircle, Clock, PlusCircle, MapPin, Truck, Calendar, Eye, Edit, Upload, Search, ChevronLeft, ChevronRight, Wallet, DollarSign } from 'lucide-react';
 import AddTruckerForm from './AddTruckerform';
 import axios from 'axios';
 import API_CONFIG from '../../config/api.js';
@@ -829,6 +829,10 @@ const handleWorkingAddressFileChange = (idx, file) => {
       mc_dot_no: trucker.mc_dot_no || '',
       carrierType: trucker.carrierType || '',
       fleetsize: trucker.fleetsize || '',
+      insuranceAmount:
+        trucker.insuranceAmount ??
+        trucker.insurance_amount ??
+        '',
       // Banking Details
       paymentType: trucker.paymentType || trucker.bankingDetails?.paymentType || '',
       factoringName: trucker.factoringName || trucker.bankingDetails?.factoringName || '',
@@ -1024,6 +1028,13 @@ const handleWorkingAddressFileChange = (idx, file) => {
         } : {}),
         carrierType: editFormData.carrierType,
         fleetsize: editFormData.fleetsize,
+        ...(editFormData.insuranceAmount !== '' &&
+        editFormData.insuranceAmount != null &&
+        String(editFormData.insuranceAmount).trim() !== ''
+          ? {
+              insuranceAmount: Number(editFormData.insuranceAmount),
+            }
+          : {}),
         city: editFormData.city,
         state: editFormData.state,
         country: editFormData.country,
@@ -1827,6 +1838,19 @@ const handleWorkingAddressFileChange = (idx, file) => {
                       className={editFieldClass(!!editErrors.fleetsize)}
                     />
                     {editErrors.fleetsize && <p className="text-xs text-red-600 mt-1">Please enter the Fleet Size.</p>}
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">Insurance amount (USD)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      name="insuranceAmount"
+                      placeholder="e.g. 1000000"
+                      value={editFormData.insuranceAmount ?? ''}
+                      onChange={handleEditInputChange}
+                      className={editFieldClass(false)}
+                    />
                   </div>
                 </div>
               </div>
@@ -2653,6 +2677,29 @@ const handleWorkingAddressFileChange = (idx, file) => {
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center">
+                      <DollarSign className="text-emerald-700" size={16} />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Insurance amount</p>
+                      <p className="font-semibold text-gray-800">
+                        {(() => {
+                          const raw =
+                            selectedTrucker.insuranceAmount ??
+                            selectedTrucker.insurance_amount;
+                          if (raw === undefined || raw === null || raw === '') return '—';
+                          const n = Number(raw);
+                          return Number.isFinite(n)
+                            ? new Intl.NumberFormat('en-US', {
+                                style: 'currency',
+                                currency: 'USD',
+                              }).format(n)
+                            : String(raw);
+                        })()}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
                     <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
                       <Calendar className="text-gray-600" size={16} />
                     </div>
@@ -2857,7 +2904,8 @@ const handleWorkingAddressFileChange = (idx, file) => {
       {showAddTruckerForm && (
         <div
           className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4"
-          onClick={() => setShowAddTruckerForm(false)}
+          role="dialog"
+          aria-modal="true"
         >
           <style>{`
             .hide-scrollbar::-webkit-scrollbar { display: none; }
@@ -2866,7 +2914,6 @@ const handleWorkingAddressFileChange = (idx, file) => {
           <div
             className="bg-white rounded-3xl max-w-6xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar shadow-2xl"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-            onClick={(e) => e.stopPropagation()}
           >
             <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl">
               <div className="flex justify-between items-center">

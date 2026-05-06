@@ -320,10 +320,20 @@ const CallDataReports = () => {
     const toEmployeeOptions = (employees) =>
       employees
         .map((emp) => {
-          const display = (emp?.aliasName || emp?.employeeName || emp?.empName || "").trim();
+          const primary = (emp?.aliasName || emp?.employeeName || emp?.empName || "").trim();
+          const identifica = String(emp?.identificaAliasName || "").trim();
+          let label = primary;
+          if (identifica) {
+            if (primary && identifica !== primary) {
+              label = `${primary} · ${identifica}`;
+            } else if (!primary) {
+              label = identifica;
+            }
+          }
+          const value = primary || identifica;
           return {
-            label: display,
-            value: display,
+            label,
+            value,
             empId: emp?.empId || emp?._id || "",
             mobileNo: emp?.mobileNo || emp?.phoneNo || emp?.phone || "",
           };
@@ -725,6 +735,18 @@ const CallDataReports = () => {
   };
 
   const pageSize = 10;
+  const selectedCallerButtonLabel = useMemo(() => {
+    const name = String(state.filters.callerName || "").trim();
+    if (!name) return "";
+    const empId = String(state.filters.callerEmpId || "").trim();
+    const match = employeeOptions.find(
+      (o) =>
+        o.value === name &&
+        (!empId || String(o.empId || "").trim() === empId)
+    );
+    return match?.label || name;
+  }, [state.filters.callerName, state.filters.callerEmpId, employeeOptions]);
+
   const filteredCallerOptions = employeeOptions.filter((option) =>
     option.label.toLowerCase().includes(callerSearchText.trim().toLowerCase())
   );
@@ -1290,7 +1312,7 @@ const CallDataReports = () => {
               disabled={state.loading}
               className="h-[42px] w-full px-3 border border-gray-300 rounded-lg text-left bg-white flex items-center justify-between cursor-pointer disabled:opacity-50 disabled:cursor-wait"
             >
-              <span className="truncate text-gray-800">{state.filters.callerName || "All caller aliases"}</span>
+              <span className="truncate text-gray-800">{selectedCallerButtonLabel || "All caller aliases"}</span>
               <span className="text-gray-500">▾</span>
             </button>
             {callerDropdownOpen && (
@@ -1430,7 +1452,6 @@ const CallDataReports = () => {
                   state.reportFilters.resolvedEmployee.employeeName ||
                     state.reportFilters.resolvedEmployee.aliasName,
                   state.reportFilters.resolvedEmployee.empId,
-                  state.reportFilters.resolvedEmployee.mobileNo,
                 ]
                   .filter(Boolean)
                   .join(" · ")
@@ -1533,8 +1554,8 @@ const CallDataReports = () => {
         <div className="bg-white rounded-2xl border border-gray-200 p-3 space-y-3">
           <div className="px-1 pb-1 font-semibold text-indigo-700">Detailed Calls</div>
           <div className="overflow-x-scroll call-report-scroll pb-1">
-            <div className="min-w-[1780px]">
-              <div className="grid grid-cols-[1.5fr_1.2fr_1.2fr_1.2fr_1fr_1fr_1fr_1.3fr_0.8fr_1fr_1fr] gap-4 items-center rounded-xl border border-gray-200 bg-slate-50 px-4 py-3 text-base font-semibold text-gray-600">
+            <div className="min-w-[1680px]">
+              <div className="grid grid-cols-[1.5fr_1.2fr_1.2fr_1.2fr_1fr_1fr_1fr_1.3fr_1fr_1fr] gap-4 items-center rounded-xl border border-gray-200 bg-slate-50 px-4 py-3 text-base font-semibold text-gray-600">
                 <div>Date/Time</div>
                 <div>Call ID</div>
                 <div>Caller</div>
@@ -1543,7 +1564,6 @@ const CallDataReports = () => {
                 <div>Answered</div>
                 <div>Talk Time (HH:MM:SS)</div>
                 <div>Category</div>
-                <div>Follow Up</div>
                 <div>Details</div>
                 <div>Action</div>
               </div>
@@ -1562,7 +1582,7 @@ const CallDataReports = () => {
                   return (
                     <div
                       key={record._rowUid ?? `${record.callId}-${index}`}
-                      className="mt-3 grid grid-cols-[1.5fr_1.2fr_1.2fr_1.2fr_1fr_1fr_1fr_1.3fr_0.8fr_1fr_1fr] gap-4 items-center rounded-xl border border-gray-200 bg-white px-4 py-4 font-medium text-gray-900"
+                      className="mt-3 grid grid-cols-[1.5fr_1.2fr_1.2fr_1.2fr_1fr_1fr_1fr_1.3fr_1fr_1fr] gap-4 items-center rounded-xl border border-gray-200 bg-white px-4 py-4 font-medium text-gray-900"
                     >
                       <div className="text-base">{record.startTime ? new Date(record.startTime).toLocaleString() : "-"}</div>
                       <div className="min-w-0">
@@ -1608,18 +1628,6 @@ const CallDataReports = () => {
                         <span className="block truncate" title={String(merged.category || "").trim() || undefined}>
                           {String(merged.category || "").trim() || "—"}
                         </span>
-                      </div>
-                      <div className="flex items-center">
-                        <input
-                          type="checkbox"
-                          checked={toBool(merged.followUp)}
-                          onChange={(e) =>
-                            updateDraft(record._rowUid ?? record.callId, {
-                              followUp: e.target.checked,
-                            })
-                          }
-                          className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                        />
                       </div>
                       <div>
                         <button

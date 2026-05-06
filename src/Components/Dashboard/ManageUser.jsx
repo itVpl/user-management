@@ -1,73 +1,34 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  User,
+  Pencil,
+  FileText,
+  Shield,
+  CreditCard,
+  Briefcase,
+  Download,
+} from 'lucide-react';
 import { AdminIcon } from '../../assets/image';
 import { ArrowDown } from '../../assets/image';
 import AddUserModal from './AddUser';
 import API_CONFIG from '../../config/api.js';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
+import SearchableSelect from './SearchableSelect';
+import { UploadSlotPreview, hasUploadSelection } from './UploadSlotPreview';
 
-// Searchable dropdown (select2-style) for filters
-const SearchableSelect = ({ value, onChange, options, placeholder = 'Select...', className = '' }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const dropdownRef = React.useRef(null);
-
-  const filteredOptions = searchTerm.trim()
-    ? options.filter(o => o.label.toLowerCase().includes(searchTerm.toLowerCase()))
-    : options;
-
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) setIsOpen(false);
-    };
-    if (isOpen) document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isOpen]);
-
-  const selected = options.find(o => o.value === value);
-  return (
-    <div className={`relative ${className}`} ref={dropdownRef}>
-      <div
-        className="w-full min-w-[180px] px-4 py-2.5 border border-gray-300 rounded-xl bg-white cursor-pointer hover:border-gray-400 focus-within:ring-2 focus-within:ring-blue-300 flex items-center justify-between"
-        onClick={() => { setIsOpen(!isOpen); setSearchTerm(''); }}
-      >
-        <span className={selected ? 'text-gray-900' : 'text-gray-500'}>{selected ? selected.label : placeholder}</span>
-        <svg className={`w-4 h-4 text-gray-400 ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
-      </div>
-      {isOpen && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-xl shadow-lg max-h-56 overflow-hidden">
-          <div className="p-2 border-b border-gray-200">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <input
-                type="text"
-                placeholder="Search..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-          </div>
-          <div className="max-h-40 overflow-y-auto">
-            {filteredOptions.length ? filteredOptions.map((opt) => (
-              <div
-                key={opt.value}
-                className="px-4 py-2 hover:bg-blue-50 cursor-pointer text-sm"
-                onClick={() => { onChange(opt.value); setIsOpen(false); }}
-              >
-                {opt.label}
-              </div>
-            )) : (
-              <div className="px-4 py-2 text-gray-500 text-sm text-center">No options</div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
+const VIEW_ROLE_OPTIONS = [
+  { value: 'admin', label: 'Manager' },
+  { value: 'employee', label: 'Employee' },
+];
+const CMT_SUBTEAM_SELECT_OPTIONS = [
+  { value: '', label: 'Not set' },
+  { value: 'scheduling', label: 'Scheduling' },
+  { value: 'rate_request', label: 'Rate request' },
+];
 
 // ---- helpers: date & sort ---------
 const parseDateFlexible = (val) => {
@@ -127,6 +88,137 @@ const departmentFromStorage = () => {
 
 const isHrDepartment = () => departmentFromStorage().toLowerCase() === 'hr';
 
+const salesShiftTimingLabel = (v) => {
+  if (v === 'day_shift') return 'US Shift';
+  if (v === 'night_shift') return 'Indian Shift';
+  return (v && String(v)) || '—';
+};
+const salesTeamLabel = (v) => {
+  if (v === 'rate_request_team') return 'Rate Request Team';
+  if (v === 'operation_team') return 'Operation Team';
+  return (v && String(v)) || '—';
+};
+
+const IMAGE_FILE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp']);
+
+/** File extension from URL path (ignores ?query and #hash so .jpg?token= works). */
+const extensionFromUrl = (url) => {
+  if (!url || typeof url !== 'string') return '';
+  const segment = url.split(/[?#]/)[0].split('/').pop() || '';
+  const dot = segment.lastIndexOf('.');
+  if (dot <= 0 || dot >= segment.length - 1) return '';
+  return segment.slice(dot + 1).toLowerCase();
+};
+
+const getFileIconFromUrl = (url) => {
+  const extension = extensionFromUrl(url);
+  switch (extension) {
+    case 'pdf':
+      return { icon: '📄', color: 'text-red-500', label: 'PDF' };
+    case 'doc':
+    case 'docx':
+      return { icon: '📝', color: 'text-blue-500', label: 'DOC' };
+    case 'jpg':
+    case 'jpeg':
+    case 'png':
+    case 'gif':
+    case 'webp':
+    case 'bmp':
+      return { icon: '🖼️', color: 'text-green-500', label: 'IMG' };
+    default:
+      return { icon: '📄', color: 'text-gray-500', label: 'FILE' };
+  }
+};
+
+const resolveFileSaver = (mod) => {
+  if (!mod) return null;
+  if (typeof mod.saveAs === 'function') return mod.saveAs;
+  if (typeof mod.default === 'function') return mod.default;
+  return null;
+};
+
+const formatDocFieldLabel = (raw) => {
+  if (!raw || typeof raw !== 'string') return '';
+  const spaced = raw.replace(/([A-Z])/g, ' $1').trim();
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+};
+
+/** View modal document thumb: fixes TW4 overlay (no bg-opacity), blob fallback for auth URLs */
+const ViewDocThumb = ({ doc, downloadFile }) => {
+  const fileInfo = getFileIconFromUrl(doc.url);
+  const isImage = IMAGE_FILE_EXTENSIONS.has(extensionFromUrl(doc.url));
+  const [blobUrl, setBlobUrl] = React.useState(null);
+  const [showIconFallback, setShowIconFallback] = React.useState(false);
+  const blobRef = React.useRef(null);
+
+  React.useEffect(
+    () => () => {
+      if (blobRef.current) {
+        URL.revokeObjectURL(blobRef.current);
+        blobRef.current = null;
+      }
+    },
+    [doc.url]
+  );
+
+  const onImgError = React.useCallback(async () => {
+    if (blobRef.current || blobUrl) {
+      setShowIconFallback(true);
+      return;
+    }
+    try {
+      const res = await fetch(doc.url, { credentials: 'include', mode: 'cors' });
+      if (!res.ok) throw new Error('bad');
+      const blob = await res.blob();
+      if (!blob || blob.size === 0) throw new Error('empty');
+      const url = URL.createObjectURL(blob);
+      if (blobRef.current) URL.revokeObjectURL(blobRef.current);
+      blobRef.current = url;
+      setBlobUrl(url);
+    } catch {
+      setShowIconFallback(true);
+    }
+  }, [doc.url, blobUrl]);
+
+  const baseName = doc.url?.split('/').pop() || 'file';
+  const imgSrc = blobUrl || doc.url;
+
+  return (
+    <div
+      className="group relative aspect-square w-full max-w-[7.25rem] cursor-pointer overflow-hidden rounded-xl border border-slate-200/90 bg-gradient-to-b from-white to-slate-50/90 shadow-sm ring-1 ring-white/90 transition-all duration-300 hover:border-sky-300/80 hover:shadow-md hover:ring-sky-100/80"
+      onClick={() => downloadFile(doc.url, baseName)}
+      title={`Click to download — ${formatDocFieldLabel(doc.name)}`}
+      role="presentation"
+    >
+      {isImage && !showIconFallback ? (
+        <img
+          src={imgSrc}
+          alt={doc.name}
+          className="relative z-0 h-full w-full object-cover"
+          loading="lazy"
+          onError={onImgError}
+        />
+      ) : (
+        <div
+          className={`relative z-0 flex h-full w-full flex-col items-center justify-center bg-slate-50/80 px-1 text-center ${fileInfo.color}`}
+        >
+          <div className="text-3xl leading-none drop-shadow-sm">{fileInfo.icon}</div>
+          <div className="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">{fileInfo.label}</div>
+        </div>
+      )}
+
+      <div
+        className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-gradient-to-t from-slate-900/55 via-slate-900/0 to-transparent opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+        aria-hidden
+      >
+        <span className="mt-6 flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-semibold text-slate-800 shadow-sm ring-1 ring-slate-200/80">
+          <Download className="h-3 w-3 text-sky-600" strokeWidth={2.5} />
+          Save
+        </span>
+      </div>
+    </div>
+  );
+};
 
 const ManageUser = () => {
   const [downloading, setDownloading] = useState(false);
@@ -350,42 +442,42 @@ const ManageUser = () => {
   };
 
   const downloadAllFiles = async (files) => {
-    if (!files || !files.length) return;
+    if (!files || !files.length) {
+      alertify.warning('No documents to download.');
+      return;
+    }
     try {
-      const [{ default: JSZip }, { saveAs }] = await Promise.all([
-        import('jszip'),
-        import('file-saver'),
-      ]);
+      const [jszipMod, fileSaverMod] = await Promise.all([import('jszip'), import('file-saver')]);
+      const JSZip = jszipMod.default;
+      const saveAs = resolveFileSaver(fileSaverMod);
+      if (typeof saveAs !== 'function') {
+        throw new Error('Could not load file saver');
+      }
 
       const zip = new JSZip();
       const usedNames = new Set();
       let added = 0;
       let skipped = 0;
 
-      // Fetch each file robustly
-      const results = await Promise.all(
+      await Promise.all(
         files.map(async (doc, i) => {
           try {
             const url = String(doc?.url || '');
             if (!url) throw new Error('Empty URL');
 
-            // try to fetch; include credentials if your URLs need cookies
             const res = await fetch(url, { credentials: 'include', mode: 'cors' });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-            // crude checks to skip HTML error pages served as 200
             const ct = (res.headers.get('content-type') || '').toLowerCase();
             const blob = await res.blob();
             if (!blob || blob.size === 0) throw new Error('Empty file');
             if (ct.includes('text/html')) throw new Error('HTML page, not a file');
 
-            // pick a clean, unique filename
             const rawName =
-              (doc?.name ? `${doc.name}-` : '') + (url.split('/').pop() || `doc-${i + 1}`);
+              (doc?.name ? `${doc.name}-` : '') + (url.split(/[?#]/)[0].split('/').pop() || `doc-${i + 1}`);
             const clean = sanitizeFileName(rawName);
             const finalName = makeUniqueName(usedNames, clean);
 
-            // add to zip
             zip.file(finalName, blob, { binary: true });
             added += 1;
             return { ok: true };
@@ -398,10 +490,16 @@ const ManageUser = () => {
       );
 
       if (added === 0) {
-        // nothing valid fetched — fall back to individual downloads
-        await Promise.allSettled(
-          files.map((doc) => downloadFile(doc.url, sanitizeFileName(doc.url.split('/').pop())))
+        alertify.error('Could not bundle files (blocked or invalid). Trying individual downloads…');
+        const outcomes = await Promise.allSettled(
+          files.map((doc) => downloadFile(doc.url, sanitizeFileName(doc.url.split(/[?#]/)[0].split('/').pop())))
         );
+        const ok = outcomes.filter((o) => o.status === 'fulfilled').length;
+        if (ok > 0) {
+          alertify.success(`Started ${ok} download(s). Check your browser if files did not save.`);
+        } else {
+          alertify.error('Downloads failed. Check network or sign in again.');
+        }
         return;
       }
 
@@ -413,82 +511,24 @@ const ManageUser = () => {
       });
 
       saveAs(zipped, `documents_${Date.now()}.zip`);
-
-      // Optional: toast/message
       if (skipped > 0) {
-        alertify.success(`Downloaded ${added} file(s). Skipped ${skipped} that looked invalid or blocked.`);
+        alertify.success(`ZIP ready: ${added} file(s). ${skipped} could not be added.`);
+      } else {
+        alertify.success('ZIP download started.');
       }
     } catch (err) {
       console.error('ZIP build failed, fallback to individual:', err);
-      // fallback: individual downloads
-      await Promise.allSettled(
-        files.map((doc) => downloadFile(doc.url, sanitizeFileName(doc.url.split('/').pop())))
+      alertify.error(err?.message || 'ZIP failed. Trying individual downloads…');
+      const outcomes = await Promise.allSettled(
+        files.map((doc) => downloadFile(doc.url, sanitizeFileName(doc.url.split(/[?#]/)[0].split('/').pop())))
       );
+      const ok = outcomes.filter((o) => o.status === 'fulfilled').length;
+      if (ok > 0) {
+        alertify.success(`Started ${ok} individual download(s).`);
+      } else {
+        alertify.error('Could not download documents.');
+      }
     }
-  };
-
-
-
-  const getFileIcon = (url) => {
-    const extension = url.split('.').pop()?.toLowerCase();
-    switch (extension) {
-      case 'pdf':
-        return { icon: '📄', color: 'text-red-500', label: 'PDF' };
-      case 'doc':
-      case 'docx':
-        return { icon: '📝', color: 'text-blue-500', label: 'DOC' };
-      case 'jpg':
-      case 'jpeg':
-      case 'png':
-        return { icon: '🖼️', color: 'text-green-500', label: 'IMG' };
-      default:
-        return { icon: '📄', color: 'text-gray-500', label: 'FILE' };
-    }
-  };
-
-  const getFilePreview = (doc) => {
-    const fileInfo = getFileIcon(doc.url);
-    const isImage = ['jpg', 'jpeg', 'png'].includes(doc.url.split('.').pop()?.toLowerCase());
-
-    return (
-      <div
-        className="w-20 h-20 border rounded bg-gray-100 flex items-center justify-center cursor-pointer hover:bg-gray-200 transition-colors relative group"
-        onClick={() => downloadFile(doc.url, doc.url.split('/').pop())}
-        title={`Click to download ${doc.name}`}
-      >
-        {isImage ? (
-          <img
-            src={doc.url}
-            alt={doc.name}
-            className="w-full h-full object-cover rounded"
-            onError={(e) => {
-              // Fallback to icon if image fails to load
-              e.target.style.display = 'none';
-              const fallback = e.target.parentElement.querySelector('.fallback-icon');
-              if (fallback) fallback.style.display = 'flex';
-            }}
-          />
-        ) : (
-          <div className={`text-center ${fileInfo.color} flex flex-col items-center justify-center h-full`}>
-            <div className="text-2xl mb-1">{fileInfo.icon}</div>
-            <div className="text-xs font-semibold">{fileInfo.label}</div>
-          </div>
-        )}
-
-        {/* Fallback icon for failed images */}
-        <div className={`fallback-icon text-center ${fileInfo.color} absolute inset-0 flex flex-col items-center justify-center`} style={{ display: 'none' }}>
-          <div className="text-2xl mb-1">{fileInfo.icon}</div>
-          <div className="text-xs font-semibold">{fileInfo.label}</div>
-        </div>
-
-        {/* Download overlay */}
-        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-200 flex items-center justify-center">
-          <div className="text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-xs font-semibold">
-            Download
-          </div>
-        </div>
-      </div>
-    );
   };
 
 
@@ -844,7 +884,7 @@ const ManageUser = () => {
       {/* View Employee Modal - same style as DeliveryOrder view popup */}
       {showViewModal && viewingUser && (
         <div
-          className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
+          className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4"
           onClick={() => {
             setShowViewModal(false);
             setBgVerificationEmail('');
@@ -860,21 +900,20 @@ const ManageUser = () => {
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header - DeliveryOrder style */}
+            {/* Header — DeliveryOrder view modal (Employee DO Data style) */}
             <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-6 rounded-t-3xl">
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
-                    </svg>
+                    <User className="text-white" size={24} />
                   </div>
                   <div>
                     <h2 className="text-xl font-bold">Employee Details</h2>
-                    <p className="text-blue-100">{viewingUser.employeeName}</p>
+                    <p className="text-blue-100">Profile & documents</p>
                   </div>
                 </div>
                 <button
+                  type="button"
                   onClick={() => {
                     setShowViewModal(false);
                     setBgVerificationEmail('');
@@ -889,28 +928,25 @@ const ManageUser = () => {
 
             {/* Content */}
             <div className="p-6 space-y-6">
-              {/* Role & Assign Manager & Status Actions - in one section */}
-              <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl p-6 border border-indigo-100">
+              {/* Role & manager — DO-style card stack */}
+              <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl p-6">
                 <div className="flex items-center gap-2 mb-4">
-                  <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center">
-                    <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
-                    </svg>
-                  </div>
-                  <h3 className="text-lg font-bold text-gray-800">Role & Manager</h3>
+                  <Shield className="text-indigo-600" size={20} />
+                  <h3 className="text-lg font-bold text-gray-800">Role & manager</h3>
                 </div>
+                <div className="bg-indigo-50/50 backdrop-blur-sm rounded-xl p-4 border border-indigo-200/70 shadow-sm">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                   <div>
                     <p className="text-sm text-gray-600 mb-2">Role</p>
-                    <select
+                    <SearchableSelect
                       value={viewingUser.role === 'admin' ? 'admin' : 'employee'}
-                      onChange={(e) => handleRoleChange(viewingUser.empId, e.target.value)}
+                      onChange={(val) => handleRoleChange(viewingUser.empId, val)}
+                      options={VIEW_ROLE_OPTIONS}
+                      placeholder="Role"
                       disabled={roleUpdateLoading}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                    >
-                      <option value="admin">Manager</option>
-                      <option value="employee">Employee</option>
-                    </select>
+                      className="w-full"
+                      surface="indigo"
+                    />
                     {roleUpdateLoading && <p className="text-xs text-gray-500 mt-1">Updating...</p>}
                   </div>
                   <div>
@@ -925,6 +961,7 @@ const ManageUser = () => {
                           .map((u) => ({ value: u.empId, label: `${u.empId} - ${u.employeeName}` })),
                       ]}
                       placeholder="Select Manager"
+                      surface="indigo"
                     />
                     {assignManagerLoading && <p className="text-xs text-gray-500 mt-1">Assigning...</p>}
                   </div>
@@ -949,169 +986,243 @@ const ManageUser = () => {
                     {cmtTeamDetailLoading ? (
                       <p className="text-xs text-gray-500">Loading team…</p>
                     ) : (
-                      <select
+                      <SearchableSelect
                         value={viewingUser.cmtTeam || ''}
-                        onChange={(e) => handleCmtTeamChange(viewingUser.empId, e.target.value)}
+                        onChange={(val) => handleCmtTeamChange(viewingUser.empId, val)}
+                        options={CMT_SUBTEAM_SELECT_OPTIONS}
+                        placeholder="Not set"
                         disabled={cmtTeamSaving}
-                        className="w-full max-w-md px-4 py-3 border border-gray-300 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:opacity-60"
-                      >
-                        <option value="">Not set</option>
-                        <option value="scheduling">Scheduling</option>
-                        <option value="rate_request">Rate request</option>
-                      </select>
+                        className="w-full max-w-md"
+                        surface="indigo"
+                      />
                     )}
                     {cmtTeamSaving && <p className="text-xs text-gray-500 mt-1">Saving…</p>}
                   </div>
                 )}
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-6">
-                {/* Personal Details */}
-                <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-5 border border-green-200">
-                  <div className="flex items-center gap-2 mb-4">
-                    <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                      <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
-                      </svg>
+              {/* Personal & organization — DO Customer-style inner white card */}
+              <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <User className="text-green-600" size={20} />
+                  <h3 className="text-lg font-bold text-gray-800">Personal & organization</h3>
+                </div>
+                <div className="bg-emerald-50/50 backdrop-blur-sm rounded-xl p-4 border border-green-200/70">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="text-sm text-gray-600">Employee ID</p>
+                      <p className="font-medium text-gray-800">{viewingUser.empId}</p>
                     </div>
-                    <h3 className="text-lg font-bold text-gray-800">Personal Details</h3>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div className="bg-gray-50 p-3 rounded-lg">
-                      <p className="text-gray-600 text-xs mb-1">Employee ID</p>
-                      <p className="font-semibold text-gray-800">{viewingUser.empId}</p>
+                    <div>
+                      <p className="text-sm text-gray-600">Name</p>
+                      <p className="font-medium text-gray-800">{viewingUser.employeeName}</p>
                     </div>
-                    <div className="bg-gray-50 p-3 rounded-lg">
-                      <p className="text-gray-600 text-xs mb-1">Name</p>
-                      <p className="font-semibold text-gray-800">{viewingUser.employeeName}</p>
-                    </div>
-                    <div className="bg-gray-50 p-3 rounded-lg">
-                      <p className="text-gray-600 text-xs mb-1">Alias Name</p>
-                      <p className="font-semibold text-gray-800">
+                    <div>
+                      <p className="text-sm text-gray-600">Alias Name</p>
+                      <p className="font-medium text-gray-800">
                         {(viewingUser.aliasName && String(viewingUser.aliasName).trim()) || '—'}
                       </p>
                     </div>
-                    <div className="bg-gray-50 p-3 rounded-lg">
-                      <p className="text-gray-600 text-xs mb-1">Department</p>
-                      <p className="font-semibold text-gray-800">{viewingUser.department}</p>
+                    <div>
+                      <p className="text-sm text-gray-600">Department</p>
+                      <p className="font-medium text-gray-800">{viewingUser.department}</p>
                     </div>
-                    <div className="bg-gray-50 p-3 rounded-lg">
-                      <p className="text-gray-600 text-xs mb-1">Designation</p>
-                      <p className="font-semibold text-gray-800">{viewingUser.designation}</p>
+                    <div>
+                      <p className="text-sm text-gray-600">Designation</p>
+                      <p className="font-medium text-gray-800">{viewingUser.designation}</p>
                     </div>
-                    {viewingUser.department === 'Sales' && viewingUser.salesExecutiveTier && (
-                      <div className="bg-gray-50 p-3 rounded-lg">
-                        <p className="text-gray-600 text-xs mb-1">Sales Executive Tier</p>
-                        <p className="font-semibold text-gray-800">{viewingUser.salesExecutiveTier}</p>
+                    {viewingUser.department === 'Sales' && viewingUser.salesShiftTiming === 'day_shift' && viewingUser.salesExecutiveTier && (
+                      <div>
+                        <p className="text-sm text-gray-600">Sales Executive Tier</p>
+                        <p className="font-medium text-gray-800">{viewingUser.salesExecutiveTier}</p>
                       </div>
                     )}
-                    <div className="bg-gray-50 p-3 rounded-lg">
-                      <p className="text-gray-600 text-xs mb-1">Date of Joining</p>
-                      <p className="font-semibold text-gray-800">{formatDateDisplay(viewingUser.dateOfJoining)}</p>
+                    {viewingUser.department === 'Sales' && (
+                      <div>
+                        <p className="text-sm text-gray-600">Team Category</p>
+                        <p className="font-medium text-gray-800">{salesShiftTimingLabel(viewingUser.salesShiftTiming)}</p>
+                      </div>
+                    )}
+                    {viewingUser.department === 'Sales' && viewingUser.salesShiftTiming === 'night_shift' && (
+                      <div>
+                        <p className="text-sm text-gray-600">Team name</p>
+                        <p className="font-medium text-gray-800">{salesTeamLabel(viewingUser.salesTeam)}</p>
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-sm text-gray-600">Date of Joining</p>
+                      <p className="font-medium text-gray-800">{formatDateDisplay(viewingUser.dateOfJoining)}</p>
                     </div>
                     {viewingUser.dateOfBirth && (
-                      <div className="bg-gray-50 p-3 rounded-lg">
-                        <p className="text-gray-600 text-xs mb-1">Date of Birth</p>
-                        <p className="font-semibold text-gray-800">{formatDateDisplay(viewingUser.dateOfBirth)}</p>
+                      <div>
+                        <p className="text-sm text-gray-600">Date of Birth</p>
+                        <p className="font-medium text-gray-800">{formatDateDisplay(viewingUser.dateOfBirth)}</p>
                       </div>
                     )}
-                    <div className="bg-gray-50 p-3 rounded-lg">
-                      <p className="text-gray-600 text-xs mb-1">Mobile</p>
-                      <p className="font-semibold text-gray-800">{viewingUser.mobileNo}</p>
+                    <div>
+                      <p className="text-sm text-gray-600">Mobile</p>
+                      <p className="font-medium text-gray-800">{viewingUser.mobileNo}</p>
                     </div>
-                    <div className="bg-gray-50 p-3 rounded-lg">
-                      <p className="text-gray-600 text-xs mb-1">Alternate No</p>
-                      <p className="font-semibold text-gray-800">{viewingUser.alternateNo}</p>
+                    <div>
+                      <p className="text-sm text-gray-600">Alternate No</p>
+                      <p className="font-medium text-gray-800">{viewingUser.alternateNo || '—'}</p>
                     </div>
-                    <div className="bg-gray-50 p-3 rounded-lg">
-                      <p className="text-gray-600 text-xs mb-1">Emergency No</p>
-                      <p className="font-semibold text-gray-800">{viewingUser.emergencyNo}</p>
+                    <div>
+                      <p className="text-sm text-gray-600">Emergency No</p>
+                      <p className="font-medium text-gray-800">{viewingUser.emergencyNo}</p>
                     </div>
-                    <div className="bg-gray-50 p-3 rounded-lg">
-                      <p className="text-gray-600 text-xs mb-1">Gender</p>
-                      <p className="font-semibold text-gray-800">{viewingUser.sex}</p>
+                    <div>
+                      <p className="text-sm text-gray-600">Gender</p>
+                      <p className="font-medium text-gray-800">{viewingUser.sex}</p>
                     </div>
-                    <div className="bg-gray-50 p-3 rounded-lg col-span-2">
-                      <p className="text-gray-600 text-xs mb-1">Email</p>
-                      <p className="font-semibold text-gray-800">{viewingUser.email}</p>
+                    <div className="sm:col-span-2">
+                      <p className="text-sm text-gray-600">Email</p>
+                      <p className="font-medium text-gray-800">{viewingUser.email}</p>
                     </div>
-                    <div className="bg-gray-50 p-3 rounded-lg">
-                      <p className="text-gray-600 text-xs mb-1">Account Number</p>
-                      <p className="font-semibold text-gray-800">{viewingUser.bankDetails?.accountNumber}</p>
-                    </div>
-                    <div className="bg-gray-50 p-3 rounded-lg">
-                      <p className="text-gray-600 text-xs mb-1">Account Holder</p>
-                      <p className="font-semibold text-gray-800">{viewingUser.bankDetails?.accountHolderName}</p>
-                    </div>
-                    <div className="bg-gray-50 p-3 rounded-lg col-span-2">
-                      <p className="text-gray-600 text-xs mb-1">IFSC Code</p>
-                      <p className="font-semibold text-gray-800">{viewingUser.bankDetails?.ifscCode}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Documents */}
-                <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-5 border border-green-200">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                        <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                        </svg>
-                      </div>
-                      <h3 className="text-lg font-bold text-gray-800">Documents</h3>
-                    </div>
-                    <button
-                      onClick={async () => {
-                        try {
-                          setDownloading(true);
-                          const allDocs = [
-                            ...extractDocumentUrls(viewingUser.identityDocs),
-                            ...extractDocumentUrls(viewingUser.previousCompanyDocs)
-                          ];
-                          await downloadAllFiles(allDocs);
-                        } finally {
-                          setDownloading(false);
-                        }
-                      }}
-                      disabled={downloading}
-                      className={`px-4 py-2 rounded-lg font-semibold transition-all duration-200 flex items-center gap-2 ${
-                        downloading ? 'bg-blue-400 cursor-not-allowed text-white' : 'bg-blue-500 hover:bg-blue-600 text-white'
-                      }`}
-                    >
-                      {downloading ? (
-                        <>
-                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                          <span>Preparing…</span>
-                        </>
-                      ) : (
-                        <>
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                          </svg>
-                          <span>Download All</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-4 gap-3">
-                    {(() => {
-                      const allDocs = [
-                        ...extractDocumentUrls(viewingUser.identityDocs),
-                        ...extractDocumentUrls(viewingUser.previousCompanyDocs)
-                      ];
-                      return allDocs.map((doc, i) => (
-                        <div key={i} className="flex flex-col items-center">
-                          <span className="text-xs text-gray-700 mb-2 font-semibold text-center capitalize">
-                            {doc.name.replace(/([A-Z])/g, ' $1').trim()}
-                          </span>
-                          {getFilePreview(doc)}
-                        </div>
-                      ));
-                    })()}
                   </div>
                 </div>
               </div>
+
+              {/* Banking — separate section like DO rate/billing blocks */}
+              <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <CreditCard className="text-amber-700" size={20} />
+                  <h3 className="text-lg font-bold text-gray-800">Banking</h3>
+                </div>
+                <div className="bg-amber-50/50 backdrop-blur-sm rounded-xl p-4 border border-amber-200/70">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="text-sm text-gray-600">Account Number</p>
+                      <p className="font-medium text-gray-800">{viewingUser.bankDetails?.accountNumber || '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Account Holder</p>
+                      <p className="font-medium text-gray-800">{viewingUser.bankDetails?.accountHolderName || '—'}</p>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <p className="text-sm text-gray-600">IFSC Code</p>
+                      <p className="font-medium text-gray-800">{viewingUser.bankDetails?.ifscCode || '—'}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Documents */}
+              {(() => {
+                const identityDocList = extractDocumentUrls(viewingUser.identityDocs);
+                const previousDocList = extractDocumentUrls(viewingUser.previousCompanyDocs);
+                const allDocList = [...identityDocList, ...previousDocList];
+                return (
+                  <div className="relative overflow-hidden rounded-2xl border border-cyan-200/50 bg-gradient-to-br from-slate-50 via-cyan-50/50 to-sky-50/90 p-6 shadow-sm ring-1 ring-cyan-100/60">
+                    <div
+                      className="pointer-events-none absolute -right-20 -top-24 h-48 w-48 rounded-full bg-sky-200/25 blur-3xl"
+                      aria-hidden
+                    />
+                    <div className="pointer-events-none absolute -bottom-16 -left-10 h-40 w-40 rounded-full bg-cyan-200/20 blur-3xl" aria-hidden />
+                    <div className="relative">
+                      <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="flex gap-3">
+                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-lg shadow-sky-600/30">
+                            <FileText className="h-6 w-6" strokeWidth={2} />
+                          </div>
+                          <div>
+                            <h3 className="text-lg font-bold tracking-tight text-slate-800">Documents</h3>
+                            <p className="mt-0.5 max-w-md text-sm text-slate-600">
+                              Identity, education, and employment files on record. Tap a card to download one file.
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              setDownloading(true);
+                              await downloadAllFiles(allDocList);
+                            } finally {
+                              setDownloading(false);
+                            }
+                          }}
+                          disabled={downloading || allDocList.length === 0}
+                          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-sky-600 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-sky-600/25 transition hover:from-sky-500 hover:to-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {downloading ? (
+                            <>
+                              <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                              <span>Preparing…</span>
+                            </>
+                          ) : (
+                            <>
+                              <Download className="h-4 w-4" strokeWidth={2.5} />
+                              <span>Download all</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+
+                      {allDocList.length === 0 ? (
+                        <div className="rounded-xl border border-dashed border-slate-200/90 bg-white/70 px-6 py-10 text-center backdrop-blur-sm">
+                          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+                            <FileText className="h-6 w-6" />
+                          </div>
+                          <p className="font-semibold text-slate-700">No documents uploaded</p>
+                          <p className="mt-1 text-sm text-slate-500">Files will appear here once they are added for this employee.</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-6">
+                          {identityDocList.length > 0 && (
+                            <div className="rounded-xl border border-emerald-200/60 bg-white/75 p-4 shadow-sm backdrop-blur-sm">
+                              <div className="mb-3 flex items-center gap-2 border-b border-emerald-100/80 pb-3">
+                                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+                                  <Shield className="h-4 w-4" strokeWidth={2.5} />
+                                </div>
+                                <div>
+                                  <p className="text-xs font-bold uppercase tracking-wider text-emerald-900/90">Identity & education</p>
+                                  <p className="text-[11px] text-emerald-800/70">PAN, Aadhaar, education, bank proof</p>
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-3 lg:grid-cols-4">
+                                {identityDocList.map((doc, i) => (
+                                  <div key={`id-${doc.name}-${i}`} className="flex flex-col items-center gap-2">
+                                    <p className="line-clamp-2 min-h-[2.5rem] max-w-[9rem] text-center text-[11px] font-semibold leading-snug text-slate-600">
+                                      {formatDocFieldLabel(doc.name)}
+                                    </p>
+                                    <ViewDocThumb doc={doc} downloadFile={downloadFile} />
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {previousDocList.length > 0 && (
+                            <div className="rounded-xl border border-indigo-200/60 bg-white/75 p-4 shadow-sm backdrop-blur-sm">
+                              <div className="mb-3 flex items-center gap-2 border-b border-indigo-100/80 pb-3">
+                                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-100 text-indigo-700">
+                                  <Briefcase className="h-4 w-4" strokeWidth={2.5} />
+                                </div>
+                                <div>
+                                  <p className="text-xs font-bold uppercase tracking-wider text-indigo-900/90">Previous company</p>
+                                  <p className="text-[11px] text-indigo-800/70">Offer, release, experience, salary proof</p>
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-3 lg:grid-cols-4">
+                                {previousDocList.map((doc, i) => (
+                                  <div key={`pv-${doc.name}-${i}`} className="flex flex-col items-center gap-2">
+                                    <p className="line-clamp-2 min-h-[2.5rem] max-w-[9rem] text-center text-[11px] font-semibold leading-snug text-slate-600">
+                                      {formatDocFieldLabel(doc.name)}
+                                    </p>
+                                    <ViewDocThumb doc={doc} downloadFile={downloadFile} />
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Background Verification Section */}
               <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-5 border border-purple-200">
@@ -1136,7 +1247,7 @@ const ManageUser = () => {
                         setBgVerificationEmail(e.target.value);
                         setBgVerificationError('');
                       }}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-purple-200 focus:border-purple-500 transition-all duration-300"
+                      className="w-full px-4 py-2.5 border border-purple-200/90 rounded-lg bg-purple-100/40 focus:outline-none focus:ring-2 focus:ring-purple-300 focus:border-purple-400 transition-colors"
                     />
                     {bgVerificationError && (
                       <p className="text-red-600 text-xs mt-2">{bgVerificationError}</p>
@@ -1192,6 +1303,37 @@ const ManageUser = () => {
 // Edit User Modal Component
 const DEPARTMENT_OPTIONS = ['IT', 'HR', 'CMT', 'Sales', 'Finance', 'QA'];
 const SALES_TIER_OPTIONS = ['1', '2', '3'];
+const SALES_SHIFT_TIMING_OPTIONS = [
+  { value: 'day_shift', label: 'US Shift' },
+  { value: 'night_shift', label: 'Indian Shift' },
+];
+const SALES_TEAM_NAME_OPTIONS = [
+  { value: 'rate_request_team', label: 'Rate Request Team' },
+  { value: 'operation_team', label: 'Operation Team' },
+];
+
+const GENDER_SELECT_OPTIONS = [
+  { value: '', label: 'Select Gender' },
+  { value: 'Male', label: 'Male' },
+  { value: 'Female', label: 'Female' },
+  { value: 'Other', label: 'Other' },
+];
+const DEPARTMENT_SELECT_OPTIONS = [
+  { value: '', label: 'Select Department' },
+  ...DEPARTMENT_OPTIONS.map((d) => ({ value: d, label: d })),
+];
+const SALES_TIER_SELECT_OPTIONS = [
+  { value: '', label: 'Select Tier' },
+  ...SALES_TIER_OPTIONS.map((t) => ({ value: t, label: t })),
+];
+const SALES_SHIFT_SELECT_OPTIONS = [
+  { value: '', label: 'Select Team Category' },
+  ...SALES_SHIFT_TIMING_OPTIONS,
+];
+const SALES_TEAM_SELECT_OPTIONS = [
+  { value: '', label: 'Select Team name' },
+  ...SALES_TEAM_NAME_OPTIONS,
+];
 
 const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate }) => {
   // ---- key filters (prevent invalid keystrokes) ----
@@ -1226,6 +1368,8 @@ const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate })
     department: user.department || '',
     designation: getDesignationForDepartment(user.department, user.salesExecutiveTier, user.designation),
     salesExecutiveTier: user.salesExecutiveTier || '',
+    salesShiftTiming: user.salesShiftTiming || '',
+    salesTeam: user.salesTeam || '',
     cmtTeam: user.cmtTeam || '',
     basicSalary: user.basicSalary || '',
     sex: user.sex || '',
@@ -1273,6 +1417,8 @@ const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate })
   const departmentRef = React.useRef(null);
   const designationRef = React.useRef(null);
   const salesExecutiveTierRef = React.useRef(null);
+  const salesShiftTimingRef = React.useRef(null);
+  const salesTeamRef = React.useRef(null);
   const dobRef = React.useRef(null);
   const dojRef = React.useRef(null);
 
@@ -1295,11 +1441,31 @@ const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate })
           next.salesExecutiveTier = '';
           next.designation = getDesignationForSalesTier('');
         }
-        if (v !== 'Sales') next.salesExecutiveTier = '';
+        if (v !== 'Sales') {
+          next.salesExecutiveTier = '';
+          next.salesShiftTiming = '';
+          next.salesTeam = '';
+        }
         if (v !== 'CMT') next.cmtTeam = '';
         return next;
       });
       setErrors((prev) => ({ ...prev, department: '' }));
+      return;
+    }
+    if (name === 'salesShiftTiming') {
+      setFormData((prev) => {
+        const next = {
+          ...prev,
+          salesShiftTiming: v,
+          salesTeam: v === 'day_shift' ? '' : prev.salesTeam,
+        };
+        if (v === 'night_shift') {
+          next.salesExecutiveTier = '';
+          next.designation = '';
+        }
+        return next;
+      });
+      setErrors((prev) => ({ ...prev, salesShiftTiming: '', salesTeam: '', salesExecutiveTier: '' }));
       return;
     }
     if (name === 'salesExecutiveTier' && formData.department === 'Sales') {
@@ -1393,6 +1559,20 @@ const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate })
       : (fileList[0]?.name || '1 file selected');
     setUploadStatus((prev) => ({ ...prev, [name]: { status: 'selected', fileName: label } }));
   };
+
+  const clearUploadField = React.useCallback((fieldName, isMulti) => {
+    setFiles((prev) => ({ ...prev, [fieldName]: isMulti ? [] : null }));
+    setFileErrors((prev) => ({ ...prev, [fieldName]: '' }));
+    setUploadStatus((prev) => {
+      const n = { ...prev };
+      delete n[fieldName];
+      return n;
+    });
+    requestAnimationFrame(() => {
+      const el = document.getElementById(fieldName);
+      if (el) el.value = '';
+    });
+  }, []);
 
   // small util for previews
   const getFileIcon = (url) => {
@@ -1493,11 +1673,13 @@ const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate })
       v.department = 'Please select a valid department.';
     }
 
-    // 10) Designation
-    if (!formData.designation?.trim()) {
-      v.designation = 'Please enter the designation name.';
-    } else if (formData.designation.trim().length < 2 || !onlyAlpha(formData.designation)) {
-      v.designation = 'Please enter the valid designation name.';
+    // 10) Designation (skip for Sales + Indian Shift — tier not used)
+    if (!(formData.department === 'Sales' && formData.salesShiftTiming === 'night_shift')) {
+      if (!formData.designation?.trim()) {
+        v.designation = 'Please enter the designation name.';
+      } else if (formData.designation.trim().length < 2 || !onlyAlpha(formData.designation)) {
+        v.designation = 'Please enter the valid designation name.';
+      }
     }
 
     // 11) DOB: must be <= maxDob (>=18 yrs)
@@ -1533,9 +1715,25 @@ const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate })
         v.ifscCode = 'Please enter the valid IFSC Code.';
       }
     }
-    // 16) Sales Executive Tier (required when Department is Sales)
-    if (formData.department === 'Sales' && !formData.salesExecutiveTier) {
+    // 16) Sales Executive Tier — only when US Shift (day_shift)
+    if (formData.department === 'Sales' && formData.salesShiftTiming === 'day_shift' && !formData.salesExecutiveTier) {
       v.salesExecutiveTier = 'Please select Sales Executive Tier.';
+    }
+    // 17) Team Category (salesShiftTiming) — required for Sales
+    if (formData.department === 'Sales') {
+      if (!formData.salesShiftTiming) {
+        v.salesShiftTiming = 'Please select Team Category.';
+      } else if (!['day_shift', 'night_shift'].includes(formData.salesShiftTiming)) {
+        v.salesShiftTiming = 'Please select a valid Team Category.';
+      }
+    }
+    // 18) Team name (salesTeam) — required when Indian Shift
+    if (formData.department === 'Sales' && formData.salesShiftTiming === 'night_shift') {
+      if (!formData.salesTeam) {
+        v.salesTeam = 'Please select Team name.';
+      } else if (!['rate_request_team', 'operation_team'].includes(formData.salesTeam)) {
+        v.salesTeam = 'Please select a valid team.';
+      }
     }
     setErrors(v);
     const hasErrors = Object.keys(v).length > 0;
@@ -1545,7 +1743,7 @@ const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate })
       // error priority + scroll/focus
       const order = [
         'employeeName', 'sex', 'email', 'mobileNo', 'alternateNo',
-        'emergencyNo', 'department', 'designation', 'salesExecutiveTier', 'dateOfBirth', 'dateOfJoining',
+        'emergencyNo', 'department', 'salesShiftTiming', 'salesTeam', 'salesExecutiveTier', 'designation', 'dateOfBirth', 'dateOfJoining',
       ];
       const refMap = {
         employeeName: employeeNameRef,
@@ -1555,8 +1753,10 @@ const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate })
         alternateNo: alternateNoRef,
         emergencyNo: emergencyNoRef,
         department: departmentRef,
-        designation: designationRef,
+        salesShiftTiming: salesShiftTimingRef,
+        salesTeam: salesTeamRef,
         salesExecutiveTier: salesExecutiveTierRef,
+        designation: designationRef,
         dateOfBirth: dobRef,
         dateOfJoining: dojRef,
       };
@@ -1583,7 +1783,9 @@ const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate })
       const designationValue = formData.department === 'CMT'
         ? 'CMT Operation'
         : formData.department === 'Sales'
-          ? ((getDesignationForSalesTier(formData.salesExecutiveTier) || formData.designation) ?? '')
+          ? (formData.salesShiftTiming === 'night_shift'
+            ? (formData.designation ?? '')
+            : ((getDesignationForSalesTier(formData.salesExecutiveTier) || formData.designation) ?? ''))
           : (formData.designation ?? '');
 
       // append normal fields (dates in DD-MM-YYYY)
@@ -1628,9 +1830,23 @@ const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate })
     }
   };
 
+  const editFieldClass = (hasErr, surface = 'blue') => {
+    const base =
+      'w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-200 transition-colors placeholder:text-gray-500 hover:border-gray-400 focus:border-gray-400';
+    if (hasErr) {
+      return `${base} border-red-500 focus:ring-red-200 bg-red-50`;
+    }
+    const fill = {
+      blue: 'bg-blue-50',
+      teal: 'bg-teal-50',
+      amber: 'bg-amber-50',
+    }[surface] || 'bg-blue-50';
+    return `${base} ${fill}`;
+  };
+
   return (
     <div
-      className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
+      className="fixed inset-0 backdrop-blur-sm bg-transparent bg-black/30 z-50 flex justify-center items-center p-4"
       onClick={onClose}
     >
       <style>{`
@@ -1638,25 +1854,24 @@ const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate })
         .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
       `}</style>
       <div
-        className="bg-white rounded-3xl max-w-6xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
+        className="bg-white rounded-3xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header - same as DeliveryOrder Add form */}
+        {/* Header — DeliveryOrder Add / Edit modal */}
         <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl">
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                </svg>
+                <Pencil className="text-white" size={24} />
               </div>
               <div>
                 <h2 className="text-xl font-bold">Edit User</h2>
-                <p className="text-blue-100">Update user information for {user.employeeName}</p>
+                <p className="text-blue-100">Update user information</p>
               </div>
             </div>
             <button
+              type="button"
               onClick={onClose}
               className="text-white hover:text-gray-200 text-2xl font-bold"
             >
@@ -1665,14 +1880,13 @@ const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate })
           </div>
         </div>
 
-        {/* Body */}
         <div ref={scrollAreaRef}>
           <form onSubmit={handleSubmit} noValidate className="p-6 space-y-6">
 
-            {/* Employee Details */}
-            <div className="bg-white p-4 rounded-lg border border-gray-200">
-              <h3 className="text-lg font-semibold text-blue-800 mb-4">Employee Details</h3>
-              <div className="grid grid-cols-2 gap-6">
+            {/* Personal & dates — Add-user style blue section */}
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold text-blue-800 mb-4">Personal information</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Name */}
                 <div className="space-y-3">
                   <label className="block text-sm font-bold text-gray-700">Employee Name *</label>
@@ -1685,7 +1899,7 @@ const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate })
                     minLength={3}
                     maxLength={50}
                     placeholder="Enter full name"
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-green-200 focus:border-green-500 transition-all duration-300"
+                    className={editFieldClass(!!errors.employeeName, 'blue')}
                   />
                   {errors.employeeName && <p className="text-red-600 text-xs mt-1">{errors.employeeName}</p>}
                 </div>
@@ -1700,7 +1914,7 @@ const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate })
                     onChange={handleInputChange}
                     maxLength={50}
                     placeholder="Enter alias name (optional)"
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-green-200 focus:border-green-500 transition-all duration-300"
+                    className={editFieldClass(false, 'blue')}
                   />
                 </div>
 
@@ -1713,7 +1927,8 @@ const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate })
                     type="email"
                     value={formData.email}
                     onChange={handleInputChange}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-green-200 focus:border-green-500 transition-all duration-300 bg-white"
+                    placeholder="name@company.com"
+                    className={editFieldClass(!!errors.email, 'blue')}
                   />
                   {errors.email && <p className="text-red-600 text-xs mt-1">{errors.email}</p>}
                 </div>
@@ -1728,7 +1943,9 @@ const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate })
                     inputMode="numeric"
                     value={formData.mobileNo}
                     readOnly
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl bg-gray-100 text-gray-700 cursor-not-allowed"
+                    title="Registered number (cannot be changed here)"
+                    placeholder="Registered mobile number"
+                    className={`${editFieldClass(false, 'blue')} bg-blue-100/60 text-gray-700 cursor-not-allowed border-gray-300`}
                   />
                   {errors.mobileNo && <p className="text-red-600 text-xs mt-1">{errors.mobileNo}</p>}
                 </div>
@@ -1743,8 +1960,8 @@ const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate })
                     inputMode="numeric"
                     value={formData.alternateNo}
                     onChange={handleInputChange}
-                    placeholder="Optional"
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-green-200 focus:border-green-500 transition-all duration-300"
+                    placeholder="Optional 10-digit alternate"
+                    className={editFieldClass(!!errors.alternateNo, 'blue')}
                   />
                   {errors.alternateNo && <p className="text-red-600 text-xs mt-1">{errors.alternateNo}</p>}
                 </div>
@@ -1759,7 +1976,8 @@ const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate })
                     inputMode="numeric"
                     value={formData.emergencyNo}
                     onChange={handleInputChange}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-green-200 focus:border-green-500 transition-all duration-300"
+                    placeholder="10-digit emergency contact"
+                    className={editFieldClass(!!errors.emergencyNo, 'blue')}
                   />
                   {errors.emergencyNo && <p className="text-red-600 text-xs mt-1">{errors.emergencyNo}</p>}
                 </div>
@@ -1767,108 +1985,19 @@ const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate })
                 {/* Gender (required) */}
                 <div className="space-y-3">
                   <label className="block text-sm font-bold text-gray-700">Gender *</label>
-                  <select
+                  <SearchableSelect
                     ref={sexRef}
-                    name="sex"
                     value={formData.sex}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-green-200 focus:border-green-500 transition-all duration-300"
-                  >
-                    <option value="">Select Gender</option>
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                    <option value="Other">Other</option>
-                  </select>
+                    onChange={(val) => handleInputChange({ target: { name: 'sex', value: val } })}
+                    options={GENDER_SELECT_OPTIONS}
+                    placeholder="Select Gender"
+                    hasError={!!errors.sex}
+                    className="w-full"
+                    surface="blue"
+                  />
                   {errors.sex && <p className="text-red-600 text-xs mt-1">{errors.sex}</p>}
                 </div>
 
-                {/* Department */}
-                <div className="space-y-3">
-                  <label className="block text-sm font-bold text-gray-700">Department *</label>
-                  <select
-                    ref={departmentRef}
-                    name="department"
-                    value={formData.department}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-green-200 focus:border-green-500 transition-all duration-300"
-                  >
-                    <option value="">Select Department</option>
-                    {DEPARTMENT_OPTIONS.map((opt) => (
-                      <option key={opt} value={opt}>{opt}</option>
-                    ))}
-                  </select>
-                  {errors.department && <p className="text-red-600 text-xs mt-1">{errors.department}</p>}
-                </div>
-
-                {/* Designation */}
-                <div className="space-y-3">
-                  <label className="block text-sm font-bold text-gray-700">Designation *</label>
-                  <input
-                    ref={designationRef}
-                    name="designation"
-                    type="text"
-                    value={formData.department === 'CMT' ? 'CMT Operation' : formData.department === 'Sales' ? (getDesignationForSalesTier(formData.salesExecutiveTier) || formData.designation) : formData.designation}
-                    onChange={handleInputChange}
-                    readOnly={formData.department === 'CMT' || formData.department === 'Sales'}
-                    minLength={2}
-                    maxLength={50}
-                    className={`w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-green-200 focus:border-green-500 transition-all duration-300 ${(formData.department === 'CMT' || formData.department === 'Sales') ? 'bg-gray-100 cursor-not-allowed' : ''}`}
-                  />
-                  {errors.designation && <p className="text-red-600 text-xs mt-1">{errors.designation}</p>}
-                </div>
-
-                {/* Sales Executive Tier - only when Department is Sales */}
-                {formData.department === 'Sales' && (
-                  <div className="space-y-3">
-                    <label className="block text-sm font-bold text-gray-700">Sales Executive Tier *</label>
-                    <select
-                      ref={salesExecutiveTierRef}
-                      name="salesExecutiveTier"
-                      value={formData.salesExecutiveTier}
-                      onChange={handleInputChange}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-green-200 focus:border-green-500 transition-all duration-300"
-                    >
-                      <option value="">Select Tier</option>
-                      {SALES_TIER_OPTIONS.map((t) => (
-                        <option key={t} value={t}>{t}</option>
-                      ))}
-                    </select>
-                    {errors.salesExecutiveTier && <p className="text-red-600 text-xs mt-1">{errors.salesExecutiveTier}</p>}
-                  </div>
-                )}
-
-                {includeCmtTeamField && formData.department === 'CMT' && (
-                  <div className="space-y-3">
-                    <label className="block text-sm font-bold text-gray-700">CMT sub-team</label>
-                    <select
-                      name="cmtTeam"
-                      value={formData.cmtTeam}
-                      onChange={handleInputChange}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-green-200 focus:border-green-500 transition-all duration-300"
-                    >
-                      <option value="">Not set</option>
-                      <option value="scheduling">Scheduling</option>
-                      <option value="rate_request">Rate request</option>
-                    </select>
-                  </div>
-                )}
-
-                {/* Basic Salary (unchanged spec) */}
-                <div className="space-y-3">
-                  <label className="block text-sm font-bold text-gray-700">Basic Salary</label>
-                  <input
-                    name="basicSalary"
-                    type="text"
-                    value={formData.basicSalary}
-                    onChange={handleInputChange}
-                    onKeyDown={(e) => allowKey(e, 'digit')}
-                    inputMode="numeric"
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-green-200 focus:border-green-500 transition-all duration-300"
-                  />
-                  {errors.basicSalary && <p className="text-red-600 text-xs mt-1">{errors.basicSalary}</p>}
-                </div>
-
-                {/* DOB (<= maxDob) */}
                 <div className="space-y-3" onClick={() => clickDate(dobRef)}>
                   <label htmlFor="dateOfBirth" className="block text-sm font-bold text-gray-700 cursor-pointer">Date of Birth *</label>
                   <input
@@ -1879,12 +2008,12 @@ const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate })
                     value={formData.dateOfBirth}
                     onChange={handleInputChange}
                     max={maxDobStr}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-green-200 focus:border-green-500 transition-all duration-300 cursor-pointer"
+                    placeholder="Select date of birth"
+                    className={`${editFieldClass(!!errors.dateOfBirth, 'blue')} cursor-pointer`}
                   />
                   {errors.dateOfBirth && <p className="text-red-600 text-xs mt-1">{errors.dateOfBirth}</p>}
                 </div>
 
-                {/* DOJ (<= today) */}
                 <div className="space-y-3" onClick={() => clickDate(dojRef)}>
                   <label htmlFor="dateOfJoining" className="block text-sm font-bold text-gray-700 cursor-pointer">Date of Joining *</label>
                   <input
@@ -1895,9 +2024,147 @@ const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate })
                     value={formData.dateOfJoining}
                     onChange={handleInputChange}
                     max={todayStr}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-green-200 focus:border-green-500 transition-all duration-300 cursor-pointer"
+                    placeholder="Select date of joining"
+                    className={`${editFieldClass(!!errors.dateOfJoining, 'blue')} cursor-pointer`}
                   />
                   {errors.dateOfJoining && <p className="text-red-600 text-xs mt-1">{errors.dateOfJoining}</p>}
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-teal-50 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold text-teal-800 mb-4">Department & organization</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Department */}
+                <div className="space-y-3">
+                  <label className="block text-sm font-bold text-gray-700">Department *</label>
+                  <SearchableSelect
+                    ref={departmentRef}
+                    value={formData.department}
+                    onChange={(val) => handleInputChange({ target: { name: 'department', value: val } })}
+                    options={DEPARTMENT_SELECT_OPTIONS}
+                    placeholder="Select Department"
+                    hasError={!!errors.department}
+                    className="w-full"
+                    surface="teal"
+                  />
+                  {errors.department && <p className="text-red-600 text-xs mt-1">{errors.department}</p>}
+                </div>
+
+                {/* Sales: Team Category → Team name / Tier; Designation comes after (below) */}
+                {formData.department === 'Sales' && (
+                  <>
+                    <div className="space-y-3">
+                      <label className="block text-sm font-bold text-gray-700">Team Category *</label>
+                      <SearchableSelect
+                        ref={salesShiftTimingRef}
+                        value={formData.salesShiftTiming}
+                        onChange={(val) =>
+                          handleInputChange({ target: { name: 'salesShiftTiming', value: val } })
+                        }
+                        options={SALES_SHIFT_SELECT_OPTIONS}
+                        placeholder="Select Team Category"
+                        hasError={!!errors.salesShiftTiming}
+                        className="w-full"
+                        surface="teal"
+                      />
+                      {errors.salesShiftTiming && <p className="text-red-600 text-xs mt-1">{errors.salesShiftTiming}</p>}
+                    </div>
+                    {formData.salesShiftTiming === 'night_shift' && (
+                      <div className="space-y-3">
+                        <label className="block text-sm font-bold text-gray-700">Team name *</label>
+                        <SearchableSelect
+                          ref={salesTeamRef}
+                          value={formData.salesTeam}
+                          onChange={(val) =>
+                            handleInputChange({ target: { name: 'salesTeam', value: val } })
+                          }
+                          options={SALES_TEAM_SELECT_OPTIONS}
+                          placeholder="Select Team name"
+                          hasError={!!errors.salesTeam}
+                          className="w-full"
+                          surface="teal"
+                        />
+                        {errors.salesTeam && <p className="text-red-600 text-xs mt-1">{errors.salesTeam}</p>}
+                      </div>
+                    )}
+                    {formData.salesShiftTiming === 'day_shift' && (
+                      <div className="space-y-3">
+                        <label className="block text-sm font-bold text-gray-700">Sales Executive Tier *</label>
+                        <SearchableSelect
+                          ref={salesExecutiveTierRef}
+                          value={formData.salesExecutiveTier}
+                          onChange={(val) =>
+                            handleInputChange({ target: { name: 'salesExecutiveTier', value: val } })
+                          }
+                          options={SALES_TIER_SELECT_OPTIONS}
+                          placeholder="Select Tier"
+                          hasError={!!errors.salesExecutiveTier}
+                          className="w-full"
+                          surface="teal"
+                        />
+                        {errors.salesExecutiveTier && <p className="text-red-600 text-xs mt-1">{errors.salesExecutiveTier}</p>}
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Designation — after Sales fields when Sales; still here for all departments */}
+                <div className="space-y-3">
+                  <label className="block text-sm font-bold text-gray-700">Designation *</label>
+                  <input
+                    ref={designationRef}
+                    name="designation"
+                    type="text"
+                    value={formData.department === 'CMT' ? 'CMT Operation' : formData.department === 'Sales' ? (formData.salesShiftTiming === 'night_shift' ? formData.designation : (getDesignationForSalesTier(formData.salesExecutiveTier) || formData.designation)) : formData.designation}
+                    onChange={handleInputChange}
+                    readOnly={formData.department === 'CMT' || (formData.department === 'Sales' && formData.salesShiftTiming !== 'night_shift')}
+                    minLength={2}
+                    maxLength={50}
+                    placeholder="Enter designation"
+                    className={`${editFieldClass(!!errors.designation, 'teal')} ${
+                      formData.department === 'CMT' || (formData.department === 'Sales' && formData.salesShiftTiming !== 'night_shift')
+                        ? 'bg-teal-100/70 cursor-not-allowed'
+                        : ''
+                    }`}
+                  />
+                  {errors.designation && <p className="text-red-600 text-xs mt-1">{errors.designation}</p>}
+                </div>
+
+                {includeCmtTeamField && formData.department === 'CMT' && (
+                  <div className="space-y-3">
+                    <label className="block text-sm font-bold text-gray-700">CMT sub-team</label>
+                    <SearchableSelect
+                      value={formData.cmtTeam}
+                      onChange={(val) =>
+                        handleInputChange({ target: { name: 'cmtTeam', value: val } })
+                      }
+                      options={CMT_SUBTEAM_SELECT_OPTIONS}
+                      placeholder="Not set"
+                      className="w-full"
+                      surface="teal"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-amber-50 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold text-amber-900 mb-4">Banking & salary</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-3">
+                  <label className="block text-sm font-bold text-gray-700">Basic Salary</label>
+                  <input
+                    name="basicSalary"
+                    type="text"
+                    value={formData.basicSalary}
+                    onChange={handleInputChange}
+                    onKeyDown={(e) => allowKey(e, 'digit')}
+                    inputMode="numeric"
+                    placeholder="e.g. 50000"
+                    className={editFieldClass(!!errors.basicSalary, 'amber')}
+                  />
+                  {errors.basicSalary && <p className="text-red-600 text-xs mt-1">{errors.basicSalary}</p>}
                 </div>
 
                 {/* Bank details */}
@@ -1908,7 +2175,8 @@ const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate })
                     type="text"
                     value={formData.accountHolderName}
                     onChange={handleInputChange}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-green-200 focus:border-green-500 transition-all duration-300"
+                    placeholder="Name as per bank passbook"
+                    className={editFieldClass(false, 'amber')}
                   />
                 </div>
                 <div className="space-y-3">
@@ -1922,7 +2190,8 @@ const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate })
                     inputMode="numeric"
                     pattern="\d*"
                     maxLength={18}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-green-200 focus:border-green-500 transition-all duration-300"
+                    placeholder="9 to 18 digit account number"
+                    className={editFieldClass(!!errors.accountNumber, 'amber')}
                   />
                   {errors.accountNumber && <p className="text-red-600 text-xs mt-1">{errors.accountNumber}</p>}
                 </div>
@@ -1936,7 +2205,8 @@ const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate })
                     onKeyDown={(e) => allowKey(e, 'alnum')}
                     maxLength={11}
                     inputMode="text"
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-green-200 focus:border-green-500 transition-all duration-300"
+                    placeholder="e.g. SBIN0001234"
+                    className={editFieldClass(!!errors.ifscCode, 'amber')}
                   />
                   {errors.ifscCode && <p className="text-red-600 text-xs mt-1">{errors.ifscCode}</p>}
                 </div>
@@ -1944,12 +2214,15 @@ const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate })
             </div>
 
             {/* Identity Documents */}
-            <div className="bg-white p-4 rounded-lg border border-gray-200">
-              <h3 className="text-lg font-semibold text-blue-800 mb-4">Identity Documents</h3>
+            <div className="rounded-2xl border border-emerald-200/70 bg-gradient-to-br from-emerald-50/90 via-green-50/40 to-white p-5 shadow-sm ring-1 ring-emerald-100/60">
+              <div className="mb-4 border-b border-emerald-100/90 pb-4">
+                <h3 className="text-lg font-bold tracking-tight text-emerald-900">Identity documents</h3>
+                <p className="mt-0.5 text-sm text-emerald-800/70">Current files and new uploads</p>
+              </div>
               {/* Current Docs */}
               <div className="mb-6">
-                <h4 className="text-lg font-semibold text-gray-700 mb-4">Current Documents:</h4>
-                <div className="grid grid-cols-3 gap-4 mb-4">
+                <h4 className="mb-3 text-sm font-bold uppercase tracking-wide text-emerald-900/80">On file</h4>
+                <div className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-3">
                   {user.identityDocs && Object.entries(user.identityDocs).map(([key, value]) => {
                     const docs = Array.isArray(value) ? value : [value];
                     return docs.map((doc, index) => (
@@ -1963,7 +2236,7 @@ const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate })
               </div>
 
               {/* Uploaders */}
-              <div className="grid grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {/* PAN Card */}
                 <div className="space-y-3">
                   <label className="block text-sm font-bold text-gray-700">PAN Card</label>
@@ -1978,20 +2251,31 @@ const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate })
                     />
                     <label
                       htmlFor="pancard"
-                      className={`block w-full px-4 py-4 border-2 border-dashed rounded-lg text-center cursor-pointer transition-all duration-300 ${isSubmitting ? 'border-gray-300 cursor-not-allowed opacity-50' : 'border-green-300 hover:bg-green-50 hover:border-green-400 hover:shadow-lg'}`}
+                      className={`block w-full px-3 py-2.5 border border-dashed rounded-lg text-center cursor-pointer text-sm transition-all duration-300 bg-green-100/30 ${isSubmitting ? 'border-gray-300 cursor-not-allowed opacity-50' : 'border-green-300/90 hover:bg-green-100/50 hover:border-green-400'}`}
                     >
-                      <div className="flex flex-col items-center">
-                        <div className="w-8 h-8 bg-gradient-to-r from-green-500 to-emerald-500 rounded-full flex items-center justify-center mb-2 shadow-lg">
-                          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
-                          </svg>
+                      {hasUploadSelection(files.pancard) ? (
+                        <div className="flex flex-col items-center gap-1 min-h-[4.5rem] justify-center">
+                          <UploadSlotPreview
+                            file={files.pancard}
+                            onClear={() => clearUploadField('pancard', false)}
+                            clearDisabled={isSubmitting}
+                          />
+                          <span className="text-[10px] text-green-700 font-medium">Tap to change</span>
                         </div>
-                        <span className="text-sm font-bold text-green-700">Upload PAN Card</span>
-                        <span className="text-xs text-gray-500 mt-1">Click to browse files</span>
-                      </div>
+                      ) : (
+                        <div className="flex flex-col items-center">
+                          <div className="w-7 h-7 bg-gradient-to-r from-green-500 to-emerald-500 rounded-full flex items-center justify-center mb-1 shadow">
+                            <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                            </svg>
+                          </div>
+                          <span className="text-xs font-semibold text-green-800">Upload PAN</span>
+                          <span className="text-[11px] text-gray-500 mt-0.5">Browse</span>
+                        </div>
+                      )}
                     </label>
                   </div>
-                  {uploadStatus.pancard?.fileName && (
+                  {uploadStatus.pancard?.fileName && !files.pancard && (
                     <p className="text-xs mt-2 text-gray-700">Selected: {uploadStatus.pancard.fileName}</p>
                   )}
                   {fileErrors.pancard && <p className="text-red-600 text-xs mt-1">{fileErrors.pancard}</p>}
@@ -2011,20 +2295,31 @@ const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate })
                     />
                     <label
                       htmlFor="aadharcard"
-                      className={`block w-full px-4 py-4 border-2 border-dashed rounded-lg text-center cursor-pointer transition-all duration-300 ${isSubmitting ? 'border-gray-300 cursor-not-allowed opacity-50' : 'border-green-300 hover:bg-green-50 hover:border-green-400 hover:shadow-lg'}`}
+                      className={`block w-full px-3 py-2.5 border border-dashed rounded-lg text-center cursor-pointer text-sm transition-all duration-300 bg-green-100/30 ${isSubmitting ? 'border-gray-300 cursor-not-allowed opacity-50' : 'border-green-300/90 hover:bg-green-100/50 hover:border-green-400'}`}
                     >
-                      <div className="flex flex-col items-center">
-                        <div className="w-8 h-8 bg-gradient-to-r from-green-500 to-emerald-500 rounded-full flex items-center justify-center mb-2 shadow-lg">
-                          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
-                          </svg>
+                      {hasUploadSelection(files.aadharcard) ? (
+                        <div className="flex flex-col items-center gap-1 min-h-[4.5rem] justify-center">
+                          <UploadSlotPreview
+                            file={files.aadharcard}
+                            onClear={() => clearUploadField('aadharcard', false)}
+                            clearDisabled={isSubmitting}
+                          />
+                          <span className="text-[10px] text-green-700 font-medium">Tap to change</span>
                         </div>
-                        <span className="text-sm font-bold text-green-700">Upload Aadhaar Card</span>
-                        <span className="text-xs text-gray-500 mt-1">Click to browse files</span>
-                      </div>
+                      ) : (
+                        <div className="flex flex-col items-center">
+                          <div className="w-7 h-7 bg-gradient-to-r from-green-500 to-emerald-500 rounded-full flex items-center justify-center mb-1 shadow">
+                            <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                            </svg>
+                          </div>
+                          <span className="text-xs font-semibold text-green-800">Upload Aadhaar</span>
+                          <span className="text-[11px] text-gray-500 mt-0.5">Browse</span>
+                        </div>
+                      )}
                     </label>
                   </div>
-                  {uploadStatus.aadharcard?.fileName && (
+                  {uploadStatus.aadharcard?.fileName && !files.aadharcard && (
                     <p className="text-xs mt-2 text-gray-700">Selected: {uploadStatus.aadharcard.fileName}</p>
                   )}
                   {fileErrors.aadharcard && <p className="text-red-600 text-xs mt-1">{fileErrors.aadharcard}</p>}
@@ -2045,36 +2340,45 @@ const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate })
                     />
                     <label
                       htmlFor="educationalDocs"
-                      className={`block w-full px-4 py-4 border-2 border-dashed rounded-lg text-center cursor-pointer transition-all duration-300 ${isSubmitting ? 'border-gray-300 cursor-not-allowed opacity-50' : 'border-green-300 hover:bg-green-50 hover:border-green-400 hover:shadow-lg'}`}
+                      className={`block w-full px-3 py-2.5 border border-dashed rounded-lg text-center cursor-pointer text-sm transition-all duration-300 bg-green-100/30 ${isSubmitting ? 'border-gray-300 cursor-not-allowed opacity-50' : 'border-green-300/90 hover:bg-green-100/50 hover:border-green-400'}`}
                     >
-                      <div className="flex flex-col items-center">
-                        <div className="w-8 h-8 bg-gradient-to-r from-green-500 to-emerald-500 rounded-full flex items-center justify-center mb-2 shadow-lg">
-                          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
-                          </svg>
+                      {hasUploadSelection(files.educationalDocs) ? (
+                        <div className="flex flex-col items-center gap-1 min-h-[4.5rem] justify-center">
+                          <UploadSlotPreview
+                            files={files.educationalDocs}
+                            onClear={() => clearUploadField('educationalDocs', true)}
+                            clearDisabled={isSubmitting}
+                          />
+                          <span className="text-[10px] text-green-700 font-medium">Tap to add or change</span>
                         </div>
-                        <span className="text-sm font-bold text-green-700">Upload Educational Documents</span>
-                        <span className="text-xs text-gray-500 mt-1">Click to browse files</span>
-                      </div>
+                      ) : (
+                        <div className="flex flex-col items-center">
+                          <div className="w-7 h-7 bg-gradient-to-r from-green-500 to-emerald-500 rounded-full flex items-center justify-center mb-1 shadow">
+                            <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                            </svg>
+                          </div>
+                          <span className="text-xs font-semibold text-green-800">Upload education</span>
+                          <span className="text-[11px] text-gray-500 mt-0.5">Browse</span>
+                        </div>
+                      )}
                     </label>
                   </div>
-                  {Array.isArray(files.educationalDocs) && files.educationalDocs.length > 0 && (
-                    <ul className="text-xs mt-2 text-gray-700 list-disc pl-5">
-                      {files.educationalDocs.map((f, i) => <li key={i}>{f.name}</li>)}
-                    </ul>
-                  )}
                   {fileErrors.educationalDocs && <p className="text-red-600 text-xs mt-1">{fileErrors.educationalDocs}</p>}
                 </div>
               </div>
             </div>
 
             {/* Previous Company Documents */}
-            <div className="bg-white p-4 rounded-lg border border-gray-200">
-              <h3 className="text-lg font-semibold text-blue-800 mb-4">Previous Company Documents</h3>
+            <div className="rounded-2xl border border-indigo-200/70 bg-gradient-to-br from-indigo-50/90 via-violet-50/30 to-white p-5 shadow-sm ring-1 ring-indigo-100/60">
+              <div className="mb-4 border-b border-indigo-100/90 pb-4">
+                <h3 className="text-lg font-bold tracking-tight text-indigo-900">Previous company documents</h3>
+                <p className="mt-0.5 text-sm text-indigo-800/70">Current files and new uploads</p>
+              </div>
               {/* Current Docs */}
               <div className="mb-6">
-                <h4 className="text-lg font-semibold text-gray-700 mb-4">Current Documents:</h4>
-                <div className="grid grid-cols-4 gap-4 mb-4">
+                <h4 className="mb-3 text-sm font-bold uppercase tracking-wide text-indigo-900/80">On file</h4>
+                <div className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
                   {user.previousCompanyDocs && Object.entries(user.previousCompanyDocs).map(([key, value]) => {
                     const docs = Array.isArray(value) ? value : [value];
                     return docs.map((doc, index) => (
@@ -2088,13 +2392,16 @@ const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate })
               </div>
 
               {/* Uploaders */}
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {[
                   { key: 'releaseLetter', label: 'Release Letter' },
                   { key: 'offerLetter', label: 'Offer Letter' },
                   { key: 'experienceLetter', label: 'Experience Letter' },
                   { key: 'bankStatementOrSalarySlip', label: 'Bank Statement/Salary Slip', multiple: true },
-                ].map(({ key, label, multiple }) => (
+                ].map(({ key, label, multiple }) => {
+                  const raw = files[key];
+                  const showPrev = hasUploadSelection(raw);
+                  return (
                   <div key={key} className="space-y-3">
                     <label className="block text-sm font-bold text-gray-700">{label}</label>
                     <div className="relative">
@@ -2109,25 +2416,38 @@ const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate })
                       />
                       <label
                         htmlFor={key}
-                        className={`block w-full px-4 py-4 border-2 border-dashed rounded-lg text-center cursor-pointer transition-all duration-300 ${isSubmitting ? 'border-gray-300 cursor-not-allowed opacity-50' : 'border-purple-300 hover:bg-purple-50 hover:border-purple-400 hover:shadow-lg'}`}
+                        className={`block w-full px-3 py-2.5 border border-dashed rounded-lg text-center cursor-pointer text-sm transition-all duration-300 bg-indigo-100/25 ${isSubmitting ? 'border-gray-300 cursor-not-allowed opacity-50' : 'border-purple-300/90 hover:bg-indigo-100/40 hover:border-purple-400'}`}
                       >
-                        <div className="flex flex-col items-center">
-                          <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center mb-2 shadow-lg">
-                            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
-                            </svg>
+                        {showPrev ? (
+                          <div className="flex flex-col items-center gap-1 min-h-[4.5rem] justify-center">
+                            <UploadSlotPreview
+                              file={Array.isArray(raw) ? undefined : raw}
+                              files={Array.isArray(raw) ? raw : undefined}
+                              onClear={() => clearUploadField(key, !!multiple)}
+                              clearDisabled={isSubmitting}
+                            />
+                            <span className="text-[10px] text-purple-800 font-medium">Tap to change</span>
                           </div>
-                          <span className="text-sm font-bold text-purple-700">Upload {label}</span>
-                          <span className="text-xs text-gray-500 mt-1">Click to browse files</span>
-                        </div>
+                        ) : (
+                          <div className="flex flex-col items-center">
+                            <div className="w-7 h-7 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center mb-1 shadow">
+                              <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                              </svg>
+                            </div>
+                            <span className="text-xs font-semibold text-purple-800">Upload {label}</span>
+                            <span className="text-[11px] text-gray-500 mt-0.5">Browse</span>
+                          </div>
+                        )}
                       </label>
                     </div>
-                    {uploadStatus[key]?.fileName && (
+                    {uploadStatus[key]?.fileName && !showPrev && (
                       <p className="text-xs mt-2 text-gray-700">Selected: {uploadStatus[key].fileName}</p>
                     )}
                     {fileErrors[key] && <p className="text-red-600 text-xs mt-1">{fileErrors[key]}</p>}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 

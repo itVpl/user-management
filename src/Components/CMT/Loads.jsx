@@ -637,6 +637,7 @@ export default function Loads() {
     fsc: "",
 
     other: "",
+    moterCargoValue: "",
 
     rateType: "Flat Rate",
 
@@ -1487,7 +1488,12 @@ export default function Loads() {
 
     // Numeric fields with up to 2 decimals (no negatives)
 
-    if (name === "lineHaul" || name === "fsc" || name === "other") {
+    if (
+      name === "lineHaul" ||
+      name === "fsc" ||
+      name === "other" ||
+      name === "moterCargoValue"
+    ) {
       value = sanitizeMoney2(value);
     }
 
@@ -1684,6 +1690,13 @@ export default function Loads() {
 
       return "";
     },
+    moterCargoValue: (v) => {
+      if (!String(v ?? "").trim()) return "Please enter the Moter Cargo Value.";
+      if (!MONEY2.test(String(v))) {
+        return "It should accept only numeric values. After decimal only two digits are accepted.";
+      }
+      return "";
+    },
 
     rateType: (v, all) => (loadType !== "DRAYAGE" ? (v ? "" : "") : ""), // Only validate for OTR loads
 
@@ -1747,6 +1760,7 @@ export default function Loads() {
         "lineHaul",
         "fsc",
         "other",
+        "moterCargoValue",
         ...(loadType !== "DRAYAGE" ? ["rateType"] : []),
 
         "bidDeadline",
@@ -1776,6 +1790,7 @@ export default function Loads() {
         "lineHaul",
         "fsc",
         "other",
+        "moterCargoValue",
         ...(loadType !== "DRAYAGE" ? ["rateType"] : []),
 
         "pickupDate",
@@ -2068,6 +2083,9 @@ export default function Loads() {
         loadType: "OTR",
 
         vehicleType: (loadForm.vehicleType || "").trim(),
+        moterCargoValue:
+          parseFloat(String(loadForm.moterCargoValue || "0").replace(/\.$/, "")) ||
+          0,
 
         rateDetails: {
           lineHaul: lineHaul,
@@ -2156,6 +2174,9 @@ export default function Loads() {
         loadType: "DRAYAGE",
 
         vehicleType: (loadForm.vehicleType || "").trim(),
+        moterCargoValue:
+          parseFloat(String(loadForm.moterCargoValue || "0").replace(/\.$/, "")) ||
+          0,
 
         portName: drayagePortName,
 
@@ -2241,6 +2262,9 @@ export default function Loads() {
         toState: (loadForm.toState || "").trim(),
 
         vehicleType: (loadForm.vehicleType || "").trim(),
+        moterCargoValue:
+          parseFloat(String(loadForm.moterCargoValue || "0").replace(/\.$/, "")) ||
+          0,
 
         rate: (() => {
           const lineHaul =
@@ -2470,6 +2494,9 @@ export default function Loads() {
         loadType: "OTR",
 
         vehicleType: (loadForm.vehicleType || "").trim(),
+        moterCargoValue:
+          parseFloat(String(loadForm.moterCargoValue || "0").replace(/\.$/, "")) ||
+          0,
 
         rateDetails: {
           lineHaul: lineHaulEdit,
@@ -2558,6 +2585,9 @@ export default function Loads() {
         loadType: "DRAYAGE",
 
         vehicleType: (loadForm.vehicleType || "").trim(),
+        moterCargoValue:
+          parseFloat(String(loadForm.moterCargoValue || "0").replace(/\.$/, "")) ||
+          0,
 
         portName: drayagePortNameEdit,
 
@@ -4086,6 +4116,9 @@ export default function Loads() {
       fsc: String(fscValue),
 
       other: String(otherTotal),
+      moterCargoValue: String(
+        load.moterCargoValue ?? load.motorCargoValue ?? "",
+      ),
 
       ...(lt !== "DRAYAGE" ? { rateType: load.rateType || "Flat Rate" } : {}),
 
@@ -6684,7 +6717,7 @@ export default function Loads() {
 
                         {/* Rate Fields: Line Haul, FSC, Other */}
 
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 col-span-2">
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 col-span-2">
                           <div>
                             <label className="block text-sm font-semibold text-gray-700 mb-2">
                               Line Haul ($)
@@ -6770,6 +6803,37 @@ export default function Loads() {
 
                                 <p className="text-sm text-red-600">
                                   {formErrors.other}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                              Moter Cargo Value ($)
+                            </label>
+
+                            <input
+                              ref={(el) =>
+                                (fieldRefs.current["moterCargoValue"] = el)
+                              }
+                              name="moterCargoValue"
+                              inputMode="decimal"
+                              placeholder="e.g., 10000"
+                              value={loadForm.moterCargoValue}
+                              onChange={handleChange}
+                              className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
+                                formErrors.moterCargoValue
+                                  ? "border-red-400 bg-red-50"
+                                  : "border-gray-200 hover:border-gray-300"
+                              }`}
+                            />
+
+                            {formErrors.moterCargoValue && (
+                              <div className="flex items-center gap-2 mt-2">
+                                <XCircle className="text-red-500" size={16} />
+                                <p className="text-sm text-red-600">
+                                  {formErrors.moterCargoValue}
                                 </p>
                               </div>
                             )}
