@@ -1776,10 +1776,10 @@ const AcountentPayable = () => {
             <thead>
               <tr className="bg-gray-100">
                 <th className="text-left px-5 py-3 text-gray-600 font-medium first:rounded-l-xl border-y border-gray-200 first:border-l first:border-gray-200">
-                  DO ID
+                  Load No.
                 </th>
                 <th className="text-left px-5 py-3 text-gray-600 font-medium border-y border-gray-200">
-                  Load No.
+                  Container No.
                 </th>
                 <th className="text-left px-5 py-3 text-gray-600 font-medium border-y border-gray-200">
                   Bill To
@@ -2111,6 +2111,11 @@ const TableRow = memo(({ deliveryOrder, index, onViewDetails, onPayClick }) => {
     deliveryOrder.fullData?.carrierPaymentStatus?.status === "paid";
   const invoice = deliveryOrder.invoice;
   const invoiceDueDateInfo = invoice?.dueDateInfo;
+  const containerNo =
+    deliveryOrder?.fullData?.shipper?.containerNo ||
+    deliveryOrder?.shipper?.containerNo ||
+    deliveryOrder?.fullData?.customers?.[0]?.containerNo ||
+    "—";
 
   // Helper function to format date
   const formatDate = (dateString) => {
@@ -2125,30 +2130,10 @@ const TableRow = memo(({ deliveryOrder, index, onViewDetails, onPayClick }) => {
   return (
     <tr className="hover:bg-gray-50 transition-colors">
       <td className="px-5 py-3 border-y border-gray-200 first:rounded-l-xl first:border-l first:border-gray-200">
-        <div className="relative group max-w-[90px]">
-          {/* Truncated Text */}
-          <span className="font-medium text-gray-700 block truncate">
-            {deliveryOrder.id || "-"}
-          </span>
-
-          {/* Tooltip */}
-          {deliveryOrder.id && (
-            <div
-              className="absolute left-0 top-full mt-2 hidden group-hover:block
-                      bg-gray-900 text-white text-sm
-                      px-3 py-2.5
-                      rounded-lg shadow-xl
-                      max-w-[150px]
-                      break-words
-                      z-50"
-            >
-              {deliveryOrder.id}
-            </div>
-          )}
-        </div>
+        <span className="font-medium text-gray-700">{deliveryOrder.doNum}</span>
       </td>
       <td className="px-5 py-3 border-y border-gray-200">
-        <span className="font-medium text-gray-700">{deliveryOrder.doNum}</span>
+        <span className="font-medium text-gray-700">{containerNo}</span>
       </td>
       <td className="px-5 py-3 border-y border-gray-200">
         <div className="relative group max-w-[100px]">
