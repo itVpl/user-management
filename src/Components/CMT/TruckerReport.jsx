@@ -10,6 +10,8 @@ import { addDays, format } from 'date-fns';
 import alertify from 'alertifyjs';
 import 'alertifyjs/build/css/alertify.css';
 import API_CONFIG from '../../config/api.js';
+import TruckerCmtDetailViewModal from './TruckerCmtDetailViewModal.jsx';
+import TruckerCmtEditModal from './TruckerCmtEditModal.jsx';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { 
   fetchTruckers, 
@@ -20,6 +22,9 @@ import {
   selectLoading,
   selectError
 } from '../../store/slices/truckerReportSlice';
+
+/** EmpIds allowed to see View / Edit actions in the Trucker Report table. */
+const ALLOWED_ACTION_EMP_IDS = ['VPL003', 'VPL046'];
 
 /** Same `documents` keys as TruckerDocuments / API `pendingRequiredDocKeys`. */
 const TRUCKER_DOC_FIELD_ORDER = [
@@ -61,9 +66,21 @@ export default function TruckerReport() {
   const [selectedCmtEmpId, setSelectedCmtEmpId] = useState('');
   const [showCmtFilter, setShowCmtFilter] = useState(false);
   const [cmtFilterSearch, setCmtFilterSearch] = useState('');
+  const [detailModalTrucker, setDetailModalTrucker] = useState(null);
+  const [editModalTrucker, setEditModalTrucker] = useState(null);
   const dateRangeDropdownRef = React.useRef(null);
   const cmtFilterRef = React.useRef(null);
   const lastTruckerReportQueryRef = React.useRef('');
+
+  // Only specific empIds (VPL003, VPL046) may see the View/Edit buttons in the Action column
+  const canViewEditActions = useMemo(() => {
+    const currentEmpId = (
+      sessionStorage.getItem('empId') ||
+      localStorage.getItem('empId') ||
+      ''
+    ).trim().toUpperCase();
+    return ALLOWED_ACTION_EMP_IDS.includes(currentEmpId);
+  }, []);
 
   // Deep link from CMT Comparison Report: ?empId=&startDate=&endDate=
   useEffect(() => {
@@ -168,6 +185,12 @@ export default function TruckerReport() {
 
   useEffect(() => {
     const sp = buildSearchParams();
+    dispatch(fetchTruckers(sp));
+  }, [dispatch, buildSearchParams]);
+
+  const refreshTruckerReportData = useCallback(() => {
+    const sp = buildSearchParams();
+    sp.forceRefresh = true;
     dispatch(fetchTruckers(sp));
   }, [dispatch, buildSearchParams]);
 
@@ -999,6 +1022,7 @@ export default function TruckerReport() {
                   <th className="text-left py-4 px-4 text-gray-800 font-medium text-base min-w-[140px]">Docs verified</th>
                   <th className="text-left py-4 px-4 text-gray-800 font-medium text-base min-w-[200px]">Pending required docs</th>
                   <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Created</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -1076,6 +1100,28 @@ export default function TruckerReport() {
                         <p className="text-sm text-gray-800">{new Date(trucker.createdAt).toLocaleDateString()}</p>
                         <p className="text-xs text-gray-500">by {trucker.addedBy?.employeeName || 'System'}</p>
                       </div>
+                    </td>
+                    <td className="py-4 px-4">
+                      {canViewEditActions ? (
+                        <div className="flex gap-3">
+                          <button
+                            type="button"
+                            onClick={() => setDetailModalTrucker(trucker)}
+                            className="px-4 py-1 rounded border border-green-500 text-green-500 text-sm font-medium hover:bg-green-50 transition-colors min-w-[70px]"
+                          >
+                            View
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditModalTrucker(trucker)}
+                            className="px-4 py-1 rounded border border-orange-500 text-orange-500 text-sm font-medium hover:bg-orange-50 transition-colors min-w-[70px]"
+                          >
+                            Edit
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-gray-400">—</span>
+                      )}
                     </td>
                   </tr>
                   );
@@ -1168,6 +1214,21 @@ export default function TruckerReport() {
           </div>
         </div>
       )}
+
+      {detailModalTrucker && (
+        <TruckerCmtDetailViewModal
+          trucker={detailModalTrucker}
+          onClose={() => setDetailModalTrucker(null)}
+          onPreviewDocument={(url, name) => setSelectedDocument({ url, name })}
+        />
+      )}
+
+      <TruckerCmtEditModal
+        open={!!editModalTrucker}
+        trucker={editModalTrucker}
+        onClose={() => setEditModalTrucker(null)}
+        onSaved={refreshTruckerReportData}
+      />
 
       {selectedDocument && (
         <div className="fixed inset-0 z-50 bg-black bg-opacity-70 flex items-center justify-center p-4">
