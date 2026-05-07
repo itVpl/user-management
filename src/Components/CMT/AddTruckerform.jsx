@@ -260,6 +260,8 @@ export default function AddTruckerForm({ onSuccess }) {
     carrierType: "",
     fleetsize: "",
     insuranceAmount: "",
+    generalLiability: "",
+    automobileLiability: "",
     loadRef: "",
     email: "",
     password: "",
@@ -679,6 +681,14 @@ React.useEffect(() => {
     if (Number.isFinite(insAmt) && insAmt >= 0) {
       truckerData.append("insuranceAmount", String(insAmt));
     }
+    const genLiability = parseFloat(String(formData.generalLiability ?? "").trim());
+    if (Number.isFinite(genLiability) && genLiability >= 0) {
+      truckerData.append("generalLiability", String(genLiability));
+    }
+    const autoLiability = parseFloat(String(formData.automobileLiability ?? "").trim());
+    if (Number.isFinite(autoLiability) && autoLiability >= 0) {
+      truckerData.append("automobileLiability", String(autoLiability));
+    }
     truckerData.append("compAdd", formData.compAdd.trim());
     truckerData.append("country", formData.country.trim());
     truckerData.append("state", formData.state.trim());
@@ -778,6 +788,8 @@ React.useEffect(() => {
           carrierType: "",
           fleetsize: "",
           insuranceAmount: "",
+          generalLiability: "",
+          automobileLiability: "",
           email: "",
           password: "",
           confirmPassword: "",
@@ -1428,6 +1440,38 @@ React.useEffect(() => {
                 className={fieldClass("insuranceAmount")}
               />
               {renderError("insuranceAmount")}
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700">
+                General Liability (USD)
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                name="generalLiability"
+                placeholder="e.g. 50000"
+                value={formData.generalLiability}
+                onChange={handleChange}
+                className={fieldClass("generalLiability")}
+              />
+              {renderError("generalLiability")}
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700">
+                Automobile Liability (USD)
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                name="automobileLiability"
+                placeholder="e.g. 75000"
+                value={formData.automobileLiability}
+                onChange={handleChange}
+                className={fieldClass("automobileLiability")}
+              />
+              {renderError("automobileLiability")}
             </div>
           </div>
         </div>
