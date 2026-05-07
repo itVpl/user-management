@@ -1691,7 +1691,7 @@ export default function Loads() {
       return "";
     },
     moterCargoValue: (v) => {
-      if (!String(v ?? "").trim()) return "Please enter the Moter Cargo Value.";
+      if (!String(v ?? "").trim()) return "Please enter the Cargo Value.";
       if (!MONEY2.test(String(v))) {
         return "It should accept only numeric values. After decimal only two digits are accepted.";
       }
@@ -6810,7 +6810,7 @@ export default function Loads() {
 
                           <div>
                             <label className="block text-sm font-semibold text-gray-700 mb-2">
-                              Moter Cargo Value ($)
+                              Cargo Value ($)
                             </label>
 
                             <input

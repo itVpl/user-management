@@ -832,6 +832,20 @@ const handleWorkingAddressFileChange = (idx, file) => {
       insuranceAmount:
         trucker.insuranceAmount ??
         trucker.insurance_amount ??
+        trucker.user?.insuranceAmount ??
+        trucker.user?.insurance_amount ??
+        '',
+      generalLiability:
+        trucker.generalLiability ??
+        trucker.general_liability ??
+        trucker.user?.generalLiability ??
+        trucker.user?.general_liability ??
+        '',
+      automobileLiability:
+        trucker.automobileLiability ??
+        trucker.automobile_liability ??
+        trucker.user?.automobileLiability ??
+        trucker.user?.automobile_liability ??
         '',
       // Banking Details
       paymentType: trucker.paymentType || trucker.bankingDetails?.paymentType || '',
@@ -928,7 +942,7 @@ const handleWorkingAddressFileChange = (idx, file) => {
     if (!editFormData.city?.trim()) errs.city = true;
 
     if (!editFormData.zipCode?.trim()) errs.zipCode = true;
-    else if (!isValidZip(editFormData.zipCode)) errs.zipCode = true;
+    else if (!isValidZip(editFormData.zipCode)) errs.zipCode = true;  
 
     // if (!isValidPhone(editFormData.phoneNo)) errs.phoneNo = true;
     if (!editFormData.mc_dot_no?.trim()) errs.mc_dot_no = true;
@@ -1028,13 +1042,18 @@ const handleWorkingAddressFileChange = (idx, file) => {
         } : {}),
         carrierType: editFormData.carrierType,
         fleetsize: editFormData.fleetsize,
-        ...(editFormData.insuranceAmount !== '' &&
-        editFormData.insuranceAmount != null &&
-        String(editFormData.insuranceAmount).trim() !== ''
-          ? {
-              insuranceAmount: Number(editFormData.insuranceAmount),
-            }
-          : {}),
+        insuranceAmount:
+          String(editFormData.insuranceAmount ?? '').trim() === ''
+            ? null
+            : Number(editFormData.insuranceAmount),
+        generalLiability:
+          String(editFormData.generalLiability ?? '').trim() === ''
+            ? null
+            : Number(editFormData.generalLiability),
+        automobileLiability:
+          String(editFormData.automobileLiability ?? '').trim() === ''
+            ? null
+            : Number(editFormData.automobileLiability),
         city: editFormData.city,
         state: editFormData.state,
         country: editFormData.country,
@@ -1095,11 +1114,32 @@ const handleWorkingAddressFileChange = (idx, file) => {
       }
 
       // Send main update (workingAddress included in jsonData if present)
-      await axiosInstance.put(
+      const updateRes = await axiosInstance.put(
         `/api/v1/shipper_driver/update/${editFormData._id}`,
         jsonData,
         { headers: { 'Content-Type': 'application/json' } }
       );
+
+      // Sync latest values locally so View/Edit always reflect backend update
+      const updatedUser = updateRes?.data?.user;
+      const updatedId = updatedUser?.userId || updatedUser?._id || editFormData._id;
+      if (updatedUser && updatedId) {
+        const mergeUpdatedTrucker = (row) => {
+          const rowId = row?.userId || row?._id;
+          if (rowId !== updatedId) return row;
+          return {
+            ...row,
+            ...updatedUser,
+            // Preserve any computed/frontend-only fields on row
+            documentPreview: row.documentPreview,
+            documentCount: row.documentCount,
+          };
+        };
+
+        setTruckers((prev) => prev.map(mergeUpdatedTrucker));
+        setAllSearchTruckers((prev) => prev.map(mergeUpdatedTrucker));
+        setSelectedTrucker((prev) => (prev ? mergeUpdatedTrucker(prev) : prev));
+      }
 
       // 4) Reset + refresh
       setShowEditModal(false);
@@ -1848,6 +1888,32 @@ const handleWorkingAddressFileChange = (idx, file) => {
                       name="insuranceAmount"
                       placeholder="e.g. 1000000"
                       value={editFormData.insuranceAmount ?? ''}
+                      onChange={handleEditInputChange}
+                      className={editFieldClass(false)}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">General Liability (USD)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      name="generalLiability"
+                      placeholder="e.g. 50000"
+                      value={editFormData.generalLiability ?? ''}
+                      onChange={handleEditInputChange}
+                      className={editFieldClass(false)}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">Automobile Liability (USD)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      name="automobileLiability"
+                      placeholder="e.g. 75000"
+                      value={editFormData.automobileLiability ?? ''}
                       onChange={handleEditInputChange}
                       className={editFieldClass(false)}
                     />
@@ -2700,6 +2766,58 @@ const handleWorkingAddressFileChange = (idx, file) => {
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center">
+                      <DollarSign className="text-emerald-700" size={16} />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">General Liability</p>
+                      <p className="font-semibold text-gray-800">
+                        {(() => {
+                          const raw = selectedTrucker.generalLiability;
+                          const fallback = selectedTrucker.general_liability;
+                          const nested =
+                            selectedTrucker.user?.generalLiability ??
+                            selectedTrucker.user?.general_liability;
+                          const v = raw ?? fallback ?? nested;
+                          if (v === undefined || v === null || v === '') return '—';
+                          const n = Number(v);
+                          return Number.isFinite(n)
+                            ? new Intl.NumberFormat('en-US', {
+                                style: 'currency',
+                                currency: 'USD',
+                              }).format(n)
+                            : String(v);
+                        })()}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center">
+                      <DollarSign className="text-emerald-700" size={16} />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Automobile Liability</p>
+                      <p className="font-semibold text-gray-800">
+                        {(() => {
+                          const raw = selectedTrucker.automobileLiability;
+                          const fallback = selectedTrucker.automobile_liability;
+                          const nested =
+                            selectedTrucker.user?.automobileLiability ??
+                            selectedTrucker.user?.automobile_liability;
+                          const v = raw ?? fallback ?? nested;
+                          if (v === undefined || v === null || v === '') return '—';
+                          const n = Number(v);
+                          return Number.isFinite(n)
+                            ? new Intl.NumberFormat('en-US', {
+                                style: 'currency',
+                                currency: 'USD',
+                              }).format(n)
+                            : String(v);
+                        })()}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
                     <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
                       <Calendar className="text-gray-600" size={16} />
                     </div>
@@ -2947,5 +3065,9 @@ const handleWorkingAddressFileChange = (idx, file) => {
     </div>
   );
 }
+
+
+
+
 
 

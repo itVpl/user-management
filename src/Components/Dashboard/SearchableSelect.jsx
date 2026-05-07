@@ -130,7 +130,7 @@ const SearchableSelect = React.forwardRef(
           </div>
         )}
       </div>
-    );
+    );  
   }
 );
 SearchableSelect.displayName = 'SearchableSelect';
