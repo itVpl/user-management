@@ -19,6 +19,21 @@ import SalesDayCustomerEditModal from './SalesDayCustomerEditModal.jsx';
 
 const LS_PREFIX = 'salesDayDispositionPromptHour';
 
+/** Aligned with SalesDayAgentWorkspace tables + manual form modals */
+const HOURLY_MODAL_SHELL =
+  'rounded-2xl border border-gray-200 bg-white w-full max-w-6xl max-h-[92vh] flex flex-col overflow-hidden';
+const HOURLY_MODAL_HEADER =
+  'bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 px-6 py-4 shrink-0 flex items-start justify-between gap-3';
+const HOURLY_TABLE_SHELL = 'do-report-scroll-x overflow-x-auto rounded-2xl border border-gray-200 bg-gray-50 p-3';
+const HOURLY_TABLE = 'min-w-full border-separate border-spacing-y-2.5 text-base font-sans';
+const HOURLY_TH =
+  'px-4 py-3 text-sm font-semibold uppercase tracking-wide text-gray-500 whitespace-nowrap bg-white border-y border-gray-200';
+const HOURLY_TD = 'px-4 py-3 text-base font-medium text-gray-800 align-middle bg-white border-y border-gray-200';
+const HOURLY_CELL_START = 'rounded-l-xl border-l border-gray-200';
+const HOURLY_CELL_END = 'rounded-r-xl border-r border-gray-200';
+const HOURLY_CONTROL =
+  'w-full border border-gray-200 rounded-xl px-3 py-2.5 text-base text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400/40 focus:border-blue-400';
+
 function storageKey(empId, dateStr) {
   return `${LS_PREFIX}:${empId}:${dateStr}`;
 }
@@ -296,49 +311,55 @@ function SalesDayDispositionModal({ customers, dispositions, loading, onClose, o
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl max-w-5xl w-full max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between border-b px-4 py-3">
-          <h2 className="text-lg font-semibold text-gray-900">Today&apos;s imports — disposition</h2>
+      <div className={HOURLY_MODAL_SHELL}>
+        <div className={HOURLY_MODAL_HEADER}>
+          <div>
+            <h2 className="text-2xl font-bold text-white tracking-tight">Today&apos;s imports — disposition</h2>
+            <p className="text-base text-blue-100/95 mt-1.5 leading-snug">
+              Set disposition for leads you imported today. You can dismiss and continue later from Review &amp;
+              filter.
+            </p>
+          </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-lg hover:bg-gray-100 text-gray-600"
+            className="shrink-0 rounded-lg p-2 text-white/90 hover:bg-white/15"
             aria-label="Close"
           >
-            <X size={22} />
+            <X size={24} />
           </button>
         </div>
-        <div className="p-4 overflow-auto flex-1">
-          {loading && <p className="text-sm text-gray-500">Loading…</p>}
+        <div className="p-5 overflow-y-auto flex-1 min-h-0 bg-white">
+          {loading && <p className="text-base text-gray-600">Loading…</p>}
           {!loading && customers.length === 0 && (
-            <p className="text-sm text-gray-600">No imports for today yet.</p>
+            <p className="text-base text-gray-700">No imports for today yet.</p>
           )}
           {!loading && customers.length > 0 && (
-            <div className="overflow-x-auto border rounded-xl">
-              <table className="min-w-full text-sm">
-                <thead className="bg-slate-50 text-left">
+            <div className={HOURLY_TABLE_SHELL}>
+              <table className={HOURLY_TABLE}>
+                <thead className="text-left">
                   <tr>
-                    <th className="px-3 py-2 font-medium">Person</th>
-                    <th className="px-3 py-2 font-medium">Company</th>
-                    <th className="px-3 py-2 font-medium">Commodity</th>
-                    <th className="px-3 py-2 font-medium">City</th>
-                    <th className="px-3 py-2 font-medium">St</th>
-                    <th className="px-3 py-2 font-medium">Disposition</th>
-                    <th className="px-3 py-2 font-medium w-16">Edit</th>
+                    <th className={`${HOURLY_TH} ${HOURLY_CELL_START}`}>Person</th>
+                    <th className={HOURLY_TH}>Company</th>
+                    <th className={HOURLY_TH}>Commodity</th>
+                    <th className={HOURLY_TH}>City</th>
+                    <th className={HOURLY_TH}>St</th>
+                    <th className={`${HOURLY_TH} min-w-[14rem]`}>Disposition</th>
+                    <th className={`${HOURLY_TH} ${HOURLY_CELL_END} w-24 text-center`}>Edit</th>
                   </tr>
                 </thead>
                 <tbody>
                   {customers.map((c) => (
-                    <tr key={c._id} className="border-t border-gray-100">
-                      <td className="px-3 py-2">{c.personName || '—'}</td>
-                      <td className="px-3 py-2">{c.companyName || '—'}</td>
-                      <td className="px-3 py-2">{c.commodity || '—'}</td>
-                      <td className="px-3 py-2">{c.city || '—'}</td>
-                      <td className="px-3 py-2">{c.state || '—'}</td>
-                      <td className="px-3 py-2 align-top">
-                        <div className="flex flex-col gap-1 max-w-[200px]">
+                    <tr key={c._id} className="bg-white">
+                      <td className={`${HOURLY_TD} ${HOURLY_CELL_START}`}>{c.personName || '—'}</td>
+                      <td className={HOURLY_TD}>{c.companyName || '—'}</td>
+                      <td className={HOURLY_TD}>{c.commodity || '—'}</td>
+                      <td className={HOURLY_TD}>{c.city || '—'}</td>
+                      <td className={HOURLY_TD}>{c.state || '—'}</td>
+                      <td className={`${HOURLY_TD} align-top min-w-[14rem]`}>
+                        <div className="flex flex-col gap-2 max-w-[min(100%,20rem)]">
                           <select
-                            className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm w-full"
+                            className={HOURLY_CONTROL}
                             value={c.salesDayDisposition || ''}
                             disabled={savingId === c._id}
                             onChange={(e) => onSelectDisposition(c, e.target.value)}
@@ -350,10 +371,10 @@ function SalesDayDispositionModal({ customers, dispositions, loading, onClose, o
                               </option>
                             ))}
                           </select>
-                          <div className="flex gap-1 items-stretch">
+                          <div className="flex gap-2 items-stretch">
                             <input
                               type="text"
-                              className="border border-gray-200 rounded px-2 py-0.5 text-[11px] min-w-0 flex-1"
+                              className={`${HOURLY_CONTROL} min-w-0 flex-1 text-base`}
                               placeholder="Notes (optional)"
                               value={
                                 dispositionNotesById[c._id] !== undefined
@@ -380,7 +401,7 @@ function SalesDayDispositionModal({ customers, dispositions, loading, onClose, o
                                 c.salesDayDisposition === 'follow_up'
                               }
                               onClick={() => saveDispositionNotes(c)}
-                              className="shrink-0 px-1.5 py-0.5 rounded border border-gray-200 bg-slate-50 text-[10px] font-semibold text-gray-700 hover:bg-slate-100 disabled:opacity-40"
+                              className="cursor-pointer shrink-0 px-3 py-2.5 rounded-xl border border-gray-200 bg-slate-50 text-sm font-semibold text-gray-800 hover:bg-slate-100 disabled:opacity-40"
                             >
                               Save
                             </button>
@@ -388,7 +409,7 @@ function SalesDayDispositionModal({ customers, dispositions, loading, onClose, o
                           {c.salesDayDisposition === 'follow_up' && (
                             <button
                               type="button"
-                              className="text-[10px] text-blue-600 font-semibold text-left hover:underline disabled:opacity-40"
+                              className="text-sm text-blue-600 font-semibold text-left hover:underline disabled:opacity-40"
                               disabled={savingId === c._id}
                               onClick={() => openFollowUpEditor(c)}
                             >
@@ -397,14 +418,15 @@ function SalesDayDispositionModal({ customers, dispositions, loading, onClose, o
                           )}
                         </div>
                       </td>
-                      <td className="px-3 py-2">
+                      <td className={`${HOURLY_TD} ${HOURLY_CELL_END} text-center`}>
                         <button
                           type="button"
                           title="Edit fields"
-                          className="inline-flex p-1.5 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
+                          className="cursor-pointer inline-flex items-center justify-center p-2.5 rounded-xl border border-gray-200 text-gray-800 hover:bg-gray-50"
                           onClick={() => setEditCustomer(c)}
                         >
-                          <Pencil size={14} />
+                          {/* <Pencil size={18} /> */}
+                          Edit
                         </button>
                       </td>
                     </tr>
@@ -414,11 +436,11 @@ function SalesDayDispositionModal({ customers, dispositions, loading, onClose, o
             </div>
           )}
         </div>
-        <div className="border-t px-4 py-3 flex justify-end">
+        <div className="border-t border-gray-100 px-5 py-4 flex justify-end shrink-0 bg-white">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-medium hover:bg-slate-800"
+            className="cursor-pointer px-5 py-3 rounded-xl bg-slate-900 text-white text-base font-semibold hover:bg-slate-800"
           >
             Done
           </button>
@@ -434,36 +456,47 @@ function SalesDayDispositionModal({ customers, dispositions, loading, onClose, o
 
       {followUp && (
         <div className="fixed inset-0 z-[210] flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-xl shadow-lg max-w-md w-full p-5 space-y-4">
-            <h3 className="font-semibold text-gray-900">
-              {followUpModalIsEdit ? 'Edit follow-up' : 'Follow-up'}
-            </h3>
-            <div className="text-sm text-gray-600 space-y-1">
-              <p>
-                <span className="font-medium">Person:</span> {followUp.personName || '—'}
-              </p>
-              <p>
-                <span className="font-medium">Company:</span> {followUp.companyName || '—'}
+          <div className="rounded-2xl border border-gray-200 bg-white w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 px-6 py-4 shrink-0">
+              <h3 className="text-xl font-bold text-white tracking-tight">
+                {followUpModalIsEdit ? 'Edit follow-up' : 'Follow-up'}
+              </h3>
+              <p className="text-base text-blue-100/95 mt-1">
+                {followUp.personName || '—'} — {followUp.companyName || '—'}
               </p>
             </div>
-            <label className="block text-sm font-medium text-gray-700">Notes (optional)</label>
-            <textarea
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
-              rows={3}
-              value={followNotes}
-              onChange={(e) => setFollowNotes(e.target.value)}
-            />
-            <label className="block text-sm font-medium text-gray-700">Next follow-up</label>
-            <input
-              type="datetime-local"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
-              value={followAt}
-              onChange={(e) => setFollowAt(e.target.value)}
-            />
-            <div className="flex justify-end gap-2 pt-2">
+            <div className="p-5 space-y-4 overflow-y-auto min-h-0">
+              <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-4 space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1.5" htmlFor="hourly-fu-notes">
+                    Notes (optional)
+                  </label>
+                  <textarea
+                    id="hourly-fu-notes"
+                    className={`${HOURLY_CONTROL} resize-y min-h-[6rem] leading-relaxed`}
+                    rows={3}
+                    value={followNotes}
+                    onChange={(e) => setFollowNotes(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1.5" htmlFor="hourly-fu-at">
+                    Date &amp; time
+                  </label>
+                  <input
+                    id="hourly-fu-at"
+                    type="datetime-local"
+                    className={HOURLY_CONTROL}
+                    value={followAt}
+                    onChange={(e) => setFollowAt(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="border-t border-gray-100 px-5 py-4 flex justify-end gap-3 shrink-0 bg-white">
               <button
                 type="button"
-                className="px-3 py-2 rounded-lg border text-sm"
+                className="cursor-pointer px-5 py-3 rounded-xl border border-gray-300 bg-white text-base font-semibold text-gray-700 hover:bg-gray-50"
                 onClick={() => {
                   setFollowUp(null);
                   setFollowUpModalIsEdit(false);
@@ -475,7 +508,7 @@ function SalesDayDispositionModal({ customers, dispositions, loading, onClose, o
               <button
                 type="button"
                 disabled={savingId === followUp._id}
-                className="px-3 py-2 rounded-lg bg-blue-600 text-white text-sm disabled:opacity-50"
+                className="cursor-pointer px-5 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 text-white text-base font-semibold hover:from-blue-700 hover:to-violet-700 disabled:opacity-50"
                 onClick={submitFollowUp}
               >
                 {followUpModalIsEdit ? 'Save changes' : 'Save follow-up'}
