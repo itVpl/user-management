@@ -1116,7 +1116,14 @@ export default function DeliveryOrder() {
         })),
 
         remarks: src.remarks || '',
-        moterCargoValue: src.moterCargoValue ?? src.motorCargoValue ?? '',
+        moterCargoValue:
+          src.moterCargoValue ??
+          src.motorCargoValue ??
+          src.cargoValue ??
+          src.carrier?.moterCargoValue ??
+          src.carrier?.motorCargoValue ??
+          src.carrier?.cargoValue ??
+          '',
         bols: (src.bols && src.bols.length
           ? src.bols.map(b => ({ bolNo: b.bolNo || '' }))
           : (src.bolInformation ? [{ bolNo: src.bolInformation }] : [{ bolNo: '' }])
@@ -3036,6 +3043,14 @@ const validateForm = (mode = formMode) => {
             remarks: l?.remarks ?? ''
           })),
           remarks: fullOrderData.remarks || '',
+          moterCargoValue:
+            fullOrderData.moterCargoValue ??
+            fullOrderData.motorCargoValue ??
+            fullOrderData.cargoValue ??
+            fullOrderData.carrier?.moterCargoValue ??
+            fullOrderData.carrier?.motorCargoValue ??
+            fullOrderData.carrier?.cargoValue ??
+            '',
           bols: (Array.isArray(fullOrderData.bols) && fullOrderData.bols.length
             ? fullOrderData.bols.map(b => ({ bolNo: b.bolNo || '' }))
             : (fullOrderData.bolInformation ? [{ bolNo: fullOrderData.bolInformation }] : [{ bolNo: '' }])
@@ -3126,7 +3141,14 @@ const validateForm = (mode = formMode) => {
           remarks: '' // 👈
         }],
         remarks: order.remarks || '',
-        moterCargoValue: '',
+        moterCargoValue:
+          order.moterCargoValue ??
+          order.motorCargoValue ??
+          order.cargoValue ??
+          order.carrier?.moterCargoValue ??
+          order.carrier?.motorCargoValue ??
+          order.carrier?.cargoValue ??
+          '',
         bols: [{ bolNo: order.bolInformation || '' }],
         docs: null
       };
@@ -3518,10 +3540,14 @@ const handleUpdateOrder = async (e) => {
       returnDate: formData.returnLocation.returnDate || ''
     } : null;
 
+    const cargoValue = Number(String(formData.moterCargoValue ?? '').trim());
+
     // --- Complete update payload ---
     const updatePayload = {
       empId: empId,
       loadType: formData.loadType || selectedLoadType,
+      moterCargoValue: Number.isFinite(cargoValue) ? cargoValue : 0,
+      motorCargoValue: Number.isFinite(cargoValue) ? cargoValue : 0,
       customers: customers,
       carrier: carrier,
       shipper: shipper,
@@ -7218,9 +7244,17 @@ const handleUpdateOrder = async (e) => {
                           <DollarSign className="text-amber-600" size={16} />
                         </div>
                         <div>
-                          <p className="text-sm text-gray-600">Moter Cargo Value</p>
+                          <p className="text-sm text-gray-600">Cargo Value</p>
                           <p className="font-semibold text-gray-800">
-                            ${Number(selectedOrder?.moterCargoValue ?? selectedOrder?.motorCargoValue ?? 0).toLocaleString()}
+                            ${Number(
+                              selectedOrder?.moterCargoValue ??
+                                selectedOrder?.motorCargoValue ??
+                                selectedOrder?.cargoValue ??
+                                selectedOrder?.carrier?.moterCargoValue ??
+                                selectedOrder?.carrier?.motorCargoValue ??
+                                selectedOrder?.carrier?.cargoValue ??
+                                0,
+                            ).toLocaleString()}
                           </p>
                         </div>
                       </div>
