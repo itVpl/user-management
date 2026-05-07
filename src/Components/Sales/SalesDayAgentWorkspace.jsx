@@ -10,6 +10,11 @@ import {
   importSalesDayCustomers,
   patchSalesDayDisposition,
 } from '../../services/salesDayAgentService';
+import {
+  searchAgentCustomersByCompany,
+  setAgentCustomerPassword,
+  updateAgentCustomerDetails,
+} from '../../services/agentCustomerEventService';
 import SalesDayCustomerEditModal from './SalesDayCustomerEditModal.jsx';
 import SalesDayAgentManualCustomerForm from './SalesDayAgentManualCustomerForm.jsx';
 import { getSavedDispositionNotesForRow } from '../../utils/salesDayAgentEligibility';
@@ -198,7 +203,8 @@ export default function SalesDayAgentWorkspace() {
         <p className="text-sm text-gray-600 leading-relaxed max-w-2xl">
           <strong className="font-medium text-gray-800">Import file</strong> (CSV/Excel),{' '}
           <strong className="font-medium text-gray-800">Manual add</strong> (event / AgentCustomer), or{' '}
-          <strong className="font-medium text-gray-800">Review &amp; filter</strong> for dispositions and edits.
+          <strong className="font-medium text-gray-800">Review &amp; filter</strong> for dispositions and edits, or{' '}
+          <strong className="font-medium text-gray-800">Agent customer manage</strong> to set password and edit details.
         </p>
         <div
           className="inline-flex flex-wrap gap-2 rounded-2xl border border-gray-200 bg-white p-2 shadow-sm shrink-0"
@@ -244,13 +250,399 @@ export default function SalesDayAgentWorkspace() {
           >
             Review &amp; filter
           </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'agent_manage'}
+            onClick={() => setTab('agent_manage')}
+            className={`px-4 sm:px-5 py-2.5 rounded-xl border text-sm font-semibold transition-all ${
+              tab === 'agent_manage'
+                ? 'bg-orange-500 border-orange-500 text-white shadow-[0_6px_16px_rgba(249,115,22,0.35)]'
+                : 'bg-white border-gray-200 text-gray-700 hover:border-orange-300 hover:text-orange-600'
+            }`}
+          >
+            Agent customer manage
+          </button>
         </div>
       </div>
       <div className="border-t border-gray-100 pt-5">
         {tab === 'import' && <ImportPanel />}
         {tab === 'manual' && <SalesDayAgentManualCustomerForm />}
         {tab === 'browse' && <BrowsePanel onGoImport={() => setTab('import')} />}
+        {tab === 'agent_manage' && <AgentCustomerManagePanel />}
       </div>
+    </div>
+  );
+}
+
+function AgentCustomerManagePanel() {
+  const [searchValue, setSearchValue] = useState('');
+  const [appliedSearch, setAppliedSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [limit] = useState(20);
+  const [loading, setLoading] = useState(false);
+  const [customers, setCustomers] = useState([]);
+  const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 1 });
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [passwordModal, setPasswordModal] = useState(false);
+  const [editModal, setEditModal] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({ password: '', confirmPassword: '' });
+  const [editForm, setEditForm] = useState({
+    personName: '',
+    companyName: '',
+    contactNumber: '',
+    whatsappNumber: '',
+    email: '',
+    linkedin: '',
+    companyAddress: '',
+    mc_dot_no: '',
+    onboardCompany: '',
+    companyEmail: '',
+    country: '',
+    state: '',
+    city: '',
+    zipcode: '',
+    compAdd: '',
+    commodity: '',
+    shippingTo: '',
+  });
+
+  const loadCustomers = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = {
+        page,
+        limit,
+        ...(appliedSearch.trim() ? { companyName: appliedSearch.trim() } : {}),
+      };
+      const res = await searchAgentCustomersByCompany(params);
+      if (res?.success) {
+        setCustomers(Array.isArray(res.customers) ? res.customers : []);
+        setPagination(
+          res.pagination || {
+            page,
+            limit,
+            total: Array.isArray(res.customers) ? res.customers.length : 0,
+            totalPages: 1,
+          },
+        );
+      } else {
+        toast.error(res?.message || 'Could not load customers');
+      }
+    } catch (e) {
+      toast.error(e?.response?.data?.message || 'Could not load customers');
+    } finally {
+      setLoading(false);
+    }
+  }, [appliedSearch, page, limit]);
+
+  useEffect(() => {
+    loadCustomers();
+  }, [loadCustomers]);
+
+  const openPasswordModal = (customer) => {
+    setSelectedCustomer(customer);
+    setPasswordForm({ email: customer.email || '', password: '', confirmPassword: '' });
+    setPasswordModal(true);
+  };
+
+  const openEditModal = (customer) => {
+    setSelectedCustomer(customer);
+    setEditForm({
+      personName: customer.personName || '',
+      companyName: customer.companyName || '',
+      contactNumber: customer.contactNumber || '',
+      whatsappNumber: customer.whatsappNumber || '',
+      email: customer.email || '',
+      linkedin: customer.linkedin || '',
+      companyAddress: customer.companyAddress || '',
+      mc_dot_no: customer.mc_dot_no || '',
+      onboardCompany: customer.onboardCompany || '',
+      companyEmail: customer.companyEmail || '',
+      country: customer.country || '',
+      state: customer.state || '',
+      city: customer.city || '',
+      zipcode: customer.zipcode || '',
+      compAdd: customer.compAdd || '',
+      commodity: customer.commodity || '',
+      shippingTo: customer.shippingTo || '',
+    });
+    setEditModal(true);
+  };
+
+  const savePassword = async () => {
+    if (!selectedCustomer?._id) return;
+    if (!String(passwordForm.email || '').trim()) {
+      toast.error('Customer email is required to set/reset password.');
+      return;
+    }
+    if (!passwordForm.password || !passwordForm.confirmPassword) {
+      toast.error('Password and confirm password are required.');
+      return;
+    }
+    if (passwordForm.password !== passwordForm.confirmPassword) {
+      toast.error('Password and confirm password must match.');
+      return;
+    }
+    if (passwordForm.password.length < 8) {
+      toast.error('Password must be at least 8 characters.');
+      return;
+    }
+    setSaving(true);
+    try {
+      await setAgentCustomerPassword(selectedCustomer._id, {
+        email: String(passwordForm.email || '').trim(),
+        password: passwordForm.password,
+        confirmPassword: passwordForm.confirmPassword,
+      });
+      toast.success('Password saved successfully');
+      setPasswordModal(false);
+      setSelectedCustomer(null);
+      await loadCustomers();
+    } catch (e) {
+      toast.error(e?.response?.data?.message || 'Could not save password');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveEdits = async () => {
+    if (!selectedCustomer?._id) return;
+    const changedPayload = Object.keys(editForm).reduce((acc, key) => {
+      const prev = String(selectedCustomer?.[key] ?? '').trim();
+      const next = String(editForm[key] ?? '').trim();
+      if (prev !== next) acc[key] = next;
+      return acc;
+    }, {});
+
+    if (!Object.keys(changedPayload).length) {
+      toast.info('No changes to save.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await updateAgentCustomerDetails(selectedCustomer._id, changedPayload);
+      toast.success('Customer updated successfully');
+      setEditModal(false);
+      setSelectedCustomer(null);
+      await loadCustomers();
+    } catch (e) {
+      toast.error(e?.response?.data?.message || 'Could not update customer');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-4">
+        <div className="flex flex-col gap-3 md:flex-row md:items-end">
+          <div className="flex-1">
+            <label className="text-xs font-medium text-gray-600">Search by company</label>
+            <input
+              className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400/40 focus:border-blue-400"
+              placeholder="Enter company name"
+              value={searchValue}
+              onChange={(e) => setSearchValue(e.target.value)}
+            />
+          </div>
+          <button
+            type="button"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 transition-colors shadow-sm"
+            onClick={() => {
+              setPage(1);
+              setAppliedSearch(searchValue);
+            }}
+          >
+            <Search size={16} />
+            Search
+          </button>
+        </div>
+      </div>
+
+      <div className="do-report-scroll-x overflow-x-auto border border-gray-200 rounded-2xl shadow-sm bg-white">
+        <table className="min-w-full text-sm">
+          <thead className="bg-slate-50 text-left">
+            <tr>
+              <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-600">Company</th>
+              <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-600">Person</th>
+              <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-600">Email</th>
+              <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-600">Phone</th>
+              <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-600">Password</th>
+              <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-600 text-center">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {!loading && customers.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-3 py-8 text-center text-sm text-gray-500">
+                  No customers found.
+                </td>
+              </tr>
+            ) : (
+              customers.map((c) => (
+                <tr key={c._id} className="border-t border-gray-100 odd:bg-white even:bg-slate-50/30">
+                  <td className="px-3 py-2">{c.companyName || '—'}</td>
+                  <td className="px-3 py-2">{c.personName || '—'}</td>
+                  <td className="px-3 py-2">{c.email || '—'}</td>
+                  <td className="px-3 py-2">{c.contactNumber || '—'}</td>
+                  <td className="px-3 py-2">
+                    <span
+                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                        c.hasPassword ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                      }`}
+                    >
+                      {c.hasPassword ? 'Set' : 'Not set'}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2">
+                    <div className="flex items-center justify-center gap-2">
+                      <button
+                        type="button"
+                        className="px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                        onClick={() => openPasswordModal(c)}
+                      >
+                        {c.hasPassword ? 'Reset password' : 'Set password'}
+                      </button>
+                      <button
+                        type="button"
+                        className="inline-flex items-center justify-center p-1.5 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
+                        title="Edit customer"
+                        onClick={() => openEditModal(c)}
+                      >
+                        <Pencil size={13} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between text-xs text-gray-600">
+        <span>
+          Page {pagination.page || page} of {pagination.totalPages || 1} · Rows: {pagination.total || customers.length}
+        </span>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            disabled={(pagination.page || page) <= 1}
+            className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white disabled:opacity-40"
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+          >
+            Prev
+          </button>
+          <button
+            type="button"
+            disabled={(pagination.page || page) >= (pagination.totalPages || 1)}
+            className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white disabled:opacity-40"
+            onClick={() => setPage((p) => p + 1)}
+          >
+            Next
+          </button>
+        </div>
+      </div>
+
+      {passwordModal && selectedCustomer && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-xl shadow-lg max-w-md w-full p-5 space-y-3">
+            <h3 className="font-semibold">
+              {selectedCustomer.hasPassword ? 'Reset password' : 'Set password'}
+            </h3>
+            <p className="text-sm text-gray-600">
+              {selectedCustomer.companyName} ({selectedCustomer.email || 'No email'})
+            </p>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-600">Email</label>
+              <input
+                type="email"
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+                value={passwordForm.email || ''}
+                onChange={(e) => setPasswordForm((f) => ({ ...f, email: e.target.value }))}
+                placeholder="No email available"
+              />
+            </div>
+            <input
+              type="password"
+              className="w-full border rounded-lg px-3 py-2 text-sm"
+              placeholder="Password"
+              value={passwordForm.password}
+              onChange={(e) => setPasswordForm((f) => ({ ...f, password: e.target.value }))}
+            />
+            <input
+              type="password"
+              className="w-full border rounded-lg px-3 py-2 text-sm"
+              placeholder="Confirm password"
+              value={passwordForm.confirmPassword}
+              onChange={(e) => setPasswordForm((f) => ({ ...f, confirmPassword: e.target.value }))}
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                className="px-3 py-2 rounded border text-sm"
+                onClick={() => {
+                  setPasswordModal(false);
+                  setSelectedCustomer(null);
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={saving}
+                className="px-3 py-2 rounded bg-blue-600 text-white text-sm disabled:opacity-50"
+                onClick={savePassword}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editModal && selectedCustomer && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-xl shadow-lg max-w-3xl w-full p-5 space-y-3 max-h-[85vh] overflow-auto">
+            <h3 className="font-semibold">Edit Agent Customer</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {Object.keys(editForm).map((key) => (
+                <div key={key} className="flex flex-col gap-1">
+                  <label className="text-xs text-gray-600">{key}</label>
+                  <input
+                    className="w-full border rounded-lg px-3 py-2 text-sm"
+                    value={editForm[key]}
+                    onChange={(e) => setEditForm((f) => ({ ...f, [key]: e.target.value }))}
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                className="px-3 py-2 rounded border text-sm"
+                onClick={() => {
+                  setEditModal(false);
+                  setSelectedCustomer(null);
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={saving}
+                className="px-3 py-2 rounded bg-blue-600 text-white text-sm disabled:opacity-50"
+                onClick={saveEdits}
+              >
+                Save changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
