@@ -3253,6 +3253,16 @@ export default function Loads() {
             acceptedBid: load.acceptedBid || null,
 
             rateDetails: load.rateDetails || null,
+            moterCargoValue:
+              load.moterCargoValue ??
+              load.motorCargoValue ??
+              load.cargoValue ??
+              "",
+            motorCargoValue:
+              load.motorCargoValue ??
+              load.moterCargoValue ??
+              load.cargoValue ??
+              "",
 
             // Drayage Return fields (support both new and legacy keys)
 
@@ -4117,7 +4127,13 @@ export default function Loads() {
 
       other: String(otherTotal),
       moterCargoValue: String(
-        load.moterCargoValue ?? load.motorCargoValue ?? "",
+        load.rateDetails?.moterCargoValue ??
+          load.rateDetails?.motorCargoValue ??
+          load.rateDetails?.cargoValue ??
+          load.moterCargoValue ??
+          load.motorCargoValue ??
+          load.cargoValue ??
+          "",
       ),
 
       ...(lt !== "DRAYAGE" ? { rateType: load.rateType || "Flat Rate" } : {}),
@@ -7980,6 +7996,39 @@ export default function Loads() {
                         )}
                     </div>
 
+                    {(selectedLoadForAction.rateDetails?.moterCargoValue !==
+                      undefined ||
+                      selectedLoadForAction.rateDetails?.motorCargoValue !==
+                        undefined ||
+                      selectedLoadForAction.rateDetails?.cargoValue !==
+                        undefined ||
+                      selectedLoadForAction.moterCargoValue !== undefined ||
+                      selectedLoadForAction.motorCargoValue !== undefined ||
+                      selectedLoadForAction.cargoValue !== undefined) && (
+                      <div className="bg-white rounded-lg p-3 border border-gray-200">
+                        <span className="text-gray-600 text-sm">
+                          Cargo Value:
+                        </span>
+                        <p className="font-bold text-green-600 text-lg">
+                          $
+                          {parseFloat(
+                            selectedLoadForAction.rateDetails
+                              ?.moterCargoValue ??
+                              selectedLoadForAction.rateDetails
+                                ?.motorCargoValue ??
+                              selectedLoadForAction.rateDetails?.cargoValue ??
+                              selectedLoadForAction.moterCargoValue ??
+                              selectedLoadForAction.motorCargoValue ??
+                              selectedLoadForAction.cargoValue ??
+                              0,
+                          ).toLocaleString("en-US", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}
+                        </p>
+                      </div>
+                    )}
+
                     {selectedLoadForAction.rateDetails.other &&
                       Array.isArray(selectedLoadForAction.rateDetails.other) &&
                       selectedLoadForAction.rateDetails.other.length > 0 && (
@@ -9691,7 +9740,7 @@ export default function Loads() {
 
                         {/* Rate Fields: Line Haul, FSC, Other */}
 
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 col-span-2">
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 col-span-2">
                           <div>
                             <label className="block text-sm font-semibold text-gray-700 mb-2">
                               Line Haul ($)
@@ -9777,6 +9826,37 @@ export default function Loads() {
 
                                 <p className="text-sm text-red-600">
                                   {formErrors.other}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                              Cargo Value ($)
+                            </label>
+
+                            <input
+                              ref={(el) =>
+                                (fieldRefs.current["moterCargoValue"] = el)
+                              }
+                              name="moterCargoValue"
+                              inputMode="decimal"
+                              placeholder="e.g., 10000"
+                              value={loadForm.moterCargoValue}
+                              onChange={handleChange}
+                              className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 ${
+                                formErrors.moterCargoValue
+                                  ? "border-red-400 bg-red-50"
+                                  : "border-gray-200 hover:border-gray-300"
+                              }`}
+                            />
+
+                            {formErrors.moterCargoValue && (
+                              <div className="flex items-center gap-2 mt-2">
+                                <XCircle className="text-red-500" size={16} />
+                                <p className="text-sm text-red-600">
+                                  {formErrors.moterCargoValue}
                                 </p>
                               </div>
                             )}
