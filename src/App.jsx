@@ -149,6 +149,9 @@ const HourlyCheckinReport = lazy(() => import("./Pages/HourlyCheckin/HourlyCheck
 const PublicEmployeeTest = lazy(() => import("./Components/EmployeeTest/PublicEmployeeTest.jsx"));
 const EmployeeTestAdmin = lazy(() => import("./Components/EmployeeTest/EmployeeTestAdmin.jsx"));
 const Newsletter = lazy(() => import("./Pages/Newsletter.jsx"));
+const OceanQuotePublicForm = lazy(() => import("./Pages/OceanQuotePublicForm.jsx"));
+const OceanQuoteList = lazy(() => import("./Components/Sales/OceanQuoteList.jsx"));
+const OceanQuoteDetail = lazy(() => import("./Components/Sales/OceanQuoteDetail.jsx"));
 
 
 // Chat Message System Imports - keep as regular imports (needed globally)
@@ -656,6 +659,7 @@ function App() {
           />
           <Route path="/signup" element={<Signup />} />
           <Route path="/credit-limit-form/:token" element={<CreditLimitForm />} />
+          <Route path="/ocean-quote" element={<OceanQuotePublicForm />} />
 
         {/* Protected Routes */}
         <Route
@@ -778,6 +782,8 @@ function App() {
           <Route path="hr-call-reports" element={<HRCallReports />} />
           <Route path="allcustomer" element={<AllCustomer />} />
           <Route path="credit-limit-requests" element={<CreditLimitRequests />} />
+          <Route path="quote-request" element={<OceanQuoteList />} />
+          <Route path="quote-request/:id" element={<OceanQuoteDetail />} />
           <Route path="employee-documents" element={<EmployeeDocuments />} />
           <Route path="salary-modification" element={<SalaryModification />} />
           <Route path="employee-feedback" element={<EmployeeFeedback />} />
