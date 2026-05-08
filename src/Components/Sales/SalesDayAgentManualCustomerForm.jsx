@@ -24,8 +24,8 @@ const phoneRegex = /^\+?\d{10,15}$/;
 const zipRegex = /^[A-Za-z0-9]{5,8}$/;
 
 function fieldClass(err) {
-  return `w-full px-3.5 py-2.5 border rounded-xl text-sm bg-white/95 focus:outline-none focus:ring-2 focus:ring-blue-400/40 focus:border-blue-400 transition-colors ${
-    err ? 'border-red-300' : 'border-gray-200 shadow-sm'
+  return `w-full px-4 py-3 border rounded-xl text-base text-gray-900 placeholder:text-gray-400 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400/40 focus:border-blue-400 transition-colors ${
+    err ? 'border-red-300' : 'border-gray-200'
   }`;
 }
 
@@ -150,182 +150,182 @@ export default function SalesDayAgentManualCustomerForm() {
   };
 
   return (
-    <form onSubmit={onSubmit} className="space-y-5 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+    <form onSubmit={onSubmit} className="space-y-5 rounded-2xl border border-gray-200 bg-white overflow-hidden">
       <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 px-5 py-4">
-        <h2 className="text-xl font-bold text-white">Add AgentCustomer</h2>
-        <p className="text-blue-100 text-sm mt-0.5">Enter customer information below</p>
+        <h2 className="text-2xl font-bold text-white tracking-tight">Add Agent Customer</h2>
+        <p className="text-base text-blue-100/95 mt-1.5 leading-snug">Enter customer information below</p>
       </div>
 
-      <div className="px-4 pb-4 space-y-4">
-      <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-4 space-y-4">
-        <h3 className="text-sm font-semibold text-blue-900">Basic Information</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      <div className="px-5 pb-5 space-y-5">
+      <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-5 space-y-5">
+        <h3 className="text-base font-semibold text-blue-900">Basic Information</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <div>
-            <label className="text-xs font-medium text-gray-600" htmlFor="sda-personName">
+            <label className="text-sm font-semibold text-gray-700" htmlFor="sda-personName">
               Person name
             </label>
-            <div className="relative mt-1">
-              <User className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <div className="relative mt-1.5">
+              <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
               <input
                 id="sda-personName"
                 name="personName"
                 value={form.personName}
                 onChange={onChange}
                 onBlur={onBlur}
-                className={fieldClass(errors.personName) + ' pl-9'}
+                className={fieldClass(errors.personName) + ' pl-11'}
                 placeholder="Optional"
                 ref={(el) => {
                   fieldRefs.current.personName = el;
                 }}
               />
             </div>
-            {errors.personName && <p className="text-red-500 text-xs mt-1">{errors.personName}</p>}
+            {errors.personName && <p className="text-red-600 text-sm mt-1.5">{errors.personName}</p>}
           </div>
           <div>
-            <label className="text-xs font-medium text-gray-600" htmlFor="sda-companyName">
+            <label className="text-sm font-semibold text-gray-700" htmlFor="sda-companyName">
               Company name
             </label>
-            <div className="relative mt-1">
-              <Building2 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <div className="relative mt-1.5">
+              <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
               <input
                 id="sda-companyName"
                 name="companyName"
                 value={form.companyName}
                 onChange={onChange}
                 onBlur={onBlur}
-                className={fieldClass(errors.companyName) + ' pl-9'}
+                className={fieldClass(errors.companyName) + ' pl-11'}
                 placeholder="Optional"
               />
             </div>
-            {errors.companyName && <p className="text-red-500 text-xs mt-1">{errors.companyName}</p>}
+            {errors.companyName && <p className="text-red-600 text-sm mt-1.5">{errors.companyName}</p>}
           </div>
           <div>
-            <label className="text-xs font-medium text-gray-600" htmlFor="sda-li">
+            <label className="text-sm font-semibold text-gray-700" htmlFor="sda-li">
               LinkedIn
             </label>
-            <div className="relative mt-1">
-              <Link2 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <div className="relative mt-1.5">
+              <Link2 className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
               <input
                 id="sda-li"
                 name="linkedin"
                 value={form.linkedin}
                 onChange={onChange}
                 onBlur={onBlur}
-                className={fieldClass(errors.linkedin) + ' pl-9'}
+                className={fieldClass(errors.linkedin) + ' pl-11'}
                 placeholder="Optional"
               />
             </div>
-            {errors.linkedin && <p className="text-red-500 text-xs mt-1">{errors.linkedin}</p>}
+            {errors.linkedin && <p className="text-red-600 text-sm mt-1.5">{errors.linkedin}</p>}
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <div>
-            <label className="text-xs font-medium text-gray-600" htmlFor="sda-contact">
+            <label className="text-sm font-semibold text-gray-700" htmlFor="sda-contact">
               Contact number
             </label>
-            <div className="relative mt-1">
-              <Phone className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <div className="relative mt-1.5">
+              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
               <input
                 id="sda-contact"
                 name="contactNumber"
                 value={form.contactNumber}
                 onChange={onChange}
                 onBlur={onBlur}
-                className={fieldClass(errors.contactNumber) + ' pl-9'}
+                className={fieldClass(errors.contactNumber) + ' pl-11'}
                 placeholder="+919058179713"
                 maxLength={16}
               />
             </div>
-            {errors.contactNumber && <p className="text-red-500 text-xs mt-1">{errors.contactNumber}</p>}
+            {errors.contactNumber && <p className="text-red-600 text-sm mt-1.5">{errors.contactNumber}</p>}
           </div>
           <div>
-            <label className="text-xs font-medium text-gray-600" htmlFor="sda-wa">
+            <label className="text-sm font-semibold text-gray-700" htmlFor="sda-wa">
               WhatsApp
             </label>
-            <div className="relative mt-1">
-              <Phone className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <div className="relative mt-1.5">
+              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
               <input
                 id="sda-wa"
                 name="whatsappNumber"
                 value={form.whatsappNumber}
                 onChange={onChange}
                 onBlur={onBlur}
-                className={fieldClass(errors.whatsappNumber) + ' pl-9'}
+                className={fieldClass(errors.whatsappNumber) + ' pl-11'}
                 placeholder="Optional"
                 maxLength={16}
               />
             </div>
-            {errors.whatsappNumber && <p className="text-red-500 text-xs mt-1">{errors.whatsappNumber}</p>}
+            {errors.whatsappNumber && <p className="text-red-600 text-sm mt-1.5">{errors.whatsappNumber}</p>}
           </div>
           <div>
-            <label className="text-xs font-medium text-gray-600" htmlFor="sda-email">
+            <label className="text-sm font-semibold text-gray-700" htmlFor="sda-email">
               Email
             </label>
-            <div className="relative mt-1">
-              <Mail className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <div className="relative mt-1.5">
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
               <input
                 id="sda-email"
                 name="email"
                 value={form.email}
                 onChange={onChange}
                 onBlur={onBlur}
-                className={fieldClass(errors.email) + ' pl-9'}
+                className={fieldClass(errors.email) + ' pl-11'}
                 placeholder="Optional (server may generate if empty)"
                 ref={(el) => {
                   fieldRefs.current.email = el;
                 }}
               />
             </div>
-            {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
+            {errors.email && <p className="text-red-600 text-sm mt-1.5">{errors.email}</p>}
           </div>
           <div>
-            <label className="text-xs font-medium text-gray-600" htmlFor="sda-commodity">
+            <label className="text-sm font-semibold text-gray-700" htmlFor="sda-commodity">
               Commodity
             </label>
-            <div className="relative mt-1">
-              <Truck className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <div className="relative mt-1.5">
+              <Truck className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
               <input
                 id="sda-commodity"
                 name="commodity"
                 value={form.commodity}
                 onChange={onChange}
                 onBlur={onBlur}
-                className={fieldClass(errors.commodity) + ' pl-9'}
+                className={fieldClass(errors.commodity) + ' pl-11'}
                 placeholder="Optional"
               />
             </div>
-            {errors.commodity && <p className="text-red-500 text-xs mt-1">{errors.commodity}</p>}
+            {errors.commodity && <p className="text-red-600 text-sm mt-1.5">{errors.commodity}</p>}
           </div>
         </div>
       </div>
 
-      <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 p-4 space-y-4">
-        <h3 className="text-sm font-semibold text-emerald-900">Address</h3>
+      <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 p-5 space-y-4">
+        <h3 className="text-base font-semibold text-emerald-900">Address</h3>
         <div>
-          <label className="text-xs font-medium text-gray-600" htmlFor="sda-addr">
+          <label className="text-sm font-semibold text-gray-700" htmlFor="sda-addr">
             Company address
           </label>
-          <div className="relative mt-1">
-            <MapPin className="absolute left-2.5 top-3 w-4 h-4 text-gray-400" />
+          <div className="relative mt-1.5">
+            <MapPin className="absolute left-3 top-3.5 w-5 h-5 text-gray-400 pointer-events-none" />
             <textarea
               id="sda-addr"
               name="companyAddress"
               value={form.companyAddress}
               onChange={onChange}
               onBlur={onBlur}
-              rows={2}
-              className={fieldClass(errors.companyAddress) + ' pl-9 resize-y min-h-[2.5rem]'}
+              rows={3}
+              className={fieldClass(errors.companyAddress) + ' pl-11 resize-y min-h-[5.5rem] leading-relaxed'}
               placeholder="Optional, 5-300 characters if provided"
             />
           </div>
-          {errors.companyAddress && <p className="text-red-500 text-xs mt-1">{errors.companyAddress}</p>}
+          {errors.companyAddress && <p className="text-red-600 text-sm mt-1.5">{errors.companyAddress}</p>}
         </div>
       </div>
 
-      <div className="rounded-xl border border-violet-100 bg-violet-50/60 p-4">
-        <h3 className="text-sm font-semibold text-violet-900 mb-3">Location</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="rounded-xl border border-violet-100 bg-violet-50/60 p-5">
+        <h3 className="text-base font-semibold text-violet-900 mb-4">Location</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[
             { name: 'country', label: 'Country', required: false },
             { name: 'state', label: 'State', required: false },
@@ -333,7 +333,7 @@ export default function SalesDayAgentManualCustomerForm() {
             { name: 'zipcode', label: 'Zip / postal', required: false },
           ].map(({ name, label, required }) => (
             <div key={name}>
-              <label className="text-xs font-medium text-gray-600" htmlFor={`sda-${name}`}>
+              <label className="text-sm font-semibold text-gray-700" htmlFor={`sda-${name}`}>
                 {label}
                 {required && <span className="text-red-500"> *</span>}
               </label>
@@ -343,16 +343,16 @@ export default function SalesDayAgentManualCustomerForm() {
                 value={form[name]}
                 onChange={onChange}
                 onBlur={onBlur}
-                className={fieldClass(errors[name]) + ' mt-1'}
+                className={fieldClass(errors[name]) + ' mt-1.5'}
                 ref={(el) => {
                   fieldRefs.current[name] = el;
                 }}
               />
-              {errors[name] && <p className="text-red-500 text-xs mt-1">{errors[name]}</p>}
+              {errors[name] && <p className="text-red-600 text-sm mt-1.5">{errors[name]}</p>}
             </div>
           ))}
           <div>
-            <label className="text-xs font-medium text-gray-600" htmlFor="sda-shippingTo">
+            <label className="text-sm font-semibold text-gray-700" htmlFor="sda-shippingTo">
               Shipping to
             </label>
             <input
@@ -361,28 +361,28 @@ export default function SalesDayAgentManualCustomerForm() {
               value={form.shippingTo}
               onChange={onChange}
               onBlur={onBlur}
-              className={fieldClass(errors.shippingTo) + ' mt-1'}
+              className={fieldClass(errors.shippingTo) + ' mt-1.5'}
             />
-            {errors.shippingTo && <p className="text-red-500 text-xs mt-1">{errors.shippingTo}</p>}
+            {errors.shippingTo && <p className="text-red-600 text-sm mt-1.5">{errors.shippingTo}</p>}
           </div>
         </div>
       </div>
 
-      <div className="flex flex-wrap justify-end gap-2 pt-1 border-t border-gray-100">
+      <div className="flex flex-wrap justify-end gap-3 pt-2 border-t border-gray-100">
         <button
           type="button"
           onClick={() => {
             setForm(initialForm);
             setErrors({});
           }}
-          className="mt-3 px-4 py-2.5 rounded-xl border border-gray-300 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50"
+          className="mt-3 px-5 py-3 rounded-xl border border-gray-300 bg-white text-base font-semibold text-gray-700 hover:bg-gray-50"
         >
           Clear
         </button>
         <button
           type="submit"
           disabled={loading}
-          className="mt-3 px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 text-white text-sm font-semibold hover:from-blue-700 hover:to-violet-700 disabled:opacity-50 shadow-sm"
+          className="mt-3 px-5 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 text-white text-base font-semibold hover:from-blue-700 hover:to-violet-700 disabled:opacity-50"
         >
           {loading ? 'Creating…' : 'Create AgentCustomer'}
         </button>

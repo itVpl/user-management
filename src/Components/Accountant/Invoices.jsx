@@ -4120,6 +4120,12 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
     };
   };
 
+  const getContainerNo = (row) =>
+    row?.shipper?.containerNo ||
+    row?.loadReference?.shipper?.containerNo ||
+    row?.customers?.[0]?.containerNo ||
+    "—";
+
   // Status color helper
   const statusColor = (status) => {
     if (!status) return "bg-yellow-100 text-yellow-700";
@@ -4818,10 +4824,10 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                         <thead className="bg-slate-100">
                           <tr>
                             <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200 first:rounded-l-xl first:border-l first:border-gray-200">
-                              DO ID
+                              Load No
                             </th>
                             <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
-                              Load No
+                              Container No
                             </th>
                             <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
                               Bill To
@@ -4856,6 +4862,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                           {filtered.map((row, index) => {
                             const cust = row?.customers?.[0] || {};
                             const totals = computeTotals(row);
+                            const containerNo = getContainerNo(row);
                             const fwBy =
                               row?.forwardedToAccountant?.forwardedBy
                                 ?.employeeName || "—";
@@ -4868,31 +4875,13 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                 className="bg-white hover:bg-gray-100 transition-colors"
                               >
                                 <td className="px-5 py-3 border-y border-gray-200 first:rounded-l-xl first:border-l first:border-gray-200">
-                                  <div className="relative group max-w-[50px]">
-                                    {/* Short ID */}
-                                    <span className="font-medium text-gray-700 block truncate">
-                                      {shortId(row?._id) || "-"}
-                                    </span>
-
-                                    {/* Tooltip */}
-                                    {row?._id && (
-                                      <div
-                                        className="absolute left-0 top-full mt-2 hidden group-hover:block
-                      bg-gray-900 text-white text-sm
-                      px-3 py-2.5
-                      rounded-lg shadow-xl
-                      max-w-[200px]
-                      break-words
-                      z-50"
-                                      >
-                                        {row._id}
-                                      </div>
-                                    )}
-                                  </div>
+                                  <span className="font-medium text-gray-700">
+                                    {cust?.loadNo || "—"}
+                                  </span>
                                 </td>
                                 <td className="px-5 py-3 border-y border-gray-200">
                                   <span className="font-medium text-gray-700">
-                                    {cust?.loadNo || "—"}
+                                    {containerNo}
                                   </span>
                                 </td>
                                 <td className="px-5 py-3 border-y border-gray-200">
@@ -5167,10 +5156,10 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                         <thead className="bg-slate-100">
                           <tr>
                             <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200 first:rounded-l-xl first:border-l first:border-gray-200">
-                              DO ID
+                              Load No
                             </th>
                             <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
-                              Load No
+                              Container No
                             </th>
                             <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
                               Bill To
@@ -5205,6 +5194,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                           {processedFiltered.map((row, index) => {
                             const cust = row?.customers?.[0] || {};
                             const totals = computeTotals(row);
+                            const containerNo = getContainerNo(row);
                             // Get Approved By with multiple fallbacks
                             const apprBy =
                               row?.accountantApproval?.approvedBy
@@ -5229,31 +5219,13 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                 className="bg-white hover:bg-gray-100 transition-colors"
                               >
                                 <td className="px-5 py-3 border-y border-gray-200 first:rounded-l-xl first:border-l first:border-gray-200">
-                                  <div className="relative group max-w-[50px]">
-                                    {/* Short ID (Truncated Display) */}
-                                    <span className="font-medium text-gray-700 block truncate">
-                                      {shortId(row?._id) || "—"}
-                                    </span>
-
-                                    {/* Tooltip (Full ID) */}
-                                    {row?._id && (
-                                      <div
-                                        className="absolute left-0 top-full mt-2 hidden group-hover:block
-                      bg-gray-900 text-white text-sm
-                      px-3 py-2.5
-                      rounded-lg shadow-xl
-                      max-w-[220px]
-                      break-words
-                      z-50"
-                                      >
-                                        {row._id}
-                                      </div>
-                                    )}
-                                  </div>
+                                  <span className="font-medium text-gray-700">
+                                    {cust?.loadNo || "—"}
+                                  </span>
                                 </td>
                                 <td className="px-5 py-3 border-y border-gray-200">
                                   <span className="font-medium text-gray-700">
-                                    {cust?.loadNo || "—"}
+                                    {containerNo}
                                   </span>
                                 </td>
                                 <td className="px-5 py-3 border-y border-gray-200">
@@ -5549,8 +5521,8 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                               size="small"
                             />
                           </th>
-                          <th className="text-left py-3 px-3 text-gray-800 font-medium text-sm uppercase tracking-wide">DO ID</th>
                           <th className="text-left py-3 px-3 text-gray-800 font-medium text-sm uppercase tracking-wide">Load No</th>
+                          <th className="text-left py-3 px-3 text-gray-800 font-medium text-sm uppercase tracking-wide">Container No</th>
                           <th className="text-left py-3 px-3 text-gray-800 font-medium text-sm uppercase tracking-wide">Bill To</th>
                           <th className="text-left py-3 px-3 text-gray-800 font-medium text-sm uppercase tracking-wide">Carrier</th>
                           <th className="text-left py-3 px-3 text-gray-800 font-medium text-sm uppercase tracking-wide">Agent Name</th>
@@ -5567,6 +5539,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                         {acceptedFiltered.map((row, index) => {
                           const cust = row?.customers?.[0] || {};
                           const totals = computeTotals(row);
+                          const containerNo = getContainerNo(row);
                           const apprBy = row?.salesApproval?.approvedBy?.employeeName 
                             || row?.salesApproval?.approvedBy?.empId
                             || "—";
@@ -5629,10 +5602,10 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                 />
                               </td>
                               <td className="py-2 px-3">
-                                <span className="font-medium text-gray-700" title={row?._id || ""}>{shortId(row?._id)}</span>
+                                <span className="font-medium text-gray-700">{cust?.loadNo || "—"}</span>
                               </td>
                               <td className="py-2 px-3">
-                                <span className="font-medium text-gray-700">{cust?.loadNo || "—"}</span>
+                                <span className="font-medium text-gray-700">{containerNo}</span>
                               </td>
                               <td className="py-2 px-3">
                                 <span className="font-medium text-gray-700">{cust?.billTo || row?.customerName || "—"}</span>
@@ -5895,10 +5868,10 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                         <thead className="bg-slate-100">
                           <tr>
                             <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200 first:rounded-l-xl first:border-l first:border-gray-200">
-                              DO ID
+                              Load No
                             </th>
                             <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
-                              Load No
+                              Container No
                             </th>
                             <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
                               Bill To
@@ -5933,6 +5906,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                           {rejectedFiltered.map((row, index) => {
                             const cust = row?.customers?.[0] || {};
                             const totals = computeTotals(row);
+                            const containerNo = getContainerNo(row);
                             const rejectedBy =
                               row?.salesApproval?.rejectedBy?.employeeName ||
                               "—";
@@ -5947,31 +5921,13 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                 className="bg-white hover:bg-gray-100 transition-colors"
                               >
                                 <td className="px-5 py-3 border-y border-gray-200 first:rounded-l-xl first:border-l first:border-gray-200">
-                                  <div className="relative group max-w-[50px]">
-                                    {/* Short ID in table */}
-                                    <span className="font-medium text-gray-700 block truncate">
-                                      {shortId(row?._id) || "—"}
-                                    </span>
-
-                                    {/* Full ID tooltip */}
-                                    {row?._id && (
-                                      <div
-                                        className="absolute left-0 top-full mt-2 hidden group-hover:block
-                      bg-gray-900 text-white text-sm
-                      px-3 py-2.5
-                      rounded-lg shadow-xl
-                      max-w-[220px]
-                      break-words
-                      z-50"
-                                      >
-                                        {row._id}
-                                      </div>
-                                    )}
-                                  </div>
+                                  <span className="font-medium text-gray-700">
+                                    {cust?.loadNo || "—"}
+                                  </span>
                                 </td>
                                 <td className="px-5 py-3 border-y border-gray-200">
                                   <span className="font-medium text-gray-700">
-                                    {cust?.loadNo || "—"}
+                                    {containerNo}
                                   </span>
                                 </td>
                                 <td className="px-5 py-3 border-y border-gray-200">

@@ -98,12 +98,12 @@ export default function AddAgent() {
 
   return (
     <div className="p-6">
-      <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6 shadow-sm">
+      <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
         <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Add Agent</h1>
-        <p className="text-gray-600 mt-2 text-base max-w-3xl leading-relaxed">
+        {/* <p className="text-gray-600 mt-2 text-base max-w-3xl leading-relaxed">
           Day-shift: import a template file, add an AgentCustomer manually, or use Review &amp; filter for
           dispositions. Follow-ups schedule email and in-app reminders when due.
-        </p>
+        </p> */}
       </div>
       <SalesDayAgentWorkspace />
       <ToastContainer

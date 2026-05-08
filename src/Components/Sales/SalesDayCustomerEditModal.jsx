@@ -17,6 +17,12 @@ function conflictApiFieldToFormKey(apiField) {
   return m[s] || s;
 }
 
+const MODAL_SHELL = 'rounded-2xl border border-gray-200 bg-white w-full flex flex-col overflow-hidden max-h-[90vh]';
+const MODAL_HEADER = 'bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 px-6 py-4 shrink-0';
+const MODAL_FIELD =
+  'w-full px-4 py-3 border rounded-xl text-base text-gray-900 placeholder:text-gray-400 bg-white border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-400/40 focus:border-blue-400';
+const MODAL_LABEL = 'text-sm font-semibold text-gray-700';
+
 const EDIT_KEYS = [
   ['personName', 'Person name'],
   ['companyName', 'Company name'],
@@ -25,14 +31,16 @@ const EDIT_KEYS = [
   ['whatsappNumber', 'WhatsApp'],
   ['linkedin', 'LinkedIn'],
   ['commodity', 'Commodity'],
-  ['companyAddress', 'Street / company address'],
+  ['companyEmail', 'Company email'],
   ['city', 'City'],
   ['state', 'State'],
   ['country', 'Country'],
   ['zipcode', 'Zip / postal'],
   ['shippingTo', 'Shipping to'],
-  ['companyEmail', 'Company email'],
+  ['companyAddress', 'Street / company address'],
 ];
+
+const MULTILINE_KEYS = new Set(['companyAddress']);
 
 function rowToForm(c) {
   const o = {};
@@ -114,40 +122,79 @@ export default function SalesDayCustomerEditModal({ open, customer, onClose, onS
     }
   };
 
+  const gridFields = EDIT_KEYS.filter(([k]) => !MULTILINE_KEYS.has(k));
+  const multilineFields = EDIT_KEYS.filter(([k]) => MULTILINE_KEYS.has(k));
+
   return (
     <div className="fixed inset-0 z-[220] flex items-center justify-center bg-black/45 p-4">
-      <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto flex flex-col">
-        <div className="flex items-center justify-between border-b px-4 py-3 sticky top-0 bg-white">
-          <h3 className="font-semibold text-gray-900">Edit import row</h3>
-          <button type="button" onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 text-gray-600" aria-label="Close">
-            <X size={20} />
+      <div className={`max-w-3xl ${MODAL_SHELL}`}>
+        <div className={`${MODAL_HEADER} flex items-start justify-between gap-2`}>
+          <div>
+            <h2 className="text-2xl font-bold text-white tracking-tight">Edit import row</h2>
+            <p className="text-base text-blue-100/95 mt-1 leading-snug">
+              {customer.companyName || customer.personName || 'Lead'}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="shrink-0 rounded-lg p-2 text-white/90 hover:bg-white/15"
+            aria-label="Close"
+            disabled={busy}
+          >
+            <X size={22} />
           </button>
         </div>
-        <div className="p-4 space-y-3">
-          <p className="text-xs text-gray-500">
+
+        <div className="flex-1 overflow-y-auto min-h-0 p-5 space-y-5">
+          <p className="text-sm text-gray-600 leading-relaxed">
             Disposition is unchanged here — use the disposition dropdown on the list. Only fields you change are sent to
             the server.
           </p>
-          {EDIT_KEYS.map(([key, label]) => (
-            <label key={key} className="block">
-              <span className="text-xs font-medium text-gray-600">{label}</span>
-              <input
-                className={`mt-1 w-full border rounded-lg px-3 py-2 text-sm ${
-                  conflictField === key ? 'border-red-500 ring-1 ring-red-200' : 'border-gray-200'
-                }`}
-                value={form[key] ?? ''}
-                onChange={(e) => onChange(key, e.target.value)}
-              />
-            </label>
-          ))}
+          <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-5 space-y-4">
+            <h3 className="text-base font-semibold text-blue-900">Lead details</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {gridFields.map(([key, label]) => (
+                <label key={key} className="block min-w-0">
+                  <span className={`${MODAL_LABEL} block mb-1.5`}>{label}</span>
+                  <input
+                    className={`${MODAL_FIELD} ${
+                      conflictField === key ? 'border-red-500 ring-2 ring-red-100' : ''
+                    }`}
+                    value={form[key] ?? ''}
+                    onChange={(e) => onChange(key, e.target.value)}
+                  />
+                </label>
+              ))}
+            </div>
+            {multilineFields.map(([key, label]) => (
+              <label key={key} className="block min-w-0">
+                <span className={`${MODAL_LABEL} block mb-1.5`}>{label}</span>
+                <textarea
+                  rows={4}
+                  className={`${MODAL_FIELD} resize-y min-h-[6rem] leading-relaxed ${
+                    conflictField === key ? 'border-red-500 ring-2 ring-red-100' : ''
+                  }`}
+                  value={form[key] ?? ''}
+                  onChange={(e) => onChange(key, e.target.value)}
+                />
+              </label>
+            ))}
+          </div>
         </div>
-        <div className="border-t px-4 py-3 flex justify-end gap-2 sticky bottom-0 bg-white">
-          <button type="button" className="px-3 py-2 rounded-lg border text-sm" onClick={onClose} disabled={busy}>
+
+        <div className="border-t border-gray-100 px-5 py-4 flex justify-end gap-3 shrink-0 bg-white">
+          <button
+            type="button"
+            className="px-5 py-3 rounded-xl border border-gray-300 bg-white text-base font-semibold text-gray-700 hover:bg-gray-50"
+            onClick={onClose}
+            disabled={busy}
+          >
             Cancel
           </button>
           <button
             type="button"
-            className="px-3 py-2 rounded-lg bg-blue-600 text-white text-sm disabled:opacity-50"
+            className="px-5 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 text-white text-base font-semibold hover:from-blue-700 hover:to-violet-700 disabled:opacity-50"
             onClick={submit}
             disabled={busy}
           >
