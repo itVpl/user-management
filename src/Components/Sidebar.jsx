@@ -113,9 +113,7 @@ const DEPARTMENT_MODULE_CATEGORIES = {
     "Office Management": ["Office Expenses", "Office Inventory"]
   },
   "Sales": {
-    "Rate Requests": [
-      "Exporter Rate Requests"
-    ],
+    "Rate Requests": ["Exporter Rate Requests", "Quote Request"],
     "Customer Management": [
       "Add Customer",
       "Add Agent",
@@ -259,6 +257,7 @@ const DEPARTMENT_MODULE_CATEGORIES = {
   },
   "Sales_UNIVERSAL": {
     "Sales Modules": [
+      "Quote Request",
       "Exporter Rate Requests",
       "Daily Follow-Up",
       "Loads",
@@ -442,6 +441,7 @@ const menuItems = [
   { name: "Employee Target Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/employee-target-report" },
   { name: "Rate Request", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/RateRequest" },
   { name: "Exporter Rate Requests", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/sales/exporter-rate-requests" },
+  { name: "Quote Request", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/quote-request" },
   { name: "All Rate Request", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/all-rate-request" },
   { name: "Rate Suggestion", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/rate-suggestion" },
   { name: "Rate Approved", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/RateApproved" },
@@ -1672,6 +1672,11 @@ const Sidebar = () => {
           }
           if (salesActive && incomingBuyersItem && !matchedMenus.some((m) => m.name === 'My Incoming Buyers')) {
             matchedMenus = [...matchedMenus, incomingBuyersItem];
+          }
+
+          const quoteRequestMenuItem = menuItems.find((i) => i.name === 'Quote Request');
+          if (isSuperAdmin && quoteRequestMenuItem && !matchedMenus.some((m) => m.name === 'Quote Request')) {
+            matchedMenus = [...matchedMenus, quoteRequestMenuItem];
           }
 
           console.log("✅ Final filtered menu items:", matchedMenus.map(m => m.name));
