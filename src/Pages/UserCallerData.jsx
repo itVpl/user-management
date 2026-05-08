@@ -58,6 +58,11 @@ const getAuthHeaders = () => {
   return tz ? { ...base, "X-Time-Zone": tz } : base;
 };
 
+const getEmployeeId = (userLike) =>
+  String(userLike?.empId ?? userLike?.empID ?? userLike?.employeeId ?? "")
+    .trim()
+    .toUpperCase();
+
 // Fallback category options if API fails (“Follow up” opens a modal, not a dropdown option)
 const CATEGORY_OPTIONS_FALLBACK = [
   "No answer", "Voice mail", "Call drop", "RPC Not Available", "Call back",
@@ -418,11 +423,13 @@ const UserCallDashboard = () => {
   // Notification state
   const [notification, setNotification] = useState({ show: false, message: '', type: 'info' });
 
-  const fetchData = async (alias, date, identificaAliasName) => {
+  const fetchData = async (alias, date, identificaAliasName, empId) => {
     const from = `${date} 00:00:00`;
     const to = `${date} 23:59:59`;
     const headers = getAuthHeaders();
     const ident = String(identificaAliasName ?? "").trim();
+    const normalizedEmpId = String(empId || "").trim().toUpperCase();
+    const isVpl059 = normalizedEmpId === "VPL059";
 
     const extractRows = (payload) => {
       const p = payload || {};
@@ -432,19 +439,36 @@ const UserCallDashboard = () => {
     };
 
     try {
-      const tasks = [
-        axios
-          .get(`${BASE_8X8}/call-records/filter`, {
-            params: { callerName: alias, calleeName: alias, from, to },
-            headers,
-          })
-          .then((res) => ({ base: BASE_8X8, res }))
-          .catch((err) => {
-            console.warn("8x8 call-records/filter failed:", err);
-            return { base: BASE_8X8, res: null };
-          }),
-      ];
-      if (ident) {
+      const tasks = [];
+      if (isVpl059) {
+        const identificaName = "Identifica LLC";
+        tasks.push(
+          axios
+            .get(`${BASE_8X8_TRITON}/call-records/filter`, {
+              params: { callerName: identificaName, calleeName: identificaName, from, to },
+              headers,
+            })
+            .then((res) => ({ base: BASE_8X8_TRITON, res }))
+            .catch((err) => {
+              console.warn("8x8-triton call-records/filter failed for VPL059:", err);
+              return { base: BASE_8X8_TRITON, res: null };
+            })
+        );
+      } else {
+        tasks.push(
+          axios
+            .get(`${BASE_8X8}/call-records/filter`, {
+              params: { callerName: alias, calleeName: alias, from, to },
+              headers,
+            })
+            .then((res) => ({ base: BASE_8X8, res }))
+            .catch((err) => {
+              console.warn("8x8 call-records/filter failed:", err);
+              return { base: BASE_8X8, res: null };
+            })
+        );
+      }
+      if (!isVpl059 && ident) {
         tasks.push(
           axios
             .get(`${BASE_8X8_TRITON}/call-records/filter`, {
@@ -974,7 +998,7 @@ const UserCallDashboard = () => {
       return;
     }
     const identificaAliasName = user.identificaAliasName;
-    fetchData(alias, selectedDate, identificaAliasName);
+    fetchData(alias, selectedDate, identificaAliasName, getEmployeeId(user));
   }, [selectedDate]);
 
   return (
