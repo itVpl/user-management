@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import {
   Mail,
   PhoneCall,
@@ -198,6 +199,12 @@ const Footer = () => {
           <p className="text-center md:text-left">
             © 2026 <span className="text-white font-semibold">V Power</span>. All rights reserved.
           </p>
+          <Link
+            to="/privacy-policy"
+            className="text-gray-400 hover:text-white transition-colors"
+          >
+            Privacy Policy
+          </Link>
         </div>
       </div>
     </footer>

@@ -152,6 +152,7 @@ const Newsletter = lazy(() => import("./Pages/Newsletter.jsx"));
 const OceanQuotePublicForm = lazy(() => import("./Pages/OceanQuotePublicForm.jsx"));
 const OceanQuoteList = lazy(() => import("./Components/Sales/OceanQuoteList.jsx"));
 const OceanQuoteDetail = lazy(() => import("./Components/Sales/OceanQuoteDetail.jsx"));
+const PrivacyPolicy = lazy(() => import("./Pages/PrivacyPolicy.jsx"));
 
 
 // Chat Message System Imports - keep as regular imports (needed globally)
@@ -660,6 +661,7 @@ function App() {
           <Route path="/signup" element={<Signup />} />
           <Route path="/credit-limit-form/:token" element={<CreditLimitForm />} />
           <Route path="/ocean-quote" element={<OceanQuotePublicForm />} />
+          <Route path="/privacy-policy" element={<PrivacyPolicy />} />
 
         {/* Protected Routes */}
         <Route
