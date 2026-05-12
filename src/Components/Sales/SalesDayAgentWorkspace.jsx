@@ -34,6 +34,7 @@ const IMPORT_FIELDS = [
   { key: 'country', label: 'Country' },
   { key: 'zipcode', label: 'Zip / postal' },
   { key: 'shippingTo', label: 'Shipping to' },
+  { key: 'shipmentType', label: 'Shipment type' },
 ];
 
 const HEADER_ALIASES = {
@@ -78,6 +79,7 @@ const HEADER_ALIASES = {
   country: ['country', 'nation'],
   zipcode: ['zip', 'zipcode', 'zip code', 'postal', 'postal code', 'postal_code', 'postalcode'],
   shippingTo: ['shipping to', 'shipping_to', 'ship to', 'destination'],
+  shipmentType: ['shipment type', 'shipment_type', 'shipmenttype', 'ship type'],
 };
 
 function normalizeHeader(h) {
@@ -151,6 +153,7 @@ function rowToCustomer(row, colMap) {
     country: pick('country'),
     zipcode: pick('zipcode'),
     shippingTo: pick('shippingTo'),
+    shipmentType: pick('shipmentType'),
   };
 }
 
@@ -218,6 +221,7 @@ const AGENT_CUSTOMER_EDIT_FIELDS = [
   { key: 'country', label: 'Country', multiline: false },
   { key: 'zipcode', label: 'Zip / postal', multiline: false },
   { key: 'shippingTo', label: 'Shipping to', multiline: false },
+  { key: 'shipmentType', label: 'Shipment type', multiline: false },
   { key: 'companyAddress', label: 'Company address', multiline: true, rows: 3 },
   { key: 'compAdd', label: 'Company address (alt)', multiline: true, rows: 2 },
 ];
@@ -254,6 +258,7 @@ function customerToAgentEditForm(customer) {
     compAdd: pickCustomerStr(customer, ['compAdd', 'comp_add', 'secondaryAddress']),
     commodity: pickCustomerStr(customer, ['commodity', 'product']),
     shippingTo: pickCustomerStr(customer, ['shippingTo', 'shipping_to', 'shipTo']),
+    shipmentType: pickCustomerStr(customer, ['shipmentType', 'shipment_type']),
   };
 }
 
@@ -556,6 +561,7 @@ function AgentCustomerManagePanel() {
               <th className={TABLE_STYLE.th}>Person</th>
               <th className={TABLE_STYLE.th}>Email</th>
               <th className={TABLE_STYLE.th}>Phone</th>
+              <th className={TABLE_STYLE.th}>Shipment type</th>
               <th className={TABLE_STYLE.th}>Password</th>
               <th className={`${TABLE_STYLE.th} ${TABLE_STYLE.tdEnd} text-center`}>Actions</th>
             </tr>
@@ -563,7 +569,7 @@ function AgentCustomerManagePanel() {
           <tbody>
             {!loading && customers.length === 0 ? (
               <tr className={TABLE_STYLE.row}>
-                <td colSpan={6} className={`${TABLE_STYLE.td} ${TABLE_STYLE.tdStart} ${TABLE_STYLE.tdEnd} py-8 text-center text-sm text-gray-500`}>
+                <td colSpan={7} className={`${TABLE_STYLE.td} ${TABLE_STYLE.tdStart} ${TABLE_STYLE.tdEnd} py-8 text-center text-sm text-gray-500`}>
                   No customers found.
                 </td>
               </tr>
@@ -580,6 +586,9 @@ function AgentCustomerManagePanel() {
                     <TruncTd title={c.email}>{c.email || '—'}</TruncTd>
                   </td>
                   <td className={TABLE_STYLE.td}>{c.contactNumber || '—'}</td>
+                  <td className={`${TABLE_STYLE.td} max-w-[6rem]`}>
+                    <TruncTd title={c.shipmentType}>{c.shipmentType || '—'}</TruncTd>
+                  </td>
                   <td className={TABLE_STYLE.td}>
                     <span
                       className={`inline-flex items-center rounded-full px-2 py-0.5 text-[14px] font-semibold ${
@@ -1057,6 +1066,7 @@ function BrowsePanel({ onGoImport }) {
     country: '',
     zipcode: '',
     shippingTo: '',
+    shipmentType: '',
     disposition: '',
     importBatchId: '',
   });
@@ -1087,6 +1097,7 @@ function BrowsePanel({ onGoImport }) {
     filters.country,
     filters.zipcode,
     filters.shippingTo,
+    filters.shipmentType,
     filters.disposition,
     filters.importBatchId,
     debouncedSearch,
@@ -1122,6 +1133,7 @@ function BrowsePanel({ onGoImport }) {
         ...(filters.country.trim() ? { country: filters.country.trim() } : {}),
         ...(filters.zipcode.trim() ? { zipcode: filters.zipcode.trim() } : {}),
         ...(filters.shippingTo.trim() ? { shippingTo: filters.shippingTo.trim() } : {}),
+        ...(filters.shipmentType.trim() ? { shipmentType: filters.shipmentType.trim() } : {}),
         ...(filters.disposition ? { disposition: filters.disposition } : {}),
         ...(filters.importBatchId ? { importBatchId: filters.importBatchId } : {}),
       };
@@ -1151,6 +1163,7 @@ function BrowsePanel({ onGoImport }) {
     filters.country,
     filters.zipcode,
     filters.shippingTo,
+    filters.shipmentType,
     filters.disposition,
     filters.importBatchId,
   ]);
@@ -1352,6 +1365,15 @@ function BrowsePanel({ onGoImport }) {
             />
           </div>
           <div className="flex flex-col gap-1">
+            <span className="text-sm font-medium text-gray-600">Shipment type</span>
+            <input
+              className="w-full border border-gray-200 rounded-xl px-2.5 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400/40 focus:border-blue-400"
+              value={filters.shipmentType}
+              onChange={(e) => setFilters((f) => ({ ...f, shipmentType: e.target.value }))}
+              placeholder="e.g. FCL, LCL"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
             <span className="text-sm font-medium text-gray-600">Disposition</span>
             <select
               className="w-full border border-gray-200 rounded-xl px-2.5 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400/40 focus:border-blue-400"
@@ -1405,6 +1427,7 @@ function BrowsePanel({ onGoImport }) {
                 country: '',
                 zipcode: '',
                 shippingTo: '',
+                shipmentType: '',
                 disposition: '',
                 importBatchId: '',
               });
@@ -1477,7 +1500,7 @@ function BrowsePanel({ onGoImport }) {
                   Ship to
                 </th>
                 <th className={TABLE_STYLE.th}>
-                  Batch
+                  Shipment type
                 </th>
                 <th className={`${TABLE_STYLE.th} min-w-[11rem]`}>
                   Disposition
@@ -1511,9 +1534,7 @@ function BrowsePanel({ onGoImport }) {
                     </TruncTd>
                   </td>
                   <td className={`${TABLE_STYLE.td} max-w-[100px] truncate`}>{c.shippingTo || '—'}</td>
-                  <td className={`${TABLE_STYLE.td} max-w-[6.5rem]`}>
-                    <TruncTd title={c.importBatchId}>{c.importBatchId || '—'}</TruncTd>
-                  </td>
+                  <td className={`${TABLE_STYLE.td} max-w-[100px] truncate`}>{c.shipmentType || '—'}</td>
                   <td className={`${TABLE_STYLE.td} align-top min-w-[11rem]`}>
                     <div className="flex flex-col gap-1.5 max-w-[220px]">
                       <select
