@@ -13,6 +13,7 @@ function conflictApiFieldToFormKey(apiField) {
     name: 'personName',
     phone: 'contactNumber',
     mobile: 'contactNumber',
+    importRemark: 'remark',
   };
   return m[s] || s;
 }
@@ -38,6 +39,7 @@ const EDIT_KEYS = [
   ['zipcode', 'Zip / postal'],
   ['shippingTo', 'Shipping to'],
   ['shipmentType', 'Shipment type'],
+  ['remark', 'Import remark'],
   ['companyAddress', 'Street / company address'],
 ];
 
@@ -46,6 +48,11 @@ const MULTILINE_KEYS = new Set(['companyAddress']);
 function rowToForm(c) {
   const o = {};
   for (const [k] of EDIT_KEYS) {
+    if (k === 'remark') {
+      const raw = c?.remark ?? c?.importRemark;
+      o.remark = String(raw ?? '').trim().toUpperCase() === 'OLD' ? 'OLD' : 'NEW';
+      continue;
+    }
     o[k] = c?.[k] != null ? String(c[k]) : '';
   }
   return o;
@@ -73,6 +80,12 @@ export default function SalesDayCustomerEditModal({ open, customer, onClose, onS
     if (!customer?._id) return null;
     const body = {};
     for (const [k] of EDIT_KEYS) {
+      if (k === 'remark') {
+        const cur = (form.remark ?? 'NEW').toUpperCase() === 'OLD' ? 'OLD' : 'NEW';
+        const orig = (initial.remark ?? 'NEW').toUpperCase() === 'OLD' ? 'OLD' : 'NEW';
+        if (cur !== orig) body.remark = cur;
+        continue;
+      }
       const cur = (form[k] ?? '').trim();
       const orig = (initial[k] ?? '').trim();
       if (cur !== orig) body[k] = cur;
@@ -110,7 +123,7 @@ export default function SalesDayCustomerEditModal({ open, customer, onClose, onS
       const fld = data?.field;
       if (status === 409 && fld) {
         const formKey = conflictApiFieldToFormKey(fld);
-        if (EDIT_KEYS.some(([k]) => k === formKey)) setConflictField(formKey);
+        if (formKey && EDIT_KEYS.some(([k]) => k === formKey)) setConflictField(formKey);
       }
       const allowed = data?.allowedFields;
       if (Array.isArray(allowed)) {
@@ -155,18 +168,37 @@ export default function SalesDayCustomerEditModal({ open, customer, onClose, onS
           <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-5 space-y-4">
             <h3 className="text-base font-semibold text-blue-900">Lead details</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {gridFields.map(([key, label]) => (
-                <label key={key} className="block min-w-0">
-                  <span className={`${MODAL_LABEL} block mb-1.5`}>{label}</span>
-                  <input
-                    className={`${MODAL_FIELD} ${
-                      conflictField === key ? 'border-red-500 ring-2 ring-red-100' : ''
-                    }`}
-                    value={form[key] ?? ''}
-                    onChange={(e) => onChange(key, e.target.value)}
-                  />
-                </label>
-              ))}
+              {gridFields.map(([key, label]) =>
+                key === 'remark' ? (
+                  <label key={key} className="block min-w-0 sm:col-span-2">
+                    <span className={`${MODAL_LABEL} block mb-1.5`}>{label}</span>
+                    <select
+                      className={`${MODAL_FIELD} ${
+                        conflictField === key ? 'border-red-500 ring-2 ring-red-100' : ''
+                      }`}
+                      value={form.remark === 'OLD' ? 'OLD' : 'NEW'}
+                      onChange={(e) => onChange('remark', e.target.value)}
+                    >
+                      <option value="NEW">NEW (dedupe on company name)</option>
+                      <option value="OLD">OLD (allow duplicate company)</option>
+                    </select>
+                    <p className="mt-1.5 text-xs text-gray-500">
+                      Changing to NEW may return 409 if another non-OLD import already uses this company name.
+                    </p>
+                  </label>
+                ) : (
+                  <label key={key} className="block min-w-0">
+                    <span className={`${MODAL_LABEL} block mb-1.5`}>{label}</span>
+                    <input
+                      className={`${MODAL_FIELD} ${
+                        conflictField === key ? 'border-red-500 ring-2 ring-red-100' : ''
+                      }`}
+                      value={form[key] ?? ''}
+                      onChange={(e) => onChange(key, e.target.value)}
+                    />
+                  </label>
+                ),
+              )}
             </div>
             {multilineFields.map(([key, label]) => (
               <label key={key} className="block min-w-0">
