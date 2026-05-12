@@ -1,632 +1,477 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-
-import { useNavigate } from 'react-router-dom';
-
-import { Ship, ChevronLeft, ChevronRight, RefreshCw, User, Users, Eye, Search } from 'lucide-react';
-
+import {
+  Ship,
+  ChevronLeft,
+  ChevronRight,
+  RefreshCw,
+  User,
+  Users,
+  Eye,
+  Search,
+  Package,
+  FileText,
+  ClipboardList,
+  Mail,
+} from 'lucide-react';
 import { format } from 'date-fns';
-
-import { listOceanQuotes } from '../../services/oceanQuoteService.js';
-
+import { listOceanQuotes, getOceanQuoteById } from '../../services/oceanQuoteService.js';
+import { formatEmployeeRefForDisplay } from '../../utils/oceanQuoteDisplay.js';
 import Loader from '../common/Loader.jsx';
-
 import { toast } from 'react-toastify';
-
-
 
 const LIMIT = 20;
 
+function StatCard({ label, value, compact }) {
+  return (
+    <div
+      className={`bg-white border border-gray-200 ${
+        compact
+          ? 'rounded-lg px-3 min-w-[88px] h-14 min-h-14 flex flex-col justify-center shrink-0'
+          : 'rounded-xl p-3'
+      }`}
+    >
+      <p className={`text-gray-500 ${compact ? 'text-[10px] leading-tight' : 'text-xs'}`}>{label}</p>
+      <p className={`font-semibold leading-tight ${compact ? 'text-lg mt-0.5' : 'text-2xl'} text-gray-800`}>
+        {value}
+      </p>
+    </div>
+  );
+}
 
+function DetailField({ label, value, multiline }) {
+  const display =
+    value === undefined || value === null || String(value).trim() === '' ? 'N/A' : String(value);
+  return (
+    <div>
+      <p className="text-xs font-medium text-gray-500">{label}</p>
+      <p className={`mt-0.5 text-sm font-semibold text-gray-900 ${multiline ? 'whitespace-pre-wrap' : ''}`}>
+        {display}
+      </p>
+    </div>
+  );
+}
 
-/** Row spacing + borders (same pattern as Sales day workspace tables). */
+function formatWhen(d) {
+  if (!d) return '—';
+  try {
+    return format(new Date(d), 'dd MMM yyyy, HH:mm');
+  } catch {
+    return '—';
+  }
+}
 
-/** No `do-report-scroll-x` here — that class forces always-visible horizontal scrollbars. */
-const OQ_TABLE_SHELL = 'overflow-x-auto rounded-2xl border border-gray-200 bg-gray-50 p-3';
-
-const OQ_TABLE = 'min-w-full border-separate border-spacing-y-2.5 text-base font-sans';
-
-const OQ_HEAD = 'text-left';
-
-const OQ_TH =
-
-  'px-4 py-3 text-sm font-semibold uppercase tracking-wide text-gray-500 whitespace-nowrap bg-white border-y border-gray-200';
-
-const OQ_TD = 'px-4 py-3 text-base font-medium text-gray-800 align-middle bg-white border-y border-gray-200';
-
-const OQ_CELL_START = 'rounded-l-xl border-l border-gray-200';
-
-const OQ_CELL_END = 'rounded-r-xl border-r border-gray-200';
-
-const BTN_SECONDARY =
-
-  'cursor-pointer inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none';
-
-const BTN_TOGGLE_ACTIVE = 'cursor-pointer bg-blue-600 text-white';
-
-const BTN_TOGGLE_IDLE = 'cursor-pointer text-gray-600 hover:bg-gray-50';
-
-const BTN_VIEW =
-
-  'cursor-pointer inline-flex items-center gap-1.5 rounded-xl border-1 border-blue-600 bg-white px-3 py-2 text-sm font-semibold text-blue-700 transition-colors hover:bg-blue-500 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-400/50 focus:ring-offset-1';
-
-
+function formatDateOnly(d) {
+  if (!d) return null;
+  try {
+    return format(new Date(d), 'dd MMM yyyy');
+  } catch {
+    return null;
+  }
+}
 
 function rowMatchesQuery(row, q) {
-
   if (!q.trim()) return true;
-
   const needle = q.trim().toLowerCase();
-
   const haystack = [
-
     row.name,
-
     row.email,
-
     row.phoneNumber,
-
     row.originPort,
-
     row.destinationPort,
-
     row.cargoType,
-
     row.containerType,
-
     row.assignedTo?.employeeName,
-
     row.assignedTo?.empId != null ? String(row.assignedTo.empId) : '',
-
   ]
-
     .filter(Boolean)
-
     .join(' ')
-
     .toLowerCase();
-
   return haystack.includes(needle);
-
 }
-
-
 
 export default function OceanQuoteList() {
-
-  const navigate = useNavigate();
-
   const [items, setItems] = useState([]);
-
-  const [pagination, setPagination] = useState({ page: 1, limit: LIMIT, totalItems: 0, totalPages: 1 });
-
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: LIMIT,
+    totalItems: 0,
+    totalPages: 1,
+  });
   const [loading, setLoading] = useState(true);
-
   const [mineOnly, setMineOnly] = useState(true);
-
   const [accessError, setAccessError] = useState(null);
-
   const [searchQuery, setSearchQuery] = useState('');
 
-
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [selectedDetail, setSelectedDetail] = useState(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
 
   const fetchPage = useCallback(
-
     async (page) => {
-
       setLoading(true);
-
       setAccessError(null);
-
       try {
-
         const res = await listOceanQuotes({ page, limit: LIMIT, mine: mineOnly });
-
         if (res.data?.success) {
-
           setItems(Array.isArray(res.data.data) ? res.data.data : []);
-
           const p = res.data.pagination || {};
-
           setPagination({
-
             page: p.page ?? page,
-
             limit: p.limit ?? LIMIT,
-
             totalItems: p.totalItems ?? 0,
-
             totalPages: Math.max(p.totalPages ?? 1, 1),
-
           });
-
         } else {
-
           setItems([]);
-
           toast.error(res.data?.message || 'Failed to load quotes');
-
         }
-
       } catch (err) {
-
         console.error(err);
-
         const status = err?.response?.status;
-
         const msg = err?.response?.data?.message || err?.message || 'Failed to load quotes';
-
-        if (status === 403) {
-
-          setAccessError(msg);
-
-        } else {
-
-          toast.error(msg);
-
-        }
-
+        if (status === 403) setAccessError(msg);
+        else toast.error(msg);
         setItems([]);
-
       } finally {
-
         setLoading(false);
-
       }
-
     },
-
     [mineOnly],
-
   );
-
-
 
   useEffect(() => {
-
     fetchPage(1);
-
   }, [fetchPage]);
 
-
-
-  const filteredItems = useMemo(
-
-    () => items.filter((row) => rowMatchesQuery(row, searchQuery)),
-
-    [items, searchQuery],
-
-  );
-
-
+  const filteredItems = useMemo(() => items.filter((row) => rowMatchesQuery(row, searchQuery)), [items, searchQuery]);
 
   const goPage = (next) => {
-
     const p = pagination.page + next;
-
     if (p < 1 || p > pagination.totalPages) return;
-
     fetchPage(p);
-
   };
 
-
-
-  const formatWhen = (d) => {
-
-    if (!d) return '—';
-
+  const handleViewRequest = async (id) => {
+    setShowDetailModal(true);
+    setSelectedDetail(null);
+    setLoadingDetail(true);
     try {
-
-      return format(new Date(d), 'dd MMM yyyy, HH:mm');
-
-    } catch {
-
-      return '—';
-
+      const res = await getOceanQuoteById(id);
+      if (res.data?.success) setSelectedDetail(res.data.data);
+      else toast.error(res.data?.message || 'Failed to load detail');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to load detail');
+    } finally {
+      setLoadingDetail(false);
     }
-
   };
-
-
 
   const searchTrim = searchQuery.trim();
+  const statTotal = searchTrim ? filteredItems.length : pagination.totalItems;
 
-
+  const quote = selectedDetail;
 
   return (
+    <div className="p-6">
+      <div className="bg-white border border-gray-200 rounded-xl p-4 mb-6">
+        <div className="flex flex-wrap items-stretch gap-3">
+          <StatCard label="Total" value={statTotal} compact />
 
-    <div className="min-h-screen bg-gray-50 p-4 md:p-6">
-
-      <div className="mx-auto max-w-7xl">
-
-        <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-
-          <div className="flex items-center gap-3">
-
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white">
-
-              <Ship className="h-5 w-5" aria-hidden />
-
-            </div>
-
-            <div>
-
-              <h1 className="text-2xl font-bold tracking-tight text-gray-900">Quote request</h1>
-
-              <p className="text-base text-gray-500">Ocean quote leads (round-robin assignment)</p>
-
-            </div>
-
+          <div className="relative flex-1 min-w-[180px] max-w-lg h-14 min-h-14">
+            <input
+              type="text"
+              placeholder="Search name / email / route / cargo / assignee"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="h-full w-full min-h-0 box-border pl-3 pr-9 text-sm leading-none bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+            />
+            <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-
-            <div className="inline-flex rounded-xl border border-gray-200 bg-white p-1">
-
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 ml-auto shrink-0 min-h-14">
+            <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-0.5">
               <button
-
                 type="button"
-
                 onClick={() => setMineOnly(true)}
-
-                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold ${mineOnly ? BTN_TOGGLE_ACTIVE : BTN_TOGGLE_IDLE}`}
-
+                className={`inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                  mineOnly ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-white'
+                }`}
               >
-
-                <User size={18} aria-hidden /> My queue
-
+                <User size={16} aria-hidden /> My queue
               </button>
-
               <button
-
                 type="button"
-
                 onClick={() => setMineOnly(false)}
-
-                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold ${!mineOnly ? BTN_TOGGLE_ACTIVE : BTN_TOGGLE_IDLE}`}
-
+                className={`inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                  !mineOnly ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-white'
+                }`}
               >
-
-                <Users size={18} aria-hidden /> Team inbox
-
+                <Users size={16} aria-hidden /> Team inbox
               </button>
-
             </div>
-
-          </div>
-
-        </div>
-
-
-
-        <div className="mb-4 rounded-2xl border border-gray-200 bg-white p-4">
-
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch sm:gap-3">
-
-            <div className="relative min-w-0 flex-1">
-
-              <label htmlFor="ocean-quote-search" className="sr-only">
-
-                Search quotes
-
-              </label>
-
-              <Search
-
-                className="pointer-events-none absolute left-3 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-gray-400"
-
-                aria-hidden
-
-              />
-
-              <input
-
-                id="ocean-quote-search"
-
-                type="search"
-
-                placeholder="Search this page — name, email, phone, lanes, cargo, assignee…"
-
-                value={searchQuery}
-
-                onChange={(e) => setSearchQuery(e.target.value)}
-
-                className="w-full cursor-text rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-base text-gray-900 placeholder:text-gray-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400/30"
-
-                autoComplete="off"
-
-              />
-
-            </div>
-
             <button
-
               type="button"
-
               onClick={() => fetchPage(pagination.page)}
-
-              className={`${BTN_SECONDARY} shrink-0 justify-center sm:w-auto`}
-
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-gray-200 bg-white hover:bg-gray-50 transition-colors whitespace-nowrap"
             >
-
-              <RefreshCw size={18} aria-hidden /> Refresh
-
+              <RefreshCw size={16} aria-hidden /> Refresh
             </button>
-
           </div>
-
-          {searchTrim ? (
-
-            <p className="mt-2 text-sm text-gray-500">
-
-              Showing {filteredItems.length} match{filteredItems.length === 1 ? '' : 'es'} on page {pagination.page} (
-
-              filtered from this page only).
-
-            </p>
-
-          ) : null}
-
         </div>
-
-
-
-        {accessError && (
-
-          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-base text-amber-900">
-
-            {accessError}
-
-          </div>
-
-        )}
-
-
-
-        <div className="overflow-hidden rounded-2xl bg-white">
-
-          {loading ? (
-
-            <Loader message="Loading quotes…" />
-
-          ) : items.length === 0 ? (
-
-            <div className="p-10 text-center text-base text-gray-500">No ocean quotes yet for this view.</div>
-
-          ) : filteredItems.length === 0 ? (
-
-            <div className="p-10 text-center text-base text-gray-600">
-
-              No rows match “{searchTrim}”. Try another term or clear the search.
-
-            </div>
-
-          ) : (
-
-            <div className="p-0 sm:p-1">
-
-              <div className={OQ_TABLE_SHELL}>
-
-                <table className={OQ_TABLE}>
-
-                  <thead className={OQ_HEAD}>
-
-                    <tr>
-
-                      <th scope="col" className={`${OQ_TH} ${OQ_CELL_START}`}>
-
-                        Submitted
-
-                      </th>
-
-                      <th scope="col" className={OQ_TH}>
-
-                        Customer
-
-                      </th>
-
-                      <th scope="col" className={OQ_TH}>
-
-                        Lane
-
-                      </th>
-
-                      <th scope="col" className={OQ_TH}>
-
-                        Cargo
-
-                      </th>
-
-                      <th scope="col" className={OQ_TH}>
-
-                        Assigned
-
-                      </th>
-
-                      <th scope="col" className={`${OQ_TH} ${OQ_CELL_END} text-right`}>
-
-                        Actions
-
-                      </th>
-
-                    </tr>
-
-                  </thead>
-
-                  <tbody>
-
-                    {filteredItems.map((row) => (
-
-                      <tr key={row._id} className="bg-white">
-
-                        <td className={`${OQ_TD} whitespace-nowrap text-gray-700 ${OQ_CELL_START}`}>
-
-                          {formatWhen(row.createdAt)}
-
-                        </td>
-
-                        <td className={OQ_TD}>
-
-                          <div className="font-semibold text-gray-900">{row.name || '—'}</div>
-
-                          <div className="text-sm font-normal text-gray-500">{row.email || '—'}</div>
-
-                          {row.phoneNumber ? (
-
-                            <div className="text-sm font-normal text-gray-500">{row.phoneNumber}</div>
-
-                          ) : null}
-
-                        </td>
-
-                        <td className={`${OQ_TD} max-w-[220px]`}>
-
-                          <div className="truncate font-medium text-gray-800" title={row.originPort}>
-
-                            {row.originPort || '—'}
-
-                          </div>
-
-                          <div className="truncate text-sm font-normal text-gray-500" title={row.destinationPort}>
-
-                            → {row.destinationPort || '—'}
-
-                          </div>
-
-                        </td>
-
-                        <td className={`${OQ_TD} max-w-[200px]`}>
-
-                          <div className="truncate font-medium text-gray-800" title={row.cargoType}>
-
-                            {row.cargoType || '—'}
-
-                          </div>
-
-                          {row.containerType ? (
-
-                            <div className="text-sm font-normal text-gray-500">{row.containerType}</div>
-
-                          ) : null}
-
-                        </td>
-
-                        <td className={`${OQ_TD} whitespace-nowrap text-gray-800`}>
-
-                          {row.assignedTo?.employeeName || (
-
-                            <span className="font-normal text-gray-400">Unassigned</span>
-
-                          )}
-
-                          {row.assignedTo?.empId ? (
-
-                            <span className="ml-1 text-sm font-normal text-gray-500">
-
-                              ({row.assignedTo.empId})
-
-                            </span>
-
-                          ) : null}
-
-                        </td>
-
-                        <td className={`${OQ_TD} whitespace-nowrap text-right ${OQ_CELL_END}`}>
-
-                          <button
-
-                            type="button"
-
-                            onClick={() => navigate(`/quote-request/${row._id}`)}
-
-                            className={BTN_VIEW}
-
-                            aria-label={`View customer details for ${row.name || 'quote'}`}
-
-                          >
-
-                            {/* <Eye size={16} aria-hidden /> */}
-
-                            View
-
-                          </button>
-
-                        </td>
-
-                      </tr>
-
-                    ))}
-
-                  </tbody>
-
-                </table>
-
-              </div>
-
-            </div>
-
-          )}
-
-
-
-          {!loading && pagination.totalPages > 1 && (
-
-            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 px-4 py-3 text-base text-gray-600">
-
-              <span>
-
-                Page {pagination.page} of {pagination.totalPages} ({pagination.totalItems} total)
-
-              </span>
-
-              <div className="flex gap-2">
-
-                <button
-
-                  type="button"
-
-                  disabled={pagination.page <= 1}
-
-                  onClick={() => goPage(-1)}
-
-                  className={BTN_SECONDARY}
-
-                >
-
-                  <ChevronLeft size={18} aria-hidden /> Previous
-
-                </button>
-
-                <button
-
-                  type="button"
-
-                  disabled={pagination.page >= pagination.totalPages}
-
-                  onClick={() => goPage(1)}
-
-                  className={BTN_SECONDARY}
-
-                >
-
-                  Next <ChevronRight size={18} aria-hidden />
-
-                </button>
-
-              </div>
-
-            </div>
-
-          )}
-
-        </div>
-
+        {searchTrim ? (
+          <p className="mt-2 text-xs text-gray-500">
+            Showing {filteredItems.length} match{filteredItems.length === 1 ? '' : 'es'} on this page (client filter).
+          </p>
+        ) : null}
       </div>
 
+      {accessError && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {accessError}
+        </div>
+      )}
+
+      <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden p-6">
+        <h2 className="text-2xl font-bold text-gray-900 mb-6">Ocean Quote Inbox</h2>
+
+        {loading ? (
+          <p className="p-4 text-sm text-gray-500">Loading quotes...</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse border-spacing-0">
+              <thead>
+                <tr className="bg-[#F1F4F9]">
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base rounded-l-2xl">Quote ID</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Customer</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Route</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Submitted</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base rounded-r-2xl">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredItems.map((item) => (
+                  <tr key={item._id} className="border-b border-gray-200 hover:bg-gray-50 transition-colors">
+                    <td
+                      className="py-4 px-4 text-sm font-medium text-gray-700 font-mono"
+                      title={item._id ? String(item._id) : undefined}
+                    >
+                      {item._id ? String(item._id).slice(-8) : '—'}
+                    </td>
+                    <td className="py-4 px-4">
+                      <p className="text-sm font-medium text-gray-900">{item.name || 'N/A'}</p>
+                      <p className="text-xs text-gray-500">{item.email || 'N/A'}</p>
+                    </td>
+                    <td className="py-4 px-4 text-sm text-gray-700">
+                      {item.originPort || '-'} to {item.destinationPort || '-'}
+                    </td>
+                    <td className="py-4 px-4 text-sm text-gray-700">{formatWhen(item.createdAt)}</td>
+                    <td className="py-4 px-4">
+                      <button
+                        type="button"
+                        onClick={() => handleViewRequest(item._id)}
+                        className="px-3 py-1 border border-blue-500 text-blue-500 rounded-md text-sm font-medium hover:bg-blue-50 transition-colors inline-flex items-center gap-1"
+                      >
+                        <Eye size={12} /> View
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {!loading && items.length === 0 && (
+          <div className="text-center py-12">
+            <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+            <p className="text-gray-500 text-lg">No quotes found</p>
+            <p className="text-gray-400 text-sm">Try Team inbox or adjust filters</p>
+          </div>
+        )}
+
+        {!loading && items.length > 0 && filteredItems.length === 0 && (
+          <div className="text-center py-12">
+            <p className="text-gray-500 text-sm">No rows match your search on this page.</p>
+          </div>
+        )}
+
+        {!loading && pagination.totalPages > 1 && (
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 pt-4 text-sm text-gray-600">
+            <span>
+              Page {pagination.page} of {pagination.totalPages} ({pagination.totalItems} total)
+            </span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={pagination.page <= 1}
+                onClick={() => goPage(-1)}
+                className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 hover:bg-gray-50 disabled:opacity-40"
+              >
+                <ChevronLeft size={16} aria-hidden /> Previous
+              </button>
+              <button
+                type="button"
+                disabled={pagination.page >= pagination.totalPages}
+                onClick={() => goPage(1)}
+                className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 hover:bg-gray-50 disabled:opacity-40"
+              >
+                Next <ChevronRight size={16} aria-hidden />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {showDetailModal && (
+        <div
+          className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
+          onClick={() => setShowDetailModal(false)}
+        >
+          <div
+            className="bg-white rounded-3xl shadow-2xl w-full max-w-6xl max-h-[95vh] flex flex-col border border-gray-200 overflow-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-5 rounded-t-3xl shrink-0">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+                    <Eye size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-semibold">Quote detail</h3>
+                    <p className="text-blue-100 text-sm">Ocean quote — customer and shipment details</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="text-white/80 hover:text-white text-xl font-bold leading-none px-1"
+                  onClick={() => setShowDetailModal(false)}
+                  aria-label="Close"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-5 bg-gray-50">
+              {loadingDetail ? (
+                <p className="text-sm text-gray-500">Loading detail...</p>
+              ) : !quote ? (
+                <p className="text-sm text-red-600">Failed to load detail.</p>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Quote ID</p>
+                      <p className="mt-1 font-mono text-lg font-bold text-slate-900 break-all">
+                        {quote._id || 'N/A'}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-teal-50/80 p-5 shadow-sm">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800">
+                        Preferred shipping
+                      </p>
+                      <p className="mt-1 text-lg font-semibold text-slate-900">
+                        {formatDateOnly(quote.preferredShippingDate) ?? 'N/A'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-blue-100 bg-blue-50/80 p-5">
+                    <h4 className="mb-4 flex items-center gap-2 text-sm font-semibold text-blue-900">
+                      <FileText size={18} className="text-blue-600" />
+                      Customer details
+                    </h4>
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                      <DetailField label="Name" value={quote.name} />
+                      <div>
+                        <p className="text-xs font-medium text-gray-500">Email</p>
+                        {quote.email ? (
+                          <a
+                            href={`mailto:${quote.email}`}
+                            className="mt-0.5 inline-flex items-center gap-1 text-sm font-semibold text-blue-600 hover:underline"
+                          >
+                            <Mail size={14} aria-hidden />
+                            {quote.email}
+                          </a>
+                        ) : (
+                          <p className="mt-0.5 text-sm font-semibold text-gray-900">N/A</p>
+                        )}
+                      </div>
+                      <DetailField label="Phone" value={quote.phoneNumber} />
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-emerald-100 bg-emerald-50/80 p-5">
+                    <h4 className="mb-4 flex items-center gap-2 text-sm font-semibold text-emerald-900">
+                      <Ship size={18} className="text-emerald-600" />
+                      Shipment details
+                    </h4>
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                      <DetailField label="Origin port" value={quote.originPort} />
+                      <DetailField label="Destination port" value={quote.destinationPort} />
+                      <DetailField label="Cargo type" value={quote.cargoType} />
+                      <DetailField label="Container type" value={quote.containerType} />
+                      <DetailField
+                        label="Weight (kg)"
+                        value={quote.weightKg != null ? String(quote.weightKg) : undefined}
+                      />
+                      <DetailField
+                        label="Volume (CBM)"
+                        value={quote.volumeCbm != null ? String(quote.volumeCbm) : undefined}
+                      />
+                      <DetailField label="Incoterms" value={quote.incoterms} />
+                      <DetailField label="Preferred shipping date" value={quote.preferredShippingDate} />
+                      <div className="md:col-span-2">
+                        <DetailField label="Additional information" value={quote.additionalInformation} multiline />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-indigo-100 bg-indigo-50/80 p-5">
+                    <h4 className="mb-4 flex items-center gap-2 text-sm font-semibold text-indigo-900">
+                      <ClipboardList size={18} className="text-indigo-600" />
+                      Assignment &amp; system
+                    </h4>
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                      <DetailField label="Assignee (name)" value={quote.assignedTo?.employeeName} />
+                      <DetailField label="Assignee emp ID" value={quote.assignedTo?.empId} />
+                      <DetailField
+                        label="Assignee employee"
+                        value={formatEmployeeRefForDisplay(quote.assignedTo?.employeeId)}
+                      />
+                      <div>
+                        <p className="text-xs font-medium text-gray-500">Assignee email</p>
+                        {quote.assignedTo?.email ? (
+                          <a
+                            href={`mailto:${quote.assignedTo.email}`}
+                            className="mt-0.5 text-sm font-semibold text-blue-600 hover:underline"
+                          >
+                            {quote.assignedTo.email}
+                          </a>
+                        ) : (
+                          <p className="mt-0.5 text-sm font-semibold text-gray-900">N/A</p>
+                        )}
+                      </div>
+                      <DetailField
+                        label="Assignment email sent at"
+                        value={formatWhen(quote.assignmentNoticeEmailSentAt)}
+                      />
+                      <DetailField
+                        label="Assignment email error"
+                        value={quote.assignmentNoticeEmailError}
+                        multiline
+                      />
+                      <DetailField label="Created" value={formatWhen(quote.createdAt)} />
+                      <DetailField label="Updated" value={formatWhen(quote.updatedAt)} />
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
-
   );
-
 }
-
-

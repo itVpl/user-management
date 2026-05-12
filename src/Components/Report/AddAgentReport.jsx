@@ -140,6 +140,7 @@ const rowToEditForm = (row) => {
     country: loc?.country ?? "",
     zipcode: loc?.zipcode ?? "",
     shippingTo: row?.shippingTo ?? "",
+    shipmentType: row?.shipmentType ?? "",
   };
 };
 
@@ -367,6 +368,7 @@ export default function AddAgentReport() {
         country: editForm.country.trim(),
         zipcode: editForm.zipcode.trim(),
         shippingTo: editForm.shippingTo.trim(),
+        shipmentType: editForm.shipmentType.trim(),
       };
       const res = await axios.patch(url, body, getAuthConfig());
       if (res?.data?.success === false) {
@@ -530,7 +532,7 @@ export default function AddAgentReport() {
                       patchSearchParams({ search: searchDraft.trim(), page: 1 });
                     }
                   }}
-                  placeholder="Name, company, email, phone, location, customer id, import batch id…"
+                  placeholder="Name, company, email, phone, shipment type, location, customer id, import batch…"
                   className={`${FIELD_INPUT} pl-10`}
                 />
               </div>
@@ -742,6 +744,9 @@ export default function AddAgentReport() {
                     Contact
                   </th>
                   <th className="text-left px-4 md:px-5 py-3.5 text-[11px] font-bold uppercase tracking-wider text-gray-500">
+                    Shipment type
+                  </th>
+                  <th className="text-left px-4 md:px-5 py-3.5 text-[11px] font-bold uppercase tracking-wider text-gray-500">
                     Created by
                   </th>
                   <th className="text-left px-4 md:px-5 py-3.5 text-[11px] font-bold uppercase tracking-wider text-gray-500">
@@ -755,7 +760,7 @@ export default function AddAgentReport() {
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-16 text-center">
+                    <td colSpan={8} className="px-4 py-16 text-center">
                       <div className="flex flex-col items-center justify-center gap-3 text-gray-500">
                         <Loader2 className="h-10 w-10 animate-spin text-indigo-500" />
                         <p className="text-sm font-medium text-gray-600">
@@ -766,7 +771,7 @@ export default function AddAgentReport() {
                   </tr>
                 ) : rows.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-16 text-center">
+                    <td colSpan={8} className="px-4 py-16 text-center">
                       <div className="mx-auto flex max-w-md flex-col items-center gap-4">
                         <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-100 text-gray-400 ring-1 ring-gray-200/80">
                           <Inbox className="h-8 w-8" strokeWidth={1.5} />
@@ -859,6 +864,9 @@ export default function AddAgentReport() {
                         <div className="text-xs text-gray-500 break-all mt-1">
                           {row.email || "—"}
                         </div>
+                      </td>
+                      <td className="px-4 md:px-5 py-3.5 align-top text-gray-700 max-w-[140px]">
+                        <span className="text-gray-800">{row.shipmentType || "—"}</span>
                       </td>
                       <td className="px-4 md:px-5 py-3.5 align-top text-gray-700">
                         <span className="font-medium text-gray-900">
@@ -1024,6 +1032,7 @@ export default function AddAgentReport() {
                   ["country", "Country"],
                   ["zipcode", "Zip / postal"],
                   ["shippingTo", "Shipping to"],
+                  ["shipmentType", "Shipment type"],
                 ].map(([name, label]) => (
                   <div
                     key={name}

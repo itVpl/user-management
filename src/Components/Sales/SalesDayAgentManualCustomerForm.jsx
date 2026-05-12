@@ -17,6 +17,7 @@ const initialForm = {
   country: '',
   zipcode: '',
   shippingTo: '',
+  shipmentType: '',
 };
 
 const emailRegex = /^[^\s@]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
@@ -55,6 +56,9 @@ export default function SalesDayAgentManualCustomerForm() {
       if (t.length < 5 || t.length > 300) e.companyAddress = 'Company address must be 5-300 characters.';
     }
     if (data.linkedin && data.linkedin.trim().length > 255) e.linkedin = 'LinkedIn must be at most 255 characters.';
+    if (data.shipmentType && data.shipmentType.trim().length > 200) {
+      e.shipmentType = 'Shipment type must be at most 200 characters.';
+    }
     if (data.zipcode?.trim()) {
       const z = data.zipcode.replace(/[^a-zA-Z0-9]/g, '');
       if (!zipRegex.test(z)) e.zipcode = 'Invalid zip/postal code.';
@@ -109,6 +113,7 @@ export default function SalesDayAgentManualCustomerForm() {
         country: form.country.trim(),
         zipcode: form.zipcode.trim(),
         shippingTo: form.shippingTo.trim(),
+        shipmentType: form.shipmentType.trim(),
       };
       const payload = Object.fromEntries(
         Object.entries(cleaned).filter(([, val]) => val !== '' && val !== undefined),
@@ -364,6 +369,22 @@ export default function SalesDayAgentManualCustomerForm() {
               className={fieldClass(errors.shippingTo) + ' mt-1.5'}
             />
             {errors.shippingTo && <p className="text-red-600 text-sm mt-1.5">{errors.shippingTo}</p>}
+          </div>
+          <div>
+            <label className="text-sm font-semibold text-gray-700" htmlFor="sda-shipmentType">
+              Shipment type
+            </label>
+            <input
+              id="sda-shipmentType"
+              name="shipmentType"
+              value={form.shipmentType}
+              onChange={onChange}
+              onBlur={onBlur}
+              maxLength={200}
+              className={fieldClass(errors.shipmentType) + ' mt-1.5'}
+              placeholder="e.g. FCL, LCL, Air (optional)"
+            />
+            {errors.shipmentType && <p className="text-red-600 text-sm mt-1.5">{errors.shipmentType}</p>}
           </div>
         </div>
       </div>

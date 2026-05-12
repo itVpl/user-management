@@ -37,6 +37,7 @@ const EDIT_KEYS = [
   ['country', 'Country'],
   ['zipcode', 'Zip / postal'],
   ['shippingTo', 'Shipping to'],
+  ['shipmentType', 'Shipment type'],
   ['companyAddress', 'Street / company address'],
 ];
 
