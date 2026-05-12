@@ -1,24 +1,26 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import axios from "axios";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Search,
-  ChevronLeft,
-  ChevronRight,
   X,
-  Pencil,
-  Calendar,
   BarChart3,
   Users,
-  Filter,
   Loader2,
-  Inbox,
   RefreshCw,
+  Calendar,
+  ChevronDown,
 } from "lucide-react";
 import { toast } from "react-toastify";
 import API_CONFIG from "../../config/api";
 
-const DEFAULT_LIMIT = 20;
+const DEFAULT_LIMIT = 10;
 const LIMIT_OPTIONS = [10, 20, 50, 100];
 const SORT_FIELDS = [
   { value: "createdAt", label: "Created" },
@@ -124,6 +126,132 @@ const FIELD_INPUT =
 const FIELD_SELECT =
   "w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-800 transition-colors hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/25 focus:border-indigo-500 disabled:opacity-55 disabled:cursor-not-allowed";
 
+/** Match `SalesDayAgentWorkspace.jsx` Review &amp; filter — table + pagination shell. */
+const TABLE_STYLE = {
+  /** `overflow-x-auto` only — avoid `do-report-scroll-x` (always-visible scrollbar). */
+  shell:
+    "overflow-x-auto rounded-2xl border border-gray-200 bg-gray-50 p-3",
+  table: "min-w-full border-separate border-spacing-y-2.5 text-[13px] font-sans",
+  head: "text-left",
+  th: "px-4 py-3 text-[14px] font-semibold uppercase tracking-wide text-gray-500 whitespace-nowrap bg-white border-y border-gray-200",
+  row: "bg-white",
+  td: "px-4 py-3 text-[16px] font-medium text-gray-700 align-middle bg-white border-y border-gray-200",
+  tdStart: "rounded-l-xl border-l border-gray-200",
+  tdEnd: "rounded-r-xl border-r border-gray-200",
+};
+
+const PAGINATION_STYLE = {
+  wrap: "mt-4 w-full rounded-xl border border-gray-200 bg-white px-4 py-3",
+  meta: "text-base text-gray-500",
+  nav: "flex items-center gap-1 gap-x-2",
+  link: "cursor-pointer px-2 py-0.5 text-base font-medium text-gray-700 rounded-md hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent",
+  pageBtn:
+    "cursor-pointer min-w-8 h-8 px-1.5 inline-flex items-center justify-center rounded-md text-base font-semibold tabular-nums transition-colors box-border leading-none",
+  pageInactive: "border-2 border-transparent text-gray-800 hover:bg-gray-100",
+  pageActive: "border-1 border-black text-black font-bold bg-gray-50/90 hover:bg-gray-100",
+  dots: "px-0.5 text-gray-500 select-none text-base font-medium",
+};
+
+function paginationPageNum(v, fallback = 1) {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n < 1) return fallback;
+  return Math.floor(n);
+}
+
+/** Local calendar date as `YYYY-MM-DD` (no UTC shift). */
+const toYmd = (d) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
+
+const addCalendarDays = (d, delta) =>
+  new Date(d.getFullYear(), d.getMonth(), d.getDate() + delta);
+
+const REPORT_DATE_PRESETS = [
+  { key: "all", label: "All dates" },
+  { key: "today", label: "Today" },
+  { key: "yesterday", label: "Yesterday" },
+  { key: "last7", label: "Last 7 days" },
+  { key: "last30", label: "Last 30 days" },
+  { key: "thisMonth", label: "This month" },
+  { key: "lastMonth", label: "Last month" },
+];
+
+function getReportPresetRange(key) {
+  const today = new Date();
+  today.setHours(12, 0, 0, 0);
+  if (key === "all") return { from: "", to: "" };
+  if (key === "today") {
+    const y = toYmd(today);
+    return { from: y, to: y };
+  }
+  if (key === "yesterday") {
+    const y = toYmd(addCalendarDays(today, -1));
+    return { from: y, to: y };
+  }
+  if (key === "last7") {
+    return { from: toYmd(addCalendarDays(today, -6)), to: toYmd(today) };
+  }
+  if (key === "last30") {
+    return { from: toYmd(addCalendarDays(today, -29)), to: toYmd(today) };
+  }
+  if (key === "thisMonth") {
+    const from = new Date(today.getFullYear(), today.getMonth(), 1);
+    const to = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    return { from: toYmd(from), to: toYmd(to) };
+  }
+  if (key === "lastMonth") {
+    const from = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    const to = new Date(today.getFullYear(), today.getMonth(), 0);
+    return { from: toYmd(from), to: toYmd(to) };
+  }
+  return { from: "", to: "" };
+}
+
+/** Map current URL query to a preset key for highlighting (`custom` = anything else). */
+function inferReportDatePreset(q) {
+  const dateOnly = (q.date || "").trim();
+  const from = (q.startDate || "").trim();
+  const to = (q.endDate || "").trim();
+  if (!dateOnly && !from && !to) return "all";
+  if (!dateOnly && from && !to) return "custom";
+  if (!dateOnly && !from && to) return "custom";
+  const effFrom = dateOnly || from;
+  const effTo = (dateOnly || to || from || "").trim();
+  if (!effFrom || !effTo) return "custom";
+  const presetKeys = [
+    "today",
+    "yesterday",
+    "last7",
+    "last30",
+    "thisMonth",
+    "lastMonth",
+  ];
+  for (const k of presetKeys) {
+    const r = getReportPresetRange(k);
+    if (r.from === effFrom && r.to === effTo) return k;
+  }
+  return "custom";
+}
+
+/** Short label for the date-range dropdown trigger. */
+function reportDateRangeSummary(q) {
+  const key = inferReportDatePreset(q);
+  if (key === "all") return "All dates";
+  const preset = REPORT_DATE_PRESETS.find((p) => p.key === key);
+  if (preset) return preset.label;
+  const from = (q.startDate || q.date || "").trim();
+  const to = (q.endDate || q.date || "").trim();
+  if (from && to && from !== to) return `${from} → ${to}`;
+  if (from) return from;
+  return "Custom range";
+}
+
+const FILTER_CONTROL =
+  "w-full border border-gray-200 rounded-xl px-2.5 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400/40 focus:border-blue-400";
+
 const rowToEditForm = (row) => {
   const loc = row?.location || {};
   return {
@@ -197,6 +325,27 @@ export default function AddAgentReport() {
   const [editRow, setEditRow] = useState(null);
   const [editForm, setEditForm] = useState(null);
   const [editSaving, setEditSaving] = useState(false);
+
+  const [dateRangeOpen, setDateRangeOpen] = useState(false);
+  const dateRangeRef = useRef(null);
+
+  useEffect(() => {
+    if (!dateRangeOpen) return;
+    const onPointerDown = (e) => {
+      if (dateRangeRef.current && !dateRangeRef.current.contains(e.target)) {
+        setDateRangeOpen(false);
+      }
+    };
+    const onKey = (e) => {
+      if (e.key === "Escape") setDateRangeOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [dateRangeOpen]);
 
   const handleApiError = useCallback(
     (error, fallbackMessage) => {
@@ -396,54 +545,57 @@ export default function AddAgentReport() {
     return [1, "...", current - 1, current, current + 1, "...", total];
   }, [pagination.page, pagination.totalPages]);
 
-  const activeFilterCount = useMemo(() => {
-    let n = 0;
-    if (query.search) n += 1;
-    if (query.addedByEmpId) n += 1;
-    if (urlSourceTypeToSelectValue(query.sourceType)) n += 1;
-    if (query.date || query.startDate || query.endDate) n += 1;
-    return n;
-  }, [query]);
+  const { visibleFrom, visibleTo } = useMemo(() => {
+    const pageNum = paginationPageNum(pagination.page, 1);
+    const lim = Number(pagination.limit) || DEFAULT_LIMIT;
+    if (!rows.length) {
+      return { visibleFrom: 0, visibleTo: 0 };
+    }
+    return {
+      visibleFrom: (pageNum - 1) * lim + 1,
+      visibleTo: (pageNum - 1) * lim + rows.length,
+    };
+  }, [pagination.page, pagination.limit, rows.length]);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 via-gray-50 to-slate-100/90 px-4 md:px-6 py-5 md:py-8 font-poppins text-gray-900">
       <div className="max-w-[1920px] mx-auto w-full space-y-6">
-        <div className="relative overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm shadow-gray-200/50">
-          <div
-            className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-indigo-600 via-blue-600 to-indigo-500"
-            aria-hidden
-          />
-          <div className="p-5 md:p-7 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-            <div className="flex items-start gap-4 min-w-0">
-              <div className="hidden sm:flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-blue-600 text-white shadow-lg shadow-indigo-500/30">
-                <BarChart3 className="h-7 w-7" strokeWidth={1.75} />
+        <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+          <div className="px-4 py-3 bg-gradient-to-r from-slate-50 to-blue-50/70 border-b border-gray-100">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+              <h1 className="text-lg md:text-xl font-bold tracking-tight text-slate-900">
+                {reportMeta?.reportName || "Add Agent Report"}
+              </h1>
+              <div className="flex flex-wrap items-center gap-2">
+                {reportMeta?.module?.label ? (
+                  <span className="inline-flex items-center rounded-full bg-white px-2.5 py-0.5 text-xs font-semibold text-slate-700 ring-1 ring-gray-200">
+                    {reportMeta.module.label}
+                  </span>
+                ) : null}
+                {reportMeta?.module?.isActive === true ? (
+                  <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-800 ring-1 ring-emerald-100">
+                    Active
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          </div>
+          <div className="p-4 md:p-5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
+            <div className="flex items-start gap-3 min-w-0">
+              <div className="hidden sm:flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white">
+                <BarChart3 className="h-5 w-5" strokeWidth={1.75} />
               </div>
               <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2 gap-y-1">
-                  <h1 className="text-2xl md:text-[1.65rem] font-bold tracking-tight text-gray-900">
-                    {reportMeta?.reportName || "Add Agent Report"}
-                  </h1>
-                  {reportMeta?.module?.label ? (
-                    <span className="inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-semibold text-indigo-800 ring-1 ring-indigo-100/80">
-                      {reportMeta.module.label}
-                    </span>
-                  ) : null}
-                  {reportMeta?.module?.isActive === true ? (
-                    <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-800 ring-1 ring-emerald-100">
-                      Active
-                    </span>
-                  ) : null}
-                </div>
-                <p className="mt-2 text-sm text-gray-600 leading-relaxed max-w-2xl">
+                <p className="text-base text-gray-600 leading-relaxed max-w-2xl">
                   Manual agent customers and sales-day CSV imports from day-shift
                   Sales. Filters and pagination stay in the URL so you can bookmark
                   or share this view.
                 </p>
                 {reportMeta?.generatedBy?.employeeName ? (
-                  <p className="mt-3 inline-flex flex-wrap items-center gap-2 text-xs text-gray-500">
-                    <Users className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
+                  <p className="mt-3 inline-flex flex-wrap items-center gap-2 text-sm text-gray-500">
+                    <Users className="h-4 w-4 text-gray-400 shrink-0" />
                     <span>
-                      <span className="text-gray-400">Viewing as</span>{" "}
+                      <span className="text-gray-500">Viewing as</span>{" "}
                       <span className="font-semibold text-gray-800">
                         {reportMeta.generatedBy.employeeName}
                       </span>
@@ -458,22 +610,22 @@ export default function AddAgentReport() {
                 ) : null}
               </div>
             </div>
-            <div className="flex flex-wrap items-stretch gap-3 lg:justify-end">
-              <div className="flex min-w-[11rem] flex-1 sm:flex-initial items-center gap-3 rounded-2xl border border-indigo-100/90 bg-gradient-to-br from-indigo-50/95 to-white px-4 py-3.5 shadow-sm">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white text-indigo-700 shadow-sm ring-1 ring-indigo-100">
+            <div className="flex flex-wrap items-stretch gap-3 lg:justify-end shrink-0">
+              <div className="flex min-w-[11rem] flex-1 sm:flex-initial items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-900">
                   {loading ? (
-                    <Loader2 className="h-6 w-6 animate-spin text-indigo-600" />
+                    <Loader2 className="h-5 w-5 animate-spin text-gray-500" />
                   ) : (
-                    <span className="text-xl font-bold tabular-nums leading-none">
+                    <span className="text-lg font-bold tabular-nums leading-none text-gray-900">
                       {pagination.total}
                     </span>
                   )}
                 </div>
                 <div className="pr-1 min-w-0">
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-indigo-600/90">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                     Records
                   </p>
-                  <p className="text-sm font-medium text-gray-700 truncate">
+                  <p className="text-base font-medium text-gray-700 truncate">
                     Matching filters
                   </p>
                 </div>
@@ -482,486 +634,598 @@ export default function AddAgentReport() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-gray-200/90 bg-white p-5 md:p-6 shadow-sm shadow-gray-200/40">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-gray-100">
-            <div className="flex items-center gap-2.5">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-50 text-indigo-700 ring-1 ring-indigo-100/80">
-                <Filter className="h-[18px] w-[18px]" strokeWidth={2} />
-              </span>
-              <div>
-                <h2 className="text-base font-semibold text-gray-900">
-                  Filters
-                </h2>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {activeFilterCount > 0
-                    ? `${activeFilterCount} active · URL updates when you change filters`
-                    : "Refine rows · query string syncs to the address bar"}
-                </p>
+        <div className="space-y-5">
+          <div className="rounded-2xl border border-gray-200 bg-white overflow-visible">
+            <div className="px-4 py-3 bg-gradient-to-r from-slate-50 to-blue-50/70 border-b border-gray-100">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                <h3 className="text-base font-semibold text-slate-800">Filters</h3>
               </div>
             </div>
-            <button
-              type="button"
-              disabled={loading}
-              onClick={() => fetchReport()}
-              className="inline-flex items-center justify-center gap-2 self-start rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:border-gray-300 transition-colors disabled:opacity-50"
-            >
-              <RefreshCw
-                className={`h-4 w-4 text-gray-500 ${loading ? "animate-spin" : ""}`}
-              />
-              Refresh
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5 pt-5">
-            <div className="md:col-span-2">
-              <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1.5">
-                Search
-              </label>
-              <div className="relative">
-                <Search
-                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
-                  size={18}
-                />
-                <input
-                  value={searchDraft}
-                  onChange={(e) => setSearchDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      patchSearchParams({ search: searchDraft.trim(), page: 1 });
-                    }
-                  }}
-                  placeholder="Name, company, email, phone, location, customer id, import batch id…"
-                  className={`${FIELD_INPUT} pl-10`}
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1.5">
-                Added by{" "}
-                <span className="font-normal normal-case text-gray-400">
-                  (day-shift Sales)
-                </span>
-              </label>
-              <select
-                value={query.addedByEmpId}
-                disabled={loadingEmployees}
-                onChange={(e) =>
-                  patchSearchParams({
-                    addedByEmpId: e.target.value,
-                    page: 1,
-                  })
-                }
-                className={FIELD_SELECT}
-              >
-                <option value="">All creators</option>
-                {employeeOptions.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1.5">
-                Source type
-              </label>
-              <select
-                value={urlSourceTypeToSelectValue(query.sourceType)}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  patchSearchParams({
-                    sourceType: v ? selectValueToSourceTypeParam(v) : "",
-                    page: 1,
-                  });
-                }}
-                className={FIELD_SELECT}
-              >
-                {SOURCE_OPTIONS.map((o) => (
-                  <option key={o.value || "all-sources"} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1.5">
-                Sort by
-              </label>
-              <select
-                value={query.sortBy}
-                onChange={(e) =>
-                  patchSearchParams({ sortBy: e.target.value, page: 1 })
-                }
-                className={FIELD_SELECT}
-              >
-                {SORT_FIELDS.map((s) => (
-                  <option key={s.value} value={s.value}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1.5">
-                Order
-              </label>
-              <select
-                value={query.sortOrder}
-                onChange={(e) =>
-                  patchSearchParams({ sortOrder: e.target.value, page: 1 })
-                }
-                className={FIELD_SELECT}
-              >
-                <option value="desc">Newest first</option>
-                <option value="asc">Oldest first</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1.5 flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5 text-indigo-400" />
-                Exact date
-              </label>
-              <input
-                type="date"
-                value={query.date}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  patchSearchParams({
-                    date: v,
-                    startDate: "",
-                    endDate: "",
-                    page: 1,
-                  });
-                }}
-                className={FIELD_INPUT}
-              />
-            </div>
-            <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1.5">
-                Range start
-              </label>
-              <input
-                type="date"
-                value={query.startDate}
-                disabled={Boolean(query.date)}
-                onChange={(e) =>
-                  patchSearchParams({
-                    startDate: e.target.value,
-                    date: "",
-                    page: 1,
-                  })
-                }
-                className={`${FIELD_INPUT} disabled:opacity-50 disabled:cursor-not-allowed`}
-              />
-            </div>
-            <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1.5">
-                Range end
-              </label>
-              <input
-                type="date"
-                value={query.endDate}
-                disabled={Boolean(query.date)}
-                onChange={(e) =>
-                  patchSearchParams({
-                    endDate: e.target.value,
-                    date: "",
-                    page: 1,
-                  })
-                }
-                className={`${FIELD_INPUT} disabled:opacity-50 disabled:cursor-not-allowed`}
-              />
-            </div>
-            <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1.5">
-                Rows / page
-              </label>
-              <select
-                value={String(query.limit)}
-                onChange={(e) =>
-                  patchSearchParams({ limit: e.target.value, page: 1 })
-                }
-                className={FIELD_SELECT}
-              >
-                {LIMIT_OPTIONS.map((n) => (
-                  <option key={n} value={String(n)}>
-                    {n}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-3 pt-5 mt-1 border-t border-gray-100">
-            <button
-              type="button"
-              onClick={() =>
-                patchSearchParams({ search: searchDraft.trim(), page: 1 })
-              }
-              className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-500/25 hover:from-indigo-700 hover:to-blue-700 transition-all"
-            >
-              Apply search
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setSearchDraft("");
-                setSearchParams(new URLSearchParams(), { replace: true });
-              }}
-              className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:border-gray-300 transition-colors"
-            >
-              Reset filters
-            </button>
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-gray-200/90 bg-white shadow-sm shadow-gray-200/40 overflow-hidden">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-4 md:px-5 py-3.5 border-b border-gray-100 bg-gradient-to-r from-slate-50/90 to-indigo-50/40">
-            <h3 className="text-sm font-semibold text-gray-800">
-              Report rows
-            </h3>
-            <p className="text-xs text-gray-500">
-              {loading
-                ? "Loading data…"
-                : `${pagination.total} row${pagination.total !== 1 ? "s" : ""} · page ${pagination.page} of ${pagination.totalPages}`}
-            </p>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-200 bg-white">
-                  <th className="text-left px-4 md:px-5 py-3.5 text-[11px] font-bold uppercase tracking-wider text-gray-500">
-                    Person / Company
-                  </th>
-                  <th className="text-left px-4 md:px-5 py-3.5 text-[11px] font-bold uppercase tracking-wider text-gray-500">
-                    Source
-                  </th>
-                  <th className="text-left px-4 md:px-5 py-3.5 text-[11px] font-bold uppercase tracking-wider text-gray-500">
-                    Event
-                  </th>
-                  <th className="text-left px-4 md:px-5 py-3.5 text-[11px] font-bold uppercase tracking-wider text-gray-500">
-                    Contact
-                  </th>
-                  <th className="text-left px-4 md:px-5 py-3.5 text-[11px] font-bold uppercase tracking-wider text-gray-500">
-                    Created by
-                  </th>
-                  <th className="text-left px-4 md:px-5 py-3.5 text-[11px] font-bold uppercase tracking-wider text-gray-500">
-                    Created
-                  </th>
-                  <th className="text-right px-4 md:px-5 py-3.5 text-[11px] font-bold uppercase tracking-wider text-gray-500">
-                    Action
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {loading ? (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-16 text-center">
-                      <div className="flex flex-col items-center justify-center gap-3 text-gray-500">
-                        <Loader2 className="h-10 w-10 animate-spin text-indigo-500" />
-                        <p className="text-sm font-medium text-gray-600">
-                          Loading report…
-                        </p>
-                      </div>
-                    </td>
-                  </tr>
-                ) : rows.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-16 text-center">
-                      <div className="mx-auto flex max-w-md flex-col items-center gap-4">
-                        <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-100 text-gray-400 ring-1 ring-gray-200/80">
-                          <Inbox className="h-8 w-8" strokeWidth={1.5} />
-                        </span>
-                        <div>
-                          <p className="text-base font-semibold text-gray-800">
-                            No rows match your filters
-                          </p>
-                          <p className="mt-1 text-sm text-gray-500 leading-relaxed">
-                            Try clearing search, widening the date range, or
-                            choosing &ldquo;All creators&rdquo; if a creator filter
-                            is too narrow.
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSearchDraft("");
-                            setSearchParams(new URLSearchParams(), {
-                              replace: true,
-                            });
-                          }}
-                          className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-800 hover:bg-indigo-100 transition-colors"
-                        >
-                          Clear all filters
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  rows.map((row, rowIdx) => (
-                    <tr
-                      key={
-                        row.agentCustomerId ||
-                        row.customerId ||
-                        `row-${rowIdx}`
-                      }
-                      className="bg-white hover:bg-indigo-50/40 transition-colors"
-                    >
-                      <td className="px-4 md:px-5 py-3.5 align-top">
-                        <div className="font-semibold text-gray-900">
-                          {row.personName || "—"}
-                        </div>
-                        <div className="text-gray-600 text-xs mt-1">
-                          {row.companyName || "—"}
-                        </div>
-                        {row.customerId ? (
-                          <div className="text-gray-400 text-[11px] mt-1.5 font-mono tracking-tight">
-                            {row.customerId}
-                          </div>
-                        ) : null}
-                      </td>
-                      <td className="px-4 md:px-5 py-3.5 align-top text-gray-700">
-                        <span className="inline-flex rounded-lg bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-800 ring-1 ring-slate-200/80">
-                          {row.sourceType || "—"}
-                        </span>
-                        {row.recordType ? (
-                          <div className="text-xs text-gray-500 mt-1.5">
-                            {row.recordType}
-                          </div>
-                        ) : null}
-                        {row.importBatchId ? (
-                          <div className="text-[11px] text-gray-500 mt-1.5 font-mono">
-                            Batch: {row.importBatchId}
-                          </div>
-                        ) : null}
-                        {row.salesDayDisposition != null &&
-                        String(row.salesDayDisposition).trim() !== "" ? (
-                          <div className="text-xs text-amber-900 mt-1.5 rounded-md bg-amber-50 px-2 py-1 ring-1 ring-amber-100 inline-block max-w-[220px]">
-                            {String(row.salesDayDisposition)}
-                          </div>
-                        ) : null}
-                      </td>
-                      <td className="px-4 md:px-5 py-3.5 align-top text-gray-700 max-w-[220px]">
-                        {row.event?.eventName ? (
-                          <>
-                            <div className="font-medium text-gray-900 truncate">
-                              {row.event.eventName}
-                            </div>
-                            <div className="text-xs text-gray-500 mt-1">
-                              {formatDateTime(row.event.eventDateTime)}
-                            </div>
-                          </>
-                        ) : (
-                          <span className="text-gray-400">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 md:px-5 py-3.5 align-top text-gray-700">
-                        <div className="tabular-nums">{row.contactNumber || "—"}</div>
-                        <div className="text-xs text-gray-500 break-all mt-1">
-                          {row.email || "—"}
-                        </div>
-                      </td>
-                      <td className="px-4 md:px-5 py-3.5 align-top text-gray-700">
-                        <span className="font-medium text-gray-900">
-                          {row.createdBy?.employeeName || "—"}
-                        </span>
-                        {row.createdBy?.empId ? (
-                          <div className="text-xs text-gray-500 mt-0.5 font-mono">
-                            {row.createdBy.empId}
-                          </div>
-                        ) : null}
-                      </td>
-                      <td className="px-4 md:px-5 py-3.5 align-top text-gray-600 text-xs whitespace-nowrap">
-                        {formatDateTime(row.createdAt)}
-                      </td>
-                      <td className="px-4 md:px-5 py-3.5 align-top text-right">
-                        {row.actions?.updateApi &&
-                        String(row.actions?.updateMethod || "PATCH")
-                          .toUpperCase() === "PATCH" ? (
-                          <button
-                            type="button"
-                            onClick={() => openEdit(row)}
-                            className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-gradient-to-r from-indigo-50 to-white px-3 py-2 text-xs font-semibold text-indigo-900 shadow-sm hover:border-indigo-300 hover:from-indigo-100 transition-all"
-                          >
-                            <Pencil className="w-3.5 h-3.5 shrink-0" />
-                            {row.actions?.viewLabel || "View / Edit"}
-                          </button>
-                        ) : (
-                          <span className="text-gray-300">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 md:px-5 py-3.5 border-t border-gray-100 bg-gradient-to-r from-gray-50/90 to-slate-50/80">
-            <p className="text-xs font-medium text-gray-600">
-              Page{" "}
-              <span className="tabular-nums text-gray-900">
-                {pagination.page}
-              </span>{" "}
-              of{" "}
-              <span className="tabular-nums text-gray-900">
-                {pagination.totalPages}
-              </span>
-              <span className="text-gray-400 mx-1.5">·</span>
-              <span className="tabular-nums text-gray-900">
-                {pagination.total}
-              </span>{" "}
-              total
-            </p>
-            <div className="flex items-center gap-1 flex-wrap justify-center">
-              <button
-                type="button"
-                disabled={pagination.page <= 1 || loading}
-                onClick={() =>
-                  patchSearchParams({ page: String(pagination.page - 1) })
-                }
-                className="p-2 rounded-xl border border-gray-200 bg-white text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-40 transition-colors"
-                aria-label="Previous page"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              {pageItems.map((item, idx) =>
-                item === "..." ? (
-                  <span key={`e-${idx}`} className="px-2 text-gray-400 text-sm">
-                    …
+            <div className="p-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
+                <div className="flex flex-col gap-1 sm:col-span-2">
+                  <span className="text-sm font-medium text-gray-600">Search</span>
+                  <div className="relative">
+                    <Search
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                      size={18}
+                    />
+                    <input
+                      value={searchDraft}
+                      onChange={(e) => setSearchDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          patchSearchParams({
+                            search: searchDraft.trim(),
+                            page: 1,
+                          });
+                        }
+                      }}
+                      placeholder="Name, company, email, phone, location, customer id, import batch id…"
+                      className={`${FILTER_CONTROL} pl-10`}
+                    />
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm font-medium text-gray-600">
+                    Added by (day-shift Sales)
                   </span>
-                ) : (
-                  <button
-                    key={item}
-                    type="button"
-                    disabled={loading}
-                    onClick={() =>
-                      patchSearchParams({ page: String(item) })
+                  <select
+                    value={query.addedByEmpId}
+                    disabled={loadingEmployees}
+                    onChange={(e) =>
+                      patchSearchParams({
+                        addedByEmpId: e.target.value,
+                        page: 1,
+                      })
                     }
-                    className={`min-w-[2.25rem] px-2 py-1.5 rounded-xl text-sm font-medium transition-all ${
-                      item === pagination.page
-                        ? "bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow-md shadow-indigo-500/25"
-                        : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
-                    }`}
+                    className={`${FILTER_CONTROL} disabled:opacity-55 disabled:cursor-not-allowed`}
                   >
-                    {item}
+                    <option value="">All creators</option>
+                    {employeeOptions.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm font-medium text-gray-600">
+                    Source type
+                  </span>
+                  <select
+                    value={urlSourceTypeToSelectValue(query.sourceType)}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      patchSearchParams({
+                        sourceType: v ? selectValueToSourceTypeParam(v) : "",
+                        page: 1,
+                      });
+                    }}
+                    className={FILTER_CONTROL}
+                  >
+                    {SOURCE_OPTIONS.map((o) => (
+                      <option key={o.value || "all-sources"} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm font-medium text-gray-600">Sort by</span>
+                  <select
+                    value={query.sortBy}
+                    onChange={(e) =>
+                      patchSearchParams({ sortBy: e.target.value, page: 1 })
+                    }
+                    className={FILTER_CONTROL}
+                  >
+                    {SORT_FIELDS.map((s) => (
+                      <option key={s.value} value={s.value}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm font-medium text-gray-600">Order</span>
+                  <select
+                    value={query.sortOrder}
+                    onChange={(e) =>
+                      patchSearchParams({ sortOrder: e.target.value, page: 1 })
+                    }
+                    className={FILTER_CONTROL}
+                  >
+                    <option value="desc">Newest first</option>
+                    <option value="asc">Oldest first</option>
+                  </select>
+                </div>
+                <div
+                  className="relative z-20 flex flex-col gap-1 sm:col-span-2 lg:col-span-2"
+                  ref={dateRangeRef}
+                >
+                  <span className="text-sm font-medium text-gray-600">
+                    Date range
+                  </span>
+                  <button
+                    type="button"
+                    aria-expanded={dateRangeOpen}
+                    aria-haspopup="dialog"
+                    aria-controls="add-agent-report-date-range-panel"
+                    id="add-agent-report-date-range-trigger"
+                    onClick={() => setDateRangeOpen((o) => !o)}
+                    className={`${FILTER_CONTROL} flex cursor-pointer items-center justify-between gap-2 text-left`}
+                  >
+                    <span className="inline-flex min-w-0 flex-1 items-center gap-2">
+                      <Calendar
+                        size={18}
+                        className="shrink-0 text-gray-400"
+                        aria-hidden
+                      />
+                      <span className="truncate font-medium text-gray-900">
+                        {reportDateRangeSummary(query)}
+                      </span>
+                    </span>
+                    <ChevronDown
+                      size={18}
+                      className={`shrink-0 text-gray-500 transition-transform ${dateRangeOpen ? "rotate-180" : ""}`}
+                      aria-hidden
+                    />
                   </button>
-                ),
-              )}
-              <button
-                type="button"
-                disabled={
-                  pagination.page >= pagination.totalPages || loading
-                }
-                onClick={() =>
-                  patchSearchParams({ page: String(pagination.page + 1) })
-                }
-                className="p-2 rounded-xl border border-gray-200 bg-white text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-40 transition-colors"
-                aria-label="Next page"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
+                  {dateRangeOpen ? (
+                    <div
+                      id="add-agent-report-date-range-panel"
+                      role="dialog"
+                      aria-labelledby="add-agent-report-date-range-trigger"
+                      className="absolute left-0 top-full z-40 mt-1 w-[min(100%,22rem)] max-w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-gray-200 bg-white p-4 shadow-lg"
+                    >
+                      <p className="mb-3 text-xs font-medium text-gray-500">
+                        Quick presets
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {REPORT_DATE_PRESETS.map(({ key, label }) => {
+                          const active = inferReportDatePreset(query) === key;
+                          return (
+                            <button
+                              key={key}
+                              type="button"
+                              onClick={() => {
+                                if (key === "all") {
+                                  patchSearchParams({
+                                    date: "",
+                                    startDate: "",
+                                    endDate: "",
+                                    page: 1,
+                                  });
+                                } else {
+                                  const { from, to } = getReportPresetRange(key);
+                                  patchSearchParams({
+                                    date: "",
+                                    startDate: from,
+                                    endDate: to,
+                                    page: 1,
+                                  });
+                                }
+                                setDateRangeOpen(false);
+                              }}
+                              className={`cursor-pointer shrink-0 rounded-xl px-3 py-2 text-sm font-semibold transition-colors ${
+                                active
+                                  ? "bg-slate-900 text-white"
+                                  : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                              }`}
+                            >
+                              {label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div className="mt-4 border-t border-gray-100 pt-4">
+                        <p className="mb-2 text-xs font-medium text-gray-500">
+                          Custom range
+                        </p>
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                          <div className="flex min-w-0 flex-1 flex-col gap-1">
+                            <span className="text-xs font-medium text-gray-500">
+                              From
+                            </span>
+                            <input
+                              type="date"
+                              value={query.startDate || query.date || ""}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                const prevEnd = (
+                                  query.endDate ||
+                                  query.date ||
+                                  ""
+                                ).trim();
+                                patchSearchParams({
+                                  date: "",
+                                  startDate: v,
+                                  endDate:
+                                    prevEnd && prevEnd >= v ? prevEnd : v,
+                                  page: 1,
+                                });
+                              }}
+                              className={FILTER_CONTROL}
+                            />
+                          </div>
+                          <div className="flex min-w-0 flex-1 flex-col gap-1">
+                            <span className="text-xs font-medium text-gray-500">
+                              To
+                            </span>
+                            <input
+                              type="date"
+                              value={query.endDate || query.date || ""}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                const prevStart = (
+                                  query.startDate ||
+                                  query.date ||
+                                  ""
+                                ).trim();
+                                patchSearchParams({
+                                  date: "",
+                                  endDate: v,
+                                  startDate:
+                                    prevStart && prevStart <= v
+                                      ? prevStart
+                                      : v,
+                                  page: 1,
+                                });
+                              }}
+                              className={FILTER_CONTROL}
+                            />
+                          </div>
+                        </div>
+                        {inferReportDatePreset(query) === "custom" ? (
+                          <p className="mt-2 text-xs text-gray-500">
+                            Range updates the URL as you change dates.
+                          </p>
+                        ) : null}
+                      </div>
+                      <button
+                        type="button"
+                        className="mt-4 w-full cursor-pointer rounded-xl border border-gray-200 bg-gray-50 py-2.5 text-sm font-semibold text-gray-800 hover:bg-gray-100"
+                        onClick={() => setDateRangeOpen(false)}
+                      >
+                        Done
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm font-medium text-gray-600">
+                    Rows / page
+                  </span>
+                  <select
+                    value={String(query.limit)}
+                    onChange={(e) =>
+                      patchSearchParams({ limit: e.target.value, page: 1 })
+                    }
+                    className={FILTER_CONTROL}
+                  >
+                    {LIMIT_OPTIONS.map((n) => (
+                      <option key={n} value={String(n)}>
+                        {n}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-gray-200/80 pt-4">
+                <button
+                  type="button"
+                  className="cursor-pointer inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 transition-colors"
+                  onClick={() =>
+                    patchSearchParams({ search: searchDraft.trim(), page: 1 })
+                  }
+                >
+                  <RefreshCw size={16} />
+                  Apply search
+                </button>
+                
+                <button
+                  type="button"
+                  className="cursor-pointer inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-300 bg-white text-gray-700 text-sm font-semibold hover:bg-gray-50 transition-colors"
+                  onClick={() => {
+                    setSearchDraft("");
+                    setDateRangeOpen(false);
+                    setSearchParams(new URLSearchParams(), { replace: true });
+                  }}
+                >
+                  Clear filters
+                </button>
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => fetchReport()}
+                  className="cursor-pointer inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-300 bg-white text-gray-700 text-sm font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  <RefreshCw
+                    size={16}
+                    className={loading ? "animate-spin" : ""}
+                  />
+                  Refresh
+                </button>
+                <span className="ml-auto text-xs text-gray-500 font-medium">
+                  Rows found: {pagination.total}
+                </span>
+              </div>
             </div>
           </div>
+
+          {loading && (
+            <p className="text-sm text-gray-500">Loading…</p>
+          )}
+
+          {!loading && rows.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-gray-300 bg-slate-50 px-6 py-12 text-center">
+              <p className="text-sm font-medium text-gray-800">No rows to show</p>
+              <p className="text-sm text-gray-600 mt-2 max-w-md mx-auto">
+                Either no records match these filters, or nothing has been added yet.
+                Try clearing search, widening the date range, or choosing &ldquo;All
+                creators&rdquo; if a creator filter is too narrow.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchDraft("");
+                  setSearchParams(new URLSearchParams(), { replace: true });
+                }}
+                className="mt-5 px-4 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
+              >
+                Clear filters
+              </button>
+            </div>
+          ) : !loading ? (
+            <>
+              <div className={TABLE_STYLE.shell}>
+                <table className={TABLE_STYLE.table}>
+                  <thead className={`${TABLE_STYLE.head} sticky top-0 z-10`}>
+                    <tr>
+                      <th
+                        scope="col"
+                        className={`${TABLE_STYLE.th} ${TABLE_STYLE.tdStart}`}
+                      >
+                        Person / Company
+                      </th>
+                      <th scope="col" className={TABLE_STYLE.th}>
+                        Source
+                      </th>
+                      <th scope="col" className={TABLE_STYLE.th}>
+                        Event
+                      </th>
+                      <th scope="col" className={TABLE_STYLE.th}>
+                        Contact
+                      </th>
+                      <th scope="col" className={TABLE_STYLE.th}>
+                        Created by
+                      </th>
+                      <th scope="col" className={TABLE_STYLE.th}>
+                        Created
+                      </th>
+                      <th
+                        scope="col"
+                        className={`${TABLE_STYLE.th} ${TABLE_STYLE.tdEnd} text-right`}
+                      >
+                        Action
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row, rowIdx) => (
+                      <tr
+                        key={
+                          row.agentCustomerId ||
+                          row.customerId ||
+                          `row-${rowIdx}`
+                        }
+                        className={`${TABLE_STYLE.row} hover:bg-blue-50/50 transition-colors`}
+                      >
+                        <td
+                          className={`${TABLE_STYLE.td} ${TABLE_STYLE.tdStart} align-top`}
+                        >
+                          <div className="font-semibold text-gray-900">
+                            {row.personName || "—"}
+                          </div>
+                          <div className="text-gray-600 text-sm mt-1">
+                            {row.companyName || "—"}
+                          </div>
+                          {/* {row.customerId ? (
+                            <div className="text-gray-400 text-sm mt-1.5 font-mono tracking-tight">
+                              {row.customerId}
+                            </div>
+                          ) : null} */}
+                        </td>
+                        <td className={`${TABLE_STYLE.td} align-top`}>
+                          <span className="inline-flex rounded-lg bg-slate-100 px-2 py-0.5 text-sm font-semibold text-slate-800 ring-1 ring-slate-200/80">
+                            {row.sourceType || "—"}
+                          </span>
+                          {row.recordType ? (
+                            <div className="text-sm text-gray-500 mt-1.5">
+                              {row.recordType}
+                            </div>
+                          ) : null}
+                          {/* {row.importBatchId ? (
+                            <div className="text-sm text-gray-500 mt-1.5 font-mono">
+                              Batch: {row.importBatchId}
+                            </div>
+                          ) : null} */}
+                          {row.salesDayDisposition != null &&
+                          String(row.salesDayDisposition).trim() !== "" ? (
+                            <div className="text-sm text-amber-900 mt-1.5 rounded-md bg-amber-50 px-2 py-1 ring-1 ring-amber-100 inline-block max-w-[220px]">
+                              {String(row.salesDayDisposition)}
+                            </div>
+                          ) : null}
+                        </td>
+                        <td
+                          className={`${TABLE_STYLE.td} align-top max-w-[220px]`}
+                        >
+                          {row.event?.eventName ? (
+                            <>
+                              <div className="font-medium text-gray-900 truncate">
+                                {row.event.eventName}
+                              </div>
+                              <div className="text-sm text-gray-500 mt-1">
+                                {formatDateTime(row.event.eventDateTime)}
+                              </div>
+                            </>
+                          ) : (
+                            <span className="text-gray-400">—</span>
+                          )}
+                        </td>
+                        <td className={`${TABLE_STYLE.td} align-top`}>
+                          <div className="tabular-nums">
+                            {row.contactNumber || "—"}
+                          </div>
+                          <div className="relative group max-w-[160px] mt-1">
+
+  {/* Truncated Email */}
+  <div className="text-sm text-gray-500 truncate block">
+    {row.email || "—"}
+  </div>
+
+  {/* Tooltip */}
+  {row.email && (
+    <div className="absolute left-0 top-full mt-2 hidden group-hover:block
+                    bg-gray-900 text-white text-sm
+                    px-3 py-2.5
+                    rounded-lg shadow-xl
+                    max-w-[170px]
+                    break-words
+                    z-50">
+      {row.email}
+    </div>
+  )}
+
+</div>
+                        </td>
+                        <td className={`${TABLE_STYLE.td} align-top`}>
+                          <span className="font-medium text-gray-900">
+                            {row.createdBy?.employeeName || "—"}
+                          </span>
+                          {row.createdBy?.empId ? (
+                            <div className="text-sm text-gray-500 mt-0.5 font-mono">
+                              {row.createdBy.empId}
+                            </div>
+                          ) : null}
+                        </td>
+                        <td
+                          className={`${TABLE_STYLE.td} align-top text-sm whitespace-nowrap`}
+                        >
+                          {formatDateTime(row.createdAt)}
+                        </td>
+                        <td
+                          className={`${TABLE_STYLE.td} ${TABLE_STYLE.tdEnd} align-top text-right`}
+                        >
+                          {row.actions?.updateApi &&
+                          String(row.actions?.updateMethod || "PATCH")
+                            .toUpperCase() === "PATCH" ? (
+                            <button
+                              type="button"
+                              onClick={() => openEdit(row)}
+                              className="cursor-pointer inline-flex items-center justify-center px-3 py-2 rounded-lg border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                            >
+                              {row.actions?.viewLabel || "View / Edit"}
+                            </button>
+                          ) : (
+                            <span className="text-gray-300">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {rows.length > 0 && (
+                <div
+                  className={`${PAGINATION_STYLE.wrap} flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between`}
+                >
+                  <span className={PAGINATION_STYLE.meta}>
+                    Showing {visibleFrom} to {visibleTo} of {pagination.total}{" "}
+                    records
+                  </span>
+                  <div className={PAGINATION_STYLE.nav}>
+                    <button
+                      type="button"
+                      disabled={
+                        loading ||
+                        paginationPageNum(pagination.page, 1) <= 1
+                      }
+                      className={PAGINATION_STYLE.link}
+                      onClick={() =>
+                        patchSearchParams({
+                          page: String(
+                            Math.max(
+                              1,
+                              paginationPageNum(pagination.page, 1) - 1,
+                            ),
+                          ),
+                        })
+                      }
+                    >
+                      Previous
+                    </button>
+                    {pageItems.map((item, idx) =>
+                      item === "..." ? (
+                        <span key={`e-${idx}`} className={PAGINATION_STYLE.dots}>
+                          ...
+                        </span>
+                      ) : (
+                        <button
+                          key={item}
+                          type="button"
+                          disabled={loading}
+                          onClick={() =>
+                            patchSearchParams({ page: String(item) })
+                          }
+                          aria-current={
+                            paginationPageNum(item, 1) ===
+                            paginationPageNum(pagination.page, 1)
+                              ? "page"
+                              : undefined
+                          }
+                          className={`${PAGINATION_STYLE.pageBtn} ${
+                            paginationPageNum(item, 1) ===
+                            paginationPageNum(pagination.page, 1)
+                              ? PAGINATION_STYLE.pageActive
+                              : PAGINATION_STYLE.pageInactive
+                          }`}
+                        >
+                          {item}
+                        </button>
+                      ),
+                    )}
+                    <button
+                      type="button"
+                      disabled={
+                        loading ||
+                        paginationPageNum(pagination.page, 1) >=
+                          paginationPageNum(pagination.totalPages, 1)
+                      }
+                      className={PAGINATION_STYLE.link}
+                      onClick={() =>
+                        patchSearchParams({
+                          page: String(
+                            Math.min(
+                              paginationPageNum(
+                                pagination.totalPages,
+                                1,
+                              ),
+                              paginationPageNum(pagination.page, 1) + 1,
+                            ),
+                          ),
+                        })
+                      }
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : null}
         </div>
       </div>
 
