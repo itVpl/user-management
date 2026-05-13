@@ -38,7 +38,7 @@ const SOURCE_OPTIONS = [
 const REMARK_FILTER_OPTIONS = [
   { value: "", label: "All remarks" },
   { value: "NEW", label: "NEW (deduped / default)" },
-  { value: "OLD", label: "OLD (legacy duplicate)" },
+  { value: "OLD", label: "Followup" },
 ];
 
 const normalizeRemarkFilter = (raw) => {
