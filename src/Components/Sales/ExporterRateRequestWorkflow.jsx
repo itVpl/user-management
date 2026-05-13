@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import axios from "axios";
 import alertify from "alertifyjs";
 import "alertifyjs/build/css/alertify.css";
@@ -15,9 +16,12 @@ import {
   Package,
   Eye,
   Plus,
+  PlusCircle,
   FileText,
   Paperclip,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Ship,
   ClipboardList,
   MapPin,
@@ -454,6 +458,181 @@ const isImageAttachment = (attachment) => {
   return [".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg"].some((ext) => text.includes(ext));
 };
 
+function formatOwnerRef(owner) {
+  if (!owner || typeof owner !== "object") return null;
+  const name = owner.employeeName || "";
+  const id = owner.empId || "";
+  if (name && id) return `${name} (${id})`;
+  return name || id || owner._id || null;
+}
+
+/** Shared read-only body for exporter + agent rate request detail modals */
+function RateRequestDetailBody({ detail }) {
+  if (!detail) return null;
+  const isAgentStyle = Boolean(detail.submissionChannel || detail.capturedByRef || detail.receivedAt);
+  return (
+    <>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Request ID</p>
+          <p className="mt-1 font-mono text-lg font-bold text-slate-900 break-all">
+            {detail.requestId || detail._id || "N/A"}
+          </p>
+        </div>
+        <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-teal-50/80 p-5 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800">Expected dispatch</p>
+          <p className="mt-1 text-lg font-semibold text-slate-900">
+            {formatDateOnly(detail.expectedDispatchDate) ?? "N/A"}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2 text-sm">
+        {detail.department && (
+          <span className="inline-flex items-center rounded-full bg-indigo-100 px-3 py-1 text-indigo-800">
+            Dept: <strong className="ml-1">{detail.department}</strong>
+          </span>
+        )}
+        <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-slate-700">
+          Source: <strong className="ml-1">{formatStatusLabel(detail.source)}</strong>
+        </span>
+        {detail.status && (
+          <span className="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-amber-900">
+            Status: <strong className="ml-1">{formatStatusLabel(detail.status)}</strong>
+          </span>
+        )}
+        {detail.submissionChannel && (
+          <span className="inline-flex items-center rounded-full bg-cyan-100 px-3 py-1 text-cyan-900">
+            Channel: <strong className="ml-1">{formatStatusLabel(detail.submissionChannel)}</strong>
+          </span>
+        )}
+        {detail.shipmentType && (
+          <span className="inline-flex items-center rounded-full bg-teal-100 px-3 py-1 text-teal-900">
+            Shipment: <strong className="ml-1">{detail.shipmentType}</strong>
+          </span>
+        )}
+        {detail.serviceType && (
+          <span className="inline-flex items-center rounded-full bg-violet-100 px-3 py-1 text-violet-900">
+            Service: <strong className="ml-1">{detail.serviceType}</strong>
+          </span>
+        )}
+      </div>
+
+      {isAgentStyle && (detail.ownerId || detail.capturedBy || detail.receivedAt || detail.capturedByRef) && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h4 className="mb-4 text-sm font-semibold text-slate-900">Assignment & intake</h4>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <DetailField label="Owner" value={formatOwnerRef(detail.ownerId)} />
+            <DetailField label="Captured by (ref)" value={detail.capturedByRef || "N/A"} />
+            <DetailField label="Captured by" value={formatExporterCompany(detail.capturedBy)} />
+            <DetailField label="Received at" value={formatDateTime(detail.receivedAt)} />
+            <DetailField label="Quote due" value={formatDateTime(detail.quoteDueAt)} />
+          </div>
+        </div>
+      )}
+
+      <div className="rounded-2xl border border-blue-100 bg-blue-50/80 p-5">
+        <h4 className="mb-4 flex items-center gap-2 text-sm font-semibold text-blue-900">
+          <FileText size={18} className="text-blue-600" />
+          Exporter details
+        </h4>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <DetailField label="Exporter company" value={formatExporterCompany(detail.exporterCompany)} />
+          <DetailField label="Contact person" value={detail.contactPerson} />
+          <DetailField label="Contact email" value={detail.contactEmail} />
+          <DetailField label="Contact phone" value={detail.contactPhone} />
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-emerald-100 bg-emerald-50/80 p-5">
+        <h4 className="mb-4 flex items-center gap-2 text-sm font-semibold text-emerald-900">
+          <Ship size={18} className="text-emerald-600" />
+          Shipment details
+        </h4>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <DetailField label="Origin port" value={detail.originPort} />
+          <DetailField label="Destination port" value={detail.destinationPort} />
+          <DetailField label="Cargo type" value={detail.cargoType} />
+          <DetailField label="Weight / volume" value={detail.weightOrVolume} />
+          <DetailField label="Incoterm" value={detail.incoterm} />
+          {detail.commodity ? <DetailField label="Commodity" value={detail.commodity} /> : null}
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-indigo-100 bg-indigo-50/80 p-5">
+        <h4 className="mb-4 text-sm font-semibold text-indigo-900">Container type</h4>
+        <ContainerTypeDisplay value={detail.containerType} />
+      </div>
+
+      {hasExtraDetails(detail) && (
+        <div className="rounded-2xl border border-violet-100 bg-violet-50/80 p-5">
+          <h4 className="mb-4 flex items-center gap-2 text-sm font-semibold text-violet-900">
+            <ClipboardList size={18} className="text-violet-600" />
+            Customs & shipment extras
+          </h4>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {EXTRA_DETAILS_DISPLAY_KEYS.map((key) => {
+              const text = formatExtraDetailDisplay(key, detail);
+              if (!text) return null;
+              return (
+                <DetailField
+                  key={key}
+                  label={EXTRA_DETAILS_LABELS[key]}
+                  value={text}
+                  multiline={
+                    key === "targetRateOrTimeline" ||
+                    key === "specialEquipmentRequired" ||
+                    key === "exactPickupLocation" ||
+                    key === "exactDeliveryLocation"
+                  }
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {detail.channelMessageText && String(detail.channelMessageText).trim() !== "" && (
+        <div className="rounded-2xl border border-sky-200 bg-sky-50/80 p-5 shadow-sm">
+          <h4 className="mb-2 text-sm font-semibold text-sky-900">Channel / notes</h4>
+          <p className="text-sm text-slate-800 whitespace-pre-wrap">{detail.channelMessageText}</p>
+        </div>
+      )}
+
+      {Array.isArray(detail.internalNotes) && detail.internalNotes.length > 0 && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900">
+            <FileText size={18} className="text-slate-600" />
+            Internal notes
+          </h4>
+          <ul className="space-y-3 max-h-56 overflow-y-auto text-sm text-slate-700">
+            {detail.internalNotes.map((entry, idx) => {
+              const text =
+                entry && typeof entry === "object" ? entry.note ?? entry.text ?? "" : String(entry ?? "");
+              const when =
+                entry && typeof entry === "object" && entry.createdAt ? formatDateTime(entry.createdAt) : null;
+              return (
+                <li key={idx} className="rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2">
+                  {when && <p className="text-xs text-slate-500 mb-1">{when}</p>}
+                  <p className="whitespace-pre-wrap">{text || "—"}</p>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
+      <div className="rounded-2xl border border-amber-100 bg-amber-50/50 p-5">
+        <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-amber-900">
+          <Paperclip size={18} className="text-amber-700" />
+          Attachments
+        </h4>
+        <AttachmentSection attachments={detail.attachments} flat />
+      </div>
+    </>
+  );
+}
+
 export default function ExporterRateRequestWorkflow() {
   const [requests, setRequests] = useState([]);
   const [selectedId, setSelectedId] = useState("");
@@ -479,6 +658,27 @@ export default function ExporterRateRequestWorkflow() {
     search: "",
     source: "",
   });
+  /** `rate` = exporter rate requests (current API); `agent` = sales-day-agent inbox */
+  const [mainTab, setMainTab] = useState("rate");
+  const [agentRequests, setAgentRequests] = useState([]);
+  const [agentLoadingList, setAgentLoadingList] = useState(false);
+  const [agentSummary, setAgentSummary] = useState({
+    ownedAgentCustomerCount: 0,
+    totalRateRequests: 0,
+  });
+  const [agentPagination, setAgentPagination] = useState({
+    currentPage: 1,
+    totalPages: 1,
+    totalItems: 0,
+    itemsPerPage: 20,
+  });
+  const [agentFilters, setAgentFilters] = useState({
+    page: 1,
+    limit: 20,
+    search: "",
+  });
+  const [showAgentDetailModal, setShowAgentDetailModal] = useState(false);
+  const [selectedAgentDetail, setSelectedAgentDetail] = useState(null);
 
   const authHeaders = useMemo(() => {
     const token = getToken();
@@ -572,9 +772,58 @@ export default function ExporterRateRequestWorkflow() {
     fetchMeta();
   }, []);
 
+  const loadAgentRequests = async (override = null) => {
+    const page = override?.page ?? agentFilters.page;
+    const limit = override?.limit ?? agentFilters.limit;
+    const search = override?.search !== undefined ? override.search : agentFilters.search;
+    setAgentLoadingList(true);
+    try {
+      const params = { page, limit };
+      if (String(search).trim()) params.search = String(search).trim();
+      const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/sales-day-agent/rate-requests`, {
+        headers: authHeaders,
+        params,
+      });
+      const list = Array.isArray(res.data?.data) ? res.data.data : [];
+      setAgentRequests(list);
+      if (res.data?.summary) {
+        setAgentSummary({
+          ownedAgentCustomerCount: res.data.summary.ownedAgentCustomerCount ?? 0,
+          totalRateRequests: res.data.summary.totalRateRequests ?? list.length,
+        });
+      }
+      if (res.data?.pagination) {
+        setAgentPagination({
+          currentPage: res.data.pagination.currentPage ?? page,
+          totalPages: res.data.pagination.totalPages ?? 1,
+          totalItems: res.data.pagination.totalItems ?? list.length,
+          itemsPerPage: res.data.pagination.itemsPerPage ?? limit,
+        });
+      } else {
+        setAgentPagination({
+          currentPage: page,
+          totalPages: 1,
+          totalItems: list.length,
+          itemsPerPage: limit,
+        });
+      }
+    } catch (error) {
+      alertify.error(error.response?.data?.message || "Failed to fetch agent rate requests");
+      setAgentRequests([]);
+    } finally {
+      setAgentLoadingList(false);
+    }
+  };
+
   useEffect(() => {
-    fetchList();
-  }, [filters.page, filters.limit, filters.source]);
+    if (mainTab !== "agent") return;
+    void loadAgentRequests();
+  }, [mainTab, agentFilters.page, agentFilters.limit]);
+
+  useEffect(() => {
+    if (mainTab !== "rate") return;
+    void fetchList();
+  }, [mainTab, filters.page, filters.limit, filters.source]);
 
   useEffect(() => {
     if (showCreate) loadAgents();
@@ -600,8 +849,14 @@ export default function ExporterRateRequestWorkflow() {
   }, [createForm.attachments]);
 
   const applySearch = () => {
-    setFilters((prev) => ({ ...prev, page: 1, search: prev.search }));
-    fetchList();
+    if (mainTab === "rate") {
+      setFilters((prev) => ({ ...prev, page: 1, search: prev.search }));
+      fetchList();
+    } else {
+      const q = agentFilters.search.trim();
+      setAgentFilters((prev) => ({ ...prev, page: 1 }));
+      void loadAgentRequests({ page: 1, limit: agentFilters.limit, search: q });
+    }
   };
 
   const onCreate = async (e) => {
@@ -663,6 +918,19 @@ export default function ExporterRateRequestWorkflow() {
 
   const totalCount = requests.length;
 
+  const todayRequestCount = useMemo(() => {
+    const today = new Date().toISOString().split("T")[0];
+    return requests.filter((r) => {
+      const raw = r.createdAt ?? r.created_at ?? r.quoteDueAt;
+      if (raw == null) return false;
+      const s = typeof raw === "string" ? raw.slice(0, 10) : "";
+      return s === today;
+    }).length;
+  }, [requests]);
+
+  const canGoNextPage = requests.length >= filters.limit;
+  const canGoNextAgentPage = agentFilters.page < (agentPagination.totalPages || 1);
+
   const handleViewRequest = async (id) => {
     setSelectedId(id);
     await fetchDetail(id);
@@ -711,46 +979,55 @@ export default function ExporterRateRequestWorkflow() {
     }
   };
 
-  return (
-    <div className="p-6">
-      <div className="bg-white border border-gray-200 rounded-xl p-4 mb-6">
-        <div className="flex flex-wrap items-stretch gap-3">
-          <StatCard label="Total" value={totalCount} compact />
+  const handleRatePageChange = (nextPage) => {
+    if (nextPage < 1) return;
+    if (nextPage > filters.page && !canGoNextPage) return;
+    setFilters((p) => ({ ...p, page: nextPage }));
+  };
 
-          <div className="relative flex-1 min-w-[180px] max-w-lg h-14 min-h-14">
-            <input
-              type="text"
-              placeholder="Search request ID / exporter / route"
-              value={filters.search}
-              onChange={(e) => setFilters((p) => ({ ...p, search: e.target.value }))}
-              onKeyDown={(e) => e.key === "Enter" && applySearch()}
-              className="h-full w-full min-h-0 box-border pl-3 pr-9 text-sm leading-none bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-            />
-            <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
+  const handleAgentPageChange = (nextPage) => {
+    if (nextPage < 1) return;
+    if (nextPage > agentFilters.page && !canGoNextAgentPage) return;
+    setAgentFilters((p) => ({ ...p, page: nextPage }));
+  };
+
+  const openAgentDetail = (row) => {
+    setSelectedAgentDetail(row);
+    setShowAgentDetailModal(true);
+  };
+
+  return (
+    <div className="p-6 bg-white min-h-screen">
+      <div className="flex flex-col gap-6 mb-6 border border-gray-200 rounded-xl p-6 bg-white">
+        <div className="flex flex-col xl:flex-row gap-6">
+          <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-white rounded-xl border border-gray-200 p-6 h-[90px] flex items-center relative">
+              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-gray-700 font-bold text-2xl">
+                {mainTab === "agent"
+                  ? agentPagination.totalItems ?? agentRequests.length
+                  : totalCount}
+              </div>
+              <div className="absolute inset-0 flex items-center justify-center text-gray-700 font-semibold pointer-events-none text-center px-2">
+                {mainTab === "agent" ? "Agent requests (total)" : "Total requests"}
+              </div>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 p-6 h-[90px] flex items-center relative">
+              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-gray-700 font-bold text-2xl">
+                {mainTab === "agent" ? agentSummary.ownedAgentCustomerCount ?? "—" : todayRequestCount}
+              </div>
+              <div className="absolute inset-0 flex items-center justify-center text-gray-700 font-semibold pointer-events-none text-center px-2">
+                {mainTab === "agent" ? "Owned customers" : "Today"}
+              </div>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3 ml-auto shrink-0 min-h-14">
-            <SearchableSelect
-              value={filters.source}
-              onChange={(value) => setFilters((p) => ({ ...p, page: 1, source: value }))}
-              options={meta.sources.map((s) => ({ value: s, label: formatStatusLabel(s) }))}
-              placeholder="All Source"
-              className="min-w-[140px] w-[160px] sm:w-[180px]"
-              compact
-            />
+          <div className="flex flex-col gap-1 w-full xl:w-[350px]">
             <button
               type="button"
               title={
-                canCreateRateRequest
-                  ? ""
-                  : "Only active Sales users on day shift can create rate requests"
+                canCreateRateRequest ? "" : "Only active Sales users on day shift can create rate requests"
               }
               disabled={!canCreateRateRequest}
-              className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                canCreateRateRequest
-                  ? "bg-blue-600 hover:bg-blue-700 text-white"
-                  : "bg-gray-300 text-gray-500 cursor-not-allowed"
-              }`}
               onClick={() => {
                 if (!canCreateRateRequest) {
                   alertify.error("Only active day-shift Sales users can create rate requests");
@@ -758,77 +1035,304 @@ export default function ExporterRateRequestWorkflow() {
                 }
                 setShowCreate(true);
               }}
+              className={`flex items-center justify-between gap-4 px-6 h-[40px] rounded-lg text-white font-semibold transition w-full ${
+                canCreateRateRequest ? "bg-blue-600 hover:bg-blue-700" : "bg-gray-400 cursor-not-allowed"
+              }`}
             >
-              <Plus className="w-4 h-4 shrink-0 opacity-95" />
-              Create Rate Request
+              <span>Create Rate Request</span>
+              <PlusCircle size={20} />
             </button>
+            {mainTab === "rate" && (
+              <div className="relative w-full h-[45px]">
+                <SearchableSelect
+                  value={filters.source}
+                  onChange={(value) => setFilters((p) => ({ ...p, page: 1, source: value }))}
+                  options={meta.sources.map((s) => ({ value: s, label: formatStatusLabel(s) }))}
+                  placeholder="All sources"
+                  className="h-full [&>button]:h-full [&>button]:rounded-lg [&>button]:border-gray-200"
+                  compact
+                />
+              </div>
+            )}
           </div>
+        </div>
+
+        <div className="relative w-full">
+          <input
+            type="text"
+            placeholder={
+              mainTab === "agent"
+                ? "Search agent requests (press Enter)"
+                : "Search request ID / exporter / route (press Enter)"
+            }
+            value={mainTab === "agent" ? agentFilters.search : filters.search}
+            onChange={(e) =>
+              mainTab === "agent"
+                ? setAgentFilters((p) => ({ ...p, search: e.target.value }))
+                : setFilters((p) => ({ ...p, search: e.target.value }))
+            }
+            onKeyDown={(e) => e.key === "Enter" && applySearch()}
+            className="w-full pl-6 pr-12 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-colors text-gray-600 placeholder-gray-400"
+          />
+          <Search className="absolute right-6 top-1/2 transform -translate-y-1/2 text-gray-400" size={24} />
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden p-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-6">Sales Rate Request Inbox</h2>
-        {loadingList ? (
-          <p className="p-4 text-sm text-gray-500">Loading requests...</p>
-        ) : (
+      <div className="relative z-20 flex gap-2 mb-4 p-1 bg-gray-100 rounded-xl border border-gray-200 w-full sm:w-auto sm:inline-flex">
+        <button
+          type="button"
+          onClick={() => setMainTab("rate")}
+          className={`flex-1 sm:flex-none px-5 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+            mainTab === "rate"
+              ? "bg-white text-gray-900 shadow-sm border border-gray-200"
+              : "text-gray-600 hover:text-gray-900"
+          }`}
+        >
+          Rate Request
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setMainTab("agent");
+          }}
+          className={`flex-1 sm:flex-none px-5 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+            mainTab === "agent"
+              ? "bg-white text-gray-900 shadow-sm border border-gray-200"
+              : "text-gray-600 hover:text-gray-900"
+          }`}
+        >
+          Agent Rate Request
+        </button>
+      </div>
+
+      {mainTab === "rate" && loadingList && (
+        <div className="flex justify-center items-center h-64 bg-white rounded-2xl border border-gray-200">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4" />
+            <p className="text-gray-600">Loading rate requests...</p>
+          </div>
+        </div>
+      )}
+
+      {mainTab === "rate" && !loadingList && (
+        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse border-spacing-0">
-              <thead>
-                <tr className="bg-[#F1F4F9]">
-                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base rounded-l-2xl">Request ID</th>
+            <table className="w-full">
+              <thead className="bg-white border-b border-gray-200">
+                <tr>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Request ID</th>
                   <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Exporter</th>
                   <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Route</th>
                   <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Quote Due</th>
-                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base rounded-r-2xl">Action</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Action</th>
                 </tr>
               </thead>
               <tbody>
                 {requests.map((item) => (
-                    <tr key={item._id} className="border-b border-gray-200 hover:bg-gray-50 transition-colors">
-                      <td className="py-4 px-4 text-sm font-medium text-gray-700">{item.requestId || item._id}</td>
-                      <td className="py-4 px-4">
-                        <p className="text-sm font-medium text-gray-900">{formatExporterCompany(item.exporterCompany)}</p>
-                        <p className="text-xs text-gray-500">{item.contactPerson || "N/A"}</p>
-                      </td>
-                      <td className="py-4 px-4 text-sm text-gray-700">{item.originPort || "-"} to {item.destinationPort || "-"}</td>
-                      <td className="py-4 px-4 text-sm text-gray-700">{formatDateTime(item.quoteDueAt)}</td>
-                      <td className="py-4 px-4">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => handleViewRequest(item._id)}
-                            className="px-3 py-1 border border-blue-500 text-blue-500 rounded-md text-sm font-medium hover:bg-blue-50 transition-colors inline-flex items-center gap-1"
-                          >
-                            <Eye size={12} /> View
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => openExtraDetailsModal(item._id)}
-                            className="px-3 py-1 border border-violet-500 text-violet-600 rounded-md text-sm font-medium hover:bg-violet-50 transition-colors inline-flex items-center gap-1"
-                          >
-                            <ClipboardList size={12} /> Customs Details
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
+                  <tr key={item._id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                    <td className="py-4 px-4">
+                      <span className="text-sm text-gray-600 font-medium">{item.requestId || item._id}</span>
+                    </td>
+                    <td className="py-4 px-4">
+                      <span className="text-sm font-medium text-gray-800 block">
+                        {formatExporterCompany(item.exporterCompany)}
+                      </span>
+                      <span className="text-xs text-gray-500">{item.contactPerson || "N/A"}</span>
+                    </td>
+                    <td className="py-4 px-4">
+                      <span className="text-sm font-medium text-gray-800">
+                        {item.originPort || "-"} to {item.destinationPort || "-"}
+                      </span>
+                    </td>
+                    <td className="py-4 px-4">
+                      <span className="text-sm font-medium text-gray-800">{formatDateTime(item.quoteDueAt)}</span>
+                    </td>
+                    <td className="py-4 px-4">
+                      <div className="flex flex-wrap gap-3">
+                        <button
+                          type="button"
+                          onClick={() => handleViewRequest(item._id)}
+                          className="px-4 py-1 rounded border border-green-500 text-green-500 text-sm font-medium hover:bg-green-50 transition-colors min-w-[70px] inline-flex items-center justify-center gap-1"
+                        >
+                          <Eye size={14} /> View
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openExtraDetailsModal(item._id)}
+                          className="px-4 py-1 rounded border border-purple-500 text-purple-500 text-sm font-medium hover:bg-purple-50 transition-colors min-w-[70px] inline-flex items-center justify-center gap-1"
+                        >
+                          <ClipboardList size={14} /> Customs
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        )}
+          {requests.length === 0 && (
+            <div className="text-center py-12">
+              <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500 text-lg">
+                {filters.search.trim() ? "No requests found matching your search" : "No rate requests found"}
+              </p>
+              <p className="text-gray-400 text-sm">
+                {filters.search.trim()
+                  ? "Try adjusting your search terms"
+                  : "Create a new rate request or change filters"}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
-        {!loadingList && requests.length === 0 && (
-          <div className="text-center py-12">
-            <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500 text-lg">No requests found</p>
-            <p className="text-gray-400 text-sm">Try changing filters or create a new request</p>
+      {mainTab === "rate" && !loadingList && requests.length > 0 && (filters.page > 1 || canGoNextPage) && (
+        <div className="flex justify-between items-center mt-6 bg-white rounded-2xl border border-gray-200 p-4">
+          <div className="text-sm text-gray-600">
+            Page {filters.page}
+            {filters.search.trim() ? ` · search: "${filters.search.trim()}"` : ""}
           </div>
-        )}
-      </div>
+          <div className="flex gap-1 items-center">
+            <button
+              type="button"
+              onClick={() => handleRatePageChange(filters.page - 1)}
+              disabled={filters.page <= 1}
+              className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+            >
+              <ChevronLeft size={18} />
+              <span>Previous</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleRatePageChange(filters.page + 1)}
+              disabled={!canGoNextPage}
+              className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+            >
+              <span>Next</span>
+              <ChevronRight size={18} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {mainTab === "agent" && agentLoadingList && (
+        <div className="flex justify-center items-center h-64 bg-white rounded-2xl border border-gray-200">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4" />
+            <p className="text-gray-600">Loading agent rate requests...</p>
+          </div>
+        </div>
+      )}
+
+      {mainTab === "agent" && !agentLoadingList && (
+        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-white border-b border-gray-200">
+                <tr>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Request ID</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Exporter</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Route</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Status</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Quote Due</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {agentRequests.map((item) => (
+                  <tr key={item._id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                    <td className="py-4 px-4">
+                      <span className="text-sm text-gray-600 font-medium">{item.requestId || item._id}</span>
+                    </td>
+                    <td className="py-4 px-4">
+                      <span className="text-sm font-medium text-gray-800 block">
+                        {formatExporterCompany(item.exporterCompany)}
+                      </span>
+                      <span className="text-xs text-gray-500">{item.contactPerson || "N/A"}</span>
+                    </td>
+                    <td className="py-4 px-4">
+                      <span className="text-sm font-medium text-gray-800">
+                        {item.originPort || "-"} to {item.destinationPort || "-"}
+                      </span>
+                    </td>
+                    <td className="py-4 px-4">
+                      <span className="text-sm font-medium text-gray-800">{formatStatusLabel(item.status)}</span>
+                    </td>
+                    <td className="py-4 px-4">
+                      <span className="text-sm font-medium text-gray-800">{formatDateTime(item.quoteDueAt)}</span>
+                    </td>
+                    <td className="py-4 px-4">
+                      <button
+                        type="button"
+                        onClick={() => openAgentDetail(item)}
+                        className="px-4 py-1 rounded border border-green-500 text-green-500 text-sm font-medium hover:bg-green-50 transition-colors min-w-[70px] inline-flex items-center justify-center gap-1"
+                      >
+                        <Eye size={14} /> View
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {agentRequests.length === 0 && (
+            <div className="text-center py-12">
+              <Truck className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500 text-lg">
+                {agentFilters.search.trim()
+                  ? "No agent requests match your search"
+                  : "No agent rate requests yet"}
+              </p>
+              <p className="text-gray-400 text-sm">
+                Submissions from the agent portal appear here for your owned customers.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {mainTab === "agent" && !agentLoadingList && agentRequests.length > 0 && (agentFilters.page > 1 || canGoNextAgentPage) && (
+        <div className="flex justify-between items-center mt-6 bg-white rounded-2xl border border-gray-200 p-4">
+          <div className="text-sm text-gray-600">
+            Page {agentFilters.page} of {agentPagination.totalPages}
+            {agentPagination.totalItems != null && ` · ${agentPagination.totalItems} total`}
+            {agentFilters.search.trim() ? ` · search: "${agentFilters.search.trim()}"` : ""}
+          </div>
+          <div className="flex gap-1 items-center">
+            <button
+              type="button"
+              onClick={() => handleAgentPageChange(agentFilters.page - 1)}
+              disabled={agentFilters.page <= 1}
+              className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+            >
+              <ChevronLeft size={18} />
+              <span>Previous</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleAgentPageChange(agentFilters.page + 1)}
+              disabled={!canGoNextAgentPage}
+              className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+            >
+              <span>Next</span>
+              <ChevronRight size={18} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {showDetailModal && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4" onClick={() => setShowDetailModal(false)}>
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-6xl max-h-[95vh] flex flex-col border border-gray-200 overflow-auto" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
+          onClick={() => {
+            setShowDetailModal(false);
+            setSelectedId("");
+          }}
+        >
+          <div
+            className="bg-white rounded-3xl shadow-2xl w-full max-w-6xl max-h-[95vh] flex flex-col border border-gray-200 overflow-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-5 rounded-t-3xl">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -840,7 +1344,15 @@ export default function ExporterRateRequestWorkflow() {
                     <p className="text-blue-100 text-sm">Exporter rate request — shipment and quote details</p>
                   </div>
                 </div>
-                <button className="text-white/80 hover:text-white text-xl font-bold" onClick={() => setShowDetailModal(false)}>X</button>
+                <button
+                  className="text-white/80 hover:text-white text-xl font-bold"
+                  onClick={() => {
+                    setShowDetailModal(false);
+                    setSelectedId("");
+                  }}
+                >
+                  X
+                </button>
               </div>
             </div>
 
@@ -850,124 +1362,50 @@ export default function ExporterRateRequestWorkflow() {
               ) : !selectedDetail ? (
                 <p className="text-sm text-red-600">Failed to load detail.</p>
               ) : (
-                <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Request ID</p>
-                      <p className="mt-1 font-mono text-lg font-bold text-slate-900 break-all">
-                        {selectedDetail.requestId || selectedDetail._id || "N/A"}
-                      </p>
-                    </div>
-                    <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-teal-50/80 p-5 shadow-sm">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800">Expected dispatch</p>
-                      <p className="mt-1 text-lg font-semibold text-slate-900">
-                        {formatDateOnly(selectedDetail.expectedDispatchDate) ?? "N/A"}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2 text-sm">
-                    <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-slate-700">
-                      Source: <strong className="ml-1">{formatStatusLabel(selectedDetail.source)}</strong>
-                    </span>
-                  </div>
-
-                  <div className="rounded-2xl border border-blue-100 bg-blue-50/80 p-5">
-                    <h4 className="mb-4 flex items-center gap-2 text-sm font-semibold text-blue-900">
-                      <FileText size={18} className="text-blue-600" />
-                      Exporter details
-                    </h4>
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                      <DetailField label="Exporter company" value={formatExporterCompany(selectedDetail.exporterCompany)} />
-                      <DetailField label="Contact person" value={selectedDetail.contactPerson} />
-                      <DetailField label="Contact email" value={selectedDetail.contactEmail} />
-                      <DetailField label="Contact phone" value={selectedDetail.contactPhone} />
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-emerald-100 bg-emerald-50/80 p-5">
-                    <h4 className="mb-4 flex items-center gap-2 text-sm font-semibold text-emerald-900">
-                      <Ship size={18} className="text-emerald-600" />
-                      Shipment details
-                    </h4>
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                      <DetailField label="Origin port" value={selectedDetail.originPort} />
-                      <DetailField label="Destination port" value={selectedDetail.destinationPort} />
-                      <DetailField label="Cargo type" value={selectedDetail.cargoType} />
-                      <DetailField label="Weight / volume" value={selectedDetail.weightOrVolume} />
-                      <DetailField label="Incoterm" value={selectedDetail.incoterm} />
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-indigo-100 bg-indigo-50/80 p-5">
-                    <h4 className="mb-4 text-sm font-semibold text-indigo-900">Container type</h4>
-                    <ContainerTypeDisplay value={selectedDetail.containerType} />
-                  </div>
-
-                  {hasExtraDetails(selectedDetail) && (
-                    <div className="rounded-2xl border border-violet-100 bg-violet-50/80 p-5">
-                      <h4 className="mb-4 flex items-center gap-2 text-sm font-semibold text-violet-900">
-                        <ClipboardList size={18} className="text-violet-600" />
-                        Customs & shipment extras
-                      </h4>
-                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                        {EXTRA_DETAILS_DISPLAY_KEYS.map((key) => {
-                          const text = formatExtraDetailDisplay(key, selectedDetail);
-                          if (!text) return null;
-                          return (
-                            <DetailField
-                              key={key}
-                              label={EXTRA_DETAILS_LABELS[key]}
-                              value={text}
-                              multiline={
-                                key === "targetRateOrTimeline" ||
-                                key === "specialEquipmentRequired" ||
-                                key === "exactPickupLocation" ||
-                                key === "exactDeliveryLocation"
-                              }
-                            />
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {Array.isArray(selectedDetail.internalNotes) && selectedDetail.internalNotes.length > 0 && (
-                    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                      <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900">
-                        <FileText size={18} className="text-slate-600" />
-                        Internal notes
-                      </h4>
-                      <ul className="space-y-3 max-h-56 overflow-y-auto text-sm text-slate-700">
-                        {selectedDetail.internalNotes.map((entry, idx) => {
-                          const text =
-                            entry && typeof entry === "object"
-                              ? entry.note ?? entry.text ?? ""
-                              : String(entry ?? "");
-                          const when =
-                            entry && typeof entry === "object" && entry.createdAt
-                              ? formatDateTime(entry.createdAt)
-                              : null;
-                          return (
-                            <li key={idx} className="rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2">
-                              {when && <p className="text-xs text-slate-500 mb-1">{when}</p>}
-                              <p className="whitespace-pre-wrap">{text || "—"}</p>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </div>
-                  )}
-
-                  <div className="rounded-2xl border border-amber-100 bg-amber-50/50 p-5">
-                    <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-amber-900">
-                      <Paperclip size={18} className="text-amber-700" />
-                      Attachments
-                    </h4>
-                    <AttachmentSection attachments={selectedDetail.attachments} flat />
-                  </div>
-                </>
+                <RateRequestDetailBody detail={selectedDetail} />
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAgentDetailModal && selectedAgentDetail && (
+        <div
+          className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
+          onClick={() => {
+            setShowAgentDetailModal(false);
+            setSelectedAgentDetail(null);
+          }}
+        >
+          <div
+            className="bg-white rounded-3xl shadow-2xl w-full max-w-6xl max-h-[95vh] flex flex-col border border-gray-200 overflow-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="bg-gradient-to-r from-teal-600 to-cyan-700 text-white px-6 py-5 rounded-t-3xl">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+                    <Eye size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-semibold">Agent Rate Request</h3>
+                    <p className="text-teal-100 text-sm">Submitted via agent portal — full shipment snapshot</p>
+                  </div>
+                </div>
+                <button
+                  className="text-white/80 hover:text-white text-xl font-bold"
+                  onClick={() => {
+                    setShowAgentDetailModal(false);
+                    setSelectedAgentDetail(null);
+                  }}
+                >
+                  X
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-5 bg-gray-50">
+              <RateRequestDetailBody detail={selectedAgentDetail} />
             </div>
           </div>
         </div>
@@ -1166,7 +1604,7 @@ export default function ExporterRateRequestWorkflow() {
           onClick={() => !extraDetailsSubmitting && setShowExtraDetailsModal(false)}
         >
           <form
-            className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[92vh] overflow-hidden flex flex-col border border-gray-200"
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col border border-gray-200 overflow-visible"
             onClick={(e) => e.stopPropagation()}
             onSubmit={submitExtraDetails}
           >
@@ -1464,27 +1902,6 @@ export default function ExporterRateRequestWorkflow() {
   );
 }
 
-function StatCard({ label, value, danger, success, compact }) {
-  return (
-    <div
-      className={`bg-white border border-gray-200 ${
-        compact
-          ? "rounded-lg px-3 min-w-[88px] h-14 min-h-14 flex flex-col justify-center shrink-0"
-          : "rounded-xl p-3"
-      }`}
-    >
-      <p className={`text-gray-500 ${compact ? "text-[10px] leading-tight" : "text-xs"}`}>{label}</p>
-      <p
-        className={`font-semibold leading-tight ${compact ? "text-lg mt-0.5" : "text-2xl"} ${
-          danger ? "text-red-600" : success ? "text-emerald-600" : "text-gray-800"
-        }`}
-      >
-        {value}
-      </p>
-    </div>
-  );
-}
-
 function DetailField({ label, value, multiline }) {
   const display =
     value === undefined || value === null || String(value).trim() === "" ? "N/A" : String(value);
@@ -1577,8 +1994,11 @@ function SearchableSelect({
   compact = false,
   largeList = false,
 }) {
+  const rootRef = useRef(null);
+  const menuRef = useRef(null);
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [menuBox, setMenuBox] = useState(null);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return options;
@@ -1593,18 +2013,115 @@ function SearchableSelect({
   const selected = options.find((option) => option.value === value);
   const displaySelected = selected?.label || (value ? String(value) : "");
 
+  const updateMenuBox = useCallback(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const gap = 4;
+    const spaceBelow = window.innerHeight - r.bottom - gap - 8;
+    const cap = largeList ? Math.min(window.innerHeight * 0.65, 448) : 240;
+    const maxH = Math.max(120, Math.min(cap, spaceBelow));
+    setMenuBox({
+      top: r.bottom + gap,
+      left: r.left,
+      width: r.width,
+      maxH,
+    });
+  }, [largeList]);
+
+  useLayoutEffect(() => {
+    if (!open || disabled) {
+      setMenuBox(null);
+      return;
+    }
+    updateMenuBox();
+    const onResize = () => updateMenuBox();
+    const onScroll = () => updateMenuBox();
+    window.addEventListener("resize", onResize);
+    window.addEventListener("scroll", onScroll, true);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("scroll", onScroll, true);
+    };
+  }, [open, disabled, updateMenuBox]);
+
+  useEffect(() => {
+    if (!open || disabled) return;
+    const onDocMouseDown = (e) => {
+      const t = e.target;
+      if (rootRef.current?.contains(t)) return;
+      if (menuRef.current?.contains(t)) return;
+      setOpen(false);
+      setSearch("");
+    };
+    document.addEventListener("mousedown", onDocMouseDown);
+    return () => document.removeEventListener("mousedown", onDocMouseDown);
+  }, [open, disabled]);
+
+  const dropdown =
+    open && !disabled && menuBox ? (
+      <div
+        ref={menuRef}
+        className="flex flex-col rounded-lg border border-gray-200 bg-white shadow-xl overflow-hidden"
+        style={{
+          position: "fixed",
+          top: menuBox.top,
+          left: menuBox.left,
+          width: menuBox.width,
+          maxHeight: menuBox.maxH,
+          zIndex: 10050,
+        }}
+      >
+        <div className="shrink-0 border-b border-gray-100 p-2">
+          <div className="relative">
+            <Search size={14} className="absolute left-2.5 top-2.5 text-gray-400" />
+            <input
+              className="w-full rounded-md border border-gray-200 py-2 pl-8 pr-3 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder={largeList ? "Search code or description…" : "Search..."}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {filtered.length === 0 ? (
+            <p className="px-3 py-2 text-sm text-gray-500">No option found</p>
+          ) : (
+            filtered.map((option) => (
+              <button
+                type="button"
+                key={option.value}
+                className={`w-full px-3 py-2 text-left text-sm hover:bg-blue-50 ${option.value === value ? "bg-blue-50 font-medium text-blue-700" : "text-gray-700"}`}
+                onClick={() => {
+                  onChange(option.value);
+                  setOpen(false);
+                  setSearch("");
+                }}
+              >
+                {option.label}
+              </button>
+            ))
+          )}
+        </div>
+      </div>
+    ) : null;
+
   return (
-    <div className={`relative ${className}`}>
+    <div ref={rootRef} className={`relative ${className}`}>
       <button
         type="button"
         disabled={disabled}
-        className={`w-full bg-white border border-gray-300 rounded-lg text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+        className={`flex w-full items-center justify-between rounded-lg border border-gray-300 bg-white text-left focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 ${
           compact ? "px-2.5 py-1.5 text-sm" : "px-3 py-2"
-        } ${disabled ? "opacity-60 cursor-not-allowed" : ""}`}
+        } ${disabled ? "cursor-not-allowed opacity-60" : ""}`}
+        onMouseDown={(e) => {
+          if (disabled) return;
+          e.preventDefault();
+        }}
         onClick={() => !disabled && setOpen((prev) => !prev)}
       >
         <span
-          className={`truncate min-w-0 ${displaySelected ? "text-gray-800" : "text-gray-500"} ${compact ? "text-sm" : ""}`}
+          className={`min-w-0 truncate ${displaySelected ? "text-gray-800" : "text-gray-500"} ${compact ? "text-sm" : ""}`}
         >
           {displaySelected || placeholder}
         </span>
@@ -1614,47 +2131,9 @@ function SearchableSelect({
         />
       </button>
 
-      {required && <input tabIndex={-1} autoComplete="off" value={value} readOnly required className="absolute opacity-0 pointer-events-none h-0 w-0" />}
+      {required && <input tabIndex={-1} autoComplete="off" value={value} readOnly required className="pointer-events-none absolute h-0 w-0 opacity-0" />}
 
-      {open && !disabled && (
-        <div
-          className={`absolute z-[70] mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden ${
-            largeList ? "max-h-[min(70vh,28rem)]" : "max-h-60"
-          }`}
-        >
-          <div className="p-2 border-b border-gray-100 shrink-0">
-            <div className="relative">
-              <Search size={14} className="absolute left-2.5 top-2.5 text-gray-400" />
-              <input
-                className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder={largeList ? "Search code or description…" : "Search..."}
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
-          </div>
-          <div className={`overflow-auto ${largeList ? "max-h-[min(55vh,22rem)]" : "max-h-44"}`}>
-            {filtered.length === 0 ? (
-              <p className="px-3 py-2 text-sm text-gray-500">No option found</p>
-            ) : (
-              filtered.map((option) => (
-                <button
-                  type="button"
-                  key={option.value}
-                  className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 ${option.value === value ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-700"}`}
-                  onClick={() => {
-                    onChange(option.value);
-                    setOpen(false);
-                    setSearch("");
-                  }}
-                >
-                  {option.label}
-                </button>
-              ))
-            )}
-          </div>
-        </div>
-      )}
+      {typeof document !== "undefined" && dropdown ? createPortal(dropdown, document.body) : null}
     </div>
   );
 }

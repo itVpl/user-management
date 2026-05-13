@@ -71,11 +71,6 @@ const TeamRating = lazy(() => import("./Components/Sales/TeamRating.jsx"));
 const DailyFollowUp = lazy(() => import("./Pages/DailyFollowUp.jsx"));
 const AddCustomer = lazy(() => import("./Components/Sales/AddCustomer.jsx"));
 const AddAgent = lazy(() => import("./Components/Sales/AddAgent.jsx"));
-const ShiftImageHandoff = lazy(() => import("./Components/Sales/ShiftImageHandoff.jsx"));
-const MyAssignedImages = lazy(() => import("./Components/Sales/MyAssignedImages.jsx"));
-const SalesBuyerHandoff = lazy(() => import("./Components/Sales/SalesBuyerHandoff.jsx"));
-const MyIncomingBuyers = lazy(() => import("./Components/Sales/MyIncomingBuyers.jsx"));
-const ExporterRateRequestWorkflow = lazy(() => import("./Components/Sales/ExporterRateRequestWorkflow.jsx"));
 const AssignAgent = lazy(() => import("./Components/Dashboard/AssignAgent.jsx"));
 const CarrierDocs = lazy(() => import("./Components/CMT/CarrierDocs.jsx"));
 const DoDetails = lazy(() => import("./Components/CMT/DODetails.jsx"));
@@ -131,6 +126,8 @@ const HRCallReports = lazy(() => import("./Components/HRDashboard/HRCallReports.
 const FollowUpReport = lazy(() => import("./Components/Sales/FollowUpReport.jsx"));
 const LandingPage = lazy(() => import("./Pages/LandingPage.jsx"));
 const CreditLimitRequests = lazy(() => import("./Components/Sales/CreditLimitRequests.jsx"));
+const ExporterRateRequestWorkflow = lazy(() => import("./Components/Sales/ExporterRateRequestWorkflow.jsx"));
+const AllExporterRR = lazy(() => import("./Components/Sales/AllExporterRR.jsx"));
 const CreditLimitForm = lazy(() => import("./Pages/CreditLimitForm.jsx"));
 const EmployeeDocuments = lazy(() => import("./Components/HRDashboard/EmployeeDocuments.jsx"));
 const SalaryModification = lazy(() => import("./Components/HRDashboard/SalaryModification.jsx"));
@@ -149,9 +146,6 @@ const HourlyCheckinReport = lazy(() => import("./Pages/HourlyCheckin/HourlyCheck
 const PublicEmployeeTest = lazy(() => import("./Components/EmployeeTest/PublicEmployeeTest.jsx"));
 const EmployeeTestAdmin = lazy(() => import("./Components/EmployeeTest/EmployeeTestAdmin.jsx"));
 const Newsletter = lazy(() => import("./Pages/Newsletter.jsx"));
-const OceanQuotePublicForm = lazy(() => import("./Pages/OceanQuotePublicForm.jsx"));
-const OceanQuoteList = lazy(() => import("./Components/Sales/OceanQuoteList.jsx"));
-const OceanQuoteDetail = lazy(() => import("./Components/Sales/OceanQuoteDetail.jsx"));
 
 
 // Chat Message System Imports - keep as regular imports (needed globally)
@@ -659,7 +653,6 @@ function App() {
           />
           <Route path="/signup" element={<Signup />} />
           <Route path="/credit-limit-form/:token" element={<CreditLimitForm />} />
-          <Route path="/ocean-quote" element={<OceanQuotePublicForm />} />
 
         {/* Protected Routes */}
         <Route
@@ -721,11 +714,6 @@ function App() {
           <Route path="daily-follow-up" element={<DailyFollowUp />} />
           <Route path="AddCustomer" element={<AddCustomer />} />
           <Route path="AddAgent" element={<AddAgent />} />
-          <Route path="sales/shift-image-handoff" element={<ShiftImageHandoff />} />
-          <Route path="sales/my-assigned-images" element={<MyAssignedImages />} />
-          <Route path="sales/buyer-handoff" element={<SalesBuyerHandoff />} />
-          <Route path="sales/my-incoming-buyers" element={<MyIncomingBuyers />} />
-          <Route path="sales/exporter-rate-requests" element={<ExporterRateRequestWorkflow />} />
           <Route path="ImportCarrierEmails" element={<ImportCarrierEmails />} />
           <Route path="AssignAgent" element={<AssignAgent />} />
           <Route path="CarrierDocs" element={<CarrierDocs />} />
@@ -782,8 +770,8 @@ function App() {
           <Route path="hr-call-reports" element={<HRCallReports />} />
           <Route path="allcustomer" element={<AllCustomer />} />
           <Route path="credit-limit-requests" element={<CreditLimitRequests />} />
-          <Route path="quote-request" element={<OceanQuoteList />} />
-          <Route path="quote-request/:id" element={<OceanQuoteDetail />} />
+          <Route path="sales/exporter-rate-requests" element={<ExporterRateRequestWorkflow />} />
+          <Route path="sales/all-exporter-rr" element={<AllExporterRR />} />
           <Route path="employee-documents" element={<EmployeeDocuments />} />
           <Route path="salary-modification" element={<SalaryModification />} />
           <Route path="employee-feedback" element={<EmployeeFeedback />} />

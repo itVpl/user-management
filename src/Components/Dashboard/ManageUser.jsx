@@ -89,8 +89,8 @@ const departmentFromStorage = () => {
 const isHrDepartment = () => departmentFromStorage().toLowerCase() === 'hr';
 
 const salesShiftTimingLabel = (v) => {
-  if (v === 'day_shift') return 'US Shift';
-  if (v === 'night_shift') return 'Indian Shift';
+  if (v === 'night_shift') return 'US Shift';
+  if (v === 'day_shift') return 'Indian Shift';
   return (v && String(v)) || '—';
 };
 const salesTeamLabel = (v) => {
@@ -1032,7 +1032,7 @@ const ManageUser = () => {
                       <p className="text-sm text-gray-600">Designation</p>
                       <p className="font-medium text-gray-800">{viewingUser.designation}</p>
                     </div>
-                    {viewingUser.department === 'Sales' && viewingUser.salesShiftTiming === 'day_shift' && viewingUser.salesExecutiveTier && (
+                    {viewingUser.department === 'Sales' && viewingUser.salesShiftTiming === 'night_shift' && viewingUser.salesExecutiveTier && (
                       <div>
                         <p className="text-sm text-gray-600">Sales Executive Tier</p>
                         <p className="font-medium text-gray-800">{viewingUser.salesExecutiveTier}</p>
@@ -1044,7 +1044,7 @@ const ManageUser = () => {
                         <p className="font-medium text-gray-800">{salesShiftTimingLabel(viewingUser.salesShiftTiming)}</p>
                       </div>
                     )}
-                    {viewingUser.department === 'Sales' && viewingUser.salesShiftTiming === 'night_shift' && (
+                    {viewingUser.department === 'Sales' && viewingUser.salesShiftTiming === 'day_shift' && (
                       <div>
                         <p className="text-sm text-gray-600">Team name</p>
                         <p className="font-medium text-gray-800">{salesTeamLabel(viewingUser.salesTeam)}</p>
@@ -1304,8 +1304,8 @@ const ManageUser = () => {
 const DEPARTMENT_OPTIONS = ['IT', 'HR', 'CMT', 'Sales', 'Finance', 'QA'];
 const SALES_TIER_OPTIONS = ['1', '2', '3'];
 const SALES_SHIFT_TIMING_OPTIONS = [
-  { value: 'day_shift', label: 'US Shift' },
-  { value: 'night_shift', label: 'Indian Shift' },
+  { value: 'night_shift', label: 'US Shift' },
+  { value: 'day_shift', label: 'Indian Shift' },
 ];
 const SALES_TEAM_NAME_OPTIONS = [
   { value: 'rate_request_team', label: 'Rate Request Team' },
@@ -1457,9 +1457,9 @@ const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate })
         const next = {
           ...prev,
           salesShiftTiming: v,
-          salesTeam: v === 'day_shift' ? '' : prev.salesTeam,
+          salesTeam: v === 'night_shift' ? '' : prev.salesTeam,
         };
-        if (v === 'night_shift') {
+        if (v === 'day_shift') {
           next.salesExecutiveTier = '';
           next.designation = '';
         }
@@ -1674,7 +1674,7 @@ const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate })
     }
 
     // 10) Designation (skip for Sales + Indian Shift — tier not used)
-    if (!(formData.department === 'Sales' && formData.salesShiftTiming === 'night_shift')) {
+    if (!(formData.department === 'Sales' && formData.salesShiftTiming === 'day_shift')) {
       if (!formData.designation?.trim()) {
         v.designation = 'Please enter the designation name.';
       } else if (formData.designation.trim().length < 2 || !onlyAlpha(formData.designation)) {
@@ -1715,8 +1715,8 @@ const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate })
         v.ifscCode = 'Please enter the valid IFSC Code.';
       }
     }
-    // 16) Sales Executive Tier — only when US Shift (day_shift)
-    if (formData.department === 'Sales' && formData.salesShiftTiming === 'day_shift' && !formData.salesExecutiveTier) {
+    // 16) Sales Executive Tier — only when US Shift (stored as night_shift)
+    if (formData.department === 'Sales' && formData.salesShiftTiming === 'night_shift' && !formData.salesExecutiveTier) {
       v.salesExecutiveTier = 'Please select Sales Executive Tier.';
     }
     // 17) Team Category (salesShiftTiming) — required for Sales
@@ -1728,7 +1728,7 @@ const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate })
       }
     }
     // 18) Team name (salesTeam) — required when Indian Shift
-    if (formData.department === 'Sales' && formData.salesShiftTiming === 'night_shift') {
+    if (formData.department === 'Sales' && formData.salesShiftTiming === 'day_shift') {
       if (!formData.salesTeam) {
         v.salesTeam = 'Please select Team name.';
       } else if (!['rate_request_team', 'operation_team'].includes(formData.salesTeam)) {
@@ -1783,7 +1783,7 @@ const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate })
       const designationValue = formData.department === 'CMT'
         ? 'CMT Operation'
         : formData.department === 'Sales'
-          ? (formData.salesShiftTiming === 'night_shift'
+          ? (formData.salesShiftTiming === 'day_shift'
             ? (formData.designation ?? '')
             : ((getDesignationForSalesTier(formData.salesExecutiveTier) || formData.designation) ?? ''))
           : (formData.designation ?? '');
@@ -2070,7 +2070,7 @@ const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate })
                       />
                       {errors.salesShiftTiming && <p className="text-red-600 text-xs mt-1">{errors.salesShiftTiming}</p>}
                     </div>
-                    {formData.salesShiftTiming === 'night_shift' && (
+                    {formData.salesShiftTiming === 'day_shift' && (
                       <div className="space-y-3">
                         <label className="block text-sm font-bold text-gray-700">Team name *</label>
                         <SearchableSelect
@@ -2088,7 +2088,7 @@ const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate })
                         {errors.salesTeam && <p className="text-red-600 text-xs mt-1">{errors.salesTeam}</p>}
                       </div>
                     )}
-                    {formData.salesShiftTiming === 'day_shift' && (
+                    {formData.salesShiftTiming === 'night_shift' && (
                       <div className="space-y-3">
                         <label className="block text-sm font-bold text-gray-700">Sales Executive Tier *</label>
                         <SearchableSelect
@@ -2116,14 +2116,14 @@ const EditUserModal = ({ user, includeCmtTeamField = false, onClose, onUpdate })
                     ref={designationRef}
                     name="designation"
                     type="text"
-                    value={formData.department === 'CMT' ? 'CMT Operation' : formData.department === 'Sales' ? (formData.salesShiftTiming === 'night_shift' ? formData.designation : (getDesignationForSalesTier(formData.salesExecutiveTier) || formData.designation)) : formData.designation}
+                    value={formData.department === 'CMT' ? 'CMT Operation' : formData.department === 'Sales' ? (formData.salesShiftTiming === 'day_shift' ? formData.designation : (getDesignationForSalesTier(formData.salesExecutiveTier) || formData.designation)) : formData.designation}
                     onChange={handleInputChange}
-                    readOnly={formData.department === 'CMT' || (formData.department === 'Sales' && formData.salesShiftTiming !== 'night_shift')}
+                    readOnly={formData.department === 'CMT' || (formData.department === 'Sales' && formData.salesShiftTiming !== 'day_shift')}
                     minLength={2}
                     maxLength={50}
                     placeholder="Enter designation"
                     className={`${editFieldClass(!!errors.designation, 'teal')} ${
-                      formData.department === 'CMT' || (formData.department === 'Sales' && formData.salesShiftTiming !== 'night_shift')
+                      formData.department === 'CMT' || (formData.department === 'Sales' && formData.salesShiftTiming !== 'day_shift')
                         ? 'bg-teal-100/70 cursor-not-allowed'
                         : ''
                     }`}

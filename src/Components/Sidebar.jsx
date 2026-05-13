@@ -113,7 +113,7 @@ const DEPARTMENT_MODULE_CATEGORIES = {
     "Office Management": ["Office Expenses", "Office Inventory"]
   },
   "Sales": {
-    "Rate Requests": ["Exporter Rate Requests", "Quote Request"],
+    "Rate Requests": ["Exporter Rate Requests", "All Exporter RR", "Quote Request"],
     "Customer Management": [
       "Add Customer",
       "Add Agent",
@@ -259,6 +259,7 @@ const DEPARTMENT_MODULE_CATEGORIES = {
     "Sales Modules": [
       "Quote Request",
       "Exporter Rate Requests",
+      "All Exporter RR",
       "Daily Follow-Up",
       "Loads",
       "Rate Approved",
@@ -441,6 +442,7 @@ const menuItems = [
   { name: "Employee Target Report", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/employee-target-report" },
   { name: "Rate Request", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/RateRequest" },
   { name: "Exporter Rate Requests", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/sales/exporter-rate-requests" },
+  { name: "All Exporter RR", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/sales/all-exporter-rr" },
   { name: "Quote Request", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/quote-request" },
   { name: "All Rate Request", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/all-rate-request" },
   { name: "Rate Suggestion", icon: BlueRevenueStatic, whiteIcon: WhiteRevenueStatic, path: "/rate-suggestion" },
