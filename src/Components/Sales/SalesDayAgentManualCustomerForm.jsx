@@ -1,7 +1,8 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Building2, Mail, Phone, User, Link2, MapPin, Truck } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { createAgentCustomerFromEvent } from '../../services/agentCustomerEventService.js';
+import { fetchSalesDayDispositions } from '../../services/salesDayAgentService.js';
 
 const initialForm = {
   companyName: '',
@@ -19,6 +20,9 @@ const initialForm = {
   shippingTo: '',
   shipmentType: '',
   remark: 'NEW',
+  disposition: '',
+  notes: '',
+  nextFollowUpAt: '',
 };
 
 const emailRegex = /^[^\s@]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
@@ -31,11 +35,68 @@ function fieldClass(err) {
   }`;
 }
 
+function isFollowUpDisposition(value) {
+  return String(value || '').trim().toLowerCase() === 'follow_up';
+}
+
+function normalizeApiErrors(raw) {
+  if (!raw || typeof raw !== 'object') return {};
+  const next = { ...raw };
+  if (next.salesDayDisposition && !next.disposition) next.disposition = next.salesDayDisposition;
+  if (next.importRemark && !next.remark) next.remark = next.importRemark;
+  return next;
+}
+
+function formatManualConflictMessage(payload) {
+  const message = typeof payload?.message === 'string' ? payload.message.trim() : '';
+  const ownerEmpName = typeof payload?.ownerEmpName === 'string' ? payload.ownerEmpName.trim() : '';
+  const ownerEmpId = typeof payload?.ownerEmpId === 'string' ? payload.ownerEmpId.trim() : '';
+  const ownerLabel = ownerEmpName ? `Team ${ownerEmpName.replace(/^team\s+/i, '').trim()}` : '';
+
+  if (message) {
+    let nextMessage = message;
+    if (ownerEmpName && ownerLabel && !new RegExp(`team\\s+${ownerEmpName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i').test(nextMessage)) {
+      nextMessage = nextMessage.replace(ownerEmpName, ownerLabel);
+    }
+    if (ownerEmpId && !nextMessage.includes(ownerEmpId)) return `${nextMessage} (${ownerEmpId})`;
+    return nextMessage;
+  }
+
+  if (ownerLabel && ownerEmpId) return `This agent already belongs to ${ownerLabel} (${ownerEmpId}).`;
+  if (ownerLabel) return `This agent already belongs to ${ownerLabel}.`;
+  return 'Email already exists.';
+}
+
 export default function SalesDayAgentManualCustomerForm() {
   const [form, setForm] = useState(initialForm);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const [dispositions, setDispositions] = useState([]);
+  const [dispositionsLoading, setDispositionsLoading] = useState(false);
   const fieldRefs = useRef({});
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      setDispositionsLoading(true);
+      try {
+        const res = await fetchSalesDayDispositions();
+        const list = Array.isArray(res?.dispositions) ? res.dispositions : Array.isArray(res) ? res : [];
+        if (!cancelled) setDispositions(list);
+      } catch (err) {
+        console.warn('Could not load sales dispositions', err);
+        if (!cancelled) setDispositions([]);
+      } finally {
+        if (!cancelled) setDispositionsLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const validate = useCallback((data) => {
     const e = {};
@@ -60,9 +121,17 @@ export default function SalesDayAgentManualCustomerForm() {
     if (data.shipmentType && data.shipmentType.trim().length > 200) {
       e.shipmentType = 'Shipment type must be at most 200 characters.';
     }
+    if (data.notes && data.notes.trim().length > 2000) e.notes = 'Notes must be at most 2000 characters.';
     if (data.zipcode?.trim()) {
       const z = data.zipcode.replace(/[^a-zA-Z0-9]/g, '');
       if (!zipRegex.test(z)) e.zipcode = 'Invalid zip/postal code.';
+    }
+    if (data.nextFollowUpAt) {
+      const parsed = new Date(data.nextFollowUpAt);
+      if (Number.isNaN(parsed.getTime())) e.nextFollowUpAt = 'Choose a valid follow-up date and time.';
+    }
+    if (isFollowUpDisposition(data.disposition) && !String(data.nextFollowUpAt || '').trim()) {
+      e.nextFollowUpAt = 'Follow-up date and time is required.';
     }
     return e;
   }, []);
@@ -77,8 +146,15 @@ export default function SalesDayAgentManualCustomerForm() {
       v = keepPlus ? `+${digits}` : digits;
     }
     if (name === 'zipcode') v = v.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8);
+    if (submitError) setSubmitError('');
     setForm((prev) => ({ ...prev, [name]: v }));
-    if (errors[name]) setErrors((er) => ({ ...er, [name]: undefined }));
+    if (errors[name] || (name === 'disposition' && errors.nextFollowUpAt && !isFollowUpDisposition(v))) {
+      setErrors((er) => ({
+        ...er,
+        [name]: undefined,
+        ...(name === 'disposition' && !isFollowUpDisposition(v) ? { nextFollowUpAt: undefined } : {}),
+      }));
+    }
   };
 
   const onBlur = (ev) => {
@@ -89,6 +165,7 @@ export default function SalesDayAgentManualCustomerForm() {
 
   const onSubmit = async (e) => {
     e.preventDefault();
+    setSubmitError('');
     const v = validate(form);
     setErrors(v);
     const first = Object.keys(v).find((k) => v[k]);
@@ -100,6 +177,7 @@ export default function SalesDayAgentManualCustomerForm() {
 
     setLoading(true);
     try {
+      const followUpIso = form.nextFollowUpAt ? new Date(form.nextFollowUpAt).toISOString() : '';
       const cleaned = {
         companyName: form.companyName.trim(),
         personName: form.personName.trim(),
@@ -116,6 +194,9 @@ export default function SalesDayAgentManualCustomerForm() {
         shippingTo: form.shippingTo.trim(),
         shipmentType: form.shipmentType.trim(),
         remark: String(form.remark || 'NEW').toUpperCase() === 'OLD' ? 'OLD' : 'NEW',
+        disposition: form.disposition.trim(),
+        notes: form.notes.trim(),
+        nextFollowUpAt: isFollowUpDisposition(form.disposition) ? followUpIso : '',
       };
       const payload = Object.fromEntries(
         Object.entries(cleaned).filter(([, val]) => val !== '' && val !== undefined),
@@ -126,29 +207,41 @@ export default function SalesDayAgentManualCustomerForm() {
         toast.success(res.message || 'Agent customer created.');
         setForm(initialForm);
         setErrors({});
+        setSubmitError('');
       } else {
-        const apiErrors = res?.errors || {};
+        const apiErrors = normalizeApiErrors(res?.errors || {});
         if (Object.keys(apiErrors).length) setErrors((prev) => ({ ...prev, ...apiErrors }));
+        setSubmitError(res?.message || '');
         toast.error(res?.message || 'Create failed');
       }
     } catch (err) {
       const status = err?.response?.status;
-      const msg = err?.response?.data?.message || err?.message || 'Create failed';
-      const apiErrors = err?.response?.data?.errors || {};
+      const responseData = err?.response?.data || {};
+      const msg = responseData?.message || err?.message || 'Create failed';
+      const apiErrors = normalizeApiErrors(responseData?.errors || {});
       if (Object.keys(apiErrors).length) {
         setErrors((prev) => ({ ...prev, ...apiErrors }));
+        setSubmitError(msg);
         toast.error(msg);
       } else if (status === 401) {
+        setSubmitError('Session expired. Please log in again.');
         toast.error('Session expired. Please log in again.');
       } else if (status === 409) {
-        setErrors((prev) => ({ ...prev, email: 'Email already exists.' }));
-        fieldRefs.current.email?.focus();
-        toast.error('Email already exists.');
+        const fieldName =
+          typeof responseData?.field === 'string' && responseData.field.trim() ? responseData.field.trim() : 'email';
+        const conflictMessage = formatManualConflictMessage(responseData);
+        setErrors((prev) => ({ ...prev, [fieldName]: conflictMessage }));
+        setSubmitError(conflictMessage);
+        fieldRefs.current[fieldName]?.focus?.();
+        toast.error(conflictMessage);
       } else if (status === 400 || status === 422) {
+        setSubmitError(msg);
         toast.error(msg);
       } else if (status >= 500) {
+        setSubmitError('Server error. Please try again.');
         toast.error('Server error. Please try again.');
       } else {
+        setSubmitError(msg);
         toast.error(msg);
       }
     } finally {
@@ -399,22 +492,98 @@ export default function SalesDayAgentManualCustomerForm() {
               onChange={onChange}
               className={fieldClass(errors.remark) + ' mt-1.5 max-w-md'}
             >
-              <option value="NEW">NEW (default — stored for filters / reporting)</option>
-              <option value="OLD">OLD (parity with import duplicates)</option>
+              <option value="NEW">NEW</option>
+              <option value="OLD">Follow Up</option>
             </select>
             <p className="text-xs text-gray-500 mt-1.5 leading-relaxed max-w-2xl">
               Does not change email uniqueness on create; optional for UI parity with CSV imports.
             </p>
           </div>
+          <div className="sm:col-span-2 lg:col-span-4 rounded-xl border border-indigo-100 bg-white/70 p-4">
+            <h4 className="text-sm font-semibold text-indigo-900">Disposition</h4>
+            <p className="text-xs text-gray-500 mt-1">
+              Optional while creating the customer. Follow-up needs date and time.
+            </p>
+            <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <div>
+                <label className="text-sm font-semibold text-gray-700" htmlFor="sda-disposition">
+                  Disposition
+                </label>
+                <select
+                  id="sda-disposition"
+                  name="disposition"
+                  value={form.disposition}
+                  onChange={onChange}
+                  onBlur={onBlur}
+                  className={fieldClass(errors.disposition) + ' mt-1.5'}
+                  ref={(el) => {
+                    fieldRefs.current.disposition = el;
+                  }}
+                >
+                  <option value="">{dispositionsLoading ? 'Loading options…' : 'Select disposition (optional)'}</option>
+                  {dispositions.map((d) => (
+                    <option key={d.value} value={d.value}>
+                      {d.label}
+                    </option>
+                  ))}
+                </select>
+                {errors.disposition && <p className="text-red-600 text-sm mt-1.5">{errors.disposition}</p>}
+              </div>
+              <div className="lg:col-span-2">
+                <label className="text-sm font-semibold text-gray-700" htmlFor="sda-notes">
+                  Notes
+                </label>
+                <textarea
+                  id="sda-notes"
+                  name="notes"
+                  value={form.notes}
+                  onChange={onChange}
+                  onBlur={onBlur}
+                  rows={3}
+                  className={fieldClass(errors.notes) + ' mt-1.5 resize-y min-h-[5.5rem] leading-relaxed'}
+                  placeholder="Optional notes for the first disposition log entry"
+                  maxLength={2000}
+                />
+                {errors.notes && <p className="text-red-600 text-sm mt-1.5">{errors.notes}</p>}
+              </div>
+              {isFollowUpDisposition(form.disposition) && (
+                <div>
+                  <label className="text-sm font-semibold text-gray-700" htmlFor="sda-nextFollowUpAt">
+                    Next follow-up at <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    id="sda-nextFollowUpAt"
+                    type="datetime-local"
+                    name="nextFollowUpAt"
+                    value={form.nextFollowUpAt}
+                    onChange={onChange}
+                    onBlur={onBlur}
+                    className={fieldClass(errors.nextFollowUpAt) + ' mt-1.5'}
+                    ref={(el) => {
+                      fieldRefs.current.nextFollowUpAt = el;
+                    }}
+                  />
+                  {errors.nextFollowUpAt && <p className="text-red-600 text-sm mt-1.5">{errors.nextFollowUpAt}</p>}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="flex flex-wrap justify-end gap-3 pt-2 border-t border-gray-100">
+      <div className="pt-2 border-t border-gray-100 space-y-3">
+        {submitError && (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+            {submitError}
+          </div>
+        )}
+        <div className="flex flex-wrap justify-end gap-3">
         <button
           type="button"
           onClick={() => {
             setForm(initialForm);
             setErrors({});
+            setSubmitError('');
           }}
           className="mt-3 px-5 py-3 rounded-xl border border-gray-300 bg-white text-base font-semibold text-gray-700 hover:bg-gray-50"
         >
@@ -427,6 +596,7 @@ export default function SalesDayAgentManualCustomerForm() {
         >
           {loading ? 'Creating…' : 'Create AgentCustomer'}
         </button>
+        </div>
       </div>
       </div>
     </form>

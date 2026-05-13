@@ -24,6 +24,8 @@ const SearchableSelect = React.forwardRef(
       disabled = false,
       hasError = false,
       surface = 'default',
+      emptyText = 'No options',
+      searchPlaceholder = 'Type to search...',
     },
     ref
   ) => {
@@ -45,7 +47,11 @@ const SearchableSelect = React.forwardRef(
     }, [disabled]);
 
     const filteredOptions = searchTerm.trim()
-      ? options.filter((o) => o.label.toLowerCase().includes(searchTerm.toLowerCase()))
+      ? options.filter((o) => {
+          const q = searchTerm.toLowerCase();
+          const haystack = `${o.label ?? ''} ${o.value ?? ''} ${o.searchText ?? ''}`.toLowerCase();
+          return haystack.includes(q);
+        })
       : options;
 
     useEffect(() => {
@@ -101,7 +107,7 @@ const SearchableSelect = React.forwardRef(
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <input
                   type="text"
-                  placeholder="Type to search..."
+                  placeholder={searchPlaceholder}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   onClick={(e) => e.stopPropagation()}
@@ -124,7 +130,7 @@ const SearchableSelect = React.forwardRef(
                   </div>
                 ))
               ) : (
-                <div className="px-4 py-2 text-gray-500 text-sm text-center">No options</div>
+                <div className="px-4 py-2 text-gray-500 text-sm text-center">{emptyText}</div>
               )}
             </div>
           </div>

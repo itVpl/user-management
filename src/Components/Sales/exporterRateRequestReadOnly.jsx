@@ -1,13 +1,15 @@
 /**
  * Read-only rate request detail UI + formatters shared by ExporterRateRequestWorkflow and AllExporterRR.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import alertify from "alertifyjs";
 import "alertifyjs/build/css/alertify.css";
-import { FileText, Paperclip, Ship, ClipboardList, Plus, Trash2, Banknote } from "lucide-react";
+import { FileText, Paperclip, Ship, ClipboardList, Plus, Trash2, Banknote, Truck } from "lucide-react";
 import API_CONFIG from "../../config/api.js";
 import { HS_CODE_OPTIONS } from "../../data/hsCodeOptions.js";
+import SearchableSelect from "../Dashboard/SearchableSelect.jsx";
+import { fetchShippingLineMaster } from "../../services/shippingLineMasterService.js";
 import containerS20 from "../../assets/containers/s20.svg";
 import containerS40 from "../../assets/containers/s40.svg";
 import containerHc40 from "../../assets/containers/hc40.svg";
@@ -49,11 +51,16 @@ const EXTRA_DETAILS_DISPLAY_KEYS = [
   "specialEquipmentRequired",
 ];
 
+function getLocationZipcode(loc) {
+  if (!loc || typeof loc !== "object") return "";
+  return String(loc.zipcode ?? loc.pincode ?? "").trim();
+}
+
 function locationHasAnyValue(loc) {
   if (loc == null) return false;
   if (typeof loc === "string") return loc.trim() !== "";
   if (typeof loc === "object") {
-    return ["address", "city", "pincode"].some((k) => String(loc[k] ?? "").trim() !== "");
+    return [loc.address, loc.city, loc.state, getLocationZipcode(loc)].some((v) => String(v ?? "").trim() !== "");
   }
   return false;
 }
@@ -64,13 +71,20 @@ function formatLocationForView(loc) {
   if (typeof loc === "object") {
     const address = (loc.address || "").trim();
     const city = (loc.city || "").trim();
-    const pincode = (loc.pincode || "").trim();
-    if (!address && !city && !pincode) return null;
-    const line2 = [city, pincode].filter(Boolean).join(" ");
+    const state = (loc.state || "").trim();
+    const zipcode = getLocationZipcode(loc);
+    if (!address && !city && !state && !zipcode) return null;
+    const cityState = [city, state].filter(Boolean).join(", ");
+    const line2 = [cityState, zipcode].filter(Boolean).join(cityState && zipcode ? " " : "");
     const parts = [address, line2].filter(Boolean);
     return parts.join("\n");
   }
   return null;
+}
+
+function isYesValue(value) {
+  const s = String(value ?? "").trim().toLowerCase();
+  return s === "yes" || s === "true";
 }
 
 export function hasExtraDetails(detail) {
@@ -78,7 +92,9 @@ export function hasExtraDetails(detail) {
   if (locationHasAnyValue(detail.exactPickupLocation)) return true;
   if (locationHasAnyValue(detail.exactDeliveryLocation)) return true;
   return EXTRA_DETAILS_DISPLAY_KEYS.some((key) => {
-    if (key === "exactPickupLocation" || key === "exactDeliveryLocation") return false;
+    if (key === "exactPickupLocation" || key === "exactDeliveryLocation") {
+      return false;
+    }
     const v = detail[key];
     if (v === undefined || v === null) return false;
     if (typeof v === "number" && !Number.isNaN(v)) return true;
@@ -110,10 +126,16 @@ function formatExtraDetailDisplay(key, detail) {
 
   if (key === "cargoReadyDate" || key === "pickupTime") return formatDateTime(raw);
 
-  if (key === "cargoHazardous" || key === "palletizedCargo" || key === "customsClearanceOriginRequired") {
+  if (
+    key === "cargoHazardous" ||
+    key === "palletizedCargo" ||
+    key === "customsClearanceOriginRequired"
+  ) {
     const s = String(raw).toLowerCase();
     if (s === "yes") return "Yes";
     if (s === "no") return "No";
+    if (s === "true") return "Yes";
+    if (s === "false") return "No";
     return String(raw);
   }
   if (key === "commercialInvoiceValue" || key === "totalCmb") {
@@ -284,46 +306,43 @@ function buildAuthHeadersFromStorage() {
 }
 
 /** GET operation SSL rates for a rate request (detail view). */
-function OperationSslRatesSection({ requestId }) {
+function OperationSslRatesSection({ requestId, requestData, allowEdit = true }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(null);
+  const [editingQuote, setEditingQuote] = useState(null);
 
-  useEffect(() => {
+  const loadRows = useCallback(async () => {
     if (!requestId) {
       setRows([]);
       setLoading(false);
       return;
     }
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      setErr(null);
-      try {
-        const res = await axios.get(
-          `${API_CONFIG.BASE_URL}/api/v1/exporter-rate-requst/${requestId}/operation-ssl-rates`,
-          { headers: buildAuthHeadersFromStorage() },
-        );
-        const list = Array.isArray(res.data?.data) ? res.data.data : [];
-        const sorted = [...list].sort((a, b) => {
-          const ta = new Date(a?.createdAt || 0).getTime();
-          const tb = new Date(b?.createdAt || 0).getTime();
-          return tb - ta;
-        });
-        if (!cancelled) setRows(sorted);
-      } catch (e) {
-        if (!cancelled) {
-          setErr(e.response?.data?.message || e.message || "Could not load SSL rates");
-          setRows([]);
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+    setLoading(true);
+    setErr(null);
+    try {
+      const res = await axios.get(
+        `${API_CONFIG.BASE_URL}/api/v1/exporter-rate-requst/${requestId}/operation-ssl-rates`,
+        { headers: buildAuthHeadersFromStorage() },
+      );
+      const list = Array.isArray(res.data?.data) ? res.data.data : [];
+      const sorted = [...list].sort((a, b) => {
+        const ta = new Date(a?.createdAt || 0).getTime();
+        const tb = new Date(b?.createdAt || 0).getTime();
+        return tb - ta;
+      });
+      setRows(sorted);
+    } catch (e) {
+      setErr(e.response?.data?.message || e.message || "Could not load SSL rates");
+      setRows([]);
+    } finally {
+      setLoading(false);
+    }
   }, [requestId]);
+
+  useEffect(() => {
+    void loadRows();
+  }, [loadRows]);
 
   const fmtAddedBy = (ab) => {
     if (!ab || typeof ab !== "object") return "N/A";
@@ -357,48 +376,63 @@ function OperationSslRatesSection({ requestId }) {
                       {r.currency || ""} {r.totalAmount != null ? Number(r.totalAmount).toLocaleString() : "—"}
                     </span>
                   </p>
+                  {(r.sslCode || r.sslId) && (
+                    <p className="mt-1 text-xs text-slate-500">
+                      {r.sslCode ? `Code: ${r.sslCode}` : ""}
+                      {r.sslCode && r.sslId ? " · " : ""}
+                      {r.sslId ? `ID: ${r.sslId}` : ""}
+                    </p>
+                  )}
                   <p className="mt-1 text-xs text-slate-500">
                     Added {formatDateTime(r.createdAt)}
                     {r.addedBy ? ` · ${fmtAddedBy(r.addedBy)}` : ""}
                   </p>
                 </div>
+                {allowEdit && (
+                  <button
+                    type="button"
+                    onClick={() => setEditingQuote(r)}
+                    className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-100"
+                  >
+                    Edit quote
+                  </button>
+                )}
               </div>
               <div className="mb-3 grid grid-cols-1 gap-2 text-sm md:grid-cols-3">
                 <DetailField label="Validity" value={formatDateOnly(r.validityDate) ?? formatDateTime(r.validityDate)} />
                 <DetailField label="Transit days" value={r.transitDays != null ? String(r.transitDays) : "N/A"} />
                 <DetailField label="Remarks" value={r.remarks} multiline />
               </div>
-              {Array.isArray(r.lineItems) && r.lineItems.length > 0 && (
-                <div className="overflow-x-auto rounded-lg border border-slate-100">
-                  <table className="w-full min-w-[400px] text-sm">
-                    <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
-                      <tr>
-                        <th className="px-3 py-2">Name</th>
-                        <th className="px-3 py-2">Qty</th>
-                        <th className="px-3 py-2">Amount</th>
-                        <th className="px-3 py-2">Total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {r.lineItems.map((li, i) => (
-                        <tr key={i} className="border-t border-slate-100">
-                          <td className="px-3 py-2 font-medium text-slate-800">{li.name ?? "—"}</td>
-                          <td className="px-3 py-2 text-slate-700">{li.quantity ?? "—"}</td>
-                          <td className="px-3 py-2 text-slate-700">
-                            {li.amount != null ? Number(li.amount).toLocaleString() : "—"}
-                          </td>
-                          <td className="px-3 py-2 font-semibold text-slate-900">
-                            {li.total != null ? Number(li.total).toLocaleString() : "—"}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+              <div className="space-y-3">
+                <ReadOnlyChargeTable
+                  title="SSL charges"
+                  rows={r.lineItems}
+                  totalAmount={r.baseTotalAmount ?? calculateLineItemsTotal(Array.isArray(r.lineItems) ? r.lineItems : [])}
+                  currency={r.currency}
+                />
+                <ReadOnlyChargeTable
+                  title="Trucking charges"
+                  rows={r.truckingLineItems}
+                  totalAmount={r.truckingTotalAmount}
+                  currency={r.currency}
+                />
+              </div>
             </div>
           ))}
         </div>
+      )}
+      {allowEdit && (
+        <GiveRateModal
+          open={Boolean(editingQuote)}
+          requestId={requestId || ""}
+          requestData={requestData}
+          authHeaders={buildAuthHeadersFromStorage()}
+          initialQuote={editingQuote}
+          onClose={() => setEditingQuote(null)}
+          onSuccess={async () => {
+            await loadRows();
+          }}
+        />
       )}
     </div>
   );
@@ -504,6 +538,20 @@ export function RateRequestDetailBody({ detail }) {
         <ContainerTypeDisplay value={detail.containerType} />
       </div>
 
+      {isYesValue(detail.truckingRequired) && (
+        <div className="rounded-2xl border border-amber-100 bg-amber-50/80 p-5">
+          <h4 className="mb-4 flex items-center gap-2 text-sm font-semibold text-amber-900">
+            <Truck size={18} className="text-amber-700" />
+            Trucking details
+          </h4>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <DetailField label="Trucking required" value="Yes" />
+            <DetailField label="Pickup location" value={formatLocationForView(detail.truckingPickupLocation) || "-"} multiline />
+            <DetailField label="Delivery location" value={formatLocationForView(detail.truckingDeliveryLocation) || "-"} multiline />
+          </div>
+        </div>
+      )}
+
       {hasExtraDetails(detail) && (
         <div className="rounded-2xl border border-violet-100 bg-violet-50/80 p-5">
           <h4 className="mb-4 flex items-center gap-2 text-sm font-semibold text-violet-900">
@@ -570,12 +618,21 @@ export function RateRequestDetailBody({ detail }) {
         <AttachmentSection attachments={detail.attachments} flat />
       </div>
 
-      <OperationSslRatesSection requestId={detail._id} />
+      <OperationSslRatesSection requestId={detail._id} requestData={detail} />
     </>
   );
 }
 
 const defaultLineItem = () => ({ name: "", quantity: 1, amount: 0, total: 0 });
+const defaultOceanLineItems = () => [
+  { name: "Ocean freight", quantity: 1, amount: 0, total: 0 },
+  { name: "Documentation", quantity: 1, amount: 0, total: 0 },
+  { name: "Custom Charges", quantity: 1, amount: 0, total: 0 },
+];
+const defaultTruckingLineItems = () => [
+  { name: "Pickup trucking", quantity: 1, amount: 0, total: 0 },
+  { name: "Delivery trucking", quantity: 1, amount: 0, total: 0 },
+];
 
 function recalcLineTotal(row) {
   const q = Number(row.quantity);
@@ -585,45 +642,380 @@ function recalcLineTotal(row) {
   return Math.round(qn * an * 100) / 100;
 }
 
+function calculateLineItemsTotal(rows) {
+  return Math.round(
+    rows.reduce((sum, row) => {
+      const total = Number(row?.total);
+      return sum + (Number.isFinite(total) ? total : recalcLineTotal(row || {}));
+    }, 0) * 100,
+  ) / 100;
+}
+
+function normalizeLineItems(rows) {
+  return rows
+    .map((row) => {
+      const quantity = Number(row?.quantity) || 0;
+      const amount = Number(row?.amount) || 0;
+      const total = Number.isFinite(Number(row?.total)) ? Number(row.total) : recalcLineTotal(row || {});
+      return {
+        name: String(row?.name || "").trim(),
+        quantity,
+        amount,
+        total,
+      };
+    })
+    .filter((row) => row.name && row.total > 0);
+}
+
+function toEditableLineItems(rows, fallbackFactory) {
+  const list = Array.isArray(rows) && rows.length > 0 ? rows : fallbackFactory();
+  return list.map((row) => ({
+    name: String(row?.name || ""),
+    quantity: row?.quantity ?? 1,
+    amount: row?.amount ?? 0,
+    total: row?.total ?? recalcLineTotal(row || {}),
+  }));
+}
+
+function toDateInputValue(value) {
+  if (!value) return "";
+  const raw = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const dt = new Date(value);
+  if (Number.isNaN(dt.getTime())) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
+}
+
+function buildSslOptionFromLine(line) {
+  return {
+    value: String(line.id || line.name),
+    label: line.code ? `${line.name} (${line.code})` : line.name,
+    searchText: [line.name, line.code, line.id].filter(Boolean).join(" "),
+    meta: line,
+  };
+}
+
+function buildSslOptionFromQuote(quote) {
+  const name = String(quote?.sslName || "").trim();
+  if (!name) return null;
+  const code = String(quote?.sslCode || "").trim();
+  const persistableId = String(quote?.sslId || "").trim();
+  return {
+    value: persistableId || code || name,
+    label: code ? `${name} (${code})` : name,
+    searchText: [name, code, persistableId].filter(Boolean).join(" "),
+    meta: {
+      id: persistableId || code || name,
+      name,
+      code,
+      persistableId,
+    },
+  };
+}
+
+function mergeSslOptionsWithQuote(lines, quote) {
+  const options = lines.map(buildSslOptionFromLine);
+  const quoteOption = buildSslOptionFromQuote(quote);
+  if (!quoteOption) return options;
+  const alreadyIncluded = options.some((option) => {
+    const meta = option.meta || {};
+    return (
+      (quote?.sslId && (meta.persistableId === quote.sslId || meta.id === quote.sslId)) ||
+      (quote?.sslCode && meta.code === quote.sslCode && meta.name === quote.sslName) ||
+      meta.name === quote?.sslName
+    );
+  });
+  return alreadyIncluded ? options : [quoteOption, ...options];
+}
+
+function resolveInitialSslValue(options, quote) {
+  if (!quote) return "";
+  const matched = options.find((option) => {
+    const meta = option.meta || {};
+    return (
+      (quote.sslId && (meta.persistableId === quote.sslId || meta.id === quote.sslId)) ||
+      (quote.sslCode && meta.code === quote.sslCode && meta.name === quote.sslName) ||
+      meta.name === quote.sslName
+    );
+  });
+  return matched?.value || "";
+}
+
+function ReadOnlyChargeTable({ title, rows, totalAmount, currency = "" }) {
+  if ((!Array.isArray(rows) || rows.length === 0) && !(Number(totalAmount) > 0)) return null;
+  return (
+    <div className="rounded-lg border border-slate-100 bg-slate-50/70 p-3">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <p className="text-sm font-semibold text-slate-800">{title}</p>
+        {Number(totalAmount) > 0 && (
+          <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">
+            Total: {currency ? `${currency} ` : ""}
+            {Number(totalAmount).toLocaleString()}
+          </span>
+        )}
+      </div>
+      {Array.isArray(rows) && rows.length > 0 ? (
+        <div className="overflow-x-auto rounded-lg border border-slate-100 bg-white">
+          <table className="w-full min-w-[400px] text-sm">
+            <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
+              <tr>
+                <th className="px-3 py-2">Name</th>
+                <th className="px-3 py-2">Qty</th>
+                <th className="px-3 py-2">Amount</th>
+                <th className="px-3 py-2">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((li, i) => (
+                <tr key={i} className="border-t border-slate-100">
+                  <td className="px-3 py-2 font-medium text-slate-800">{li.name ?? "—"}</td>
+                  <td className="px-3 py-2 text-slate-700">{li.quantity ?? "—"}</td>
+                  <td className="px-3 py-2 text-slate-700">{li.amount != null ? Number(li.amount).toLocaleString() : "—"}</td>
+                  <td className="px-3 py-2 font-semibold text-slate-900">{li.total != null ? Number(li.total).toLocaleString() : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="text-sm text-slate-500">No charge lines saved.</p>
+      )}
+    </div>
+  );
+}
+
+function ChargeCalculatorSection({
+  title,
+  subtitle,
+  rows,
+  inputClass,
+  onUpdateRow,
+  onAddRow,
+  onRemoveRow,
+  totalAmount,
+  addLabel,
+  tone = "blue",
+}) {
+  const theme =
+    tone === "amber"
+      ? {
+          shell: "border-amber-200 bg-amber-50/60",
+          title: "text-amber-900",
+          subtitle: "text-amber-700/80",
+          addButton: "from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600",
+        }
+      : {
+          shell: "border-blue-200 bg-blue-50/50",
+          title: "text-blue-900",
+          subtitle: "text-blue-700/80",
+          addButton: "from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700",
+        };
+
+  return (
+    <div className={`overflow-hidden rounded-2xl border ${theme.shell}`}>
+      <div className="border-b border-white/70 bg-white/80 px-5 py-4">
+        <h4 className={`text-lg font-semibold ${theme.title}`}>{title}</h4>
+        {subtitle && <p className={`mt-1 text-sm ${theme.subtitle}`}>{subtitle}</p>}
+      </div>
+
+      <div className="space-y-5 p-5">
+        <div className="grid grid-cols-12 gap-3 text-xs font-semibold text-gray-600">
+          <div className="col-span-12 md:col-span-4">
+            Name <span className="text-red-500">*</span>
+          </div>
+          <div className="col-span-4 md:col-span-2">
+            Qty <span className="text-red-500">*</span>
+          </div>
+          <div className="col-span-4 md:col-span-2">
+            Amount <span className="text-red-500">*</span>
+          </div>
+          <div className="col-span-3 md:col-span-3">Total</div>
+          <div className="col-span-1 text-center">Action</div>
+        </div>
+
+        {rows.map((row, idx) => (
+          <div key={idx} className="grid grid-cols-12 gap-3 items-center">
+            <div className="col-span-12 md:col-span-4">
+              <input
+                className={inputClass}
+                value={row.name}
+                onChange={(e) => onUpdateRow(idx, "name", e.target.value)}
+                placeholder="Enter charge name"
+              />
+            </div>
+            <div className="col-span-4 md:col-span-2">
+              <input
+                type="number"
+                min="0"
+                step="any"
+                className={inputClass}
+                value={row.quantity}
+                onChange={(e) => onUpdateRow(idx, "quantity", e.target.value)}
+              />
+            </div>
+            <div className="col-span-4 md:col-span-2">
+              <input
+                type="number"
+                min="0"
+                step="any"
+                className={inputClass}
+                value={row.amount}
+                onChange={(e) => onUpdateRow(idx, "amount", e.target.value)}
+              />
+            </div>
+            <div className="col-span-3 md:col-span-3">
+              <div className="w-full rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-gray-800">
+                {recalcLineTotal(row).toFixed(2)}
+              </div>
+            </div>
+            <div className="col-span-1 flex justify-center">
+              <button
+                type="button"
+                disabled={rows.length <= 1}
+                onClick={() => onRemoveRow(idx)}
+                className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
+                title="Remove charge"
+              >
+                <Trash2 size={18} />
+              </button>
+            </div>
+          </div>
+        ))}
+
+        <div className="flex justify-center">
+          <button
+            type="button"
+            onClick={onAddRow}
+            className={`inline-flex items-center gap-2 rounded-xl bg-gradient-to-r px-6 py-3 text-sm font-semibold text-white shadow-lg transition-colors ${theme.addButton}`}
+          >
+            <Plus size={18} />
+            {addLabel}
+          </button>
+        </div>
+
+        <div className="flex justify-start">
+          <div className="inline-flex items-center gap-3 rounded-xl bg-green-500 px-6 py-4 text-sm font-semibold text-white shadow-lg">
+            <Banknote size={20} className="text-white" />
+            <span>Total Charges {Number(totalAmount || 0).toFixed(2)}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /**
- * Operation team: submit SSL rate quote — POST /api/v1/exporter-rate-requst/:id/operation-ssl-rates
+ * Operation team: submit/update SSL rate quote.
  */
-export function GiveRateModal({ open, onClose, requestId, authHeaders, onSuccess }) {
-  const [sslName, setSslName] = useState("");
+export function GiveRateModal({ open, onClose, requestId, requestData, authHeaders, onSuccess, initialQuote = null }) {
+  const [existingQuote, setExistingQuote] = useState(null);
+  const [loadingExistingQuote, setLoadingExistingQuote] = useState(false);
+  const [selectedSslValue, setSelectedSslValue] = useState("");
+  const [sslOptions, setSslOptions] = useState([]);
+  const [sslLoading, setSslLoading] = useState(false);
   const [currency, setCurrency] = useState("USD");
   const [validityDate, setValidityDate] = useState("");
   const [transitDays, setTransitDays] = useState("");
   const [remarks, setRemarks] = useState("");
-  const [lineItems, setLineItems] = useState([
-    { name: "Ocean freight", quantity: 1, amount: 0, total: 0 },
-    { name: "Documentation", quantity: 1, amount: 0, total: 0 },
-    { name: "Custom Charges", quantity: 1, amount: 0, total: 0 },
-  ]);
+  const [lineItems, setLineItems] = useState(defaultOceanLineItems);
+  const [truckingLineItems, setTruckingLineItems] = useState(defaultTruckingLineItems);
   const [submitting, setSubmitting] = useState(false);
+  const hasTruckingRequest = isYesValue(requestData?.truckingRequired);
+  const activeQuote = initialQuote || existingQuote;
+  const isEditMode = Boolean(activeQuote?._id);
 
-  const totalFromLines = useMemo(
-    () =>
-      lineItems.reduce((s, row) => {
-        const t = Number(row.total);
-        return s + (Number.isFinite(t) ? t : recalcLineTotal(row));
-      }, 0),
-    [lineItems],
+  const totalFromLines = useMemo(() => calculateLineItemsTotal(lineItems), [lineItems]);
+  const truckingTotalFromLines = useMemo(() => calculateLineItemsTotal(truckingLineItems), [truckingLineItems]);
+  const grandTotalAmount = useMemo(
+    () => Math.round((totalFromLines + (hasTruckingRequest ? truckingTotalFromLines : 0)) * 100) / 100,
+    [totalFromLines, truckingTotalFromLines, hasTruckingRequest],
+  );
+
+  const selectedSsl = useMemo(
+    () => sslOptions.find((option) => option.value === selectedSslValue)?.meta || null,
+    [sslOptions, selectedSslValue],
   );
 
   useEffect(() => {
     if (!open) return;
-    setSslName("");
-    setCurrency("USD");
-    setValidityDate("");
-    setTransitDays("");
-    setRemarks("");
-    setLineItems([
-      { name: "Ocean freight", quantity: 1, amount: 0, total: 0 },
-      { name: "Documentation", quantity: 1, amount: 0, total: 0 },
-      { name: "Custom Charges", quantity: 1, amount: 0, total: 0 },
-    ]);
+    if (initialQuote?._id) {
+      setExistingQuote(null);
+      setLoadingExistingQuote(false);
+      return;
+    }
+    if (!requestId) {
+      setExistingQuote(null);
+      setLoadingExistingQuote(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setLoadingExistingQuote(true);
+      try {
+        const res = await axios.get(
+          `${API_CONFIG.BASE_URL}/api/v1/exporter-rate-requst/${requestId}/operation-ssl-rates`,
+          { headers: { ...authHeaders } },
+        );
+        if (cancelled) return;
+        const list = Array.isArray(res.data?.data) ? res.data.data : [];
+        const sorted = [...list].sort((a, b) => {
+          const ta = new Date(a?.createdAt || 0).getTime();
+          const tb = new Date(b?.createdAt || 0).getTime();
+          return tb - ta;
+        });
+        setExistingQuote(sorted[0] || null);
+      } catch (err) {
+        if (cancelled) return;
+        setExistingQuote(null);
+      } finally {
+        if (!cancelled) setLoadingExistingQuote(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, requestId, authHeaders, initialQuote]);
+
+  useEffect(() => {
+    if (!open) return;
+    setSelectedSslValue("");
+    setCurrency(activeQuote?.currency || "USD");
+    setValidityDate(toDateInputValue(activeQuote?.validityDate));
+    setTransitDays(activeQuote?.transitDays === 0 || activeQuote?.transitDays ? String(activeQuote.transitDays) : "");
+    setRemarks(activeQuote?.remarks || "");
+    setLineItems(toEditableLineItems(activeQuote?.lineItems, defaultOceanLineItems));
+    setTruckingLineItems(
+      hasTruckingRequest ? toEditableLineItems(activeQuote?.truckingLineItems, defaultTruckingLineItems) : defaultTruckingLineItems(),
+    );
     setSubmitting(false);
-  }, [open, requestId]);
+  }, [open, requestId, activeQuote, hasTruckingRequest]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+
+    (async () => {
+      setSslLoading(true);
+      try {
+        const lines = await fetchShippingLineMaster(authHeaders);
+        if (cancelled) return;
+        const options = mergeSslOptionsWithQuote(lines, activeQuote);
+        setSslOptions(options);
+        setSelectedSslValue(resolveInitialSslValue(options, activeQuote));
+      } catch (err) {
+        if (cancelled) return;
+        setSslOptions([]);
+        alertify.error(err?.response?.data?.message || "Could not load shipping lines");
+      } finally {
+        if (!cancelled) setSslLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, authHeaders, activeQuote]);
 
   const updateLine = (idx, field, raw) => {
     setLineItems((prev) =>
@@ -647,9 +1039,33 @@ export function GiveRateModal({ open, onClose, requestId, authHeaders, onSuccess
       }),
     );
   };
+  const updateTruckingLine = (idx, field, raw) => {
+    setTruckingLineItems((prev) =>
+      prev.map((row, i) => {
+        if (i !== idx) return row;
+        const next = { ...row };
+        if (field === "name") {
+          next.name = raw;
+        } else {
+          const n = raw === "" ? "" : Number(raw);
+          next[field] = raw === "" ? "" : Number.isFinite(n) ? n : 0;
+        }
+        if (field === "quantity" || field === "amount") {
+          next.total = recalcLineTotal({
+            ...next,
+            quantity: field === "quantity" ? (raw === "" ? 0 : Number(raw) || 0) : next.quantity,
+            amount: field === "amount" ? (raw === "" ? 0 : Number(raw) || 0) : next.amount,
+          });
+        }
+        return next;
+      }),
+    );
+  };
 
   const addLine = () => setLineItems((p) => [...p, defaultLineItem()]);
+  const addTruckingLine = () => setTruckingLineItems((p) => [...p, defaultLineItem()]);
   const removeLine = (idx) => setLineItems((p) => (p.length <= 1 ? p : p.filter((_, i) => i !== idx)));
+  const removeTruckingLine = (idx) => setTruckingLineItems((p) => (p.length <= 1 ? p : p.filter((_, i) => i !== idx)));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -657,8 +1073,8 @@ export function GiveRateModal({ open, onClose, requestId, authHeaders, onSuccess
       alertify.error("Missing request id");
       return;
     }
-    if (!String(sslName).trim()) {
-      alertify.error("Enter SSL name");
+    if (!selectedSsl?.name) {
+      alertify.error("Select an SSL name");
       return;
     }
     if (!String(validityDate).trim()) {
@@ -670,46 +1086,57 @@ export function GiveRateModal({ open, onClose, requestId, authHeaders, onSuccess
       alertify.error("Enter transit days (0 or more)");
       return;
     }
-    const ta = Math.round(totalFromLines * 100) / 100;
+    const ta = Math.round(grandTotalAmount * 100) / 100;
     if (!Number.isFinite(ta) || ta <= 0) {
       alertify.error("Add line items with amounts so the total is greater than zero");
       return;
     }
-    const normalizedLines = lineItems
-      .filter((row) => String(row.name || "").trim() !== "")
-      .map((row) => {
-        const quantity = Number(row.quantity) || 0;
-        const amount = Number(row.amount) || 0;
-        const total = Number.isFinite(Number(row.total)) ? Number(row.total) : recalcLineTotal(row);
-        return { name: String(row.name).trim(), quantity, amount, total };
-      });
+    const normalizedLines = normalizeLineItems(lineItems);
     if (normalizedLines.length === 0) {
-      alertify.error("Add at least one line item with a name");
+      alertify.error("Add at least one SSL charge with an amount greater than zero");
       return;
     }
+    const normalizedTruckingLines = hasTruckingRequest ? normalizeLineItems(truckingLineItems) : [];
 
     const payload = {
-      sslName: String(sslName).trim(),
+      sslName: selectedSsl.name,
+      ...(selectedSsl.code ? { sslCode: selectedSsl.code } : {}),
+      ...(selectedSsl.persistableId ? { sslId: selectedSsl.persistableId } : {}),
       currency: String(currency).trim() || "USD",
       totalAmount: ta,
+      baseTotalAmount: totalFromLines,
       validityDate: String(validityDate).trim(),
       transitDays: td,
       remarks: String(remarks || "").trim(),
       lineItems: normalizedLines,
+      ...(hasTruckingRequest
+        ? {
+            truckingLineItems: normalizedTruckingLines,
+            truckingTotalAmount: truckingTotalFromLines,
+          }
+        : {}),
     };
 
     setSubmitting(true);
     try {
-      await axios.post(
-        `${API_CONFIG.BASE_URL}/api/v1/exporter-rate-requst/${requestId}/operation-ssl-rates`,
-        payload,
-        { headers: { ...authHeaders, "Content-Type": "application/json" } },
-      );
-      alertify.success("SSL rate submitted");
+      if (isEditMode) {
+        await axios.patch(
+          `${API_CONFIG.BASE_URL}/api/v1/exporter-rate-requst/${requestId}/operation-ssl-rates/${activeQuote._id}`,
+          payload,
+          { headers: { ...authHeaders, "Content-Type": "application/json" } },
+        );
+      } else {
+        await axios.post(
+          `${API_CONFIG.BASE_URL}/api/v1/exporter-rate-requst/${requestId}/operation-ssl-rates`,
+          payload,
+          { headers: { ...authHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      alertify.success(isEditMode ? "SSL rate updated" : "SSL rate submitted");
       onSuccess?.();
       onClose();
     } catch (err) {
-      alertify.error(err.response?.data?.message || "Failed to submit SSL rate");
+      alertify.error(err.response?.data?.message || (isEditMode ? "Failed to update SSL rate" : "Failed to submit SSL rate"));
     } finally {
       setSubmitting(false);
     }
@@ -732,8 +1159,11 @@ export function GiveRateModal({ open, onClose, requestId, authHeaders, onSuccess
       >
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-gradient-to-r from-slate-800 to-slate-900 px-5 py-4 text-white">
           <div>
-            <h3 className="text-lg font-semibold">Give rate (SSL)</h3>
+            <h3 className="text-lg font-semibold">{isEditMode ? "Edit rate (SSL)" : "Give rate (SSL)"}</h3>
             <p className="text-xs text-slate-300">Request: {requestId}</p>
+            {loadingExistingQuote && !initialQuote && (
+              <p className="mt-1 text-[11px] text-slate-300">Loading saved SSL quote…</p>
+            )}
           </div>
           <button type="button" disabled={submitting} className="text-2xl text-white/80 hover:text-white" onClick={onClose}>
             ×
@@ -744,7 +1174,30 @@ export function GiveRateModal({ open, onClose, requestId, authHeaders, onSuccess
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
               <label className="mb-1 block text-xs font-semibold text-gray-600">SSL name *</label>
-              <input className={inputClass} value={sslName} onChange={(e) => setSslName(e.target.value)} placeholder="e.g. MERSK" />
+              <SearchableSelect
+                value={selectedSslValue}
+                onChange={setSelectedSslValue}
+                options={sslOptions}
+                placeholder={sslLoading ? "Loading shipping lines..." : "Search and select shipping line"}
+                searchPlaceholder="Search shipping lines..."
+                emptyText="No shipping lines found"
+                disabled={sslLoading || submitting}
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                {sslLoading
+                  ? "Loading shipping lines..."
+                  : !sslOptions.length
+                    ? "No shipping lines found"
+                    : selectedSsl
+                      ? [
+                          `Selected: ${selectedSsl.name}`,
+                          selectedSsl.code ? `Code: ${selectedSsl.code}` : "",
+                          selectedSsl.persistableId ? `ID: ${selectedSsl.persistableId}` : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")
+                      : "Choose a shipping line from master data."}
+              </p>
             </div>
             <div>
               <label className="mb-1 block text-xs font-semibold text-gray-600">Currency *</label>
@@ -756,13 +1209,15 @@ export function GiveRateModal({ open, onClose, requestId, authHeaders, onSuccess
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-semibold text-gray-600">Total amount (sum of line totals)</label>
+              <label className="mb-1 block text-xs font-semibold text-gray-600">
+                {hasTruckingRequest ? "Grand total amount (SSL + trucking)" : "Total amount (sum of line totals)"}
+              </label>
               <input
                 type="text"
                 readOnly
                 tabIndex={-1}
                 className={`${inputClass} cursor-not-allowed bg-slate-100 text-slate-800`}
-                value={Number.isFinite(totalFromLines) ? String(Math.round(totalFromLines * 100) / 100) : "0"}
+                value={Number.isFinite(grandTotalAmount) ? String(Math.round(grandTotalAmount * 100) / 100) : "0"}
               />
             </div>
             <div>
@@ -787,71 +1242,40 @@ export function GiveRateModal({ open, onClose, requestId, authHeaders, onSuccess
             </div>
           </div>
 
-          <div>
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-sm font-semibold text-gray-800">Line items</span>
-              <button type="button" onClick={addLine} className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100">
-                <Plus size={14} /> Add line
-              </button>
+          <ChargeCalculatorSection
+            title="SSL charges"
+            subtitle="Add the main ocean and documentation charges for this shipping line quote."
+            rows={lineItems}
+            inputClass={inputClass}
+            onUpdateRow={updateLine}
+            onAddRow={addLine}
+            onRemoveRow={removeLine}
+            totalAmount={totalFromLines}
+            addLabel="Add New Charge"
+            tone="blue"
+          />
+
+          {hasTruckingRequest && (
+            <div className="space-y-4">
+              <ChargeCalculatorSection
+                title="Trucking charges"
+                subtitle="Use this section only for pickup and delivery trucking costs tied to this request."
+                rows={truckingLineItems}
+                inputClass={inputClass}
+                onUpdateRow={updateTruckingLine}
+                onAddRow={addTruckingLine}
+                onRemoveRow={removeTruckingLine}
+                totalAmount={truckingTotalFromLines}
+                addLabel="Add Trucking Charge"
+                tone="amber"
+              />
             </div>
-            <div className="overflow-x-auto rounded-xl border border-gray-200">
-              <table className="w-full min-w-[520px] text-sm">
-                <thead className="border-b border-gray-200 bg-gray-50">
-                  <tr>
-                    <th className="px-3 py-2 text-left font-medium text-gray-700">Name</th>
-                    <th className="w-24 px-3 py-2 text-left font-medium text-gray-700">Qty</th>
-                    <th className="w-28 px-3 py-2 text-left font-medium text-gray-700">Amount</th>
-                    <th className="w-28 px-3 py-2 text-left font-medium text-gray-700">Total</th>
-                    <th className="w-12 px-2 py-2" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {lineItems.map((row, idx) => (
-                    <tr key={idx} className="border-b border-gray-100">
-                      <td className="px-2 py-2">
-                        <input className={inputClass} value={row.name} onChange={(e) => updateLine(idx, "name", e.target.value)} placeholder="Charge name" />
-                      </td>
-                      <td className="px-2 py-2">
-                        <input
-                          type="number"
-                          min="0"
-                          step="any"
-                          className={inputClass}
-                          value={row.quantity}
-                          onChange={(e) => updateLine(idx, "quantity", e.target.value)}
-                        />
-                      </td>
-                      <td className="px-2 py-2">
-                        <input
-                          type="number"
-                          min="0"
-                          step="any"
-                          className={inputClass}
-                          value={row.amount}
-                          onChange={(e) => updateLine(idx, "amount", e.target.value)}
-                        />
-                      </td>
-                      <td className="px-2 py-2">
-                        <input type="number" className={`${inputClass} bg-gray-50`} readOnly value={recalcLineTotal(row)} />
-                      </td>
-                      <td className="px-1 py-2 text-center">
-                        <button
-                          type="button"
-                          disabled={lineItems.length <= 1}
-                          onClick={() => removeLine(idx)}
-                          className="rounded p-1 text-red-600 hover:bg-red-50 disabled:opacity-30"
-                          title="Remove line"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <p className="mt-1 text-xs text-gray-500">Each line total = quantity × amount. Header total amount sent to the API is always the sum of these line totals.</p>
-          </div>
+          )}
+
+          <p className="text-xs text-gray-500">
+            Main SSL charges are sent as `lineItems`. {hasTruckingRequest ? "Trucking charges are sent as `truckingLineItems` and included in the grand total." : "Total amount sent to the API is the sum of these line totals."}
+          </p>
+
         </div>
 
         <div className="flex justify-end gap-3 border-t border-gray-200 bg-gray-50 px-5 py-4">
@@ -863,7 +1287,7 @@ export function GiveRateModal({ open, onClose, requestId, authHeaders, onSuccess
             disabled={submitting}
             className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
           >
-            {submitting ? "Submitting…" : "Submit rate"}
+            {submitting ? (isEditMode ? "Updating…" : "Submitting…") : isEditMode ? "Update rate" : "Submit rate"}
           </button>
         </div>
       </form>
