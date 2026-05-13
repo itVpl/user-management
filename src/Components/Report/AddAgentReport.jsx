@@ -34,6 +34,28 @@ const SOURCE_OPTIONS = [
   { value: "import", label: "CSV import only" },
 ];
 
+/** GET add-agent / list / today: `remark=NEW` | `remark=OLD`; omit = all */
+const REMARK_FILTER_OPTIONS = [
+  { value: "", label: "All remarks" },
+  { value: "NEW", label: "NEW (deduped / default)" },
+  { value: "OLD", label: "OLD (legacy duplicate)" },
+];
+
+const normalizeRemarkFilter = (raw) => {
+  const t = String(raw || "").trim().toUpperCase();
+  if (t === "NEW" || t === "OLD") return t;
+  return "";
+};
+
+/** Import remark for table badges: only explicit OLD vs everything else shown as NEW or absent */
+const isImportRemarkOld = (v) => String(v || "").trim().toUpperCase() === "OLD";
+
+const isSalesDayAgentUpdateUrl = (api) =>
+  /sales-day-agent/i.test(String(api || ""));
+
+const isEventCustomerUpdateUrl = (api) =>
+  /event-customer/i.test(String(api || ""));
+
 const DAY_SHIFT_SALES_URL = `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/reports/add-agent/day-shift-sales`;
 
 /** Normalize URL sourceType to a select value: "" | "manual" | "import". */
@@ -141,6 +163,7 @@ const rowToEditForm = (row) => {
     zipcode: loc?.zipcode ?? "",
     shippingTo: row?.shippingTo ?? "",
     shipmentType: row?.shipmentType ?? "",
+    remark: isImportRemarkOld(row?.remark) ? "OLD" : "NEW",
   };
 };
 
@@ -163,6 +186,7 @@ export default function AddAgentReport() {
     const date = (searchParams.get("date") || "").trim();
     const startDate = (searchParams.get("startDate") || "").trim();
     const endDate = (searchParams.get("endDate") || "").trim();
+    const remark = normalizeRemarkFilter(searchParams.get("remark"));
     return {
       page,
       limit,
@@ -174,6 +198,7 @@ export default function AddAgentReport() {
       date,
       startDate,
       endDate,
+      remark,
     };
   }, [searchParams]);
 
@@ -276,20 +301,21 @@ export default function AddAgentReport() {
         if (query.startDate) params.startDate = query.startDate;
         if (query.endDate) params.endDate = query.endDate;
       }
+      if (query.remark) params.remark = query.remark;
 
-        const res = await axios.get(
-          `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/reports/add-agent`,
-          { ...getAuthConfig(), params },
-        );
+      const res = await axios.get(
+        `${API_CONFIG.BASE_URL}/api/v1/shipper_driver/reports/add-agent`,
+        { ...getAuthConfig(), params },
+      );
 
-        const payload = res?.data;
-        const data = payload?.data || {};
-        const p = data?.pagination || {};
-        const rawRows = Array.isArray(data?.rows) ? data.rows : [];
+      const payload = res?.data;
+      const data = payload?.data || {};
+      const p = data?.pagination || {};
+      const rawRows = Array.isArray(data?.rows) ? data.rows : [];
 
-        setReportMeta({
-          reportName: data?.reportName || "Add Agent Report",
-          generatedBy: data?.generatedBy || null,
+      setReportMeta({
+        reportName: data?.reportName || "Add Agent Report",
+        generatedBy: data?.generatedBy || null,
         module: payload?.module || null,
         filters: data?.filters || null,
         eligibleCreators: Array.isArray(data?.eligibleCreators)
@@ -304,6 +330,7 @@ export default function AddAgentReport() {
       if (fromReport.length) {
         setEmployeeOptions((prev) => mergeCreatorOptions(prev, fromReport));
       }
+
       setPagination({
         page: Math.max(1, Number(p.page ?? query.page) || 1),
         limit: clampLimit(p.limit ?? query.limit),
@@ -370,6 +397,10 @@ export default function AddAgentReport() {
         shippingTo: editForm.shippingTo.trim(),
         shipmentType: editForm.shipmentType.trim(),
       };
+      if (isSalesDayAgentUpdateUrl(editRow.actions.updateApi) || isEventCustomerUpdateUrl(editRow.actions.updateApi)) {
+        body.remark =
+          String(editForm.remark || "").toUpperCase() === "OLD" ? "OLD" : "NEW";
+      }
       const res = await axios.patch(url, body, getAuthConfig());
       if (res?.data?.success === false) {
         toast.error(res?.data?.message || "Update failed");
@@ -379,7 +410,16 @@ export default function AddAgentReport() {
       closeEdit();
       fetchReport();
     } catch (error) {
-      handleApiError(error, "Update failed");
+      const status = error?.response?.status;
+      if (status === 409) {
+        toast.error(
+          error?.response?.data?.message ||
+            error?.response?.data?.error ||
+            "Duplicate company for NEW remark. Switch to OLD or use a unique company name.",
+        );
+      } else {
+        handleApiError(error, "Update failed");
+      }
     } finally {
       setEditSaving(false);
     }
@@ -404,6 +444,7 @@ export default function AddAgentReport() {
     if (query.addedByEmpId) n += 1;
     if (urlSourceTypeToSelectValue(query.sourceType)) n += 1;
     if (query.date || query.startDate || query.endDate) n += 1;
+    if (query.remark) n += 1;
     return n;
   }, [query]);
 
@@ -532,7 +573,7 @@ export default function AddAgentReport() {
                       patchSearchParams({ search: searchDraft.trim(), page: 1 });
                     }
                   }}
-                  placeholder="Name, company, email, phone, shipment type, location, customer id, import batch…"
+                  placeholder="Name, company, email, phone, remark, shipment type, location, customer id, import batch…"
                   className={`${FIELD_INPUT} pl-10`}
                 />
               </div>
@@ -580,6 +621,24 @@ export default function AddAgentReport() {
               >
                 {SOURCE_OPTIONS.map((o) => (
                   <option key={o.value || "all-sources"} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1.5">
+                Import remark
+              </label>
+              <select
+                value={query.remark}
+                onChange={(e) =>
+                  patchSearchParams({ remark: e.target.value, page: 1 })
+                }
+                className={FIELD_SELECT}
+              >
+                {REMARK_FILTER_OPTIONS.map((o) => (
+                  <option key={o.value || "remark-all"} value={o.value}>
                     {o.label}
                   </option>
                 ))}
@@ -747,6 +806,9 @@ export default function AddAgentReport() {
                     Shipment type
                   </th>
                   <th className="text-left px-4 md:px-5 py-3.5 text-[11px] font-bold uppercase tracking-wider text-gray-500">
+                    Remark
+                  </th>
+                  <th className="text-left px-4 md:px-5 py-3.5 text-[11px] font-bold uppercase tracking-wider text-gray-500">
                     Created by
                   </th>
                   <th className="text-left px-4 md:px-5 py-3.5 text-[11px] font-bold uppercase tracking-wider text-gray-500">
@@ -760,7 +822,7 @@ export default function AddAgentReport() {
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-16 text-center">
+                    <td colSpan={9} className="px-4 py-16 text-center">
                       <div className="flex flex-col items-center justify-center gap-3 text-gray-500">
                         <Loader2 className="h-10 w-10 animate-spin text-indigo-500" />
                         <p className="text-sm font-medium text-gray-600">
@@ -771,7 +833,7 @@ export default function AddAgentReport() {
                   </tr>
                 ) : rows.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-16 text-center">
+                    <td colSpan={9} className="px-4 py-16 text-center">
                       <div className="mx-auto flex max-w-md flex-col items-center gap-4">
                         <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-100 text-gray-400 ring-1 ring-gray-200/80">
                           <Inbox className="h-8 w-8" strokeWidth={1.5} />
@@ -865,8 +927,33 @@ export default function AddAgentReport() {
                           {row.email || "—"}
                         </div>
                       </td>
-                      <td className="px-4 md:px-5 py-3.5 align-top text-gray-700 max-w-[140px]">
+                      <td className="px-4 md:px-5 py-3.5 align-top text-gray-700 max-w-[160px]">
                         <span className="text-gray-800">{row.shipmentType || "—"}</span>
+                        {isImportRemarkOld(row.remark) ? (
+                          <div className="mt-1.5">
+                            <span
+                              className="inline-flex items-center rounded-md bg-violet-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-800 ring-1 ring-violet-100/90"
+                              title="Legacy duplicate import — prioritize follow-up"
+                            >
+                              FollowUp
+                            </span>
+                          </div>
+                        ) : null}
+                      </td>
+                      <td className="px-4 md:px-5 py-3.5 align-top text-gray-700 whitespace-nowrap">
+                        {row.remark != null && String(row.remark).trim() !== "" ? (
+                          isImportRemarkOld(row.remark) ? (
+                            <span className="inline-flex rounded-lg bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700 ring-1 ring-slate-200/90">
+                              OLD
+                            </span>
+                          ) : (
+                            <span className="inline-flex rounded-lg bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-800 ring-1 ring-indigo-100/90">
+                              NEW
+                            </span>
+                          )
+                        ) : (
+                          <span className="text-gray-400 text-xs">—</span>
+                        )}
                       </td>
                       <td className="px-4 md:px-5 py-3.5 align-top text-gray-700">
                         <span className="font-medium text-gray-900">
@@ -1004,7 +1091,12 @@ export default function AddAgentReport() {
                   <span className="font-mono text-[11px]">event-customer</span>;
                   imports use{" "}
                   <span className="font-mono text-[11px]">sales-day-agent</span>{" "}
-                  (day shift required on server).
+                  (day shift required on server). Import remark{" "}
+                  <span className="font-mono text-[11px]">NEW</span> /{" "}
+                  <span className="font-mono text-[11px]">OLD</span> can be updated here
+                  for <span className="font-mono text-[11px]">sales-day-agent</span> (imports)
+                  and <span className="font-mono text-[11px]">event-customer</span> (manual /
+                  event adds).
                 </p>
               </div>
               <button
@@ -1051,6 +1143,28 @@ export default function AddAgentReport() {
                     />
                   </div>
                 ))}
+                {isSalesDayAgentUpdateUrl(editRow?.actions?.updateApi) ||
+                isEventCustomerUpdateUrl(editRow?.actions?.updateApi) ? (
+                  <div className="sm:col-span-2">
+                    <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1.5">
+                      Import remark
+                    </label>
+                    <select
+                      name="remark"
+                      value={editForm.remark || "NEW"}
+                      onChange={onEditChange}
+                      className={FIELD_SELECT}
+                    >
+                      <option value="NEW">NEW (dedupe on company name)</option>
+                      <option value="OLD">OLD (allow duplicate company)</option>
+                    </select>
+                    <p className="mt-1.5 text-xs text-gray-500 leading-relaxed">
+                      Setting NEW runs the duplicate check against other non-OLD
+                      imports. The server may return 409 if the company already
+                      exists.
+                    </p>
+                  </div>
+                ) : null}
               </div>
             </div>
             <div className="shrink-0 flex gap-3 justify-end px-5 py-4 border-t border-gray-200 bg-white">

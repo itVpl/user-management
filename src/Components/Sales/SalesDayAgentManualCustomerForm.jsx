@@ -18,6 +18,7 @@ const initialForm = {
   zipcode: '',
   shippingTo: '',
   shipmentType: '',
+  remark: 'NEW',
 };
 
 const emailRegex = /^[^\s@]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
@@ -114,6 +115,7 @@ export default function SalesDayAgentManualCustomerForm() {
         zipcode: form.zipcode.trim(),
         shippingTo: form.shippingTo.trim(),
         shipmentType: form.shipmentType.trim(),
+        remark: String(form.remark || 'NEW').toUpperCase() === 'OLD' ? 'OLD' : 'NEW',
       };
       const payload = Object.fromEntries(
         Object.entries(cleaned).filter(([, val]) => val !== '' && val !== undefined),
@@ -385,6 +387,24 @@ export default function SalesDayAgentManualCustomerForm() {
               placeholder="e.g. FCL, LCL, Air (optional)"
             />
             {errors.shipmentType && <p className="text-red-600 text-sm mt-1.5">{errors.shipmentType}</p>}
+          </div>
+          <div className="sm:col-span-2 lg:col-span-4">
+            <label className="text-sm font-semibold text-gray-700" htmlFor="sda-remark">
+              Import remark
+            </label>
+            <select
+              id="sda-remark"
+              name="remark"
+              value={form.remark === 'OLD' ? 'OLD' : 'NEW'}
+              onChange={onChange}
+              className={fieldClass(errors.remark) + ' mt-1.5 max-w-md'}
+            >
+              <option value="NEW">NEW (default — stored for filters / reporting)</option>
+              <option value="OLD">OLD (parity with import duplicates)</option>
+            </select>
+            <p className="text-xs text-gray-500 mt-1.5 leading-relaxed max-w-2xl">
+              Does not change email uniqueness on create; optional for UI parity with CSV imports.
+            </p>
           </div>
         </div>
       </div>

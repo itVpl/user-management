@@ -211,7 +211,7 @@ export default function SalesDayAgentHourlyDispositionPrompt() {
             try {
               const todayRes = await fetchSalesDayToday(localTodayParam());
               setCustomers(extractTodayCustomers(todayRes));
-            } catch (e) {
+            } catch {
               toast.error('Could not refresh list.');
             } finally {
               setLoading(false);
@@ -344,6 +344,7 @@ function SalesDayDispositionModal({ customers, dispositions, loading, onClose, o
                     <th className={HOURLY_TH}>Commodity</th>
                     <th className={HOURLY_TH}>City</th>
                     <th className={HOURLY_TH}>St</th>
+                    <th className={HOURLY_TH}>Remark</th>
                     <th className={`${HOURLY_TH} min-w-[14rem]`}>Disposition</th>
                     <th className={`${HOURLY_TH} ${HOURLY_CELL_END} w-24 text-center`}>Edit</th>
                   </tr>
@@ -356,6 +357,21 @@ function SalesDayDispositionModal({ customers, dispositions, loading, onClose, o
                       <td className={HOURLY_TD}>{c.commodity || '—'}</td>
                       <td className={HOURLY_TD}>{c.city || '—'}</td>
                       <td className={HOURLY_TD}>{c.state || '—'}</td>
+                      <td className={`${HOURLY_TD} whitespace-nowrap`}>
+                        {c.remark != null && String(c.remark).trim() !== '' ? (
+                          String(c.remark).trim().toUpperCase() === 'OLD' ? (
+                            <span className="inline-flex rounded-lg bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700 ring-1 ring-slate-200/90">
+                              OLD
+                            </span>
+                          ) : (
+                            <span className="inline-flex rounded-lg bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-800 ring-1 ring-indigo-100/90">
+                              NEW
+                            </span>
+                          )
+                        ) : (
+                          <span className="text-gray-400 text-sm">—</span>
+                        )}
+                      </td>
                       <td className={`${HOURLY_TD} align-top min-w-[14rem]`}>
                         <div className="flex flex-col gap-2 max-w-[min(100%,20rem)]">
                           <select
