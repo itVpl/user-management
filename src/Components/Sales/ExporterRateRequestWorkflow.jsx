@@ -92,6 +92,11 @@ const EXTRA_DETAILS_DISPLAY_KEYS = [
   "specialEquipmentRequired",
 ];
 
+function getLocationZipcode(loc) {
+  if (!loc || typeof loc !== "object") return "";
+  return String(loc.zipcode ?? loc.pincode ?? "").trim();
+}
+
 function defaultEmptyLocation() {
   return { address: "", city: "", pincode: "" };
 }
@@ -135,7 +140,7 @@ function locationHasAnyValue(loc) {
   if (loc == null) return false;
   if (typeof loc === "string") return loc.trim() !== "";
   if (typeof loc === "object") {
-    return ["address", "city", "pincode"].some((k) => String(loc[k] ?? "").trim() !== "");
+    return [loc.address, loc.city, loc.state, getLocationZipcode(loc)].some((v) => String(v ?? "").trim() !== "");
   }
   return false;
 }
@@ -155,13 +160,20 @@ function formatLocationForView(loc) {
   if (typeof loc === "object") {
     const address = (loc.address || "").trim();
     const city = (loc.city || "").trim();
-    const pincode = (loc.pincode || "").trim();
-    if (!address && !city && !pincode) return null;
-    const line2 = [city, pincode].filter(Boolean).join(" ");
+    const state = (loc.state || "").trim();
+    const zipcode = getLocationZipcode(loc);
+    if (!address && !city && !state && !zipcode) return null;
+    const cityState = [city, state].filter(Boolean).join(", ");
+    const line2 = [cityState, zipcode].filter(Boolean).join(cityState && zipcode ? " " : "");
     const parts = [address, line2].filter(Boolean);
     return parts.join("\n");
   }
   return null;
+}
+
+function isYesValue(value) {
+  const s = String(value ?? "").trim().toLowerCase();
+  return s === "yes" || s === "true";
 }
 
 function hasExtraDetails(detail) {
@@ -169,7 +181,9 @@ function hasExtraDetails(detail) {
   if (locationHasAnyValue(detail.exactPickupLocation)) return true;
   if (locationHasAnyValue(detail.exactDeliveryLocation)) return true;
   return EXTRA_DETAILS_DISPLAY_KEYS.some((key) => {
-    if (key === "exactPickupLocation" || key === "exactDeliveryLocation") return false;
+    if (key === "exactPickupLocation" || key === "exactDeliveryLocation") {
+      return false;
+    }
     const v = detail[key];
     if (v === undefined || v === null) return false;
     if (typeof v === "number" && !Number.isNaN(v)) return true;
@@ -196,10 +210,16 @@ function formatExtraDetailDisplay(key, detail) {
 
   if (key === "cargoReadyDate" || key === "pickupTime") return formatDateTime(raw);
 
-  if (key === "cargoHazardous" || key === "palletizedCargo" || key === "customsClearanceOriginRequired") {
+  if (
+    key === "cargoHazardous" ||
+    key === "palletizedCargo" ||
+    key === "customsClearanceOriginRequired"
+  ) {
     const s = String(raw).toLowerCase();
     if (s === "yes") return "Yes";
     if (s === "no") return "No";
+    if (s === "true") return "Yes";
+    if (s === "false") return "No";
     return String(raw);
   }
   if (key === "commercialInvoiceValue" || key === "totalCmb") {
@@ -563,6 +583,20 @@ function RateRequestDetailBody({ detail }) {
         <h4 className="mb-4 text-sm font-semibold text-indigo-900">Container type</h4>
         <ContainerTypeDisplay value={detail.containerType} />
       </div>
+
+      {isYesValue(detail.truckingRequired) && (
+        <div className="rounded-2xl border border-amber-100 bg-amber-50/80 p-5">
+          <h4 className="mb-4 flex items-center gap-2 text-sm font-semibold text-amber-900">
+            <Truck size={18} className="text-amber-700" />
+            Trucking details
+          </h4>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <DetailField label="Trucking required" value="Yes" />
+            <DetailField label="Pickup location" value={formatLocationForView(detail.truckingPickupLocation) || "-"} multiline />
+            <DetailField label="Delivery location" value={formatLocationForView(detail.truckingDeliveryLocation) || "-"} multiline />
+          </div>
+        </div>
+      )}
 
       {hasExtraDetails(detail) && (
         <div className="rounded-2xl border border-violet-100 bg-violet-50/80 p-5">

@@ -316,7 +316,7 @@ function TruncTd({ children, title }) {
 }
 
 export default function SalesDayAgentWorkspace() {
-  const [tab, setTab] = useState('import');
+  const [tab, setTab] = useState('manual');
 
   return (
     <div className="space-y-5">
@@ -333,7 +333,7 @@ export default function SalesDayAgentWorkspace() {
           role="tablist"
           aria-label="Add Agent sections"
         >
-          <button
+          {/* <button
             type="button"
             role="tab"
             aria-selected={tab === 'import'}
@@ -345,7 +345,7 @@ export default function SalesDayAgentWorkspace() {
             }`}
           >
             Import file
-          </button>
+          </button> */}
           <button
             type="button"
             role="tab"
@@ -389,7 +389,7 @@ export default function SalesDayAgentWorkspace() {
         </div>
       </div>
       <div>
-        {tab === 'import' && <ImportPanel />}
+        {/* {tab === 'import' && <ImportPanel />} */}
         {tab === 'manual' && <SalesDayAgentManualCustomerForm />}
         {tab === 'browse' && <BrowsePanel onGoImport={() => setTab('import')} />}
         {tab === 'agent_manage' && <AgentCustomerManagePanel />}
@@ -1414,8 +1414,8 @@ function BrowsePanel({ onGoImport }) {
               onChange={(e) => setFilters((f) => ({ ...f, remark: e.target.value }))}
             >
               <option value="">All</option>
-              <option value="NEW">NEW (deduped / default)</option>
-              <option value="OLD">OLD (legacy duplicate)</option>
+              <option value="NEW">New Customer</option>
+              <option value="OLD">Follow Up</option>
             </select>
           </div>
           <div className="flex flex-col gap-1">
@@ -1532,9 +1532,6 @@ function BrowsePanel({ onGoImport }) {
                 <th className={TABLE_STYLE.th}>
                   Shipment type
                 </th>
-                <th className={TABLE_STYLE.th}>
-                  Remark
-                </th>
                 <th className={`${TABLE_STYLE.th} min-w-[11rem]`}>
                   Disposition
                 </th>
@@ -1568,21 +1565,6 @@ function BrowsePanel({ onGoImport }) {
                   </td>
                   <td className={`${TABLE_STYLE.td} max-w-[100px] truncate`}>{c.shippingTo || '—'}</td>
                   <td className={`${TABLE_STYLE.td} max-w-[100px] truncate`}>{c.shipmentType || '—'}</td>
-                  <td className={`${TABLE_STYLE.td} whitespace-nowrap`}>
-                    {c.remark != null && String(c.remark).trim() !== '' ? (
-                      String(c.remark).trim().toUpperCase() === 'OLD' ? (
-                        <span className="inline-flex rounded-lg bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700 ring-1 ring-slate-200/90">
-                          OLD
-                        </span>
-                      ) : (
-                        <span className="inline-flex rounded-lg bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-800 ring-1 ring-indigo-100/90">
-                          NEW
-                        </span>
-                      )
-                    ) : (
-                      <span className="text-gray-400 text-sm">—</span>
-                    )}
-                  </td>
                   <td className={`${TABLE_STYLE.td} align-top min-w-[11rem]`}>
                     <div className="flex flex-col gap-1.5 max-w-[220px]">
                       <select

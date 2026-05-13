@@ -39,6 +39,10 @@ export default function AllExporterRR() {
     const token = getToken();
     return token ? { Authorization: `Bearer ${token}` } : {};
   }, []);
+  const giveRateRequest = useMemo(
+    () => rows.find((row) => row._id === giveRateRequestId) || null,
+    [rows, giveRateRequestId],
+  );
 
   const loadList = async (override = {}) => {
     const p = override.page ?? page;
@@ -267,6 +271,7 @@ export default function AllExporterRR() {
       <GiveRateModal
         open={Boolean(giveRateRequestId)}
         requestId={giveRateRequestId || ""}
+        requestData={giveRateRequest}
         authHeaders={authHeaders}
         onClose={() => setGiveRateRequestId(null)}
         onSuccess={() => void loadList()}
