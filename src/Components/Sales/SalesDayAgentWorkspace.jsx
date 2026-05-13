@@ -35,6 +35,7 @@ const IMPORT_FIELDS = [
   { key: 'zipcode', label: 'Zip / postal' },
   { key: 'shippingTo', label: 'Shipping to' },
   { key: 'shipmentType', label: 'Shipment type' },
+  { key: 'remark', label: 'Remark (NEW / OLD)' },
 ];
 
 const HEADER_ALIASES = {
@@ -80,7 +81,16 @@ const HEADER_ALIASES = {
   zipcode: ['zip', 'zipcode', 'zip code', 'postal', 'postal code', 'postal_code', 'postalcode'],
   shippingTo: ['shipping to', 'shipping_to', 'ship to', 'destination'],
   shipmentType: ['shipment type', 'shipment_type', 'shipmenttype', 'ship type'],
+  remark: ['remark', 'import remark', 'import_remark', 'importremark'],
 };
+
+/** Excel/JSON: only OLD is special; everything else → NEW (server rule). */
+function normalizeImportRemarkForApi(raw) {
+  const t = String(raw ?? '')
+    .trim()
+    .toUpperCase();
+  return t === 'OLD' ? 'OLD' : 'NEW';
+}
 
 function normalizeHeader(h) {
   return String(h ?? '')
@@ -154,6 +164,7 @@ function rowToCustomer(row, colMap) {
     zipcode: pick('zipcode'),
     shippingTo: pick('shippingTo'),
     shipmentType: pick('shipmentType'),
+    remark: normalizeImportRemarkForApi(pick('remark')),
   };
 }
 
@@ -981,8 +992,10 @@ function ImportPanel() {
       {headers.length > 0 && (
         <>
           <p className="text-xs text-gray-500">
-            Columns are detected from your header row. Use <strong className="font-medium text-gray-700">Download
-            template</strong> for guaranteed column names, or names like Phone, Email, and City.
+            Columns are detected from your header row. Include <strong className="font-medium text-gray-700">Remark</strong>{' '}
+            (<span className="font-mono">NEW</span> / <span className="font-mono">OLD</span>) after shipment type when
+            using a custom sheet, or use <strong className="font-medium text-gray-700">Download template</strong> for
+            guaranteed column names.
           </p>
 
           <div>
@@ -1069,6 +1082,7 @@ function BrowsePanel({ onGoImport }) {
     shipmentType: '',
     disposition: '',
     importBatchId: '',
+    remark: '',
   });
 
   const [editCustomer, setEditCustomer] = useState(null);
@@ -1100,6 +1114,7 @@ function BrowsePanel({ onGoImport }) {
     filters.shipmentType,
     filters.disposition,
     filters.importBatchId,
+    filters.remark,
     debouncedSearch,
   ]);
 
@@ -1136,6 +1151,7 @@ function BrowsePanel({ onGoImport }) {
         ...(filters.shipmentType.trim() ? { shipmentType: filters.shipmentType.trim() } : {}),
         ...(filters.disposition ? { disposition: filters.disposition } : {}),
         ...(filters.importBatchId ? { importBatchId: filters.importBatchId } : {}),
+        ...(filters.remark === 'NEW' || filters.remark === 'OLD' ? { remark: filters.remark } : {}),
       };
       const data = await fetchSalesDayList(params);
       if (data?.success) {
@@ -1166,6 +1182,7 @@ function BrowsePanel({ onGoImport }) {
     filters.shipmentType,
     filters.disposition,
     filters.importBatchId,
+    filters.remark,
   ]);
 
   useEffect(() => {
@@ -1303,7 +1320,7 @@ function BrowsePanel({ onGoImport }) {
                 className="w-full pl-10 pr-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400/40 focus:border-blue-400"
                 value={filters.search}
                 onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
-                placeholder="Name, email, company, phone…"
+                placeholder="Name, email, company, phone, remark…"
               />
             </div>
           </div>
@@ -1390,6 +1407,18 @@ function BrowsePanel({ onGoImport }) {
             </select>
           </div>
           <div className="flex flex-col gap-1">
+            <span className="text-sm font-medium text-gray-600">Import remark</span>
+            <select
+              className="w-full border border-gray-200 rounded-xl px-2.5 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400/40 focus:border-blue-400"
+              value={filters.remark}
+              onChange={(e) => setFilters((f) => ({ ...f, remark: e.target.value }))}
+            >
+              <option value="">All</option>
+              <option value="NEW">NEW (deduped / default)</option>
+              <option value="OLD">OLD (legacy duplicate)</option>
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
             <span className="text-sm font-medium text-gray-600">Import batch</span>
             <select
               className="w-full border border-gray-200 rounded-xl px-2.5 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400/40 focus:border-blue-400"
@@ -1430,6 +1459,7 @@ function BrowsePanel({ onGoImport }) {
                 shipmentType: '',
                 disposition: '',
                 importBatchId: '',
+                remark: '',
               });
               setDebouncedSearch('');
               setPage(1);
@@ -1502,6 +1532,9 @@ function BrowsePanel({ onGoImport }) {
                 <th className={TABLE_STYLE.th}>
                   Shipment type
                 </th>
+                <th className={TABLE_STYLE.th}>
+                  Remark
+                </th>
                 <th className={`${TABLE_STYLE.th} min-w-[11rem]`}>
                   Disposition
                 </th>
@@ -1535,6 +1568,21 @@ function BrowsePanel({ onGoImport }) {
                   </td>
                   <td className={`${TABLE_STYLE.td} max-w-[100px] truncate`}>{c.shippingTo || '—'}</td>
                   <td className={`${TABLE_STYLE.td} max-w-[100px] truncate`}>{c.shipmentType || '—'}</td>
+                  <td className={`${TABLE_STYLE.td} whitespace-nowrap`}>
+                    {c.remark != null && String(c.remark).trim() !== '' ? (
+                      String(c.remark).trim().toUpperCase() === 'OLD' ? (
+                        <span className="inline-flex rounded-lg bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700 ring-1 ring-slate-200/90">
+                          OLD
+                        </span>
+                      ) : (
+                        <span className="inline-flex rounded-lg bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-800 ring-1 ring-indigo-100/90">
+                          NEW
+                        </span>
+                      )
+                    ) : (
+                      <span className="text-gray-400 text-sm">—</span>
+                    )}
+                  </td>
                   <td className={`${TABLE_STYLE.td} align-top min-w-[11rem]`}>
                     <div className="flex flex-col gap-1.5 max-w-[220px]">
                       <select
