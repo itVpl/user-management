@@ -22,10 +22,17 @@ import API_CONFIG from "../../config/api.js";
 import { HS_CODE_OPTIONS } from "../../data/hsCodeOptions.js";
 import SearchableSelect from "../Dashboard/SearchableSelect.jsx";
 import { fetchShippingLineMaster } from "../../services/shippingLineMasterService.js";
+import BlinkingUnreadDot from "../common/BlinkingUnreadDot.jsx";
 import containerS20 from "../../assets/containers/s20.svg";
 import containerS40 from "../../assets/containers/s40.svg";
 import containerHc40 from "../../assets/containers/hc40.svg";
 import containerHc45 from "../../assets/containers/hc45.svg";
+import {
+  EXPORTER_QUOTE_THREAD_READ_EVENT,
+  markExporterQuoteEntriesRead,
+  persistExporterQuoteBellEntries,
+  readExporterQuoteBellEntries,
+} from "./exporterQuoteNotificationUtils.js";
 
 const EXTRA_DETAILS_LABELS = {
   productName: "Product name",
@@ -194,10 +201,11 @@ export const formatStatusLabel = (value) => {
 
 function normalizeQuoteDecisionStatus(value) {
   const raw = String(value ?? "").trim().toLowerCase();
-  if (!raw) return "pending";
+  if (!raw || raw === "pending") return "offered";
   if (raw.includes("accept") || raw === "approved") return "accepted";
   if (raw.includes("reject") || raw === "declined") return "rejected";
-  if (raw.includes("negotiat") || raw.includes("counter")) return "negotiate";
+  if (raw.includes("negotiat") || raw.includes("counter")) return "negotiating";
+  if (raw.includes("offer")) return "offered";
   return raw;
 }
 
@@ -217,17 +225,17 @@ function getQuoteDecisionMeta(value) {
       badgeClass: "border-red-200 bg-red-50 text-red-700",
     };
   }
-  if (normalized === "negotiate") {
+  if (normalized === "negotiating") {
     return {
       value: normalized,
-      label: "Negotiate",
+      label: "Negotiating",
       badgeClass: "border-amber-200 bg-amber-50 text-amber-700",
     };
   }
-  if (normalized === "pending") {
+  if (normalized === "offered") {
     return {
       value: normalized,
-      label: "Pending",
+      label: "Offered",
       badgeClass: "border-slate-200 bg-slate-50 text-slate-700",
     };
   }
@@ -548,13 +556,16 @@ function buildAuthHeadersFromStorage() {
 }
 
 /** GET operation SSL rates for a rate request (detail view). */
-function OperationSslRatesSection({ requestId, requestData, allowEdit = true }) {
+function OperationSslRatesSection({ requestId, requestData, allowEdit = true, initialNegotiationQuoteId = null }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(null);
+  const [unreadSummaryByQuoteId, setUnreadSummaryByQuoteId] = useState({});
   const [editingQuote, setEditingQuote] = useState(null);
   const [negotiatingQuote, setNegotiatingQuote] = useState(null);
+  const autoOpenedThreadRef = useRef("");
   const modalAuthHeaders = useMemo(() => buildAuthHeadersFromStorage(), []);
+  const summaryRequestId = requestData?.requestId || requestId || "";
 
   const loadRows = useCallback(async () => {
     if (!requestId) {
@@ -586,6 +597,48 @@ function OperationSslRatesSection({ requestId, requestData, allowEdit = true }) 
     void loadRows();
   }, [loadRows]);
 
+  const loadUnreadSummary = useCallback(
+    async ({ silent = false } = {}) => {
+      if (!summaryRequestId) {
+        setUnreadSummaryByQuoteId({});
+        return {};
+      }
+      try {
+        const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/exporter-rate-requst/quote-thread-unread-summary`, {
+          headers: buildAuthHeadersFromStorage(),
+          params: { requestId: summaryRequestId },
+        });
+        const list = Array.isArray(res.data?.data) ? res.data.data : [];
+        const next = list.reduce((acc, entry) => {
+          const quoteId = String(entry?.sslQuote || "").trim();
+          if (!quoteId) return acc;
+          acc[quoteId] = entry;
+          return acc;
+        }, {});
+        setUnreadSummaryByQuoteId(next);
+        return next;
+      } catch (e) {
+        if (!silent) {
+          alertify.error(e.response?.data?.message || e.message || "Could not load unread quote messages");
+        }
+        return {};
+      }
+    },
+    [summaryRequestId],
+  );
+
+  useEffect(() => {
+    void loadUnreadSummary({ silent: true });
+  }, [loadUnreadSummary]);
+
+  useEffect(() => {
+    if (!summaryRequestId || negotiatingQuote?._id) return undefined;
+    const intervalId = setInterval(() => {
+      void loadUnreadSummary({ silent: true });
+    }, 12000);
+    return () => clearInterval(intervalId);
+  }, [summaryRequestId, negotiatingQuote?._id, loadUnreadSummary]);
+
   const fmtAddedBy = (ab) => {
     if (!ab || typeof ab !== "object") return "N/A";
     const name = ab.employeeName || "";
@@ -606,6 +659,49 @@ function OperationSslRatesSection({ requestId, requestData, allowEdit = true }) 
     setNegotiatingQuote((prev) => (prev?._id === updatedQuote._id ? { ...prev, ...updatedQuote } : prev));
   }, []);
 
+  const handleThreadRead = useCallback((quoteId, readState) => {
+    if (!quoteId) return;
+    setUnreadSummaryByQuoteId((prev) => ({
+      ...prev,
+      [quoteId]: {
+        ...(prev[quoteId] || {}),
+        ...(readState && typeof readState === "object" ? readState : {}),
+        sslQuote: quoteId,
+        unreadCount: 0,
+      },
+    }));
+    if (typeof window !== "undefined") {
+      const nextBellEntries = markExporterQuoteEntriesRead(readExporterQuoteBellEntries(), quoteId, readState);
+      persistExporterQuoteBellEntries(nextBellEntries);
+      window.dispatchEvent(
+        new CustomEvent(EXPORTER_QUOTE_THREAD_READ_EVENT, {
+          detail: {
+            quoteId,
+            readState: readState && typeof readState === "object" ? readState : null,
+          },
+        }),
+      );
+    }
+  }, []);
+
+  useEffect(() => {
+    const targetQuoteId = String(initialNegotiationQuoteId || "").trim();
+    if (!targetQuoteId) {
+      autoOpenedThreadRef.current = "";
+      return;
+    }
+    const autoOpenKey = `${requestId || ""}:${targetQuoteId}`;
+    if (autoOpenedThreadRef.current === autoOpenKey) return;
+    const matchedQuote = rows.find((row) => String(row?._id || "").trim() === targetQuoteId);
+    if (!matchedQuote) return;
+    const unreadSummary = unreadSummaryByQuoteId[matchedQuote._id] || null;
+    const mergedQuote = unreadSummary
+      ? { ...matchedQuote, ...unreadSummary, decisionStatus: unreadSummary.decisionStatus ?? matchedQuote.decisionStatus }
+      : matchedQuote;
+    autoOpenedThreadRef.current = autoOpenKey;
+    setNegotiatingQuote(mergedQuote);
+  }, [initialNegotiationQuoteId, requestId, rows, unreadSummaryByQuoteId]);
+
   return (
     <div className="rounded-2xl border border-teal-200 bg-gradient-to-br from-teal-50/90 via-white to-cyan-50/40 p-5 shadow-sm">
       <h4 className="mb-4 flex items-center gap-2 text-sm font-semibold text-teal-950">
@@ -620,28 +716,31 @@ function OperationSslRatesSection({ requestId, requestData, allowEdit = true }) 
       {!loading && !err && rows.length > 0 && (
         <div className="space-y-4">
           {rows.map((r) => {
-            const decisionMeta = getQuoteDecisionMeta(r.decisionStatus || r.quoteDecisionStatus || r.negotiationStatus);
-            const isRejectedQuote = decisionMeta.value === "rejected";
+            const unreadSummary = unreadSummaryByQuoteId[r._id] || null;
+            const mergedQuote = unreadSummary ? { ...r, ...unreadSummary, decisionStatus: unreadSummary.decisionStatus ?? r.decisionStatus } : r;
+            const decisionMeta = getQuoteDecisionMeta(mergedQuote.decisionStatus);
+            const isReadOnlyThread = decisionMeta.value === "accepted" || decisionMeta.value === "rejected";
+            const unreadCount = Number(unreadSummary?.unreadCount) > 0 ? Number(unreadSummary.unreadCount) : 0;
             return (
             <div key={r._id} className="rounded-xl border border-teal-100 bg-white p-4 shadow-sm">
               <div className="mb-3 flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 pb-3">
                 <div>
                   <p className="text-base font-bold text-slate-900">
-                    {r.sslName || "—"}{" "}
+                    {mergedQuote.sslName || "—"}{" "}
                     <span className="text-sm font-semibold text-teal-700">
-                      {r.currency || ""} {r.totalAmount != null ? Number(r.totalAmount).toLocaleString() : "—"}
+                      {mergedQuote.currency || ""} {mergedQuote.totalAmount != null ? Number(mergedQuote.totalAmount).toLocaleString() : "—"}
                     </span>
                   </p>
-                  {(r.sslCode || r.sslId) && (
+                  {(mergedQuote.sslCode || mergedQuote.sslId) && (
                     <p className="mt-1 text-xs text-slate-500">
-                      {r.sslCode ? `Code: ${r.sslCode}` : ""}
-                      {r.sslCode && r.sslId ? " · " : ""}
-                      {r.sslId ? `ID: ${r.sslId}` : ""}
+                      {mergedQuote.sslCode ? `Code: ${mergedQuote.sslCode}` : ""}
+                      {mergedQuote.sslCode && mergedQuote.sslId ? " · " : ""}
+                      {mergedQuote.sslId ? `ID: ${mergedQuote.sslId}` : ""}
                     </p>
                   )}
                   <p className="mt-1 text-xs text-slate-500">
-                    Added {formatDateTime(r.createdAt)}
-                    {r.addedBy ? ` · ${fmtAddedBy(r.addedBy)}` : ""}
+                    Added {formatDateTime(mergedQuote.createdAt)}
+                    {mergedQuote.addedBy ? ` · ${fmtAddedBy(mergedQuote.addedBy)}` : ""}
                   </p>
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     <span className="text-xs font-medium text-slate-500">Decision status</span>
@@ -656,17 +755,23 @@ function OperationSslRatesSection({ requestId, requestData, allowEdit = true }) 
                   <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
-                      disabled={isRejectedQuote}
-                      onClick={() => setNegotiatingQuote(r)}
+                      onClick={() => setNegotiatingQuote(mergedQuote)}
                       className={`inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
-                        isRejectedQuote
-                          ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400"
+                        isReadOnlyThread
+                          ? "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
                           : "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
                       }`}
-                      title={isRejectedQuote ? "Negotiation is disabled for rejected quotes" : "Open negotiation"}
+                      title={isReadOnlyThread ? "Open read-only conversation" : "Open negotiation"}
                     >
                       <MessageSquareText size={14} />
                       Negotiate
+                      {unreadCount > 0 && (
+                        <BlinkingUnreadDot
+                          count={unreadCount}
+                          className="ml-1"
+                          title={`${unreadCount} unread message${unreadCount === 1 ? "" : "s"} in this negotiation`}
+                        />
+                      )}
                     </button>
                     <button
                       type="button"
@@ -723,19 +828,22 @@ function OperationSslRatesSection({ requestId, requestData, allowEdit = true }) 
         authHeaders={modalAuthHeaders}
         onClose={() => setNegotiatingQuote(null)}
         onQuoteUpdated={handleQuoteUpdated}
+        onThreadRead={handleThreadRead}
       />
     </div>
   );
 }
 
-function QuoteNegotiationModal({ open, onClose, requestId, requestData, quote, authHeaders, onQuoteUpdated }) {
+function QuoteNegotiationModal({ open, onClose, requestId, requestData, quote, authHeaders, onQuoteUpdated, onThreadRead }) {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [composerFocused, setComposerFocused] = useState(false);
   const chatEndRef = useRef(null);
   const initializedThreadRef = useRef("");
+  const lastMarkedReadRef = useRef("");
   const authHeaderKey = authHeaders?.Authorization || "";
   const requestHeaders = useMemo(() => (authHeaderKey ? { Authorization: authHeaderKey } : {}), [authHeaderKey]);
   const threadKey = `${requestId || ""}:${quote?._id || ""}`;
@@ -777,11 +885,13 @@ function QuoteNegotiationModal({ open, onClose, requestId, requestData, quote, a
   useEffect(() => {
     if (!open) {
       initializedThreadRef.current = "";
+      lastMarkedReadRef.current = "";
       return;
     }
     if (!quote?._id) return;
     if (initializedThreadRef.current === threadKey) return;
     initializedThreadRef.current = threadKey;
+    lastMarkedReadRef.current = "";
     setMessage("");
     setMessages([]);
     void loadMessages();
@@ -815,13 +925,43 @@ function QuoteNegotiationModal({ open, onClose, requestId, requestData, quote, a
   );
 
   useEffect(() => {
-    if (!open || !quote?._id || sending) return undefined;
+    if (!open || !quote?._id || sending || composerFocused || String(message).trim()) return undefined;
     const intervalId = setInterval(() => {
       void loadMessages({ silent: true });
       void refreshQuote({ silent: true });
     }, 5000);
     return () => clearInterval(intervalId);
-  }, [open, quote?._id, sending, loadMessages, refreshQuote]);
+  }, [open, quote?._id, sending, composerFocused, message, loadMessages, refreshQuote]);
+
+  const markThreadRead = useCallback(
+    async (latestMessageId) => {
+      const messageId = String(latestMessageId || "").trim();
+      if (!requestId || !quote?._id || !messageId) return null;
+      const markerKey = `${threadKey}:${messageId}`;
+      if (lastMarkedReadRef.current === markerKey) return null;
+      try {
+        const res = await axios.post(
+          `${API_CONFIG.BASE_URL}/api/v1/exporter-rate-requst/${requestId}/operation-ssl-rates/${quote._id}/read`,
+          { lastReadMessageId: messageId },
+          { headers: { ...requestHeaders, "Content-Type": "application/json" } },
+        );
+        lastMarkedReadRef.current = markerKey;
+        const readState = res.data?.data || null;
+        onThreadRead?.(quote._id, readState);
+        return readState;
+      } catch (err) {
+        return null;
+      }
+    },
+    [requestId, quote?._id, threadKey, requestHeaders, onThreadRead],
+  );
+
+  useEffect(() => {
+    if (!open || !quote?._id || messagesLoading || messages.length === 0) return;
+    const latestVisibleMessageId = messages[messages.length - 1]?._id;
+    if (!latestVisibleMessageId) return;
+    void markThreadRead(latestVisibleMessageId);
+  }, [open, quote?._id, messagesLoading, messages, markThreadRead]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -881,8 +1021,8 @@ function QuoteNegotiationModal({ open, onClose, requestId, requestData, quote, a
 
   const quoteAmount =
     quote.totalAmount != null ? `${quote.currency || ""} ${Number(quote.totalAmount).toLocaleString()}`.trim() : "N/A";
-  const decisionMeta = getQuoteDecisionMeta(quote.decisionStatus || quote.quoteDecisionStatus || quote.negotiationStatus);
-  const isRejectedQuote = decisionMeta.value === "rejected";
+  const decisionMeta = getQuoteDecisionMeta(quote.decisionStatus);
+  const isReadOnlyQuote = decisionMeta.value === "accepted" || decisionMeta.value === "rejected";
   const shipmentLabel = requestData?.shipmentType || requestData?.cargoType || "Shipment";
   const shipmentSummaryItems = [
     ["Request ID", requestData?.requestId || requestId],
@@ -965,7 +1105,9 @@ function QuoteNegotiationModal({ open, onClose, requestId, requestData, quote, a
                   <MessageSquareText size={36} className="mx-auto mb-3 text-slate-400" />
                   <p className="text-sm font-medium text-slate-700">No negotiation messages yet</p>
                   <p className="mt-1 text-xs text-slate-500">
-                    {isRejectedQuote ? "This quote has been rejected, so negotiation is locked." : "Type your message below to start the conversation."}
+                    {isReadOnlyQuote
+                      ? `This quote is ${decisionMeta.label.toLowerCase()}, so the conversation is read-only.`
+                      : "Type your message below to start the conversation."}
                   </p>
                 </div>
               </div>
@@ -1003,9 +1145,15 @@ function QuoteNegotiationModal({ open, onClose, requestId, requestData, quote, a
           </div>
 
           <form onSubmit={handleSubmit} className="border-t border-slate-200 bg-white p-4">
-            {isRejectedQuote && (
-              <div className="mb-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                This SSL quote is rejected. Negotiation messages are disabled for rejected quotes.
+            {isReadOnlyQuote && (
+              <div
+                className={`mb-3 rounded-2xl px-4 py-3 text-sm ${
+                  decisionMeta.value === "accepted"
+                    ? "border border-green-200 bg-green-50 text-green-700"
+                    : "border border-red-200 bg-red-50 text-red-700"
+                }`}
+              >
+                This SSL quote is {decisionMeta.label.toLowerCase()}. New negotiation messages are disabled for this thread.
               </div>
             )}
             <div className="flex items-end gap-3">
@@ -1013,13 +1161,15 @@ function QuoteNegotiationModal({ open, onClose, requestId, requestData, quote, a
                 rows={2}
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                placeholder="Type your message..."
-                disabled={sending || isRejectedQuote}
+                onFocus={() => setComposerFocused(true)}
+                onBlur={() => setComposerFocused(false)}
+                placeholder={isReadOnlyQuote ? "Conversation is closed for new messages" : "Type your message..."}
+                disabled={sending || isReadOnlyQuote}
                 className="min-h-[52px] flex-1 resize-none rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
               />
               <button
                 type="submit"
-                disabled={sending || isRejectedQuote || !String(message).trim()}
+                disabled={sending || isReadOnlyQuote || !String(message).trim()}
                 className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white transition-colors hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
                 title="Send negotiation message"
               >
@@ -1027,7 +1177,7 @@ function QuoteNegotiationModal({ open, onClose, requestId, requestData, quote, a
               </button>
             </div>
             <p className="mt-2 text-[11px] text-slate-500">
-              {isRejectedQuote
+              {isReadOnlyQuote
                 ? "You can review the previous conversation here, but no new negotiation message can be sent."
                 : "All negotiation messages for this quote are tracked under the selected SSL provider rate."}
             </p>
@@ -1069,7 +1219,7 @@ function QuoteNegotiationModal({ open, onClose, requestId, requestData, quote, a
 }
 
 /** Read-only detail sections for exporter / operation-team rows */
-export function RateRequestDetailBody({ detail }) {
+export function RateRequestDetailBody({ detail, initialNegotiationQuoteId = null }) {
   if (!detail) return null;
   const showAssignment = Boolean(
     detail.ownerId || detail.capturedBy || detail.capturedByRef || detail.receivedAt || detail.submissionChannel,
@@ -1250,7 +1400,11 @@ export function RateRequestDetailBody({ detail }) {
         <AttachmentSection attachments={detail.attachments} flat />
       </div>
 
-      <OperationSslRatesSection requestId={detail._id} requestData={detail} />
+      <OperationSslRatesSection
+        requestId={detail._id}
+        requestData={detail}
+        initialNegotiationQuoteId={initialNegotiationQuoteId}
+      />
     </>
   );
 }

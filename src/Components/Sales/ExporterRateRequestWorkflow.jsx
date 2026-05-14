@@ -5,6 +5,7 @@ import alertify from "alertifyjs";
 import "alertifyjs/build/css/alertify.css";
 import API_CONFIG from "../../config/api.js";
 import { fetchSalesDayList } from "../../services/salesDayAgentService.js";
+import BlinkingUnreadDot from "../common/BlinkingUnreadDot.jsx";
 import {
   getUserFromStorage,
   isEmployeeActiveForHandoff,
@@ -35,6 +36,13 @@ import containerS40 from "../../assets/containers/s40.svg";
 import containerHc40 from "../../assets/containers/hc40.svg";
 import containerHc45 from "../../assets/containers/hc45.svg";
 import { HS_CODE_OPTIONS } from "../../data/hsCodeOptions.js";
+import {
+  EXPORTER_QUOTE_SUMMARY_EVENT,
+  EXPORTER_QUOTE_THREAD_READ_EVENT,
+  buildExporterQuoteRequestUnreadMap,
+  getExporterQuoteRequestUnreadCount,
+  readExporterQuoteBellEntries,
+} from "./exporterQuoteNotificationUtils.js";
 
 /** Matches `GET /meta` — see `exporter-rate-request-frontend-api.md` */
 const STATUS_OPTIONS = [
@@ -696,6 +704,7 @@ export default function ExporterRateRequestWorkflow() {
   const [mainTab, setMainTab] = useState("rate");
   const [agentRequests, setAgentRequests] = useState([]);
   const [agentLoadingList, setAgentLoadingList] = useState(false);
+  const [requestUnreadMap, setRequestUnreadMap] = useState({});
   const [agentSummary, setAgentSummary] = useState({
     ownedAgentCustomerCount: 0,
     totalRateRequests: 0,
@@ -866,6 +875,30 @@ export default function ExporterRateRequestWorkflow() {
   useEffect(() => {
     if (selectedId) fetchDetail(selectedId);
   }, [selectedId]);
+
+  useEffect(() => {
+    const syncRequestUnreadMap = (entries) => {
+      setRequestUnreadMap(buildExporterQuoteRequestUnreadMap(entries));
+    };
+
+    syncRequestUnreadMap(readExporterQuoteBellEntries());
+
+    const handleSummaryUpdate = (event) => {
+      syncRequestUnreadMap(Array.isArray(event?.detail) ? event.detail : []);
+    };
+
+    const handleThreadRead = () => {
+      syncRequestUnreadMap(readExporterQuoteBellEntries());
+    };
+
+    window.addEventListener(EXPORTER_QUOTE_SUMMARY_EVENT, handleSummaryUpdate);
+    window.addEventListener(EXPORTER_QUOTE_THREAD_READ_EVENT, handleThreadRead);
+
+    return () => {
+      window.removeEventListener(EXPORTER_QUOTE_SUMMARY_EVENT, handleSummaryUpdate);
+      window.removeEventListener(EXPORTER_QUOTE_THREAD_READ_EVENT, handleThreadRead);
+    };
+  }, []);
 
   useEffect(() => {
     const nextPreviews = (createForm.attachments || []).map((file) => ({
@@ -1162,7 +1195,9 @@ export default function ExporterRateRequestWorkflow() {
                 </tr>
               </thead>
               <tbody>
-                {requests.map((item) => (
+                {requests.map((item) => {
+                  const requestUnreadCount = getExporterQuoteRequestUnreadCount(requestUnreadMap, item);
+                  return (
                   <tr key={item._id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                     <td className="py-4 px-4">
                       <span className="text-sm text-gray-600 font-medium">{item.requestId || item._id}</span>
@@ -1187,8 +1222,10 @@ export default function ExporterRateRequestWorkflow() {
                           type="button"
                           onClick={() => handleViewRequest(item._id)}
                           className="px-4 py-1 rounded border border-green-500 text-green-500 text-sm font-medium hover:bg-green-50 transition-colors min-w-[70px] inline-flex items-center justify-center gap-1"
+                          title={requestUnreadCount > 0 ? `${requestUnreadCount} unread message${requestUnreadCount === 1 ? "" : "s"} in this request` : "View"}
                         >
                           <Eye size={14} /> View
+                          <BlinkingUnreadDot count={requestUnreadCount} className="ml-1" />
                         </button>
                         <button
                           type="button"
@@ -1200,7 +1237,8 @@ export default function ExporterRateRequestWorkflow() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                );
+                })}
               </tbody>
             </table>
           </div>
@@ -1273,7 +1311,9 @@ export default function ExporterRateRequestWorkflow() {
                 </tr>
               </thead>
               <tbody>
-                {agentRequests.map((item) => (
+                {agentRequests.map((item) => {
+                  const requestUnreadCount = getExporterQuoteRequestUnreadCount(requestUnreadMap, item);
+                  return (
                   <tr key={item._id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                     <td className="py-4 px-4">
                       <span className="text-sm text-gray-600 font-medium">{item.requestId || item._id}</span>
@@ -1300,12 +1340,15 @@ export default function ExporterRateRequestWorkflow() {
                         type="button"
                         onClick={() => openAgentDetail(item)}
                         className="px-4 py-1 rounded border border-green-500 text-green-500 text-sm font-medium hover:bg-green-50 transition-colors min-w-[70px] inline-flex items-center justify-center gap-1"
+                        title={requestUnreadCount > 0 ? `${requestUnreadCount} unread message${requestUnreadCount === 1 ? "" : "s"} in this request` : "View"}
                       >
                         <Eye size={14} /> View
+                        <BlinkingUnreadDot count={requestUnreadCount} className="ml-1" />
                       </button>
                     </td>
                   </tr>
-                ))}
+                );
+                })}
               </tbody>
             </table>
           </div>

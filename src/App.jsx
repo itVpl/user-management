@@ -166,6 +166,7 @@ import NotificationHandler from "./Components/NotificationHandler";
 import sharedSocketService from "./services/sharedSocketService";
 import { OnlineStatusProvider } from "./contexts/OnlineStatusContext";
 import { UnreadCountProvider } from "./contexts/UnreadCountContext";
+import GlobalExporterQuoteNotifications from "./Components/Sales/GlobalExporterQuoteNotifications.jsx";
 
 
 
@@ -602,6 +603,7 @@ function App() {
             {/* Global Components */}
             <GlobalAssignmentNotification />
             <GlobalNegotiationNotification />
+            <GlobalExporterQuoteNotifications />
             <NotificationHandler />
             <ChatMessagePopup />
         {/* {import.meta.env.DEV && <TestChatPopup />} */}

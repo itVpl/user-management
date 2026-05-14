@@ -8,6 +8,14 @@ import { useEnhancedNotifications } from "./hooks/useEnhancedNotifications";
 import LoadChatModalCMT from "./Components/CMT/LoadChatModalCMT";
 import sharedSocketService from "./services/sharedSocketService";
 import { X } from "lucide-react";
+import {
+  EXPORTER_QUOTE_SUMMARY_EVENT,
+  EXPORTER_QUOTE_THREAD_READ_EVENT,
+  markExporterQuoteEntriesRead,
+  persistExporterQuoteBellEntries,
+  readExporterQuoteBellEntries,
+  toExporterQuoteUnreadCount,
+} from "./Components/Sales/exporterQuoteNotificationUtils.js";
 
 const Topbar = () => {
   const navigate = useNavigate();
@@ -31,6 +39,7 @@ const Topbar = () => {
   const seenFollowUpIdsRef = useRef(new Set());
   /** Sales day Add Agent follow-up reminders (socket `notification` → NotificationHandler → this list). */
   const [salesDayInbox, setSalesDayInbox] = useState([]);
+  const [exporterQuoteInbox, setExporterQuoteInbox] = useState([]);
 
   const [chatModalState, setChatModalState] = useState({
     isOpen: false,
@@ -60,6 +69,33 @@ const Topbar = () => {
     };
     document.addEventListener("click", handleClickOutside);
     return () => document.removeEventListener("click", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    setExporterQuoteInbox(readExporterQuoteBellEntries());
+
+    const handleExporterQuoteSummary = (event) => {
+      const entries = Array.isArray(event?.detail) ? event.detail : [];
+      setExporterQuoteInbox(entries);
+    };
+
+    const handleExporterQuoteRead = (event) => {
+      const quoteId = String(event?.detail?.quoteId || "").trim();
+      if (!quoteId) return;
+      setExporterQuoteInbox((prev) => {
+        const next = markExporterQuoteEntriesRead(prev, quoteId, event?.detail?.readState);
+        persistExporterQuoteBellEntries(next);
+        return next;
+      });
+    };
+
+    window.addEventListener(EXPORTER_QUOTE_SUMMARY_EVENT, handleExporterQuoteSummary);
+    window.addEventListener(EXPORTER_QUOTE_THREAD_READ_EVENT, handleExporterQuoteRead);
+
+    return () => {
+      window.removeEventListener(EXPORTER_QUOTE_SUMMARY_EVENT, handleExporterQuoteSummary);
+      window.removeEventListener(EXPORTER_QUOTE_THREAD_READ_EVENT, handleExporterQuoteRead);
+    };
   }, []);
 
   // Helper function to format department name
@@ -554,7 +590,8 @@ const Topbar = () => {
   }, []);
 
   const salesDayBellUnread = salesDayInbox.filter((x) => !x.read).length;
-  const bellBadgeCount = unreadCount + followUpNotifications.length + salesDayBellUnread;
+  const exporterQuoteBellUnread = exporterQuoteInbox.reduce((sum, item) => sum + toExporterQuoteUnreadCount(item?.unreadCount), 0);
+  const bellBadgeCount = unreadCount + followUpNotifications.length + salesDayBellUnread + exporterQuoteBellUnread;
 
   const openSalesDayFollowUpFromBell = (item) => {
     setNotificationOpen(false);
@@ -565,6 +602,25 @@ const Topbar = () => {
     );
     const nid = String(item._id || item.id);
     setSalesDayInbox((prev) => prev.filter((x) => String(x._id || x.id) !== nid));
+  };
+
+  const openExporterQuoteNotification = (item) => {
+    if (!item?.rateRequest) return;
+    setNotificationOpen(false);
+    setExporterQuoteInbox((prev) => {
+      const next = prev.filter((entry) => String(entry?.sslQuote || "") !== String(item?.sslQuote || ""));
+      persistExporterQuoteBellEntries(next);
+      return next;
+    });
+    navigate("/sales/all-exporter-rr", {
+      state: {
+        exporterQuoteNotification: {
+          requestMongoId: item.rateRequest,
+          requestId: item.requestId || "",
+          quoteId: item.sslQuote || "",
+        },
+      },
+    });
   };
 
   /** Realtime follow-up due (room user_<empId>); polling remains fallback. */
@@ -857,12 +913,14 @@ const Topbar = () => {
               <div className="absolute right-0 top-12 w-80 bg-white rounded-lg shadow-xl py-2 z-50 animate-fade-in border border-gray-100 max-h-[80vh] overflow-y-auto">
                 <div className="px-4 py-2 border-b border-gray-100 flex justify-between items-center bg-gray-50">
                   <h3 className="font-semibold text-gray-700">Notifications</h3>
-                  {(notifications.length > 0 || salesDayInbox.length > 0) && (
+                  {(notifications.length > 0 || salesDayInbox.length > 0 || exporterQuoteInbox.length > 0) && (
                     <button
                       type="button"
                       onClick={() => {
                         clearAllNotifications();
                         setSalesDayInbox([]);
+                        setExporterQuoteInbox([]);
+                        persistExporterQuoteBellEntries([]);
                       }}
                       className="text-xs text-blue-600 hover:text-blue-800 font-medium"
                     >
@@ -873,12 +931,40 @@ const Topbar = () => {
                 
                 {notifications.length === 0 &&
                 followUpNotifications.length === 0 &&
-                salesDayInbox.length === 0 ? (
+                salesDayInbox.length === 0 &&
+                exporterQuoteInbox.length === 0 ? (
                   <div className="px-4 py-8 text-center text-gray-500 text-sm">
                     No new notifications
                   </div>
                 ) : (
                   <>
+                    {exporterQuoteInbox.map((item, idx) => (
+                      <div
+                        key={`exporter-quote-${item.sslQuote || idx}`}
+                        className="px-4 py-3 hover:bg-amber-50 cursor-pointer border-b border-gray-50 transition-colors"
+                        onClick={() => openExporterQuoteNotification(item)}
+                      >
+                        <div className="flex justify-between items-start mb-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-amber-600 text-xs">🚢</span>
+                            <span className="font-medium text-amber-800 text-sm">
+                              {item?.sslName || "SSL quote"} · {item?.requestId || item?.rateRequest || "Request"}
+                            </span>
+                          </div>
+                          <span className="text-xs text-gray-400">
+                            {item?.lastMessageAt
+                              ? new Date(item.lastMessageAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                              : ""}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-800 font-medium truncate">
+                          {toExporterQuoteUnreadCount(item?.unreadCount)} unread message{toExporterQuoteUnreadCount(item?.unreadCount) === 1 ? "" : "s"}
+                        </p>
+                        <p className="text-xs text-gray-500 line-clamp-2">
+                          {item?.lastMessagePreview || "Open to view the latest negotiation message."}
+                        </p>
+                      </div>
+                    ))}
                     {followUpNotifications.map((item, idx) => (
                       <div
                         key={`followup-${item.id || item._id || idx}`}

@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import alertify from "alertifyjs";
 import "alertifyjs/build/css/alertify.css";
+import { useLocation, useNavigate } from "react-router-dom";
 import API_CONFIG from "../../config/api.js";
 import { Search, Eye, Package, ChevronLeft, ChevronRight, DollarSign } from "lucide-react";
+import BlinkingUnreadDot from "../common/BlinkingUnreadDot.jsx";
 import {
   RateRequestDetailBody,
   GiveRateModal,
@@ -11,6 +13,13 @@ import {
   formatDateTime,
   formatStatusLabel,
 } from "./exporterRateRequestReadOnly.jsx";
+import {
+  EXPORTER_QUOTE_SUMMARY_EVENT,
+  EXPORTER_QUOTE_THREAD_READ_EVENT,
+  buildExporterQuoteRequestUnreadMap,
+  getExporterQuoteRequestUnreadCount,
+  readExporterQuoteBellEntries,
+} from "./exporterQuoteNotificationUtils.js";
 
 const getToken = () =>
   sessionStorage.getItem("authToken") ||
@@ -19,6 +28,8 @@ const getToken = () =>
   localStorage.getItem("token");
 
 export default function AllExporterRR() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
@@ -33,6 +44,8 @@ export default function AllExporterRR() {
   });
   const [showDetail, setShowDetail] = useState(false);
   const [selected, setSelected] = useState(null);
+  const [initialNegotiationQuoteId, setInitialNegotiationQuoteId] = useState(null);
+  const [requestUnreadMap, setRequestUnreadMap] = useState({});
   const [giveRateRequestId, setGiveRateRequestId] = useState(null);
 
   const authHeaders = useMemo(() => {
@@ -85,6 +98,30 @@ export default function AllExporterRR() {
     void loadList();
   }, [page, limit, activeSearch]);
 
+  useEffect(() => {
+    const syncRequestUnreadMap = (entries) => {
+      setRequestUnreadMap(buildExporterQuoteRequestUnreadMap(entries));
+    };
+
+    syncRequestUnreadMap(readExporterQuoteBellEntries());
+
+    const handleSummaryUpdate = (event) => {
+      syncRequestUnreadMap(Array.isArray(event?.detail) ? event.detail : []);
+    };
+
+    const handleThreadRead = () => {
+      syncRequestUnreadMap(readExporterQuoteBellEntries());
+    };
+
+    window.addEventListener(EXPORTER_QUOTE_SUMMARY_EVENT, handleSummaryUpdate);
+    window.addEventListener(EXPORTER_QUOTE_THREAD_READ_EVENT, handleThreadRead);
+
+    return () => {
+      window.removeEventListener(EXPORTER_QUOTE_SUMMARY_EVENT, handleSummaryUpdate);
+      window.removeEventListener(EXPORTER_QUOTE_THREAD_READ_EVENT, handleThreadRead);
+    };
+  }, []);
+
   const totalCount = pagination.totalItems ?? rows.length;
   const todayCount = useMemo(() => {
     const today = new Date().toISOString().split("T")[0];
@@ -101,10 +138,48 @@ export default function AllExporterRR() {
     setPage(1);
   };
 
-  const openDetail = (row) => {
+  const openDetail = useCallback((row, options = {}) => {
     setSelected(row);
+    setInitialNegotiationQuoteId(options.quoteId || null);
     setShowDetail(true);
-  };
+  }, []);
+
+  const openDetailById = useCallback(
+    async (id, options = {}) => {
+      if (!id) return;
+      try {
+        const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/exporter-rate-requst/${id}`, {
+          headers: authHeaders,
+        });
+        const detail = res.data?.data || null;
+        if (!detail) return;
+        openDetail(detail, options);
+      } catch (err) {
+        alertify.error(err.response?.data?.message || "Failed to open exporter rate request detail");
+      }
+    },
+    [authHeaders, openDetail],
+  );
+
+  useEffect(() => {
+    const notificationState = location.state?.exporterQuoteNotification;
+    if (!notificationState) return;
+
+    const requestMongoId = String(notificationState.requestMongoId || "").trim();
+    const requestNumber = String(notificationState.requestId || "").trim();
+    const quoteId = String(notificationState.quoteId || "").trim() || null;
+    const matchedRow = rows.find(
+      (row) => row?._id === requestMongoId || (requestNumber && String(row?.requestId || "").trim() === requestNumber),
+    );
+
+    if (matchedRow) {
+      openDetail(matchedRow, { quoteId });
+    } else if (requestMongoId) {
+      void openDetailById(requestMongoId, { quoteId });
+    }
+
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.pathname, location.state, navigate, openDetail, openDetailById, rows]);
 
   const canGoPrev = page > 1;
   const canGoNext = page < (pagination.totalPages || 1);
@@ -176,7 +251,9 @@ export default function AllExporterRR() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((item) => (
+                {rows.map((item) => {
+                  const requestUnreadCount = getExporterQuoteRequestUnreadCount(requestUnreadMap, item);
+                  return (
                   <tr key={item._id} className="border-b border-gray-100 transition-colors hover:bg-gray-50">
                     <td className="px-4 py-4">
                       <span className="text-sm font-medium text-gray-600">{item.requestId || item._id}</span>
@@ -207,8 +284,10 @@ export default function AllExporterRR() {
                           type="button"
                           onClick={() => openDetail(item)}
                           className="inline-flex items-center gap-0.5 whitespace-nowrap rounded border border-green-600 px-2 py-0.5 text-xs font-medium text-green-700 transition-colors hover:bg-green-50"
+                          title={requestUnreadCount > 0 ? `${requestUnreadCount} unread message${requestUnreadCount === 1 ? "" : "s"} in this request` : "View"}
                         >
                           <Eye size={12} /> View
+                          <BlinkingUnreadDot count={requestUnreadCount} className="ml-1" />
                         </button>
                         <button
                           type="button"
@@ -220,7 +299,8 @@ export default function AllExporterRR() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                );
+                })}
               </tbody>
             </table>
           </div>
@@ -283,6 +363,7 @@ export default function AllExporterRR() {
           onClick={() => {
             setShowDetail(false);
             setSelected(null);
+            setInitialNegotiationQuoteId(null);
           }}
         >
           <div
@@ -306,6 +387,7 @@ export default function AllExporterRR() {
                   onClick={() => {
                     setShowDetail(false);
                     setSelected(null);
+                    setInitialNegotiationQuoteId(null);
                   }}
                 >
                   X
@@ -313,7 +395,7 @@ export default function AllExporterRR() {
               </div>
             </div>
             <div className="space-y-5 bg-gray-50 p-6">
-              <RateRequestDetailBody detail={selected} />
+              <RateRequestDetailBody detail={selected} initialNegotiationQuoteId={initialNegotiationQuoteId} />
             </div>
           </div>
         </div>
