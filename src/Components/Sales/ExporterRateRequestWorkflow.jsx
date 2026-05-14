@@ -198,7 +198,7 @@ function buildTruckingLocationPayload(loc) {
   return { address, city, state, zipcode };
 }
 
-function validateAgentTruckingSection(requiredValue, pickupLocation, deliveryLocation, sectionLabel) {
+function validateTruckingSection(requiredValue, pickupLocation, deliveryLocation, sectionLabel) {
   if (String(requiredValue || "").trim().toLowerCase() !== "yes") return null;
 
   const pickup = buildTruckingLocationPayload(pickupLocation);
@@ -1212,28 +1212,26 @@ export default function ExporterRateRequestWorkflow() {
 
   const submitExtraDetails = async (e) => {
     e.preventDefault();
-    if (extraDetailsMode === "agent") {
-      const originError = validateAgentTruckingSection(
-        extraDetailsForm.originTruckingRequired,
-        extraDetailsForm.originTruckingPickupLocation,
-        extraDetailsForm.originTruckingDeliveryLocation,
-        "Origin trucking",
-      );
-      if (originError) {
-        alertify.error(originError);
-        return;
-      }
+    const originError = validateTruckingSection(
+      extraDetailsForm.originTruckingRequired,
+      extraDetailsForm.originTruckingPickupLocation,
+      extraDetailsForm.originTruckingDeliveryLocation,
+      "Origin trucking",
+    );
+    if (originError) {
+      alertify.error(originError);
+      return;
+    }
 
-      const destinationError = validateAgentTruckingSection(
-        extraDetailsForm.destinationTruckingRequired,
-        extraDetailsForm.destinationTruckingPickupLocation,
-        extraDetailsForm.destinationTruckingDeliveryLocation,
-        "Destination trucking",
-      );
-      if (destinationError) {
-        alertify.error(destinationError);
-        return;
-      }
+    const destinationError = validateTruckingSection(
+      extraDetailsForm.destinationTruckingRequired,
+      extraDetailsForm.destinationTruckingPickupLocation,
+      extraDetailsForm.destinationTruckingDeliveryLocation,
+      "Destination trucking",
+    );
+    if (destinationError) {
+      alertify.error(destinationError);
+      return;
     }
 
     const payload = buildExtraDetailsPayload(extraDetailsForm);
@@ -1561,13 +1559,6 @@ export default function ExporterRateRequestWorkflow() {
                           >
                             <Eye size={14} /> View
                             <BlinkingUnreadDot count={requestUnreadCount} className="ml-1" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => openExtraDetailsModal(item.requestId || item._id, "agent")}
-                            className="px-4 py-1 rounded border border-purple-500 text-purple-500 text-sm font-medium hover:bg-purple-50 transition-colors min-w-[70px] inline-flex items-center justify-center gap-1"
-                          >
-                            <ClipboardList size={14} /> Customs
                           </button>
                         </div>
                       </td>
@@ -2070,357 +2061,109 @@ export default function ExporterRateRequestWorkflow() {
                     </div>
                   </ExtraSection>
 
-                  {extraDetailsMode === "agent" && (
-                    <>
-                      <ExtraSection tone="amber" icon={Truck} title="Origin trucking">
-                        <div className="grid grid-cols-1 gap-4">
-                          <FieldLabel label="Origin trucking required">
-                            <SearchableSelect
-                              value={extraDetailsForm.originTruckingRequired}
-                              onChange={(value) =>
-                                setExtraDetailsForm((p) => ({
-                                  ...p,
-                                  originTruckingRequired: value,
-                                  ...(String(value).toLowerCase() === "no"
-                                    ? {
-                                        originTruckingPickupLocation: defaultEmptyTruckingLocation(),
-                                        originTruckingDeliveryLocation: defaultEmptyTruckingLocation(),
-                                      }
-                                    : {}),
-                                }))
-                              }
-                              options={YES_NO_SEARCH_OPTIONS}
-                              placeholder="Select…"
-                              className="w-full"
-                              compact
-                            />
-                          </FieldLabel>
-                          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                            <div className="rounded-xl border border-amber-100 bg-white p-4">
-                              <h5 className="mb-3 text-sm font-semibold text-amber-900">Pickup location</h5>
-                              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                                <FieldLabel label="Address" className="md:col-span-3">
-                                  <input
-                                    className={extraInputClass}
-                                    value={extraDetailsForm.originTruckingPickupLocation.address}
-                                    disabled={String(extraDetailsForm.originTruckingRequired).toLowerCase() === "no"}
-                                    onChange={(e) =>
-                                      setExtraDetailsForm((p) => ({
-                                        ...p,
-                                        originTruckingPickupLocation: {
-                                          ...p.originTruckingPickupLocation,
-                                          address: e.target.value,
-                                        },
-                                      }))
-                                    }
-                                    placeholder="Updated pickup address"
-                                  />
-                                </FieldLabel>
-                                <FieldLabel label="City">
-                                  <input
-                                    className={extraInputClass}
-                                    value={extraDetailsForm.originTruckingPickupLocation.city}
-                                    disabled={String(extraDetailsForm.originTruckingRequired).toLowerCase() === "no"}
-                                    onChange={(e) =>
-                                      setExtraDetailsForm((p) => ({
-                                        ...p,
-                                        originTruckingPickupLocation: {
-                                          ...p.originTruckingPickupLocation,
-                                          city: e.target.value,
-                                        },
-                                      }))
-                                    }
-                                    placeholder="Gurugram"
-                                  />
-                                </FieldLabel>
-                                <FieldLabel label="State">
-                                  <input
-                                    className={extraInputClass}
-                                    value={extraDetailsForm.originTruckingPickupLocation.state}
-                                    disabled={String(extraDetailsForm.originTruckingRequired).toLowerCase() === "no"}
-                                    onChange={(e) =>
-                                      setExtraDetailsForm((p) => ({
-                                        ...p,
-                                        originTruckingPickupLocation: {
-                                          ...p.originTruckingPickupLocation,
-                                          state: e.target.value,
-                                        },
-                                      }))
-                                    }
-                                    placeholder="Haryana"
-                                  />
-                                </FieldLabel>
-                                <FieldLabel label="Zipcode">
-                                  <input
-                                    className={extraInputClass}
-                                    value={extraDetailsForm.originTruckingPickupLocation.zipcode}
-                                    disabled={String(extraDetailsForm.originTruckingRequired).toLowerCase() === "no"}
-                                    onChange={(e) =>
-                                      setExtraDetailsForm((p) => ({
-                                        ...p,
-                                        originTruckingPickupLocation: {
-                                          ...p.originTruckingPickupLocation,
-                                          zipcode: e.target.value,
-                                        },
-                                      }))
-                                    }
-                                    placeholder="122016"
-                                  />
-                                </FieldLabel>
-                              </div>
-                            </div>
-                            <div className="rounded-xl border border-amber-100 bg-white p-4">
-                              <h5 className="mb-3 text-sm font-semibold text-amber-900">Delivery location</h5>
-                              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                                <FieldLabel label="Address" className="md:col-span-3">
-                                  <input
-                                    className={extraInputClass}
-                                    value={extraDetailsForm.originTruckingDeliveryLocation.address}
-                                    disabled={String(extraDetailsForm.originTruckingRequired).toLowerCase() === "no"}
-                                    onChange={(e) =>
-                                      setExtraDetailsForm((p) => ({
-                                        ...p,
-                                        originTruckingDeliveryLocation: {
-                                          ...p.originTruckingDeliveryLocation,
-                                          address: e.target.value,
-                                        },
-                                      }))
-                                    }
-                                    placeholder="Updated delivery address"
-                                  />
-                                </FieldLabel>
-                                <FieldLabel label="City">
-                                  <input
-                                    className={extraInputClass}
-                                    value={extraDetailsForm.originTruckingDeliveryLocation.city}
-                                    disabled={String(extraDetailsForm.originTruckingRequired).toLowerCase() === "no"}
-                                    onChange={(e) =>
-                                      setExtraDetailsForm((p) => ({
-                                        ...p,
-                                        originTruckingDeliveryLocation: {
-                                          ...p.originTruckingDeliveryLocation,
-                                          city: e.target.value,
-                                        },
-                                      }))
-                                    }
-                                    placeholder="New Delhi"
-                                  />
-                                </FieldLabel>
-                                <FieldLabel label="State">
-                                  <input
-                                    className={extraInputClass}
-                                    value={extraDetailsForm.originTruckingDeliveryLocation.state}
-                                    disabled={String(extraDetailsForm.originTruckingRequired).toLowerCase() === "no"}
-                                    onChange={(e) =>
-                                      setExtraDetailsForm((p) => ({
-                                        ...p,
-                                        originTruckingDeliveryLocation: {
-                                          ...p.originTruckingDeliveryLocation,
-                                          state: e.target.value,
-                                        },
-                                      }))
-                                    }
-                                    placeholder="Delhi"
-                                  />
-                                </FieldLabel>
-                                <FieldLabel label="Zipcode">
-                                  <input
-                                    className={extraInputClass}
-                                    value={extraDetailsForm.originTruckingDeliveryLocation.zipcode}
-                                    disabled={String(extraDetailsForm.originTruckingRequired).toLowerCase() === "no"}
-                                    onChange={(e) =>
-                                      setExtraDetailsForm((p) => ({
-                                        ...p,
-                                        originTruckingDeliveryLocation: {
-                                          ...p.originTruckingDeliveryLocation,
-                                          zipcode: e.target.value,
-                                        },
-                                      }))
-                                    }
-                                    placeholder="110037"
-                                  />
-                                </FieldLabel>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </ExtraSection>
+                  <EditableTruckingSection
+                    tone="amber"
+                    title="Origin trucking"
+                    requiredLabel="Origin trucking required"
+                    requiredValue={extraDetailsForm.originTruckingRequired}
+                    onRequiredChange={(value) =>
+                      setExtraDetailsForm((p) => ({
+                        ...p,
+                        originTruckingRequired: value,
+                        ...(String(value).toLowerCase() === "no"
+                          ? {
+                              originTruckingPickupLocation: defaultEmptyTruckingLocation(),
+                              originTruckingDeliveryLocation: defaultEmptyTruckingLocation(),
+                            }
+                          : {}),
+                      }))
+                    }
+                    pickupLocation={extraDetailsForm.originTruckingPickupLocation}
+                    deliveryLocation={extraDetailsForm.originTruckingDeliveryLocation}
+                    onPickupChange={(field, value) =>
+                      setExtraDetailsForm((p) => ({
+                        ...p,
+                        originTruckingPickupLocation: {
+                          ...p.originTruckingPickupLocation,
+                          [field]: value,
+                        },
+                      }))
+                    }
+                    onDeliveryChange={(field, value) =>
+                      setExtraDetailsForm((p) => ({
+                        ...p,
+                        originTruckingDeliveryLocation: {
+                          ...p.originTruckingDeliveryLocation,
+                          [field]: value,
+                        },
+                      }))
+                    }
+                    disabled={String(extraDetailsForm.originTruckingRequired).toLowerCase() === "no"}
+                    pickupPlaceholders={{
+                      address: "Updated pickup address",
+                      city: "Gurugram",
+                      state: "Haryana",
+                      zipcode: "122016",
+                    }}
+                    deliveryPlaceholders={{
+                      address: "Updated delivery address",
+                      city: "New Delhi",
+                      state: "Delhi",
+                      zipcode: "110037",
+                    }}
+                  />
 
-                      <ExtraSection tone="slate" icon={Truck} title="Destination trucking">
-                        <div className="grid grid-cols-1 gap-4">
-                          <FieldLabel label="Destination trucking required">
-                            <SearchableSelect
-                              value={extraDetailsForm.destinationTruckingRequired}
-                              onChange={(value) =>
-                                setExtraDetailsForm((p) => ({
-                                  ...p,
-                                  destinationTruckingRequired: value,
-                                  ...(String(value).toLowerCase() === "no"
-                                    ? {
-                                        destinationTruckingPickupLocation: defaultEmptyTruckingLocation(),
-                                        destinationTruckingDeliveryLocation: defaultEmptyTruckingLocation(),
-                                      }
-                                    : {}),
-                                }))
-                              }
-                              options={YES_NO_SEARCH_OPTIONS}
-                              placeholder="Select…"
-                              className="w-full"
-                              compact
-                            />
-                          </FieldLabel>
-                          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                            <div className="rounded-xl border border-slate-200 bg-white p-4">
-                              <h5 className="mb-3 text-sm font-semibold text-slate-900">Pickup location</h5>
-                              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                                <FieldLabel label="Address" className="md:col-span-3">
-                                  <input
-                                    className={extraInputClass}
-                                    value={extraDetailsForm.destinationTruckingPickupLocation.address}
-                                    disabled={String(extraDetailsForm.destinationTruckingRequired).toLowerCase() === "no"}
-                                    onChange={(e) =>
-                                      setExtraDetailsForm((p) => ({
-                                        ...p,
-                                        destinationTruckingPickupLocation: {
-                                          ...p.destinationTruckingPickupLocation,
-                                          address: e.target.value,
-                                        },
-                                      }))
-                                    }
-                                    placeholder="Port terminal yard"
-                                  />
-                                </FieldLabel>
-                                <FieldLabel label="City">
-                                  <input
-                                    className={extraInputClass}
-                                    value={extraDetailsForm.destinationTruckingPickupLocation.city}
-                                    disabled={String(extraDetailsForm.destinationTruckingRequired).toLowerCase() === "no"}
-                                    onChange={(e) =>
-                                      setExtraDetailsForm((p) => ({
-                                        ...p,
-                                        destinationTruckingPickupLocation: {
-                                          ...p.destinationTruckingPickupLocation,
-                                          city: e.target.value,
-                                        },
-                                      }))
-                                    }
-                                    placeholder="Los Angeles"
-                                  />
-                                </FieldLabel>
-                                <FieldLabel label="State">
-                                  <input
-                                    className={extraInputClass}
-                                    value={extraDetailsForm.destinationTruckingPickupLocation.state}
-                                    disabled={String(extraDetailsForm.destinationTruckingRequired).toLowerCase() === "no"}
-                                    onChange={(e) =>
-                                      setExtraDetailsForm((p) => ({
-                                        ...p,
-                                        destinationTruckingPickupLocation: {
-                                          ...p.destinationTruckingPickupLocation,
-                                          state: e.target.value,
-                                        },
-                                      }))
-                                    }
-                                    placeholder="California"
-                                  />
-                                </FieldLabel>
-                                <FieldLabel label="Zipcode">
-                                  <input
-                                    className={extraInputClass}
-                                    value={extraDetailsForm.destinationTruckingPickupLocation.zipcode}
-                                    disabled={String(extraDetailsForm.destinationTruckingRequired).toLowerCase() === "no"}
-                                    onChange={(e) =>
-                                      setExtraDetailsForm((p) => ({
-                                        ...p,
-                                        destinationTruckingPickupLocation: {
-                                          ...p.destinationTruckingPickupLocation,
-                                          zipcode: e.target.value,
-                                        },
-                                      }))
-                                    }
-                                    placeholder="90731"
-                                  />
-                                </FieldLabel>
-                              </div>
-                            </div>
-                            <div className="rounded-xl border border-slate-200 bg-white p-4">
-                              <h5 className="mb-3 text-sm font-semibold text-slate-900">Delivery location</h5>
-                              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                                <FieldLabel label="Address" className="md:col-span-3">
-                                  <input
-                                    className={extraInputClass}
-                                    value={extraDetailsForm.destinationTruckingDeliveryLocation.address}
-                                    disabled={String(extraDetailsForm.destinationTruckingRequired).toLowerCase() === "no"}
-                                    onChange={(e) =>
-                                      setExtraDetailsForm((p) => ({
-                                        ...p,
-                                        destinationTruckingDeliveryLocation: {
-                                          ...p.destinationTruckingDeliveryLocation,
-                                          address: e.target.value,
-                                        },
-                                      }))
-                                    }
-                                    placeholder="Customer warehouse"
-                                  />
-                                </FieldLabel>
-                                <FieldLabel label="City">
-                                  <input
-                                    className={extraInputClass}
-                                    value={extraDetailsForm.destinationTruckingDeliveryLocation.city}
-                                    disabled={String(extraDetailsForm.destinationTruckingRequired).toLowerCase() === "no"}
-                                    onChange={(e) =>
-                                      setExtraDetailsForm((p) => ({
-                                        ...p,
-                                        destinationTruckingDeliveryLocation: {
-                                          ...p.destinationTruckingDeliveryLocation,
-                                          city: e.target.value,
-                                        },
-                                      }))
-                                    }
-                                    placeholder="Long Beach"
-                                  />
-                                </FieldLabel>
-                                <FieldLabel label="State">
-                                  <input
-                                    className={extraInputClass}
-                                    value={extraDetailsForm.destinationTruckingDeliveryLocation.state}
-                                    disabled={String(extraDetailsForm.destinationTruckingRequired).toLowerCase() === "no"}
-                                    onChange={(e) =>
-                                      setExtraDetailsForm((p) => ({
-                                        ...p,
-                                        destinationTruckingDeliveryLocation: {
-                                          ...p.destinationTruckingDeliveryLocation,
-                                          state: e.target.value,
-                                        },
-                                      }))
-                                    }
-                                    placeholder="California"
-                                  />
-                                </FieldLabel>
-                                <FieldLabel label="Zipcode">
-                                  <input
-                                    className={extraInputClass}
-                                    value={extraDetailsForm.destinationTruckingDeliveryLocation.zipcode}
-                                    disabled={String(extraDetailsForm.destinationTruckingRequired).toLowerCase() === "no"}
-                                    onChange={(e) =>
-                                      setExtraDetailsForm((p) => ({
-                                        ...p,
-                                        destinationTruckingDeliveryLocation: {
-                                          ...p.destinationTruckingDeliveryLocation,
-                                          zipcode: e.target.value,
-                                        },
-                                      }))
-                                    }
-                                    placeholder="90802"
-                                  />
-                                </FieldLabel>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </ExtraSection>
-                    </>
-                  )}
+                  <EditableTruckingSection
+                    tone="slate"
+                    title="Destination trucking"
+                    requiredLabel="Destination trucking required"
+                    requiredValue={extraDetailsForm.destinationTruckingRequired}
+                    onRequiredChange={(value) =>
+                      setExtraDetailsForm((p) => ({
+                        ...p,
+                        destinationTruckingRequired: value,
+                        ...(String(value).toLowerCase() === "no"
+                          ? {
+                              destinationTruckingPickupLocation: defaultEmptyTruckingLocation(),
+                              destinationTruckingDeliveryLocation: defaultEmptyTruckingLocation(),
+                            }
+                          : {}),
+                      }))
+                    }
+                    pickupLocation={extraDetailsForm.destinationTruckingPickupLocation}
+                    deliveryLocation={extraDetailsForm.destinationTruckingDeliveryLocation}
+                    onPickupChange={(field, value) =>
+                      setExtraDetailsForm((p) => ({
+                        ...p,
+                        destinationTruckingPickupLocation: {
+                          ...p.destinationTruckingPickupLocation,
+                          [field]: value,
+                        },
+                      }))
+                    }
+                    onDeliveryChange={(field, value) =>
+                      setExtraDetailsForm((p) => ({
+                        ...p,
+                        destinationTruckingDeliveryLocation: {
+                          ...p.destinationTruckingDeliveryLocation,
+                          [field]: value,
+                        },
+                      }))
+                    }
+                    disabled={String(extraDetailsForm.destinationTruckingRequired).toLowerCase() === "no"}
+                    pickupPlaceholders={{
+                      address: "Port terminal yard",
+                      city: "Los Angeles",
+                      state: "California",
+                      zipcode: "90731",
+                    }}
+                    deliveryPlaceholders={{
+                      address: "Customer warehouse",
+                      city: "Long Beach",
+                      state: "California",
+                      zipcode: "90802",
+                    }}
+                  />
 
                   <ExtraSection tone="amber" icon={Clock3} title="Schedule & timing">
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -2806,6 +2549,124 @@ function FieldLabel({ label, required = false, className = "", hint, children })
       </label>
       {hint ? <p className="text-xs text-slate-500 mb-2">{hint}</p> : null}
       {children}
+    </div>
+  );
+}
+
+function EditableTruckingSection({
+  tone,
+  title,
+  requiredLabel,
+  requiredValue,
+  onRequiredChange,
+  pickupLocation,
+  deliveryLocation,
+  onPickupChange,
+  onDeliveryChange,
+  disabled,
+  pickupPlaceholders,
+  deliveryPlaceholders,
+}) {
+  const toneMap = {
+    amber: {
+      cardBorder: "border-amber-100",
+      cardHeading: "text-amber-900",
+    },
+    slate: {
+      cardBorder: "border-slate-200",
+      cardHeading: "text-slate-900",
+    },
+  };
+  const currentTone = toneMap[tone] || toneMap.slate;
+
+  return (
+    <ExtraSection tone={tone} icon={Truck} title={title}>
+      <div className="grid grid-cols-1 gap-4">
+        <FieldLabel label={requiredLabel}>
+          <SearchableSelect
+            value={requiredValue}
+            onChange={onRequiredChange}
+            options={YES_NO_SEARCH_OPTIONS}
+            placeholder="Select..."
+            className="w-full"
+            compact
+          />
+        </FieldLabel>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <TruckingLocationCard
+            title="Pickup location"
+            borderClass={currentTone.cardBorder}
+            headingClass={currentTone.cardHeading}
+            location={pickupLocation}
+            disabled={disabled}
+            onChange={onPickupChange}
+            placeholders={pickupPlaceholders}
+          />
+          <TruckingLocationCard
+            title="Delivery location"
+            borderClass={currentTone.cardBorder}
+            headingClass={currentTone.cardHeading}
+            location={deliveryLocation}
+            disabled={disabled}
+            onChange={onDeliveryChange}
+            placeholders={deliveryPlaceholders}
+          />
+        </div>
+      </div>
+    </ExtraSection>
+  );
+}
+
+function TruckingLocationCard({
+  title,
+  borderClass,
+  headingClass,
+  location,
+  disabled,
+  onChange,
+  placeholders,
+}) {
+  return (
+    <div className={`rounded-xl border bg-white p-4 ${borderClass}`}>
+      <h5 className={`mb-3 text-sm font-semibold ${headingClass}`}>{title}</h5>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <FieldLabel label="Address" className="md:col-span-3">
+          <input
+            className={extraInputClass}
+            value={location.address}
+            disabled={disabled}
+            onChange={(e) => onChange("address", e.target.value)}
+            placeholder={placeholders.address}
+          />
+        </FieldLabel>
+        <FieldLabel label="City">
+          <input
+            className={extraInputClass}
+            value={location.city}
+            disabled={disabled}
+            onChange={(e) => onChange("city", e.target.value)}
+            placeholder={placeholders.city}
+          />
+        </FieldLabel>
+        <FieldLabel label="State">
+          <input
+            className={extraInputClass}
+            value={location.state}
+            disabled={disabled}
+            onChange={(e) => onChange("state", e.target.value)}
+            placeholder={placeholders.state}
+          />
+        </FieldLabel>
+        <FieldLabel label="Zipcode">
+          <input
+            className={extraInputClass}
+            value={location.zipcode}
+            disabled={disabled}
+            onChange={(e) => onChange("zipcode", e.target.value)}
+            placeholder={placeholders.zipcode}
+          />
+        </FieldLabel>
+      </div>
     </div>
   );
 }
