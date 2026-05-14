@@ -906,11 +906,9 @@ function ChargeCalculatorSection({
 }
 
 /**
- * Operation team: submit/update SSL rate quote.
+ * Operation team: create a new SSL rate quote, or edit one only when explicitly passed.
  */
 export function GiveRateModal({ open, onClose, requestId, requestData, authHeaders, onSuccess, initialQuote = null }) {
-  const [existingQuote, setExistingQuote] = useState(null);
-  const [loadingExistingQuote, setLoadingExistingQuote] = useState(false);
   const [selectedSslValue, setSelectedSslValue] = useState("");
   const [sslOptions, setSslOptions] = useState([]);
   const [sslLoading, setSslLoading] = useState(false);
@@ -922,7 +920,7 @@ export function GiveRateModal({ open, onClose, requestId, requestData, authHeade
   const [truckingLineItems, setTruckingLineItems] = useState(defaultTruckingLineItems);
   const [submitting, setSubmitting] = useState(false);
   const hasTruckingRequest = isYesValue(requestData?.truckingRequired);
-  const activeQuote = initialQuote || existingQuote;
+  const activeQuote = initialQuote;
   const isEditMode = Boolean(activeQuote?._id);
 
   const totalFromLines = useMemo(() => calculateLineItemsTotal(lineItems), [lineItems]);
@@ -936,46 +934,6 @@ export function GiveRateModal({ open, onClose, requestId, requestData, authHeade
     () => sslOptions.find((option) => option.value === selectedSslValue)?.meta || null,
     [sslOptions, selectedSslValue],
   );
-
-  useEffect(() => {
-    if (!open) return;
-    if (initialQuote?._id) {
-      setExistingQuote(null);
-      setLoadingExistingQuote(false);
-      return;
-    }
-    if (!requestId) {
-      setExistingQuote(null);
-      setLoadingExistingQuote(false);
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      setLoadingExistingQuote(true);
-      try {
-        const res = await axios.get(
-          `${API_CONFIG.BASE_URL}/api/v1/exporter-rate-requst/${requestId}/operation-ssl-rates`,
-          { headers: { ...authHeaders } },
-        );
-        if (cancelled) return;
-        const list = Array.isArray(res.data?.data) ? res.data.data : [];
-        const sorted = [...list].sort((a, b) => {
-          const ta = new Date(a?.createdAt || 0).getTime();
-          const tb = new Date(b?.createdAt || 0).getTime();
-          return tb - ta;
-        });
-        setExistingQuote(sorted[0] || null);
-      } catch (err) {
-        if (cancelled) return;
-        setExistingQuote(null);
-      } finally {
-        if (!cancelled) setLoadingExistingQuote(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [open, requestId, authHeaders, initialQuote]);
 
   useEffect(() => {
     if (!open) return;
@@ -1161,9 +1119,6 @@ export function GiveRateModal({ open, onClose, requestId, requestData, authHeade
           <div>
             <h3 className="text-lg font-semibold">{isEditMode ? "Edit rate (SSL)" : "Give rate (SSL)"}</h3>
             <p className="text-xs text-slate-300">Request: {requestId}</p>
-            {loadingExistingQuote && !initialQuote && (
-              <p className="mt-1 text-[11px] text-slate-300">Loading saved SSL quote…</p>
-            )}
           </div>
           <button type="button" disabled={submitting} className="text-2xl text-white/80 hover:text-white" onClick={onClose}>
             ×
