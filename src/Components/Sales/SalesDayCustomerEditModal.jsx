@@ -179,8 +179,8 @@ export default function SalesDayCustomerEditModal({ open, customer, onClose, onS
                       value={form.remark === 'OLD' ? 'OLD' : 'NEW'}
                       onChange={(e) => onChange('remark', e.target.value)}
                     >
-                      <option value="NEW">NEW (dedupe on company name)</option>
-                      <option value="OLD">OLD (allow duplicate company)</option>
+                      <option value="NEW">NEW </option>
+                      <option value="OLD">Follow Up</option>
                     </select>
                     <p className="mt-1.5 text-xs text-gray-500">
                       Changing to NEW may return 409 if another non-OLD import already uses this company name.
