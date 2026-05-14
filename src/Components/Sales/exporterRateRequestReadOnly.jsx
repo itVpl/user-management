@@ -1,11 +1,23 @@
 /**
  * Read-only rate request detail UI + formatters shared by ExporterRateRequestWorkflow and AllExporterRR.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import alertify from "alertifyjs";
 import "alertifyjs/build/css/alertify.css";
-import { FileText, Paperclip, Ship, ClipboardList, Plus, Trash2, Banknote, Truck } from "lucide-react";
+import {
+  FileText,
+  Paperclip,
+  Ship,
+  ClipboardList,
+  Plus,
+  Trash2,
+  Banknote,
+  Truck,
+  MessageSquareText,
+  RefreshCw,
+  SendHorizontal,
+} from "lucide-react";
 import API_CONFIG from "../../config/api.js";
 import { HS_CODE_OPTIONS } from "../../data/hsCodeOptions.js";
 import SearchableSelect from "../Dashboard/SearchableSelect.jsx";
@@ -180,6 +192,236 @@ export const formatStatusLabel = (value) => {
   return STATUS_LABELS[value] || value.replaceAll("_", " ").replace(/\b\w/g, (c) => c.toUpperCase());
 };
 
+function normalizeQuoteDecisionStatus(value) {
+  const raw = String(value ?? "").trim().toLowerCase();
+  if (!raw) return "pending";
+  if (raw.includes("accept") || raw === "approved") return "accepted";
+  if (raw.includes("reject") || raw === "declined") return "rejected";
+  if (raw.includes("negotiat") || raw.includes("counter")) return "negotiate";
+  return raw;
+}
+
+function getQuoteDecisionMeta(value) {
+  const normalized = normalizeQuoteDecisionStatus(value);
+  if (normalized === "accepted") {
+    return {
+      value: normalized,
+      label: "Accepted",
+      badgeClass: "border-green-200 bg-green-50 text-green-700",
+    };
+  }
+  if (normalized === "rejected") {
+    return {
+      value: normalized,
+      label: "Rejected",
+      badgeClass: "border-red-200 bg-red-50 text-red-700",
+    };
+  }
+  if (normalized === "negotiate") {
+    return {
+      value: normalized,
+      label: "Negotiate",
+      badgeClass: "border-amber-200 bg-amber-50 text-amber-700",
+    };
+  }
+  if (normalized === "pending") {
+    return {
+      value: normalized,
+      label: "Pending",
+      badgeClass: "border-slate-200 bg-slate-50 text-slate-700",
+    };
+  }
+  return {
+    value: normalized,
+    label: formatStatusLabel(normalized),
+    badgeClass: "border-slate-200 bg-slate-50 text-slate-700",
+  };
+}
+
+function getTimeValue(value) {
+  const ms = new Date(value || 0).getTime();
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+function sortQuotesByCreatedAt(list) {
+  return [...list].sort((a, b) => getTimeValue(b?.createdAt) - getTimeValue(a?.createdAt));
+}
+
+function resolveNegotiationSide(entry) {
+  if (!entry || typeof entry !== "object") return "external";
+  if (entry.isOwnMessage || entry.isMine || entry.sentByCurrentUser) return "internal";
+  const authorKind = String(entry.authorKind || "").trim().toLowerCase();
+  if (authorKind === "employee") return "internal";
+  if (authorKind === "agent_customer" || authorKind === "exporter" || authorKind === "customer") return "external";
+  const hints = [
+    entry.authorKind,
+    entry.by,
+    entry.role,
+    entry.senderType,
+    entry.senderRole,
+    entry.from,
+    entry.fromType,
+    entry.actorType,
+    entry.createdByType,
+    entry.messageBy,
+    entry.party,
+    entry.side,
+    entry.senderName,
+    entry.sender?.role,
+    entry.sender?.type,
+    entry.sender?.name,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  if (
+    hints.includes("operation") ||
+    hints.includes("ops") ||
+    hints.includes("inhouse") ||
+    hints.includes("internal") ||
+    hints.includes("sales") ||
+    hints.includes("ssl") ||
+    hints.includes("team") ||
+    hints.includes("employee")
+  ) {
+    return "internal";
+  }
+  if (
+    hints.includes("exporter") ||
+    hints.includes("customer") ||
+    hints.includes("client") ||
+    hints.includes("shipper") ||
+    hints.includes("external")
+  ) {
+    return "external";
+  }
+  return "external";
+}
+
+function normalizeNegotiationMessage(entry, index = 0) {
+  if (entry == null) return null;
+  const rawText =
+    typeof entry === "string"
+      ? entry
+      : entry.message ??
+        entry.text ??
+        entry.content ??
+        entry.body ??
+        entry.note ??
+        entry.comment ??
+        entry.latestMessage ??
+        "";
+  const message = String(rawText || "").trim();
+  if (!message) return null;
+  const side =
+    typeof entry === "object" && entry != null ? resolveNegotiationSide(entry) : "external";
+  const senderLabel =
+    typeof entry === "object" && entry != null
+      ? String(
+          entry.senderName ||
+            entry.sender?.name ||
+            entry.sender?.employeeName ||
+            entry.createdByName ||
+            entry.name ||
+            entry.by ||
+            (String(entry.authorKind || "").trim().toLowerCase() === "employee"
+              ? "You"
+              : String(entry.authorKind || "").trim().toLowerCase() === "agent_customer"
+                ? "Exporter"
+                : "") ||
+            (side === "internal" ? "You" : "Exporter"),
+        ).trim()
+      : side === "internal"
+        ? "You"
+        : "Exporter";
+  const atSource =
+    typeof entry === "object" && entry != null
+      ? entry.at || entry.createdAt || entry.updatedAt || entry.sentAt || entry.timestamp || entry.time
+      : null;
+  const at =
+    atSource && Number.isFinite(new Date(atSource).getTime())
+      ? new Date(atSource).toISOString()
+      : new Date(Date.now() + index).toISOString();
+  const rateSource =
+    typeof entry === "object" && entry != null
+      ? entry.rate ?? entry.counterRate ?? entry.offeredRate ?? entry.quotedRate ?? entry.amount
+      : null;
+  const numericRate = Number(rateSource);
+  return {
+    _id:
+      (typeof entry === "object" && entry != null && (entry._id || entry.id)) ||
+      `${side}-${index}-${at}`,
+    message,
+    at,
+    side,
+    senderLabel,
+    rate: Number.isFinite(numericRate) ? numericRate : null,
+    pending: Boolean(typeof entry === "object" && entry != null && entry.pending),
+  };
+}
+
+function sortNegotiationMessages(list) {
+  return [...list].sort((a, b) => getTimeValue(a?.at) - getTimeValue(b?.at));
+}
+
+function createClientMessageId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `msg-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function extractNegotiationMessages(quote) {
+  if (!quote || typeof quote !== "object") return [];
+  const rawList =
+    quote.negotiationHistory ||
+    quote.negotiationMessages ||
+    quote.negotiations ||
+    quote.negotiationThread ||
+    quote.thread ||
+    quote.messages ||
+    quote.chatMessages ||
+    quote.negotiation?.history ||
+    quote.negotiation?.messages ||
+    quote.negotiation?.thread ||
+    quote.messageThread ||
+    [];
+  if (!Array.isArray(rawList)) return [];
+  return sortNegotiationMessages(
+    rawList
+      .map((entry, index) => normalizeNegotiationMessage(entry, index))
+      .filter(Boolean),
+  );
+}
+
+function extractUpdatedQuoteFromPayload(payload, quoteId) {
+  const directCandidates = [
+    payload?.data,
+    payload?.quote,
+    payload?.updatedQuote,
+    payload?.rateQuote,
+    payload?.operationSslRate,
+    payload?.negotiation?.quote,
+    payload?.data?.quote,
+    payload?.data?.updatedQuote,
+    payload?.data?.rateQuote,
+    payload?.data?.operationSslRate,
+    payload?.data?.negotiation?.quote,
+  ];
+  for (const candidate of directCandidates) {
+    if (candidate && typeof candidate === "object" && !Array.isArray(candidate)) {
+      if (!quoteId || candidate._id === quoteId || candidate.id === quoteId) return candidate;
+    }
+  }
+  const collections = [payload?.data, payload?.quotes, payload?.data?.quotes, payload?.data?.items];
+  for (const collection of collections) {
+    if (!Array.isArray(collection)) continue;
+    const match = collection.find((item) => item && typeof item === "object" && (item._id === quoteId || item.id === quoteId));
+    if (match) return match;
+  }
+  return null;
+}
+
 export function getAttachmentUrl(attachment) {
   if (!attachment) return "";
   const raw =
@@ -311,12 +553,14 @@ function OperationSslRatesSection({ requestId, requestData, allowEdit = true }) 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(null);
   const [editingQuote, setEditingQuote] = useState(null);
+  const [negotiatingQuote, setNegotiatingQuote] = useState(null);
+  const modalAuthHeaders = useMemo(() => buildAuthHeadersFromStorage(), []);
 
   const loadRows = useCallback(async () => {
     if (!requestId) {
       setRows([]);
       setLoading(false);
-      return;
+      return [];
     }
     setLoading(true);
     setErr(null);
@@ -326,15 +570,13 @@ function OperationSslRatesSection({ requestId, requestData, allowEdit = true }) 
         { headers: buildAuthHeadersFromStorage() },
       );
       const list = Array.isArray(res.data?.data) ? res.data.data : [];
-      const sorted = [...list].sort((a, b) => {
-        const ta = new Date(a?.createdAt || 0).getTime();
-        const tb = new Date(b?.createdAt || 0).getTime();
-        return tb - ta;
-      });
+      const sorted = sortQuotesByCreatedAt(list);
       setRows(sorted);
+      return sorted;
     } catch (e) {
       setErr(e.response?.data?.message || e.message || "Could not load SSL rates");
       setRows([]);
+      return [];
     } finally {
       setLoading(false);
     }
@@ -353,6 +595,17 @@ function OperationSslRatesSection({ requestId, requestData, allowEdit = true }) 
     return parts.length ? parts.join(" · ") : "N/A";
   };
 
+  const handleQuoteUpdated = useCallback((updatedQuote) => {
+    if (!updatedQuote?._id) return;
+    setRows((prev) => {
+      const next = prev.some((row) => row._id === updatedQuote._id)
+        ? prev.map((row) => (row._id === updatedQuote._id ? { ...row, ...updatedQuote } : row))
+        : [updatedQuote, ...prev];
+      return sortQuotesByCreatedAt(next);
+    });
+    setNegotiatingQuote((prev) => (prev?._id === updatedQuote._id ? { ...prev, ...updatedQuote } : prev));
+  }, []);
+
   return (
     <div className="rounded-2xl border border-teal-200 bg-gradient-to-br from-teal-50/90 via-white to-cyan-50/40 p-5 shadow-sm">
       <h4 className="mb-4 flex items-center gap-2 text-sm font-semibold text-teal-950">
@@ -366,7 +619,10 @@ function OperationSslRatesSection({ requestId, requestData, allowEdit = true }) 
       )}
       {!loading && !err && rows.length > 0 && (
         <div className="space-y-4">
-          {rows.map((r) => (
+          {rows.map((r) => {
+            const decisionMeta = getQuoteDecisionMeta(r.decisionStatus || r.quoteDecisionStatus || r.negotiationStatus);
+            const isRejectedQuote = decisionMeta.value === "rejected";
+            return (
             <div key={r._id} className="rounded-xl border border-teal-100 bg-white p-4 shadow-sm">
               <div className="mb-3 flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 pb-3">
                 <div>
@@ -387,15 +643,39 @@ function OperationSslRatesSection({ requestId, requestData, allowEdit = true }) 
                     Added {formatDateTime(r.createdAt)}
                     {r.addedBy ? ` · ${fmtAddedBy(r.addedBy)}` : ""}
                   </p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-medium text-slate-500">Decision status</span>
+                    <span
+                      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${decisionMeta.badgeClass}`}
+                    >
+                      {decisionMeta.label}
+                    </span>
+                  </div>
                 </div>
                 {allowEdit && (
-                  <button
-                    type="button"
-                    onClick={() => setEditingQuote(r)}
-                    className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-100"
-                  >
-                    Edit quote
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={isRejectedQuote}
+                      onClick={() => setNegotiatingQuote(r)}
+                      className={`inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                        isRejectedQuote
+                          ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400"
+                          : "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                      }`}
+                      title={isRejectedQuote ? "Negotiation is disabled for rejected quotes" : "Open negotiation"}
+                    >
+                      <MessageSquareText size={14} />
+                      Negotiate
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingQuote(r)}
+                      className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-100"
+                    >
+                      Edit quote
+                    </button>
+                  </div>
                 )}
               </div>
               <div className="mb-3 grid grid-cols-1 gap-2 text-sm md:grid-cols-3">
@@ -418,7 +698,8 @@ function OperationSslRatesSection({ requestId, requestData, allowEdit = true }) 
                 />
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
       {allowEdit && (
@@ -426,7 +707,7 @@ function OperationSslRatesSection({ requestId, requestData, allowEdit = true }) 
           open={Boolean(editingQuote)}
           requestId={requestId || ""}
           requestData={requestData}
-          authHeaders={buildAuthHeadersFromStorage()}
+          authHeaders={modalAuthHeaders}
           initialQuote={editingQuote}
           onClose={() => setEditingQuote(null)}
           onSuccess={async () => {
@@ -434,6 +715,355 @@ function OperationSslRatesSection({ requestId, requestData, allowEdit = true }) 
           }}
         />
       )}
+      <QuoteNegotiationModal
+        open={Boolean(negotiatingQuote)}
+        requestId={requestId || ""}
+        requestData={requestData}
+        quote={negotiatingQuote}
+        authHeaders={modalAuthHeaders}
+        onClose={() => setNegotiatingQuote(null)}
+        onQuoteUpdated={handleQuoteUpdated}
+      />
+    </div>
+  );
+}
+
+function QuoteNegotiationModal({ open, onClose, requestId, requestData, quote, authHeaders, onQuoteUpdated }) {
+  const [message, setMessage] = useState("");
+  const [messages, setMessages] = useState([]);
+  const [messagesLoading, setMessagesLoading] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const chatEndRef = useRef(null);
+  const initializedThreadRef = useRef("");
+  const authHeaderKey = authHeaders?.Authorization || "";
+  const requestHeaders = useMemo(() => (authHeaderKey ? { Authorization: authHeaderKey } : {}), [authHeaderKey]);
+  const threadKey = `${requestId || ""}:${quote?._id || ""}`;
+
+  useEffect(() => {
+    if (!open) return;
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [open, messages]);
+
+  const loadMessages = useCallback(
+    async ({ silent = false } = {}) => {
+      if (!requestId || !quote?._id) return [];
+      if (!silent) setMessagesLoading(true);
+      try {
+        const res = await axios.get(
+          `${API_CONFIG.BASE_URL}/api/v1/exporter-rate-requst/${requestId}/operation-ssl-rates/${quote._id}/messages`,
+          { headers: requestHeaders },
+        );
+        const list = Array.isArray(res.data?.data) ? res.data.data : [];
+        const normalized = sortNegotiationMessages(
+          list
+            .map((entry, index) => normalizeNegotiationMessage(entry, index))
+            .filter(Boolean),
+        );
+        setMessages(normalized);
+        return normalized;
+      } catch (err) {
+        if (!silent) {
+          alertify.error(err.response?.data?.message || "Failed to load negotiation messages");
+        }
+        return [];
+      } finally {
+        if (!silent) setMessagesLoading(false);
+      }
+    },
+    [requestId, quote?._id, requestHeaders],
+  );
+
+  useEffect(() => {
+    if (!open) {
+      initializedThreadRef.current = "";
+      return;
+    }
+    if (!quote?._id) return;
+    if (initializedThreadRef.current === threadKey) return;
+    initializedThreadRef.current = threadKey;
+    setMessage("");
+    setMessages([]);
+    void loadMessages();
+  }, [open, quote?._id, threadKey, loadMessages]);
+
+  const refreshQuote = useCallback(
+    async ({ silent = false } = {}) => {
+      if (!requestId || !quote?._id) return null;
+      if (!silent) setRefreshing(true);
+      try {
+        const res = await axios.get(
+          `${API_CONFIG.BASE_URL}/api/v1/exporter-rate-requst/${requestId}/operation-ssl-rates`,
+          { headers: requestHeaders },
+        );
+        const list = Array.isArray(res.data?.data) ? res.data.data : [];
+        const updatedQuote = list.find((item) => item?._id === quote._id) || null;
+        if (updatedQuote) {
+          onQuoteUpdated?.(updatedQuote);
+        }
+        return updatedQuote;
+      } catch (err) {
+        if (!silent) {
+          alertify.error(err.response?.data?.message || "Failed to refresh negotiation thread");
+        }
+        return null;
+      } finally {
+        if (!silent) setRefreshing(false);
+      }
+    },
+    [requestId, quote?._id, requestHeaders, onQuoteUpdated],
+  );
+
+  useEffect(() => {
+    if (!open || !quote?._id || sending) return undefined;
+    const intervalId = setInterval(() => {
+      void loadMessages({ silent: true });
+      void refreshQuote({ silent: true });
+    }, 5000);
+    return () => clearInterval(intervalId);
+  }, [open, quote?._id, sending, loadMessages, refreshQuote]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const trimmed = String(message || "").trim();
+    if (!trimmed) {
+      alertify.error("Type your message first");
+      return;
+    }
+    if (!requestId || !quote?._id) {
+      alertify.error("Missing request or quote details");
+      return;
+    }
+    const clientMessageId = createClientMessageId();
+    const optimisticMessage = {
+      _id: clientMessageId,
+      message: trimmed,
+      at: new Date().toISOString(),
+      side: "internal",
+      senderLabel: "You",
+      pending: true,
+      rate: null,
+    };
+    setSending(true);
+    setMessages((prev) => sortNegotiationMessages([...prev, optimisticMessage]));
+    try {
+      const res = await axios.post(
+        `${API_CONFIG.BASE_URL}/api/v1/exporter-rate-requst/${requestId}/operation-ssl-rates/${quote._id}/messages`,
+        { body: trimmed, clientMessageId },
+        { headers: { ...requestHeaders, "Content-Type": "application/json" } },
+      );
+      setMessage("");
+      const createdMessage = normalizeNegotiationMessage(res.data?.data);
+      if (createdMessage) {
+        setMessages((prev) =>
+          sortNegotiationMessages(
+            prev.map((entry) => (entry._id === optimisticMessage._id ? { ...createdMessage, pending: false } : entry)),
+          ),
+        );
+      } else {
+        const refreshedMessages = await loadMessages({ silent: true });
+        if (refreshedMessages.length === 0) {
+          setMessages((prev) =>
+            prev.map((entry) => (entry._id === optimisticMessage._id ? { ...entry, pending: false } : entry)),
+          );
+        }
+      }
+      alertify.success(res.data?.message || "Message sent");
+    } catch (err) {
+      setMessages((prev) => prev.filter((entry) => entry._id !== optimisticMessage._id));
+      alertify.error(err.response?.data?.message || "Failed to send message");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  if (!open || !quote) return null;
+
+  const quoteAmount =
+    quote.totalAmount != null ? `${quote.currency || ""} ${Number(quote.totalAmount).toLocaleString()}`.trim() : "N/A";
+  const decisionMeta = getQuoteDecisionMeta(quote.decisionStatus || quote.quoteDecisionStatus || quote.negotiationStatus);
+  const isRejectedQuote = decisionMeta.value === "rejected";
+  const shipmentLabel = requestData?.shipmentType || requestData?.cargoType || "Shipment";
+  const shipmentSummaryItems = [
+    ["Request ID", requestData?.requestId || requestId],
+    ["Origin", requestData?.originPort || "N/A"],
+    ["Destination", requestData?.destinationPort || "N/A"],
+    ["Cargo type", requestData?.cargoType || shipmentLabel],
+    ["Container", requestData?.containerType || "N/A"],
+    ["Weight / Volume", requestData?.weightOrVolume || "N/A"],
+  ];
+  const offerSummaryItems = [
+    ["Provider", quote.sslName || "N/A"],
+    ["Offered rate", quoteAmount],
+    ["Decision status", decisionMeta.label],
+    ["Transit time", quote.transitDays != null ? `${quote.transitDays} days` : "N/A"],
+    ["Rate valid till", formatDateOnly(quote.validityDate) ?? "N/A"],
+    ["Remarks", quote.remarks || "N/A"],
+  ];
+
+  return (
+    <div
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+      onClick={() => !sending && onClose()}
+    >
+      <div
+        className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl lg:flex-row"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="flex items-start justify-between gap-4 border-b border-slate-200 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 px-5 py-4 text-white">
+            <div className="min-w-0">
+              <h3 className="truncate text-lg font-semibold">Negotiate Rates</h3>
+              <p className="mt-1 truncate text-xs text-blue-100">
+                {quote.sslName || "Shipping line"} · Request {requestData?.requestId || requestId}
+              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <span className="text-xs text-blue-100">
+                Current offered rate: {quoteAmount} · Valid till {formatDateOnly(quote.validityDate) ?? "N/A"}
+                </span>
+                <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${decisionMeta.badgeClass}`}>
+                  {decisionMeta.label}
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  void refreshQuote();
+                  void loadMessages();
+                }}
+                disabled={refreshing || sending}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/30 text-white transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                title="Refresh messages"
+              >
+                <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={sending}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/30 text-xl text-white transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto bg-gradient-to-br from-slate-50 via-white to-blue-50 p-4">
+            {messagesLoading ? (
+              <div className="flex h-full min-h-[280px] items-center justify-center rounded-2xl border border-slate-200 bg-white/80 p-6 text-center">
+                <div>
+                  <RefreshCw size={30} className="mx-auto mb-3 animate-spin text-slate-400" />
+                  <p className="text-sm font-medium text-slate-700">Loading messages...</p>
+                  <p className="mt-1 text-xs text-slate-500">Fetching the latest negotiation thread.</p>
+                </div>
+              </div>
+            ) : messages.length === 0 ? (
+              <div className="flex h-full min-h-[280px] items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white/80 p-6 text-center">
+                <div>
+                  <MessageSquareText size={36} className="mx-auto mb-3 text-slate-400" />
+                  <p className="text-sm font-medium text-slate-700">No negotiation messages yet</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {isRejectedQuote ? "This quote has been rejected, so negotiation is locked." : "Type your message below to start the conversation."}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {messages.map((entry) => {
+                  const isOwn = entry.side === "internal";
+                  return (
+                    <div
+                      key={entry._id}
+                      className={`flex flex-col ${isOwn ? "items-end" : "items-start"}`}
+                    >
+                      <p className="mb-1 px-1 text-[11px] text-slate-500">
+                        {isOwn ? "You" : entry.senderLabel || "Exporter"}
+                      </p>
+                      <div
+                        className={`max-w-[86%] rounded-2xl px-4 py-3 shadow-sm ${
+                          isOwn
+                            ? "rounded-br-md bg-gradient-to-r from-blue-600 to-indigo-600 text-white"
+                            : "rounded-bl-md border border-slate-200 bg-white text-slate-800"
+                        }`}
+                      >
+                        <p className="whitespace-pre-wrap text-sm leading-relaxed">{entry.message}</p>
+                        <p className={`mt-2 text-[11px] ${isOwn ? "text-blue-100/90" : "text-slate-500"}`}>
+                          {formatDateTime(entry.at)}
+                          {entry.pending ? " · Sending..." : ""}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+                <div ref={chatEndRef} />
+              </div>
+            )}
+          </div>
+
+          <form onSubmit={handleSubmit} className="border-t border-slate-200 bg-white p-4">
+            {isRejectedQuote && (
+              <div className="mb-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                This SSL quote is rejected. Negotiation messages are disabled for rejected quotes.
+              </div>
+            )}
+            <div className="flex items-end gap-3">
+              <textarea
+                rows={2}
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                placeholder="Type your message..."
+                disabled={sending || isRejectedQuote}
+                className="min-h-[52px] flex-1 resize-none rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
+              />
+              <button
+                type="submit"
+                disabled={sending || isRejectedQuote || !String(message).trim()}
+                className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white transition-colors hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+                title="Send negotiation message"
+              >
+                {sending ? <RefreshCw size={18} className="animate-spin" /> : <SendHorizontal size={18} />}
+              </button>
+            </div>
+            <p className="mt-2 text-[11px] text-slate-500">
+              {isRejectedQuote
+                ? "You can review the previous conversation here, but no new negotiation message can be sent."
+                : "All negotiation messages for this quote are tracked under the selected SSL provider rate."}
+            </p>
+          </form>
+        </div>
+
+        <aside className="w-full shrink-0 border-t border-slate-200 bg-slate-50/80 p-4 lg:w-[320px] lg:border-l lg:border-t-0">
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <h4 className="text-sm font-semibold text-slate-900">Shipment summary</h4>
+              <div className="mt-4 space-y-3 text-sm">
+                {shipmentSummaryItems.map(([label, value]) => (
+                  <div key={label}>
+                    <p className="text-xs font-medium text-slate-500">{label}</p>
+                    <p className="mt-0.5 text-sm font-semibold text-slate-900">{value}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <h4 className="text-sm font-semibold text-slate-900">Offer details</h4>
+              <div className="mt-4 space-y-3 text-sm">
+                {offerSummaryItems.map(([label, value]) => (
+                  <div key={label}>
+                    <p className="text-xs font-medium text-slate-500">{label}</p>
+                    <p className={`mt-0.5 text-sm font-semibold text-slate-900 ${label === "Remarks" ? "whitespace-pre-wrap" : ""}`}>
+                      {value}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </aside>
+      </div>
     </div>
   );
 }
@@ -585,7 +1215,9 @@ export function RateRequestDetailBody({ detail }) {
           <h4 className="mb-2 text-sm font-semibold text-sky-900">Channel / notes</h4>
           <p className="whitespace-pre-wrap text-sm text-slate-800">{detail.channelMessageText}</p>
         </div>
-      )}
+   
+   
+   )}
 
       {Array.isArray(detail.internalNotes) && detail.internalNotes.length > 0 && (
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
