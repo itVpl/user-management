@@ -733,38 +733,20 @@ function RateRequestDetailBody({ detail }) {
           </h4>
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
             {hasOriginTruckingBlock && (
-              <div className="rounded-xl border border-amber-200 bg-white p-4 shadow-sm">
-                <h5 className="mb-3 text-sm font-semibold text-amber-900">Origin trucking</h5>
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <DetailField
-                    label="Pickup location"
-                    value={formatLocationForView(detail.originTruckingPickupLocation) || "-"}
-                    multiline
-                  />
-                  <DetailField
-                    label="Delivery location"
-                    value={formatLocationForView(detail.originTruckingDeliveryLocation) || "-"}
-                    multiline
-                  />
-                </div>
-              </div>
+              <ReadonlyTruckingSectionCard
+                title="Origin trucking"
+                requiredValue={detail.originTruckingRequired}
+                pickupLocation={detail.originTruckingPickupLocation}
+                deliveryLocation={detail.originTruckingDeliveryLocation}
+              />
             )}
             {hasDestinationTruckingBlock && (
-              <div className="rounded-xl border border-amber-200 bg-white p-4 shadow-sm">
-                <h5 className="mb-3 text-sm font-semibold text-amber-900">Destination trucking</h5>
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <DetailField
-                    label="Pickup location"
-                    value={formatLocationForView(detail.destinationTruckingPickupLocation) || "-"}
-                    multiline
-                  />
-                  <DetailField
-                    label="Delivery location"
-                    value={formatLocationForView(detail.destinationTruckingDeliveryLocation) || "-"}
-                    multiline
-                  />
-                </div>
-              </div>
+              <ReadonlyTruckingSectionCard
+                title="Destination trucking"
+                requiredValue={detail.destinationTruckingRequired}
+                pickupLocation={detail.destinationTruckingPickupLocation}
+                deliveryLocation={detail.destinationTruckingDeliveryLocation}
+              />
             )}
           </div>
         </div>
@@ -1212,26 +1194,28 @@ export default function ExporterRateRequestWorkflow() {
 
   const submitExtraDetails = async (e) => {
     e.preventDefault();
-    const originError = validateTruckingSection(
-      extraDetailsForm.originTruckingRequired,
-      extraDetailsForm.originTruckingPickupLocation,
-      extraDetailsForm.originTruckingDeliveryLocation,
-      "Origin trucking",
-    );
-    if (originError) {
-      alertify.error(originError);
-      return;
-    }
+    if (extraDetailsMode === "agent") {
+      const originError = validateTruckingSection(
+        extraDetailsForm.originTruckingRequired,
+        extraDetailsForm.originTruckingPickupLocation,
+        extraDetailsForm.originTruckingDeliveryLocation,
+        "Origin trucking",
+      );
+      if (originError) {
+        alertify.error(originError);
+        return;
+      }
 
-    const destinationError = validateTruckingSection(
-      extraDetailsForm.destinationTruckingRequired,
-      extraDetailsForm.destinationTruckingPickupLocation,
-      extraDetailsForm.destinationTruckingDeliveryLocation,
-      "Destination trucking",
-    );
-    if (destinationError) {
-      alertify.error(destinationError);
-      return;
+      const destinationError = validateTruckingSection(
+        extraDetailsForm.destinationTruckingRequired,
+        extraDetailsForm.destinationTruckingPickupLocation,
+        extraDetailsForm.destinationTruckingDeliveryLocation,
+        "Destination trucking",
+      );
+      if (destinationError) {
+        alertify.error(destinationError);
+        return;
+      }
     }
 
     const payload = buildExtraDetailsPayload(extraDetailsForm);
@@ -1559,6 +1543,13 @@ export default function ExporterRateRequestWorkflow() {
                           >
                             <Eye size={14} /> View
                             <BlinkingUnreadDot count={requestUnreadCount} className="ml-1" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openExtraDetailsModal(item.requestId || item._id, "agent")}
+                            className="px-4 py-1 rounded border border-purple-500 text-purple-500 text-sm font-medium hover:bg-purple-50 transition-colors min-w-[70px] inline-flex items-center justify-center gap-1"
+                          >
+                            <ClipboardList size={14} /> Customs
                           </button>
                         </div>
                       </td>
@@ -2061,109 +2052,113 @@ export default function ExporterRateRequestWorkflow() {
                     </div>
                   </ExtraSection>
 
-                  <EditableTruckingSection
-                    tone="amber"
-                    title="Origin trucking"
-                    requiredLabel="Origin trucking required"
-                    requiredValue={extraDetailsForm.originTruckingRequired}
-                    onRequiredChange={(value) =>
-                      setExtraDetailsForm((p) => ({
-                        ...p,
-                        originTruckingRequired: value,
-                        ...(String(value).toLowerCase() === "no"
-                          ? {
-                              originTruckingPickupLocation: defaultEmptyTruckingLocation(),
-                              originTruckingDeliveryLocation: defaultEmptyTruckingLocation(),
-                            }
-                          : {}),
-                      }))
-                    }
-                    pickupLocation={extraDetailsForm.originTruckingPickupLocation}
-                    deliveryLocation={extraDetailsForm.originTruckingDeliveryLocation}
-                    onPickupChange={(field, value) =>
-                      setExtraDetailsForm((p) => ({
-                        ...p,
-                        originTruckingPickupLocation: {
-                          ...p.originTruckingPickupLocation,
-                          [field]: value,
-                        },
-                      }))
-                    }
-                    onDeliveryChange={(field, value) =>
-                      setExtraDetailsForm((p) => ({
-                        ...p,
-                        originTruckingDeliveryLocation: {
-                          ...p.originTruckingDeliveryLocation,
-                          [field]: value,
-                        },
-                      }))
-                    }
-                    disabled={String(extraDetailsForm.originTruckingRequired).toLowerCase() === "no"}
-                    pickupPlaceholders={{
-                      address: "Updated pickup address",
-                      city: "Gurugram",
-                      state: "Haryana",
-                      zipcode: "122016",
-                    }}
-                    deliveryPlaceholders={{
-                      address: "Updated delivery address",
-                      city: "New Delhi",
-                      state: "Delhi",
-                      zipcode: "110037",
-                    }}
-                  />
+                  {extraDetailsMode === "agent" && (
+                    <>
+                      <EditableTruckingSection
+                        tone="amber"
+                        title="Origin trucking"
+                        requiredLabel="Origin trucking required"
+                        requiredValue={extraDetailsForm.originTruckingRequired}
+                        onRequiredChange={(value) =>
+                          setExtraDetailsForm((p) => ({
+                            ...p,
+                            originTruckingRequired: value,
+                            ...(String(value).toLowerCase() === "no"
+                              ? {
+                                  originTruckingPickupLocation: defaultEmptyTruckingLocation(),
+                                  originTruckingDeliveryLocation: defaultEmptyTruckingLocation(),
+                                }
+                              : {}),
+                          }))
+                        }
+                        pickupLocation={extraDetailsForm.originTruckingPickupLocation}
+                        deliveryLocation={extraDetailsForm.originTruckingDeliveryLocation}
+                        onPickupChange={(field, value) =>
+                          setExtraDetailsForm((p) => ({
+                            ...p,
+                            originTruckingPickupLocation: {
+                              ...p.originTruckingPickupLocation,
+                              [field]: value,
+                            },
+                          }))
+                        }
+                        onDeliveryChange={(field, value) =>
+                          setExtraDetailsForm((p) => ({
+                            ...p,
+                            originTruckingDeliveryLocation: {
+                              ...p.originTruckingDeliveryLocation,
+                              [field]: value,
+                            },
+                          }))
+                        }
+                        disabled={String(extraDetailsForm.originTruckingRequired).toLowerCase() === "no"}
+                        pickupPlaceholders={{
+                          address: "Updated pickup address",
+                          city: "Gurugram",
+                          state: "Haryana",
+                          zipcode: "122016",
+                        }}
+                        deliveryPlaceholders={{
+                          address: "Updated delivery address",
+                          city: "New Delhi",
+                          state: "Delhi",
+                          zipcode: "110037",
+                        }}
+                      />
 
-                  <EditableTruckingSection
-                    tone="slate"
-                    title="Destination trucking"
-                    requiredLabel="Destination trucking required"
-                    requiredValue={extraDetailsForm.destinationTruckingRequired}
-                    onRequiredChange={(value) =>
-                      setExtraDetailsForm((p) => ({
-                        ...p,
-                        destinationTruckingRequired: value,
-                        ...(String(value).toLowerCase() === "no"
-                          ? {
-                              destinationTruckingPickupLocation: defaultEmptyTruckingLocation(),
-                              destinationTruckingDeliveryLocation: defaultEmptyTruckingLocation(),
-                            }
-                          : {}),
-                      }))
-                    }
-                    pickupLocation={extraDetailsForm.destinationTruckingPickupLocation}
-                    deliveryLocation={extraDetailsForm.destinationTruckingDeliveryLocation}
-                    onPickupChange={(field, value) =>
-                      setExtraDetailsForm((p) => ({
-                        ...p,
-                        destinationTruckingPickupLocation: {
-                          ...p.destinationTruckingPickupLocation,
-                          [field]: value,
-                        },
-                      }))
-                    }
-                    onDeliveryChange={(field, value) =>
-                      setExtraDetailsForm((p) => ({
-                        ...p,
-                        destinationTruckingDeliveryLocation: {
-                          ...p.destinationTruckingDeliveryLocation,
-                          [field]: value,
-                        },
-                      }))
-                    }
-                    disabled={String(extraDetailsForm.destinationTruckingRequired).toLowerCase() === "no"}
-                    pickupPlaceholders={{
-                      address: "Port terminal yard",
-                      city: "Los Angeles",
-                      state: "California",
-                      zipcode: "90731",
-                    }}
-                    deliveryPlaceholders={{
-                      address: "Customer warehouse",
-                      city: "Long Beach",
-                      state: "California",
-                      zipcode: "90802",
-                    }}
-                  />
+                      <EditableTruckingSection
+                        tone="slate"
+                        title="Destination trucking"
+                        requiredLabel="Destination trucking required"
+                        requiredValue={extraDetailsForm.destinationTruckingRequired}
+                        onRequiredChange={(value) =>
+                          setExtraDetailsForm((p) => ({
+                            ...p,
+                            destinationTruckingRequired: value,
+                            ...(String(value).toLowerCase() === "no"
+                              ? {
+                                  destinationTruckingPickupLocation: defaultEmptyTruckingLocation(),
+                                  destinationTruckingDeliveryLocation: defaultEmptyTruckingLocation(),
+                                }
+                              : {}),
+                          }))
+                        }
+                        pickupLocation={extraDetailsForm.destinationTruckingPickupLocation}
+                        deliveryLocation={extraDetailsForm.destinationTruckingDeliveryLocation}
+                        onPickupChange={(field, value) =>
+                          setExtraDetailsForm((p) => ({
+                            ...p,
+                            destinationTruckingPickupLocation: {
+                              ...p.destinationTruckingPickupLocation,
+                              [field]: value,
+                            },
+                          }))
+                        }
+                        onDeliveryChange={(field, value) =>
+                          setExtraDetailsForm((p) => ({
+                            ...p,
+                            destinationTruckingDeliveryLocation: {
+                              ...p.destinationTruckingDeliveryLocation,
+                              [field]: value,
+                            },
+                          }))
+                        }
+                        disabled={String(extraDetailsForm.destinationTruckingRequired).toLowerCase() === "no"}
+                        pickupPlaceholders={{
+                          address: "Port terminal yard",
+                          city: "Los Angeles",
+                          state: "California",
+                          zipcode: "90731",
+                        }}
+                        deliveryPlaceholders={{
+                          address: "Customer warehouse",
+                          city: "Long Beach",
+                          state: "California",
+                          zipcode: "90802",
+                        }}
+                      />
+                    </>
+                  )}
 
                   <ExtraSection tone="amber" icon={Clock3} title="Schedule & timing">
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -2316,6 +2311,58 @@ function DetailField({ label, value, multiline }) {
       >
         {display}
       </p>
+    </div>
+  );
+}
+
+function ReadonlyTruckingSectionCard({ title, requiredValue, pickupLocation, deliveryLocation }) {
+  const normalizedRequired = formatYesNoValue(requiredValue) || "No";
+  const shouldShowLocations =
+    normalizedRequired === "Yes" ||
+    formatLocationForView(pickupLocation) ||
+    formatLocationForView(deliveryLocation);
+
+  return (
+    <div className="rounded-xl border border-amber-200 bg-white p-4 shadow-sm">
+      <h5 className="mb-3 text-sm font-semibold text-amber-900">{title}</h5>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <DetailField label="Trucking required" value={normalizedRequired} />
+        {shouldShowLocations && (
+          <div className="md:col-span-2 grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <ReadonlyTruckingLocationBlock title="Pickup location" location={pickupLocation} />
+            <ReadonlyTruckingLocationBlock title="Delivery location" location={deliveryLocation} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ReadonlyTruckingLocationBlock({ title, location }) {
+  const normalizedLocation =
+    location && typeof location === "object"
+      ? {
+          address: String(location.address ?? "").trim(),
+          city: String(location.city ?? "").trim(),
+          state: String(location.state ?? "").trim(),
+          zipcode: getLocationZipcode(location),
+        }
+      : {
+          address: typeof location === "string" ? location.trim() : "",
+          city: "",
+          state: "",
+          zipcode: "",
+        };
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+      <h6 className="mb-3 text-sm font-semibold text-slate-900">{title}</h6>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <DetailField label="Address" value={normalizedLocation.address || "N/A"} />
+        <DetailField label="City" value={normalizedLocation.city || "N/A"} />
+        <DetailField label="State" value={normalizedLocation.state || "N/A"} />
+        <DetailField label="Zipcode" value={normalizedLocation.zipcode || "N/A"} />
+      </div>
     </div>
   );
 }

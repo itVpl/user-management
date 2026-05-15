@@ -172,8 +172,8 @@ export default function AllExporterRR() {
       (row) => row?._id === requestMongoId || (requestNumber && String(row?.requestId || "").trim() === requestNumber),
     );
 
-    if (matchedRow) {
-      openDetail(matchedRow, { quoteId });
+    if (matchedRow?._id) {
+      void openDetailById(matchedRow._id, { quoteId });
     } else if (requestMongoId) {
       void openDetailById(requestMongoId, { quoteId });
     }
@@ -282,7 +282,7 @@ export default function AllExporterRR() {
                       <div className="flex flex-wrap items-center gap-1.5">
                         <button
                           type="button"
-                          onClick={() => openDetail(item)}
+                          onClick={() => void openDetailById(item._id)}
                           className="inline-flex items-center gap-0.5 whitespace-nowrap rounded border border-green-600 px-2 py-0.5 text-xs font-medium text-green-700 transition-colors hover:bg-green-50"
                           title={requestUnreadCount > 0 ? `${requestUnreadCount} unread message${requestUnreadCount === 1 ? "" : "s"} in this request` : "View"}
                         >

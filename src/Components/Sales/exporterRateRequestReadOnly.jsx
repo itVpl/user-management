@@ -14,25 +14,18 @@ import {
   Trash2,
   Banknote,
   Truck,
-  MessageSquareText,
   RefreshCw,
-  SendHorizontal,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 import API_CONFIG from "../../config/api.js";
 import { HS_CODE_OPTIONS } from "../../data/hsCodeOptions.js";
 import SearchableSelect from "../Dashboard/SearchableSelect.jsx";
 import { fetchShippingLineMaster } from "../../services/shippingLineMasterService.js";
-import BlinkingUnreadDot from "../common/BlinkingUnreadDot.jsx";
 import containerS20 from "../../assets/containers/s20.svg";
 import containerS40 from "../../assets/containers/s40.svg";
 import containerHc40 from "../../assets/containers/hc40.svg";
 import containerHc45 from "../../assets/containers/hc45.svg";
-import {
-  EXPORTER_QUOTE_THREAD_READ_EVENT,
-  markExporterQuoteEntriesRead,
-  persistExporterQuoteBellEntries,
-  readExporterQuoteBellEntries,
-} from "./exporterQuoteNotificationUtils.js";
 
 const EXTRA_DETAILS_LABELS = {
   productName: "Product name",
@@ -255,181 +248,6 @@ function sortQuotesByCreatedAt(list) {
   return [...list].sort((a, b) => getTimeValue(b?.createdAt) - getTimeValue(a?.createdAt));
 }
 
-function resolveNegotiationSide(entry) {
-  if (!entry || typeof entry !== "object") return "external";
-  if (entry.isOwnMessage || entry.isMine || entry.sentByCurrentUser) return "internal";
-  const authorKind = String(entry.authorKind || "").trim().toLowerCase();
-  if (authorKind === "employee") return "internal";
-  if (authorKind === "agent_customer" || authorKind === "exporter" || authorKind === "customer") return "external";
-  const hints = [
-    entry.authorKind,
-    entry.by,
-    entry.role,
-    entry.senderType,
-    entry.senderRole,
-    entry.from,
-    entry.fromType,
-    entry.actorType,
-    entry.createdByType,
-    entry.messageBy,
-    entry.party,
-    entry.side,
-    entry.senderName,
-    entry.sender?.role,
-    entry.sender?.type,
-    entry.sender?.name,
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-  if (
-    hints.includes("operation") ||
-    hints.includes("ops") ||
-    hints.includes("inhouse") ||
-    hints.includes("internal") ||
-    hints.includes("sales") ||
-    hints.includes("ssl") ||
-    hints.includes("team") ||
-    hints.includes("employee")
-  ) {
-    return "internal";
-  }
-  if (
-    hints.includes("exporter") ||
-    hints.includes("customer") ||
-    hints.includes("client") ||
-    hints.includes("shipper") ||
-    hints.includes("external")
-  ) {
-    return "external";
-  }
-  return "external";
-}
-
-function normalizeNegotiationMessage(entry, index = 0) {
-  if (entry == null) return null;
-  const rawText =
-    typeof entry === "string"
-      ? entry
-      : entry.message ??
-        entry.text ??
-        entry.content ??
-        entry.body ??
-        entry.note ??
-        entry.comment ??
-        entry.latestMessage ??
-        "";
-  const message = String(rawText || "").trim();
-  if (!message) return null;
-  const side =
-    typeof entry === "object" && entry != null ? resolveNegotiationSide(entry) : "external";
-  const senderLabel =
-    typeof entry === "object" && entry != null
-      ? String(
-          entry.senderName ||
-            entry.sender?.name ||
-            entry.sender?.employeeName ||
-            entry.createdByName ||
-            entry.name ||
-            entry.by ||
-            (String(entry.authorKind || "").trim().toLowerCase() === "employee"
-              ? "You"
-              : String(entry.authorKind || "").trim().toLowerCase() === "agent_customer"
-                ? "Exporter"
-                : "") ||
-            (side === "internal" ? "You" : "Exporter"),
-        ).trim()
-      : side === "internal"
-        ? "You"
-        : "Exporter";
-  const atSource =
-    typeof entry === "object" && entry != null
-      ? entry.at || entry.createdAt || entry.updatedAt || entry.sentAt || entry.timestamp || entry.time
-      : null;
-  const at =
-    atSource && Number.isFinite(new Date(atSource).getTime())
-      ? new Date(atSource).toISOString()
-      : new Date(Date.now() + index).toISOString();
-  const rateSource =
-    typeof entry === "object" && entry != null
-      ? entry.rate ?? entry.counterRate ?? entry.offeredRate ?? entry.quotedRate ?? entry.amount
-      : null;
-  const numericRate = Number(rateSource);
-  return {
-    _id:
-      (typeof entry === "object" && entry != null && (entry._id || entry.id)) ||
-      `${side}-${index}-${at}`,
-    message,
-    at,
-    side,
-    senderLabel,
-    rate: Number.isFinite(numericRate) ? numericRate : null,
-    pending: Boolean(typeof entry === "object" && entry != null && entry.pending),
-  };
-}
-
-function sortNegotiationMessages(list) {
-  return [...list].sort((a, b) => getTimeValue(a?.at) - getTimeValue(b?.at));
-}
-
-function createClientMessageId() {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-  return `msg-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
-function extractNegotiationMessages(quote) {
-  if (!quote || typeof quote !== "object") return [];
-  const rawList =
-    quote.negotiationHistory ||
-    quote.negotiationMessages ||
-    quote.negotiations ||
-    quote.negotiationThread ||
-    quote.thread ||
-    quote.messages ||
-    quote.chatMessages ||
-    quote.negotiation?.history ||
-    quote.negotiation?.messages ||
-    quote.negotiation?.thread ||
-    quote.messageThread ||
-    [];
-  if (!Array.isArray(rawList)) return [];
-  return sortNegotiationMessages(
-    rawList
-      .map((entry, index) => normalizeNegotiationMessage(entry, index))
-      .filter(Boolean),
-  );
-}
-
-function extractUpdatedQuoteFromPayload(payload, quoteId) {
-  const directCandidates = [
-    payload?.data,
-    payload?.quote,
-    payload?.updatedQuote,
-    payload?.rateQuote,
-    payload?.operationSslRate,
-    payload?.negotiation?.quote,
-    payload?.data?.quote,
-    payload?.data?.updatedQuote,
-    payload?.data?.rateQuote,
-    payload?.data?.operationSslRate,
-    payload?.data?.negotiation?.quote,
-  ];
-  for (const candidate of directCandidates) {
-    if (candidate && typeof candidate === "object" && !Array.isArray(candidate)) {
-      if (!quoteId || candidate._id === quoteId || candidate.id === quoteId) return candidate;
-    }
-  }
-  const collections = [payload?.data, payload?.quotes, payload?.data?.quotes, payload?.data?.items];
-  for (const collection of collections) {
-    if (!Array.isArray(collection)) continue;
-    const match = collection.find((item) => item && typeof item === "object" && (item._id === quoteId || item.id === quoteId));
-    if (match) return match;
-  }
-  return null;
-}
-
 export function getAttachmentUrl(attachment) {
   if (!attachment) return "";
   const raw =
@@ -460,6 +278,24 @@ function formatOwnerRef(owner) {
   return name || id || owner._id || null;
 }
 
+function formatYesNoValue(value) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+  const s = raw.toLowerCase();
+  if (s === "yes" || s === "true") return "Yes";
+  if (s === "no" || s === "false") return "No";
+  return raw;
+}
+
+function hasAnyTruckingRequest(detail) {
+  if (!detail || typeof detail !== "object") return false;
+  return (
+    isYesValue(detail.truckingRequired) ||
+    isYesValue(detail.originTruckingRequired) ||
+    isYesValue(detail.destinationTruckingRequired)
+  );
+}
+
 const CONTAINER_TYPE_OPTIONS = [
   { value: "S20", label: "20FT Standard", image: containerS20 },
   { value: "S40", label: "40FT Standard", image: containerS40 },
@@ -476,6 +312,58 @@ function DetailField({ label, value, multiline }) {
       <p className={`mt-0.5 text-sm font-semibold text-gray-900 ${multiline ? "whitespace-pre-wrap" : ""}`}>
         {display}
       </p>
+    </div>
+  );
+}
+
+function ReadonlyTruckingSectionCard({ title, requiredValue, pickupLocation, deliveryLocation }) {
+  const normalizedRequired = formatYesNoValue(requiredValue) || "No";
+  const shouldShowLocations =
+    normalizedRequired === "Yes" ||
+    formatLocationForView(pickupLocation) ||
+    formatLocationForView(deliveryLocation);
+
+  return (
+    <div className="rounded-xl border border-amber-200 bg-white p-4 shadow-sm">
+      <h5 className="mb-3 text-sm font-semibold text-amber-900">{title}</h5>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        
+        {shouldShowLocations && (
+          <div className="grid grid-cols-1 gap-4 md:col-span-2 lg:grid-cols-2">
+            <ReadonlyTruckingLocationBlock title="Pickup location" location={pickupLocation} />
+            <ReadonlyTruckingLocationBlock title="Delivery location" location={deliveryLocation} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ReadonlyTruckingLocationBlock({ title, location }) {
+  const normalizedLocation =
+    location && typeof location === "object"
+      ? {
+          address: String(location.address ?? "").trim(),
+          city: String(location.city ?? "").trim(),
+          state: String(location.state ?? "").trim(),
+          zipcode: getLocationZipcode(location),
+        }
+      : {
+          address: typeof location === "string" ? location.trim() : "",
+          city: "",
+          state: "",
+          zipcode: "",
+        };
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+      <h6 className="mb-3 text-sm font-semibold text-slate-900">{title}</h6>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <DetailField label="Address" value={normalizedLocation.address || "N/A"} />
+        <DetailField label="City" value={normalizedLocation.city || "N/A"} />
+        <DetailField label="State" value={normalizedLocation.state || "N/A"} />
+        <DetailField label="Zipcode" value={normalizedLocation.zipcode || "N/A"} />
+      </div>
     </div>
   );
 }
@@ -659,31 +547,6 @@ function OperationSslRatesSection({ requestId, requestData, allowEdit = true, in
     setNegotiatingQuote((prev) => (prev?._id === updatedQuote._id ? { ...prev, ...updatedQuote } : prev));
   }, []);
 
-  const handleThreadRead = useCallback((quoteId, readState) => {
-    if (!quoteId) return;
-    setUnreadSummaryByQuoteId((prev) => ({
-      ...prev,
-      [quoteId]: {
-        ...(prev[quoteId] || {}),
-        ...(readState && typeof readState === "object" ? readState : {}),
-        sslQuote: quoteId,
-        unreadCount: 0,
-      },
-    }));
-    if (typeof window !== "undefined") {
-      const nextBellEntries = markExporterQuoteEntriesRead(readExporterQuoteBellEntries(), quoteId, readState);
-      persistExporterQuoteBellEntries(nextBellEntries);
-      window.dispatchEvent(
-        new CustomEvent(EXPORTER_QUOTE_THREAD_READ_EVENT, {
-          detail: {
-            quoteId,
-            readState: readState && typeof readState === "object" ? readState : null,
-          },
-        }),
-      );
-    }
-  }, []);
-
   useEffect(() => {
     const targetQuoteId = String(initialNegotiationQuoteId || "").trim();
     if (!targetQuoteId) {
@@ -719,8 +582,7 @@ function OperationSslRatesSection({ requestId, requestData, allowEdit = true, in
             const unreadSummary = unreadSummaryByQuoteId[r._id] || null;
             const mergedQuote = unreadSummary ? { ...r, ...unreadSummary, decisionStatus: unreadSummary.decisionStatus ?? r.decisionStatus } : r;
             const decisionMeta = getQuoteDecisionMeta(mergedQuote.decisionStatus);
-            const isReadOnlyThread = decisionMeta.value === "accepted" || decisionMeta.value === "rejected";
-            const unreadCount = Number(unreadSummary?.unreadCount) > 0 ? Number(unreadSummary.unreadCount) : 0;
+            const isDecisionLocked = decisionMeta.value === "accepted" || decisionMeta.value === "rejected";
             return (
             <div key={r._id} className="rounded-xl border border-teal-100 bg-white p-4 shadow-sm">
               <div className="mb-3 flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 pb-3">
@@ -757,21 +619,13 @@ function OperationSslRatesSection({ requestId, requestData, allowEdit = true, in
                       type="button"
                       onClick={() => setNegotiatingQuote(mergedQuote)}
                       className={`inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
-                        isReadOnlyThread
+                        isDecisionLocked
                           ? "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
                           : "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
                       }`}
-                      title={isReadOnlyThread ? "Open read-only conversation" : "Open negotiation"}
+                      title={isDecisionLocked ? "Review quote decision" : "Review sender rate"}
                     >
-                      <MessageSquareText size={14} />
-                      Negotiate
-                      {unreadCount > 0 && (
-                        <BlinkingUnreadDot
-                          count={unreadCount}
-                          className="ml-1"
-                          title={`${unreadCount} unread message${unreadCount === 1 ? "" : "s"} in this negotiation`}
-                        />
-                      )}
+                      {isDecisionLocked ? "View decision" : "Review rate"}
                     </button>
                     <button
                       type="button"
@@ -820,7 +674,7 @@ function OperationSslRatesSection({ requestId, requestData, allowEdit = true, in
           }}
         />
       )}
-      <QuoteNegotiationModal
+      <QuoteDecisionModal
         open={Boolean(negotiatingQuote)}
         requestId={requestId || ""}
         requestData={requestData}
@@ -828,74 +682,16 @@ function OperationSslRatesSection({ requestId, requestData, allowEdit = true, in
         authHeaders={modalAuthHeaders}
         onClose={() => setNegotiatingQuote(null)}
         onQuoteUpdated={handleQuoteUpdated}
-        onThreadRead={handleThreadRead}
       />
     </div>
   );
 }
 
-function QuoteNegotiationModal({ open, onClose, requestId, requestData, quote, authHeaders, onQuoteUpdated, onThreadRead }) {
-  const [message, setMessage] = useState("");
-  const [messages, setMessages] = useState([]);
-  const [messagesLoading, setMessagesLoading] = useState(false);
-  const [sending, setSending] = useState(false);
+function QuoteDecisionModal({ open, onClose, requestId, requestData, quote, authHeaders, onQuoteUpdated }) {
   const [refreshing, setRefreshing] = useState(false);
-  const [composerFocused, setComposerFocused] = useState(false);
-  const chatEndRef = useRef(null);
-  const initializedThreadRef = useRef("");
-  const lastMarkedReadRef = useRef("");
+  const [submittingDecision, setSubmittingDecision] = useState("");
   const authHeaderKey = authHeaders?.Authorization || "";
   const requestHeaders = useMemo(() => (authHeaderKey ? { Authorization: authHeaderKey } : {}), [authHeaderKey]);
-  const threadKey = `${requestId || ""}:${quote?._id || ""}`;
-
-  useEffect(() => {
-    if (!open) return;
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [open, messages]);
-
-  const loadMessages = useCallback(
-    async ({ silent = false } = {}) => {
-      if (!requestId || !quote?._id) return [];
-      if (!silent) setMessagesLoading(true);
-      try {
-        const res = await axios.get(
-          `${API_CONFIG.BASE_URL}/api/v1/exporter-rate-requst/${requestId}/operation-ssl-rates/${quote._id}/messages`,
-          { headers: requestHeaders },
-        );
-        const list = Array.isArray(res.data?.data) ? res.data.data : [];
-        const normalized = sortNegotiationMessages(
-          list
-            .map((entry, index) => normalizeNegotiationMessage(entry, index))
-            .filter(Boolean),
-        );
-        setMessages(normalized);
-        return normalized;
-      } catch (err) {
-        if (!silent) {
-          alertify.error(err.response?.data?.message || "Failed to load negotiation messages");
-        }
-        return [];
-      } finally {
-        if (!silent) setMessagesLoading(false);
-      }
-    },
-    [requestId, quote?._id, requestHeaders],
-  );
-
-  useEffect(() => {
-    if (!open) {
-      initializedThreadRef.current = "";
-      lastMarkedReadRef.current = "";
-      return;
-    }
-    if (!quote?._id) return;
-    if (initializedThreadRef.current === threadKey) return;
-    initializedThreadRef.current = threadKey;
-    lastMarkedReadRef.current = "";
-    setMessage("");
-    setMessages([]);
-    void loadMessages();
-  }, [open, quote?._id, threadKey, loadMessages]);
 
   const refreshQuote = useCallback(
     async ({ silent = false } = {}) => {
@@ -914,7 +710,7 @@ function QuoteNegotiationModal({ open, onClose, requestId, requestData, quote, a
         return updatedQuote;
       } catch (err) {
         if (!silent) {
-          alertify.error(err.response?.data?.message || "Failed to refresh negotiation thread");
+          alertify.error(err.response?.data?.message || "Failed to refresh quote");
         }
         return null;
       } finally {
@@ -924,98 +720,27 @@ function QuoteNegotiationModal({ open, onClose, requestId, requestData, quote, a
     [requestId, quote?._id, requestHeaders, onQuoteUpdated],
   );
 
-  useEffect(() => {
-    if (!open || !quote?._id || sending || composerFocused || String(message).trim()) return undefined;
-    const intervalId = setInterval(() => {
-      void loadMessages({ silent: true });
-      void refreshQuote({ silent: true });
-    }, 5000);
-    return () => clearInterval(intervalId);
-  }, [open, quote?._id, sending, composerFocused, message, loadMessages, refreshQuote]);
-
-  const markThreadRead = useCallback(
-    async (latestMessageId) => {
-      const messageId = String(latestMessageId || "").trim();
-      if (!requestId || !quote?._id || !messageId) return null;
-      const markerKey = `${threadKey}:${messageId}`;
-      if (lastMarkedReadRef.current === markerKey) return null;
+  const handleDecision = useCallback(
+    (decision) => {
+      const nextDecision = decision === "rejected" ? "rejected" : "accepted";
+      if (!quote?._id) {
+        alertify.error("Missing quote details");
+        return;
+      }
+      setSubmittingDecision(nextDecision);
       try {
-        const res = await axios.post(
-          `${API_CONFIG.BASE_URL}/api/v1/exporter-rate-requst/${requestId}/operation-ssl-rates/${quote._id}/read`,
-          { lastReadMessageId: messageId },
-          { headers: { ...requestHeaders, "Content-Type": "application/json" } },
-        );
-        lastMarkedReadRef.current = markerKey;
-        const readState = res.data?.data || null;
-        onThreadRead?.(quote._id, readState);
-        return readState;
-      } catch (err) {
-        return null;
+        onQuoteUpdated?.({
+          ...quote,
+          decisionStatus: nextDecision,
+        });
+        alertify.success(nextDecision === "accepted" ? "Quote accepted" : "Quote rejected");
+        onClose?.();
+      } finally {
+        setSubmittingDecision("");
       }
     },
-    [requestId, quote?._id, threadKey, requestHeaders, onThreadRead],
+    [onClose, onQuoteUpdated, quote],
   );
-
-  useEffect(() => {
-    if (!open || !quote?._id || messagesLoading || messages.length === 0) return;
-    const latestVisibleMessageId = messages[messages.length - 1]?._id;
-    if (!latestVisibleMessageId) return;
-    void markThreadRead(latestVisibleMessageId);
-  }, [open, quote?._id, messagesLoading, messages, markThreadRead]);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    const trimmed = String(message || "").trim();
-    if (!trimmed) {
-      alertify.error("Type your message first");
-      return;
-    }
-    if (!requestId || !quote?._id) {
-      alertify.error("Missing request or quote details");
-      return;
-    }
-    const clientMessageId = createClientMessageId();
-    const optimisticMessage = {
-      _id: clientMessageId,
-      message: trimmed,
-      at: new Date().toISOString(),
-      side: "internal",
-      senderLabel: "You",
-      pending: true,
-      rate: null,
-    };
-    setSending(true);
-    setMessages((prev) => sortNegotiationMessages([...prev, optimisticMessage]));
-    try {
-      const res = await axios.post(
-        `${API_CONFIG.BASE_URL}/api/v1/exporter-rate-requst/${requestId}/operation-ssl-rates/${quote._id}/messages`,
-        { body: trimmed, clientMessageId },
-        { headers: { ...requestHeaders, "Content-Type": "application/json" } },
-      );
-      setMessage("");
-      const createdMessage = normalizeNegotiationMessage(res.data?.data);
-      if (createdMessage) {
-        setMessages((prev) =>
-          sortNegotiationMessages(
-            prev.map((entry) => (entry._id === optimisticMessage._id ? { ...createdMessage, pending: false } : entry)),
-          ),
-        );
-      } else {
-        const refreshedMessages = await loadMessages({ silent: true });
-        if (refreshedMessages.length === 0) {
-          setMessages((prev) =>
-            prev.map((entry) => (entry._id === optimisticMessage._id ? { ...entry, pending: false } : entry)),
-          );
-        }
-      }
-      alertify.success(res.data?.message || "Message sent");
-    } catch (err) {
-      setMessages((prev) => prev.filter((entry) => entry._id !== optimisticMessage._id));
-      alertify.error(err.response?.data?.message || "Failed to send message");
-    } finally {
-      setSending(false);
-    }
-  };
 
   if (!open || !quote) return null;
 
@@ -1023,6 +748,7 @@ function QuoteNegotiationModal({ open, onClose, requestId, requestData, quote, a
     quote.totalAmount != null ? `${quote.currency || ""} ${Number(quote.totalAmount).toLocaleString()}`.trim() : "N/A";
   const decisionMeta = getQuoteDecisionMeta(quote.decisionStatus);
   const isReadOnlyQuote = decisionMeta.value === "accepted" || decisionMeta.value === "rejected";
+  const hasPendingAction = Boolean(submittingDecision);
   const shipmentLabel = requestData?.shipmentType || requestData?.cargoType || "Shipment";
   const shipmentSummaryItems = [
     ["Request ID", requestData?.requestId || requestId],
@@ -1034,7 +760,7 @@ function QuoteNegotiationModal({ open, onClose, requestId, requestData, quote, a
   ];
   const offerSummaryItems = [
     ["Provider", quote.sslName || "N/A"],
-    ["Offered rate", quoteAmount],
+    ["Sender rate", quoteAmount],
     ["Decision status", decisionMeta.label],
     ["Transit time", quote.transitDays != null ? `${quote.transitDays} days` : "N/A"],
     ["Rate valid till", formatDateOnly(quote.validityDate) ?? "N/A"],
@@ -1044,7 +770,7 @@ function QuoteNegotiationModal({ open, onClose, requestId, requestData, quote, a
   return (
     <div
       className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
-      onClick={() => !sending && onClose()}
+      onClick={() => !hasPendingAction && onClose()}
     >
       <div
         className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl lg:flex-row"
@@ -1053,13 +779,13 @@ function QuoteNegotiationModal({ open, onClose, requestId, requestData, quote, a
         <div className="flex min-h-0 flex-1 flex-col">
           <div className="flex items-start justify-between gap-4 border-b border-slate-200 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 px-5 py-4 text-white">
             <div className="min-w-0">
-              <h3 className="truncate text-lg font-semibold">Negotiate Rates</h3>
+              <h3 className="truncate text-lg font-semibold">Review Offered Rate</h3>
               <p className="mt-1 truncate text-xs text-blue-100">
                 {quote.sslName || "Shipping line"} · Request {requestData?.requestId || requestId}
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <span className="text-xs text-blue-100">
-                Current offered rate: {quoteAmount} · Valid till {formatDateOnly(quote.validityDate) ?? "N/A"}
+                  Sender amount: {quoteAmount} · Valid till {formatDateOnly(quote.validityDate) ?? "N/A"}
                 </span>
                 <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${decisionMeta.badgeClass}`}>
                   {decisionMeta.label}
@@ -1071,18 +797,17 @@ function QuoteNegotiationModal({ open, onClose, requestId, requestData, quote, a
                 type="button"
                 onClick={() => {
                   void refreshQuote();
-                  void loadMessages();
                 }}
-                disabled={refreshing || sending}
+                disabled={refreshing || hasPendingAction}
                 className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/30 text-white transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-                title="Refresh messages"
+                title="Refresh quote"
               >
                 <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
               </button>
               <button
                 type="button"
                 onClick={onClose}
-                disabled={sending}
+                disabled={hasPendingAction}
                 className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/30 text-xl text-white transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 ×
@@ -1091,97 +816,73 @@ function QuoteNegotiationModal({ open, onClose, requestId, requestData, quote, a
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto bg-gradient-to-br from-slate-50 via-white to-blue-50 p-4">
-            {messagesLoading ? (
-              <div className="flex h-full min-h-[280px] items-center justify-center rounded-2xl border border-slate-200 bg-white/80 p-6 text-center">
-                <div>
-                  <RefreshCw size={30} className="mx-auto mb-3 animate-spin text-slate-400" />
-                  <p className="text-sm font-medium text-slate-700">Loading messages...</p>
-                  <p className="mt-1 text-xs text-slate-500">Fetching the latest negotiation thread.</p>
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">Customer Negotiating amount</p>
+                <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
+                  <div>
+                    <p className="text-3xl font-bold text-slate-900">{quoteAmount}</p>
+                   
+                  </div>
+                  <span className={`inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-semibold ${decisionMeta.badgeClass}`}>
+                    {decisionMeta.label}
+                  </span>
                 </div>
               </div>
-            ) : messages.length === 0 ? (
-              <div className="flex h-full min-h-[280px] items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white/80 p-6 text-center">
-                <div>
-                  <MessageSquareText size={36} className="mx-auto mb-3 text-slate-400" />
-                  <p className="text-sm font-medium text-slate-700">No negotiation messages yet</p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {isReadOnlyQuote
-                      ? `This quote is ${decisionMeta.label.toLowerCase()}, so the conversation is read-only.`
-                      : "Type your message below to start the conversation."}
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {messages.map((entry) => {
-                  const isOwn = entry.side === "internal";
-                  return (
-                    <div
-                      key={entry._id}
-                      className={`flex flex-col ${isOwn ? "items-end" : "items-start"}`}
-                    >
-                      <p className="mb-1 px-1 text-[11px] text-slate-500">
-                        {isOwn ? "You" : entry.senderLabel || "Exporter"}
-                      </p>
-                      <div
-                        className={`max-w-[86%] rounded-2xl px-4 py-3 shadow-sm ${
-                          isOwn
-                            ? "rounded-br-md bg-gradient-to-r from-blue-600 to-indigo-600 text-white"
-                            : "rounded-bl-md border border-slate-200 bg-white text-slate-800"
-                        }`}
-                      >
-                        <p className="whitespace-pre-wrap text-sm leading-relaxed">{entry.message}</p>
-                        <p className={`mt-2 text-[11px] ${isOwn ? "text-blue-100/90" : "text-slate-500"}`}>
-                          {formatDateTime(entry.at)}
-                          {entry.pending ? " · Sending..." : ""}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-                <div ref={chatEndRef} />
-              </div>
-            )}
-          </div>
 
-          <form onSubmit={handleSubmit} className="border-t border-slate-200 bg-white p-4">
-            {isReadOnlyQuote && (
-              <div
-                className={`mb-3 rounded-2xl px-4 py-3 text-sm ${
-                  decisionMeta.value === "accepted"
-                    ? "border border-green-200 bg-green-50 text-green-700"
-                    : "border border-red-200 bg-red-50 text-red-700"
-                }`}
-              >
-                This SSL quote is {decisionMeta.label.toLowerCase()}. New negotiation messages are disabled for this thread.
+              {isReadOnlyQuote ? (
+                <div
+                  className={`rounded-2xl px-4 py-3 text-sm ${
+                    decisionMeta.value === "accepted"
+                      ? "border border-green-200 bg-green-50 text-green-700"
+                      : "border border-red-200 bg-red-50 text-red-700"
+                  }`}
+                >
+                  This quote has already been {decisionMeta.label.toLowerCase()}. No further action is needed.
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <h4 className="text-sm font-semibold text-slate-900">Take action</h4>
+                  
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      disabled={hasPendingAction}
+                      onClick={() => void handleDecision("accepted")}
+                      className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {submittingDecision === "accepted" ? <RefreshCw size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+                      {submittingDecision === "accepted" ? "Accepting..." : "Accept"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={hasPendingAction}
+                      onClick={() => void handleDecision("rejected")}
+                      className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {submittingDecision === "rejected" ? <RefreshCw size={16} className="animate-spin" /> : <XCircle size={16} />}
+                      {submittingDecision === "rejected" ? "Rejecting..." : "Reject"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-3">
+                <ReadOnlyChargeTable
+                  title="SSL charges"
+                  rows={quote.lineItems}
+                  totalAmount={quote.baseTotalAmount ?? calculateLineItemsTotal(Array.isArray(quote.lineItems) ? quote.lineItems : [])}
+                  currency={quote.currency}
+                />
+                <ReadOnlyChargeTable
+                  title="Trucking charges"
+                  rows={quote.truckingLineItems}
+                  totalAmount={quote.truckingTotalAmount}
+                  currency={quote.currency}
+                />
               </div>
-            )}
-            <div className="flex items-end gap-3">
-              <textarea
-                rows={2}
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                onFocus={() => setComposerFocused(true)}
-                onBlur={() => setComposerFocused(false)}
-                placeholder={isReadOnlyQuote ? "Conversation is closed for new messages" : "Type your message..."}
-                disabled={sending || isReadOnlyQuote}
-                className="min-h-[52px] flex-1 resize-none rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
-              />
-              <button
-                type="submit"
-                disabled={sending || isReadOnlyQuote || !String(message).trim()}
-                className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white transition-colors hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
-                title="Send negotiation message"
-              >
-                {sending ? <RefreshCw size={18} className="animate-spin" /> : <SendHorizontal size={18} />}
-              </button>
             </div>
-            <p className="mt-2 text-[11px] text-slate-500">
-              {isReadOnlyQuote
-                ? "You can review the previous conversation here, but no new negotiation message can be sent."
-                : "All negotiation messages for this quote are tracked under the selected SSL provider rate."}
-            </p>
-          </form>
+          </div>
         </div>
 
         <aside className="w-full shrink-0 border-t border-slate-200 bg-slate-50/80 p-4 lg:w-[320px] lg:border-l lg:border-t-0">
@@ -1224,6 +925,20 @@ export function RateRequestDetailBody({ detail, initialNegotiationQuoteId = null
   const showAssignment = Boolean(
     detail.ownerId || detail.capturedBy || detail.capturedByRef || detail.receivedAt || detail.submissionChannel,
   );
+  const hasOriginTruckingBlock =
+    detail.originTruckingRequired != null ||
+    detail.originTruckingPickupLocation != null ||
+    detail.originTruckingDeliveryLocation != null;
+  const hasDestinationTruckingBlock =
+    detail.destinationTruckingRequired != null ||
+    detail.destinationTruckingPickupLocation != null ||
+    detail.destinationTruckingDeliveryLocation != null;
+  const hasModernTruckingBlocks = hasOriginTruckingBlock || hasDestinationTruckingBlock;
+  const hasLegacyTruckingBlock =
+    !hasModernTruckingBlocks &&
+    (detail.truckingRequired != null ||
+      detail.truckingPickupLocation != null ||
+      detail.truckingDeliveryLocation != null);
   return (
     <>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -1318,16 +1033,51 @@ export function RateRequestDetailBody({ detail, initialNegotiationQuoteId = null
         <ContainerTypeDisplay value={detail.containerType} />
       </div>
 
-      {isYesValue(detail.truckingRequired) && (
+      {hasModernTruckingBlocks && (
+        <div className="rounded-2xl border border-amber-100 bg-amber-50/80 p-5">
+          <h4 className="mb-4 flex items-center gap-2 text-sm font-semibold text-amber-900">
+            <Truck size={18} className="text-amber-700" />
+            Trucking details
+          </h4>
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            {hasOriginTruckingBlock && (
+              <ReadonlyTruckingSectionCard
+                title="Origin trucking"
+                requiredValue={detail.originTruckingRequired}
+                pickupLocation={detail.originTruckingPickupLocation}
+                deliveryLocation={detail.originTruckingDeliveryLocation}
+              />
+            )}
+            {hasDestinationTruckingBlock && (
+              <ReadonlyTruckingSectionCard
+                title="Destination trucking"
+                requiredValue={detail.destinationTruckingRequired}
+                pickupLocation={detail.destinationTruckingPickupLocation}
+                deliveryLocation={detail.destinationTruckingDeliveryLocation}
+              />
+            )}
+          </div>
+        </div>
+      )}
+
+      {hasLegacyTruckingBlock && (
         <div className="rounded-2xl border border-amber-100 bg-amber-50/80 p-5">
           <h4 className="mb-4 flex items-center gap-2 text-sm font-semibold text-amber-900">
             <Truck size={18} className="text-amber-700" />
             Trucking details
           </h4>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <DetailField label="Trucking required" value="Yes" />
-            <DetailField label="Pickup location" value={formatLocationForView(detail.truckingPickupLocation) || "-"} multiline />
-            <DetailField label="Delivery location" value={formatLocationForView(detail.truckingDeliveryLocation) || "-"} multiline />
+            <DetailField label="Trucking required" value={formatYesNoValue(detail.truckingRequired) || "N/A"} />
+            <DetailField
+              label="Pickup location"
+              value={formatLocationForView(detail.truckingPickupLocation) || "-"}
+              multiline
+            />
+            <DetailField
+              label="Delivery location"
+              value={formatLocationForView(detail.truckingDeliveryLocation) || "-"}
+              multiline
+            />
           </div>
         </div>
       )}
@@ -1705,7 +1455,7 @@ export function GiveRateModal({ open, onClose, requestId, requestData, authHeade
   const [lineItems, setLineItems] = useState(defaultOceanLineItems);
   const [truckingLineItems, setTruckingLineItems] = useState(defaultTruckingLineItems);
   const [submitting, setSubmitting] = useState(false);
-  const hasTruckingRequest = isYesValue(requestData?.truckingRequired);
+  const hasTruckingRequest = hasAnyTruckingRequest(requestData);
   const activeQuote = initialQuote;
   const isEditMode = Boolean(activeQuote?._id);
 
