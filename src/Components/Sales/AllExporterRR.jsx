@@ -13,6 +13,9 @@ import {
   formatDateTime,
   formatStatusLabel,
 } from "./exporterRateRequestReadOnly.jsx";
+import RateRequestDocumentsPanel, {
+  formatDocumentProgressLabel,
+} from "./RateRequestDocumentsPanel.jsx";
 import {
   EXPORTER_QUOTE_SUMMARY_EVENT,
   EXPORTER_QUOTE_THREAD_READ_EVENT,
@@ -144,6 +147,19 @@ export default function AllExporterRR() {
     setShowDetail(true);
   }, []);
 
+  const handleDocumentProgress = useCallback((progress) => {
+    setSelected((prev) => {
+      if (!prev) return prev;
+      const id = prev.requestId || prev._id;
+      setRows((list) =>
+        list.map((row) =>
+          (row.requestId || row._id) === id ? { ...row, documentProgress: progress } : row,
+        ),
+      );
+      return { ...prev, documentProgress: progress };
+    });
+  }, []);
+
   const openDetailById = useCallback(
     async (id, options = {}) => {
       if (!id) return;
@@ -247,12 +263,14 @@ export default function AllExporterRR() {
                   <th className="px-4 py-4 text-left text-base font-medium text-gray-800">Route</th>
                   <th className="px-4 py-4 text-left text-base font-medium text-gray-800">Status</th>
                   <th className="px-4 py-4 text-left text-base font-medium text-gray-800">Quote due</th>
+                  <th className="px-4 py-4 text-left text-base font-medium text-gray-800">Documents</th>
                   <th className="px-4 py-4 text-left text-base font-medium text-gray-800">Action</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((item) => {
                   const requestUnreadCount = getExporterQuoteRequestUnreadCount(requestUnreadMap, item);
+                  const documentProgressLabel = formatDocumentProgressLabel(item.documentProgress);
                   return (
                   <tr key={item._id} className="border-b border-gray-100 transition-colors hover:bg-gray-50">
                     <td className="px-4 py-4">
@@ -277,6 +295,15 @@ export default function AllExporterRR() {
                     </td>
                     <td className="px-4 py-4">
                       <span className="text-sm font-medium text-gray-800">{formatDateTime(item.quoteDueAt)}</span>
+                    </td>
+                    <td className="px-4 py-4">
+                      {documentProgressLabel ? (
+                        <span className="inline-flex rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-800">
+                          {documentProgressLabel}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-400">—</span>
+                      )}
                     </td>
                     <td className="px-3 py-3">
                       <div className="flex flex-wrap items-center gap-1.5">
@@ -396,6 +423,11 @@ export default function AllExporterRR() {
             </div>
             <div className="space-y-5 bg-gray-50 p-6">
               <RateRequestDetailBody detail={selected} initialNegotiationQuoteId={initialNegotiationQuoteId} />
+              <RateRequestDocumentsPanel
+                requestIdentifier={selected.requestId || selected._id}
+                authHeaders={authHeaders}
+                onProgressChange={handleDocumentProgress}
+              />
             </div>
           </div>
         </div>

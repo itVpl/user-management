@@ -43,6 +43,9 @@ import {
   getExporterQuoteRequestUnreadCount,
   readExporterQuoteBellEntries,
 } from "./exporterQuoteNotificationUtils.js";
+import RateRequestDocumentsPanel, {
+  formatDocumentProgressLabel,
+} from "./RateRequestDocumentsPanel.jsx";
 
 /** Matches `GET /meta` — see `exporter-rate-request-frontend-api.md` */
 const STATUS_OPTIONS = [
@@ -1261,6 +1264,19 @@ export default function ExporterRateRequestWorkflow() {
     setShowAgentDetailModal(true);
   };
 
+  const handleAgentDocumentProgress = useCallback((progress) => {
+    setSelectedAgentDetail((prev) => {
+      if (!prev) return prev;
+      const id = prev.requestId || prev._id;
+      setAgentRequests((rows) =>
+        rows.map((row) =>
+          (row.requestId || row._id) === id ? { ...row, documentProgress: progress } : row,
+        ),
+      );
+      return { ...prev, documentProgress: progress };
+    });
+  }, []);
+
   return (
     <div className="p-6 bg-white min-h-screen">
       <div className="flex flex-col gap-6 mb-6 border border-gray-200 rounded-xl p-6 bg-white">
@@ -1505,12 +1521,14 @@ export default function ExporterRateRequestWorkflow() {
                   <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Route</th>
                   <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Status</th>
                   <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Quote Due</th>
+                  <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Documents</th>
                   <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Action</th>
                 </tr>
               </thead>
               <tbody>
                 {agentRequests.map((item) => {
                   const requestUnreadCount = getExporterQuoteRequestUnreadCount(requestUnreadMap, item);
+                  const documentProgressLabel = formatDocumentProgressLabel(item.documentProgress);
                   return (
                     <tr key={item._id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                       <td className="py-4 px-4">
@@ -1532,6 +1550,15 @@ export default function ExporterRateRequestWorkflow() {
                       </td>
                       <td className="py-4 px-4">
                         <span className="text-sm font-medium text-gray-800">{formatDateTime(item.quoteDueAt)}</span>
+                      </td>
+                      <td className="py-4 px-4">
+                        {documentProgressLabel ? (
+                          <span className="inline-flex rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-800">
+                            {documentProgressLabel}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-400">—</span>
+                        )}
                       </td>
                       <td className="py-4 px-4">
                         <div className="flex flex-wrap gap-3">
@@ -1646,7 +1673,14 @@ export default function ExporterRateRequestWorkflow() {
               ) : !selectedDetail ? (
                 <p className="text-sm text-red-600">Failed to load detail.</p>
               ) : (
-                <RateRequestDetailBody detail={selectedDetail} />
+                <>
+                  <RateRequestDetailBody detail={selectedDetail} />
+                  <RateRequestDocumentsPanel
+                    requestIdentifier={selectedDetail.requestId || selectedDetail._id}
+                    authHeaders={authHeaders}
+                    readOnly
+                  />
+                </>
               )}
             </div>
           </div>
@@ -1690,6 +1724,12 @@ export default function ExporterRateRequestWorkflow() {
 
             <div className="p-6 space-y-5 bg-gray-50">
               <RateRequestDetailBody detail={selectedAgentDetail} />
+              <RateRequestDocumentsPanel
+                requestIdentifier={selectedAgentDetail.requestId || selectedAgentDetail._id}
+                authHeaders={authHeaders}
+                readOnly
+                onProgressChange={handleAgentDocumentProgress}
+              />
             </div>
           </div>
         </div>

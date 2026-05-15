@@ -49,6 +49,9 @@ const Newsletter = () => {
   const [channels, setChannels] = useState({ email: false, whatsapp: false });
   const [sendType, setSendType] = useState("");
   const [recipients, setRecipients] = useState([]);
+  const [recipientSearch, setRecipientSearch] = useState("");
+  const [debouncedRecipientSearch, setDebouncedRecipientSearch] = useState("");
+  const [isLoadingRecipients, setIsLoadingRecipients] = useState(false);
   const [newsletters, setNewsletters] = useState([]);
   const [selectedRecipientIds, setSelectedRecipientIds] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -190,14 +193,30 @@ const Newsletter = () => {
   }, []);
 
   useEffect(() => {
+    const timer = setTimeout(() => setDebouncedRecipientSearch(recipientSearch), 300);
+    return () => clearTimeout(timer);
+  }, [recipientSearch]);
+
+  useEffect(() => {
+    let cancelled = false;
+
     const fetchRecipients = async () => {
+      setIsLoadingRecipients(true);
       try {
-        const data = await newsletterService.getRecipients({ page: 1, limit: 500 });
+        const trimmedSearch = debouncedRecipientSearch.trim();
+        const params = { page: 1, limit: 500 };
+        if (trimmedSearch) params.search = trimmedSearch;
+
+        const data = await newsletterService.getRecipients(params);
+        if (cancelled) return;
+
         const list = data?.recipients || data?.data?.recipients || [];
         setRecipients(Array.isArray(list) ? list : []);
         setErrors((prev) => ({ ...prev, recipients: "" }));
       } catch (error) {
+        if (cancelled) return;
         console.error("Failed to fetch recipients:", error);
+        setRecipients([]);
         setErrors((prev) => ({
           ...prev,
           recipients:
@@ -206,10 +225,16 @@ const Newsletter = () => {
               ? "You do not have permission to view recipients."
               : "Failed to load recipients.",
         }));
+      } finally {
+        if (!cancelled) setIsLoadingRecipients(false);
       }
     };
+
     fetchRecipients();
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedRecipientSearch]);
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -483,6 +508,9 @@ const Newsletter = () => {
             recipients={recipients}
             selectedRecipientIds={selectedRecipientIds}
             onChange={setSelectedRecipientIds}
+            searchQuery={recipientSearch}
+            onSearchChange={setRecipientSearch}
+            isLoading={isLoadingRecipients}
             error={errors.recipients}
           />
         </section>
