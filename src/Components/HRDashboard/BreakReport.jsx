@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { toast } from 'react-toastify';
 import breakReportService from '../../services/breakReportService';
 import { Clock, Filter, Search, Calendar, User, Users, Coffee, TrendingUp, RefreshCw, FileText, BarChart3, X, Eye, Activity, AlertCircle, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
@@ -36,7 +36,8 @@ const BreakReport = () => {
     startDate: new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split('T')[0],
     endDate: new Date().toISOString().split('T')[0],
     department: '',
-    empId: ''
+    empId: '',
+    status: ''
   });
   const [statistics, setStatistics] = useState({
     totalBreaks: 0,
@@ -73,7 +74,7 @@ const BreakReport = () => {
     } else if (filters.startDate && filters.endDate) {
       fetchReport();
     }
-  }, [filters.startDate, filters.endDate, filters.department, filters.empId, viewMode, autoRefresh]);
+  }, [filters.startDate, filters.endDate, filters.department, viewMode, autoRefresh]);
 
   // Fetch current status when department filter changes in current mode
   useEffect(() => {
@@ -109,8 +110,7 @@ const BreakReport = () => {
       const params = {
         startDate: filters.startDate,
         endDate: filters.endDate,
-        ...(filters.department && { department: filters.department }),
-        ...(filters.empId && { empId: filters.empId })
+        ...(filters.department && { department: filters.department })
       };
 
       let response;
@@ -413,12 +413,17 @@ const BreakReport = () => {
     setFilters(prev => ({ ...prev, [name]: value }));
   };
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters.empId]);
+
   const handleClearFilters = () => {
     setFilters({
       startDate: new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split('T')[0],
       endDate: new Date().toISOString().split('T')[0],
       department: '',
-      empId: ''
+      empId: '',
+      status: ''
     });
   };
 
@@ -432,10 +437,28 @@ const BreakReport = () => {
 
   // Pagination Logic
   const currentData = viewMode === 'summary' ? (summaryData || []) : (reportData || []);
+  const searchQuery = String(filters.empId || '').trim().toLowerCase();
+  const filteredData = useMemo(() => {
+    const base = !searchQuery
+      ? currentData
+      : currentData.filter((item) => {
+      const employee = viewMode === 'summary' ? item : (item.employee || item);
+      const empId = String(item.empId || employee?.empId || '').toLowerCase();
+      const empName = String(employee?.employeeName || employee?.name || '').toLowerCase();
+      return empId.includes(searchQuery) || empName.includes(searchQuery);
+    });
+
+    const s = String(filters.status || '').trim().toLowerCase();
+    if (!s) return base;
+    if (s === 'break') return base.filter((item) => Boolean(item?.isCurrentlyOnBreak));
+    if (s === 'available') return base.filter((item) => !Boolean(item?.isCurrentlyOnBreak));
+    return base;
+  }, [currentData, searchQuery, viewMode, filters.status]);
+
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = currentData.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(currentData.length / itemsPerPage);
+  const currentItems = filteredData.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
 
   return (
     <div className="p-6">
@@ -553,6 +576,23 @@ const BreakReport = () => {
                         {departments.map(dept => (
                           <option key={dept} value={dept}>{dept}</option>
                         ))}
+                      </select>
+                      <ChevronDown className="absolute right-4 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
+                  </div>
+               </div>
+
+               <div className="w-full md:flex-1">
+                  <label className="block text-xs font-semibold text-gray-500 mb-1.5 ml-1">Status</label>
+                  <div className="relative">
+                      <select
+                        name="status"
+                        value={filters.status}
+                        onChange={handleFilterChange}
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors appearance-none text-sm"
+                      >
+                        <option value="">All</option>
+                        <option value="break">On Break</option>
+                        <option value="available">Available</option>
                       </select>
                       <ChevronDown className="absolute right-4 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
                   </div>
@@ -730,7 +770,7 @@ const BreakReport = () => {
               {totalPages > 1 && (
                 <div className="flex justify-between items-center mt-6 px-4 border border-separate border-gray-200 p-2 rounded-xl">
                   <div className="text-sm text-gray-600">
-                    Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, currentData.length)} of {currentData.length} entries
+                    Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredData.length)} of {filteredData.length} entries
                   </div>
                   <div className="flex gap-2 items-center">
                     <button
