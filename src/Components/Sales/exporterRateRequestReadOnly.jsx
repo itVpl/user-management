@@ -17,6 +17,16 @@ import {
   RefreshCw,
   CheckCircle2,
   XCircle,
+  Scale,
+  MapPin,
+  Package,
+  Calendar,
+  Clock,
+  Building2,
+  X,
+  Shield,
+  MessageSquare,
+  History,
 } from "lucide-react";
 import API_CONFIG from "../../config/api.js";
 import { HS_CODE_OPTIONS } from "../../data/hsCodeOptions.js";
@@ -434,13 +444,32 @@ function AttachmentSection({ attachments, flat }) {
   );
 }
 
-function buildAuthHeadersFromStorage() {
-  const token =
+function getAuthTokenFromStorage() {
+  return (
     sessionStorage.getItem("authToken") ||
     localStorage.getItem("authToken") ||
     sessionStorage.getItem("token") ||
-    localStorage.getItem("token");
+    localStorage.getItem("token") ||
+    ""
+  );
+}
+
+function buildAuthHeadersFromStorage() {
+  const token = getAuthTokenFromStorage();
   return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+/** Fresh employee JWT + cookies on every request (avoid stale empty headers on POST). */
+function buildAuthRequestConfig(extraHeaders = {}) {
+  const token = getAuthTokenFromStorage();
+  return {
+    withCredentials: true,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...extraHeaders,
+    },
+  };
 }
 
 /** GET operation SSL rates for a rate request (detail view). */
@@ -452,7 +481,7 @@ function OperationSslRatesSection({ requestId, requestData, allowEdit = true, in
   const [editingQuote, setEditingQuote] = useState(null);
   const [negotiatingQuote, setNegotiatingQuote] = useState(null);
   const autoOpenedThreadRef = useRef("");
-  const modalAuthHeaders = useMemo(() => buildAuthHeadersFromStorage(), []);
+  const getAuthConfig = useCallback(() => buildAuthRequestConfig(), []);
   const summaryRequestId = requestData?.requestId || requestId || "";
 
   const loadRows = useCallback(async () => {
@@ -466,7 +495,7 @@ function OperationSslRatesSection({ requestId, requestData, allowEdit = true, in
     try {
       const res = await axios.get(
         `${API_CONFIG.BASE_URL}/api/v1/exporter-rate-requst/${requestId}/operation-ssl-rates`,
-        { headers: buildAuthHeadersFromStorage() },
+        { ...getAuthConfig() },
       );
       const list = Array.isArray(res.data?.data) ? res.data.data : [];
       const sorted = sortQuotesByCreatedAt(list);
@@ -479,7 +508,7 @@ function OperationSslRatesSection({ requestId, requestData, allowEdit = true, in
     } finally {
       setLoading(false);
     }
-  }, [requestId]);
+  }, [getAuthConfig, requestId]);
 
   useEffect(() => {
     void loadRows();
@@ -493,7 +522,7 @@ function OperationSslRatesSection({ requestId, requestData, allowEdit = true, in
       }
       try {
         const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/exporter-rate-requst/quote-thread-unread-summary`, {
-          headers: buildAuthHeadersFromStorage(),
+          ...getAuthConfig(),
           params: { requestId: summaryRequestId },
         });
         const list = Array.isArray(res.data?.data) ? res.data.data : [];
@@ -512,7 +541,7 @@ function OperationSslRatesSection({ requestId, requestData, allowEdit = true, in
         return {};
       }
     },
-    [summaryRequestId],
+    [getAuthConfig, summaryRequestId],
   );
 
   useEffect(() => {
@@ -666,7 +695,7 @@ function OperationSslRatesSection({ requestId, requestData, allowEdit = true, in
           open={Boolean(editingQuote)}
           requestId={requestId || ""}
           requestData={requestData}
-          authHeaders={modalAuthHeaders}
+          authHeaders={buildAuthHeadersFromStorage()}
           initialQuote={editingQuote}
           onClose={() => setEditingQuote(null)}
           onSuccess={async () => {
@@ -679,7 +708,6 @@ function OperationSslRatesSection({ requestId, requestData, allowEdit = true, in
         requestId={requestId || ""}
         requestData={requestData}
         quote={negotiatingQuote}
-        authHeaders={modalAuthHeaders}
         onClose={() => setNegotiatingQuote(null)}
         onQuoteUpdated={handleQuoteUpdated}
       />
@@ -687,11 +715,173 @@ function OperationSslRatesSection({ requestId, requestData, allowEdit = true, in
   );
 }
 
-function QuoteDecisionModal({ open, onClose, requestId, requestData, quote, authHeaders, onQuoteUpdated }) {
+function formatQuoteMoney(currency, amount) {
+  if (amount == null || Number.isNaN(Number(amount))) return "N/A";
+  return `${currency || ""} ${Number(amount).toLocaleString()}`.trim();
+}
+
+function getCounterOfferHistoryStatusMeta(status) {
+  const key = String(status || "").trim().toLowerCase();
+  if (key === "accepted") {
+    return { label: "Accepted", badgeClass: "border-emerald-200 bg-emerald-50 text-emerald-800" };
+  }
+  if (key === "rejected") {
+    return { label: "Rejected", badgeClass: "border-red-200 bg-red-50 text-red-800" };
+  }
+  if (key === "pending") {
+    return { label: "Pending", badgeClass: "border-amber-200 bg-amber-50 text-amber-800" };
+  }
+  return {
+    label: key ? formatStatusLabel(key) : "Unknown",
+    badgeClass: "border-slate-200 bg-slate-50 text-slate-700",
+  };
+}
+
+function sortCounterOfferHistory(entries) {
+  if (!Array.isArray(entries)) return [];
+  return [...entries].sort((a, b) => {
+    const ta = new Date(a?.respondedAt || a?.proposedAt || 0).getTime();
+    const tb = new Date(b?.respondedAt || b?.proposedAt || 0).getTime();
+    return tb - ta;
+  });
+}
+
+function CounterOfferHistorySection({ entries, currency, loading }) {
+  const history = sortCounterOfferHistory(entries);
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+      <div className="mb-4 flex items-center justify-between gap-2 border-b border-slate-100 pb-3">
+        <div className="flex items-center gap-2">
+          <History size={18} className="text-indigo-600" />
+          <h4 className="text-sm font-semibold text-slate-900">Counter-offer history</h4>
+        </div>
+        {!loading && history.length > 0 && (
+          <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[11px] font-semibold text-slate-600">
+            {history.length} {history.length === 1 ? "entry" : "entries"}
+          </span>
+        )}
+      </div>
+
+      {loading ? (
+        <p className="text-sm text-slate-500">Loading history…</p>
+      ) : history.length === 0 ? (
+        <p className="text-sm text-slate-500">No counter-offers have been recorded yet.</p>
+      ) : (
+        <ul className="space-y-0">
+          {history.map((entry, index) => {
+            const statusMeta = getCounterOfferHistoryStatusMeta(entry?.status);
+            const amountLabel = formatQuoteMoney(currency, entry?.amount);
+            const proposedLabel = entry?.proposedAt ? formatDateTime(entry.proposedAt) : null;
+            const respondedLabel = entry?.respondedAt ? formatDateTime(entry.respondedAt) : null;
+            const entryKey = entry?._id || `${entry?.proposedAt || "row"}-${index}`;
+
+            return (
+              <li key={entryKey} className="relative flex gap-4 pb-5 last:pb-0">
+                {index < history.length - 1 && (
+                  <span
+                    className="absolute left-[11px] top-6 bottom-0 w-px bg-slate-200"
+                    aria-hidden
+                  />
+                )}
+                <span
+                  className={`relative z-[1] mt-1 flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border-2 bg-white ${
+                    entry?.status === "accepted"
+                      ? "border-emerald-400"
+                      : entry?.status === "rejected"
+                        ? "border-red-400"
+                        : "border-amber-400"
+                  }`}
+                >
+                  <span
+                    className={`h-2 w-2 rounded-full ${
+                      entry?.status === "accepted"
+                        ? "bg-emerald-500"
+                        : entry?.status === "rejected"
+                          ? "bg-red-500"
+                          : "bg-amber-500"
+                    }`}
+                  />
+                </span>
+                <div className="min-w-0 flex-1 rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <p className="text-lg font-bold tracking-tight text-slate-900">{amountLabel}</p>
+                    <span
+                      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${statusMeta.badgeClass}`}
+                    >
+                      {statusMeta.label}
+                    </span>
+                  </div>
+                  <dl className="mt-2 grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
+                    {proposedLabel && (
+                      <div>
+                        <dt className="font-medium uppercase tracking-wide text-slate-400">Proposed</dt>
+                        <dd className="mt-0.5 font-medium text-slate-700">{proposedLabel}</dd>
+                      </div>
+                    )}
+                    {respondedLabel && (
+                      <div>
+                        <dt className="font-medium uppercase tracking-wide text-slate-400">Responded</dt>
+                        <dd className="mt-0.5 font-medium text-slate-700">{respondedLabel}</dd>
+                      </div>
+                    )}
+                  </dl>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function QuoteDecisionModal({ open, onClose, requestId, requestData, quote, onQuoteUpdated }) {
   const [refreshing, setRefreshing] = useState(false);
   const [submittingDecision, setSubmittingDecision] = useState("");
-  const authHeaderKey = authHeaders?.Authorization || "";
-  const requestHeaders = useMemo(() => (authHeaderKey ? { Authorization: authHeaderKey } : {}), [authHeaderKey]);
+  const [counterOffer, setCounterOffer] = useState(null);
+  const [counterOfferLoading, setCounterOfferLoading] = useState(false);
+  const [counterOfferErr, setCounterOfferErr] = useState(null);
+  const getAuthConfig = useCallback(() => buildAuthRequestConfig(), []);
+  const quoteId = quote?._id || "";
+
+  const loadCounterOffer = useCallback(
+    async ({ silent = false } = {}) => {
+      if (!requestId || !quoteId) {
+        setCounterOffer(null);
+        return null;
+      }
+      if (!silent) setCounterOfferLoading(true);
+      setCounterOfferErr(null);
+      try {
+        const res = await axios.get(
+          `${API_CONFIG.BASE_URL}/api/v1/exporter-rate-requst/${requestId}/operation-ssl-rates/${quoteId}/counter-offer`,
+          getAuthConfig(),
+        );
+        const data = res.data?.data ?? null;
+        setCounterOffer(data);
+        return data;
+      } catch (err) {
+        const message = err.response?.data?.message || "Failed to load counter-offer details";
+        setCounterOfferErr(message);
+        if (!silent) alertify.error(message);
+        return null;
+      } finally {
+        if (!silent) setCounterOfferLoading(false);
+      }
+    },
+    [getAuthConfig, requestId, quoteId],
+  );
+
+  useEffect(() => {
+    if (!open || !quoteId) {
+      setCounterOffer(null);
+      setCounterOfferErr(null);
+      setCounterOfferLoading(false);
+      return;
+    }
+    void loadCounterOffer();
+  }, [open, quoteId, requestId, loadCounterOffer]);
 
   const refreshQuote = useCallback(
     async ({ silent = false } = {}) => {
@@ -700,7 +890,7 @@ function QuoteDecisionModal({ open, onClose, requestId, requestData, quote, auth
       try {
         const res = await axios.get(
           `${API_CONFIG.BASE_URL}/api/v1/exporter-rate-requst/${requestId}/operation-ssl-rates`,
-          { headers: requestHeaders },
+          getAuthConfig(),
         );
         const list = Array.isArray(res.data?.data) ? res.data.data : [];
         const updatedQuote = list.find((item) => item?._id === quote._id) || null;
@@ -717,89 +907,121 @@ function QuoteDecisionModal({ open, onClose, requestId, requestData, quote, auth
         if (!silent) setRefreshing(false);
       }
     },
-    [requestId, quote?._id, requestHeaders, onQuoteUpdated],
+    [getAuthConfig, onQuoteUpdated, quote?._id, requestId],
   );
 
-  const handleDecision = useCallback(
-    (decision) => {
+  const handleRefreshAll = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([loadCounterOffer({ silent: true }), refreshQuote({ silent: true })]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadCounterOffer, refreshQuote]);
+
+  const handleCounterOfferDecision = useCallback(
+    async (decision) => {
       const nextDecision = decision === "rejected" ? "rejected" : "accepted";
-      if (!quote?._id) {
+      if (!requestId || !quoteId) {
         alertify.error("Missing quote details");
+        return;
+      }
+      const token = getAuthTokenFromStorage();
+      if (!token) {
+        alertify.error("Employee authentication required. Please log in again.");
         return;
       }
       setSubmittingDecision(nextDecision);
       try {
-        onQuoteUpdated?.({
-          ...quote,
-          decisionStatus: nextDecision,
-        });
-        alertify.success(nextDecision === "accepted" ? "Quote accepted" : "Quote rejected");
-        onClose?.();
+        const res = await axios.post(
+          `${API_CONFIG.BASE_URL}/api/v1/exporter-rate-requst/${requestId}/operation-ssl-rates/${quoteId}/counter-offer/${nextDecision === "accepted" ? "accept" : "reject"}`,
+          {},
+          getAuthConfig(),
+        );
+        const updated = res.data?.data;
+        if (updated) {
+          onQuoteUpdated?.({ ...quote, ...updated });
+        }
+        alertify.success(
+          res.data?.message ||
+            (nextDecision === "accepted" ? "Counter-offer accepted" : "Counter-offer rejected"),
+        );
+        await loadCounterOffer({ silent: true });
+        await refreshQuote({ silent: true });
+      } catch (err) {
+        alertify.error(err.response?.data?.message || "Failed to update counter-offer");
       } finally {
         setSubmittingDecision("");
       }
     },
-    [onClose, onQuoteUpdated, quote],
+    [getAuthConfig, loadCounterOffer, onQuoteUpdated, quote, quoteId, refreshQuote, requestId],
   );
 
   if (!open || !quote) return null;
 
-  const quoteAmount =
-    quote.totalAmount != null ? `${quote.currency || ""} ${Number(quote.totalAmount).toLocaleString()}`.trim() : "N/A";
-  const decisionMeta = getQuoteDecisionMeta(quote.decisionStatus);
-  const isReadOnlyQuote = decisionMeta.value === "accepted" || decisionMeta.value === "rejected";
-  const hasPendingAction = Boolean(submittingDecision);
+  const displayCurrency = counterOffer?.currency || quote.currency || "";
+  const sslQuotedAmount = counterOffer?.totalAmount ?? quote.totalAmount;
+  const pendingCounter = counterOffer?.pendingCounterOffer;
+  const pendingCounterActive = Boolean(counterOffer?.pendingCounterOfferActive && pendingCounter?.amount != null);
+  const canRespondToCounterOffer = Boolean(counterOffer?.canRespondToCounterOffer);
+  const decisionStatus = counterOffer?.decisionStatus ?? quote.decisionStatus;
+  const decisionMeta = getQuoteDecisionMeta(decisionStatus);
+  const quoteAmount = formatQuoteMoney(displayCurrency, sslQuotedAmount);
+  const counterOfferAmount =
+    pendingCounter?.amount != null ? formatQuoteMoney(displayCurrency, pendingCounter.amount) : null;
+  const primaryAmountLabel = pendingCounterActive ? "Customer counter offer" : "Offered amount";
+  const primaryAmount = pendingCounterActive ? counterOfferAmount : quoteAmount;
+  const showCounterOfferActions = canRespondToCounterOffer && !counterOfferLoading;
+  const hasPendingAction = Boolean(submittingDecision) || counterOfferLoading;
+  const snapshotAmount = pendingCounterActive ? counterOfferAmount : quoteAmount;
   const shipmentLabel = requestData?.shipmentType || requestData?.cargoType || "Shipment";
-  const shipmentSummaryItems = [
-    ["Request ID", requestData?.requestId || requestId],
-    ["Origin", requestData?.originPort || "N/A"],
-    ["Destination", requestData?.destinationPort || "N/A"],
-    ["Cargo type", requestData?.cargoType || shipmentLabel],
-    ["Container", requestData?.containerType || "N/A"],
-    ["Weight / Volume", requestData?.weightOrVolume || "N/A"],
-  ];
-  const offerSummaryItems = [
-    ["Provider", quote.sslName || "N/A"],
-    ["Sender rate", quoteAmount],
-    ["Decision status", decisionMeta.label],
-    ["Transit time", quote.transitDays != null ? `${quote.transitDays} days` : "N/A"],
-    ["Rate valid till", formatDateOnly(quote.validityDate) ?? "N/A"],
-    ["Remarks", quote.remarks || "N/A"],
-  ];
+  const validityLabel = formatDateOnly(quote.validityDate) ?? "N/A";
+  const transitLabel = quote.transitDays != null ? `${quote.transitDays} days` : "N/A";
+  const addedByLabel = (() => {
+    const ab = quote.addedBy;
+    if (!ab || typeof ab !== "object") return null;
+    const name = ab.employeeName || "";
+    const id = ab.empId || "";
+    if (name && id) return `${name} (${id})`;
+    return name || id || null;
+  })();
+  const lastUpdatedLabel =
+    formatDateTime(pendingCounter?.proposedAt || counterOffer?.updatedAt || quote.updatedAt || quote.createdAt) ||
+    "N/A";
+  const counterOfferStatusLabel =
+    counterOffer?.counterOfferStatus != null
+      ? formatStatusLabel(String(counterOffer.counterOfferStatus))
+      : null;
 
   return (
     <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/55 p-3 backdrop-blur-[2px] sm:p-4"
       onClick={() => !hasPendingAction && onClose()}
     >
       <div
-        className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl lg:flex-row"
+        className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_24px_80px_-12px_rgba(15,23,42,0.35)]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex min-h-0 flex-1 flex-col">
-          <div className="flex items-start justify-between gap-4 border-b border-slate-200 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 px-5 py-4 text-white">
-            <div className="min-w-0">
-              <h3 className="truncate text-lg font-semibold">Review Offered Rate</h3>
-              <p className="mt-1 truncate text-xs text-blue-100">
-                {quote.sslName || "Shipping line"} · Request {requestData?.requestId || requestId}
-              </p>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <span className="text-xs text-blue-100">
-                  Sender amount: {quoteAmount} · Valid till {formatDateOnly(quote.validityDate) ?? "N/A"}
-                </span>
-                <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${decisionMeta.badgeClass}`}>
-                  {decisionMeta.label}
-                </span>
+        <div className="shrink-0 bg-[#1e293b] px-5 py-4 text-white sm:px-6">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex min-w-0 items-start gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/20">
+                  <Scale size={22} className="text-indigo-200" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">Rate review</p>
+                  <h3 className="mt-0.5 truncate text-lg font-semibold tracking-tight sm:text-xl">Review offered rate</h3>
+                  <p className="mt-1 truncate text-sm text-slate-300">
+                    {quote.sslName || "Shipping line"} · {requestData?.requestId || requestId}
+                  </p>
+                </div>
               </div>
-            </div>
-            <div className="flex items-center gap-2">
+              <div className="flex shrink-0 items-center gap-1.5">
               <button
                 type="button"
-                onClick={() => {
-                  void refreshQuote();
-                }}
-                disabled={refreshing || hasPendingAction}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/30 text-white transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => void handleRefreshAll()}
+                disabled={refreshing || Boolean(submittingDecision)}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/15 bg-white/5 text-white transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-45"
                 title="Refresh quote"
               >
                 <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
@@ -808,112 +1030,270 @@ function QuoteDecisionModal({ open, onClose, requestId, requestData, quote, auth
                 type="button"
                 onClick={onClose}
                 disabled={hasPendingAction}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/30 text-xl text-white transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/15 bg-white/5 text-white transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-45"
+                aria-label="Close"
               >
-                ×
+                <X size={18} />
               </button>
+              </div>
             </div>
-          </div>
+        </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto bg-gradient-to-br from-slate-50 via-white to-blue-50 p-4">
-            <div className="space-y-4">
-              <div className="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm">
-                <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">Customer Negotiating amount</p>
-                <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
-                  <div>
-                    <p className="text-3xl font-bold text-slate-900">{quoteAmount}</p>
-                   
+        <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+          <div className="min-h-0 min-w-0 flex-1 overflow-y-auto bg-[#f8fafc] p-4 sm:p-5">
+            <div className="space-y-5">
+              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div className="border-b border-slate-100 bg-white px-5 py-4 sm:px-6">
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{primaryAmountLabel}</p>
+                    <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+                      {counterOfferStatusLabel && pendingCounterActive && (
+                        <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-800">
+                          {counterOfferStatusLabel}
+                        </span>
+                      )}
+                      <span
+                        className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${decisionMeta.badgeClass}`}
+                      >
+                        {decisionMeta.label}
+                      </span>
+                    </div>
                   </div>
-                  <span className={`inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-semibold ${decisionMeta.badgeClass}`}>
-                    {decisionMeta.label}
-                  </span>
+                  {counterOfferLoading ? (
+                    <p className="mt-3 text-sm text-slate-500">Loading counter-offer details…</p>
+                  ) : counterOfferErr && !counterOffer ? (
+                    <p className="mt-3 text-sm text-red-600">{counterOfferErr}</p>
+                  ) : (
+                    <>
+                      <p className="mt-2 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">{primaryAmount}</p>
+                      {pendingCounterActive && quoteAmount !== "N/A" && (
+                        <p className="mt-2 text-sm text-slate-600">
+                          SSL quoted: <span className="font-semibold text-slate-900">{quoteAmount}</span>
+                        </p>
+                      )}
+                      <p className="mt-1 text-sm text-slate-500">
+                        {pendingCounterActive
+                          ? "Customer has proposed this amount for your review"
+                          : "Total quoted by the shipping line for this request"}
+                      </p>
+                      {pendingCounterActive && pendingCounter?.proposedAt && (
+                        <p className="mt-1 text-xs text-slate-400">
+                          Proposed {formatDateTime(pendingCounter.proposedAt)}
+                        </p>
+                      )}
+                    </>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 gap-px bg-slate-100 sm:grid-cols-3">
+                  <div className="flex items-start gap-3 bg-white px-4 py-3.5 sm:px-5">
+                    <Calendar size={16} className="mt-0.5 shrink-0 text-slate-400" />
+                    <div>
+                      <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Valid until</p>
+                      <p className="mt-0.5 text-sm font-semibold text-slate-900">{validityLabel}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 bg-white px-4 py-3.5 sm:px-5">
+                    <Clock size={16} className="mt-0.5 shrink-0 text-slate-400" />
+                    <div>
+                      <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Transit</p>
+                      <p className="mt-0.5 text-sm font-semibold text-slate-900">{transitLabel}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 bg-white px-4 py-3.5 sm:px-5">
+                    <Building2 size={16} className="mt-0.5 shrink-0 text-slate-400" />
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Provider</p>
+                      <p className="mt-0.5 truncate text-sm font-semibold text-slate-900">{quote.sslName || "N/A"}</p>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {isReadOnlyQuote ? (
-                <div
-                  className={`rounded-2xl px-4 py-3 text-sm ${
-                    decisionMeta.value === "accepted"
-                      ? "border border-green-200 bg-green-50 text-green-700"
-                      : "border border-red-200 bg-red-50 text-red-700"
-                  }`}
-                >
-                  This quote has already been {decisionMeta.label.toLowerCase()}. No further action is needed.
-                </div>
-              ) : (
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <h4 className="text-sm font-semibold text-slate-900">Take action</h4>
-                  
-                  <div className="mt-4 flex flex-wrap gap-3">
+              {showCounterOfferActions ? (
+                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+                  <div className="flex flex-col gap-1 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h4 className="text-base font-semibold text-slate-900">Your decision</h4>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Accept the customer counter-offer, or reject to allow a new amount.
+                      </p>
+                    </div>
+                    {pendingCounterActive && (
+                      <span className="mt-2 inline-flex w-fit items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-800 sm:mt-0">
+                        Counter-offer pending
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <button
                       type="button"
-                      disabled={hasPendingAction}
-                      onClick={() => void handleDecision("accepted")}
-                      className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={Boolean(submittingDecision)}
+                      onClick={() => void handleCounterOfferDecision("accepted")}
+                      className="flex items-center gap-3 rounded-xl border-2 border-emerald-400 bg-white px-4 py-4 text-left transition-colors hover:bg-emerald-50/40 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      {submittingDecision === "accepted" ? <RefreshCw size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
-                      {submittingDecision === "accepted" ? "Accepting..." : "Accept"}
+                      {submittingDecision === "accepted" ? (
+                        <RefreshCw size={22} className="shrink-0 animate-spin text-emerald-600" />
+                      ) : (
+                        <CheckCircle2 size={22} className="shrink-0 text-emerald-600" />
+                      )}
+                      <div>
+                        <span className="block text-sm font-semibold text-emerald-700">
+                          {submittingDecision === "accepted" ? "Accepting..." : "Accept"}
+                        </span>
+                        <span className="mt-0.5 block text-xs text-emerald-600/80">
+                          Accept counter-offer and update quote total
+                        </span>
+                      </div>
                     </button>
                     <button
                       type="button"
-                      disabled={hasPendingAction}
-                      onClick={() => void handleDecision("rejected")}
-                      className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={Boolean(submittingDecision)}
+                      onClick={() => void handleCounterOfferDecision("rejected")}
+                      className="flex items-center gap-3 rounded-xl border-2 border-red-400 bg-white px-4 py-4 text-left transition-colors hover:bg-red-50/40 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      {submittingDecision === "rejected" ? <RefreshCw size={16} className="animate-spin" /> : <XCircle size={16} />}
-                      {submittingDecision === "rejected" ? "Rejecting..." : "Reject"}
+                      {submittingDecision === "rejected" ? (
+                        <RefreshCw size={22} className="shrink-0 animate-spin text-red-600" />
+                      ) : (
+                        <XCircle size={22} className="shrink-0 text-red-600" />
+                      )}
+                      <div>
+                        <span className="block text-sm font-semibold text-red-700">
+                          {submittingDecision === "rejected" ? "Rejecting..." : "Reject"}
+                        </span>
+                        <span className="mt-0.5 block text-xs text-red-600/80">
+                          Reject counter-offer; agent may submit a new amount
+                        </span>
+                      </div>
                     </button>
                   </div>
                 </div>
+              ) : (
+                !counterOfferLoading &&
+                counterOffer && (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600">
+                    No counter-offer is pending your response.
+                  </div>
+                )
               )}
 
-              <div className="space-y-3">
+              <CounterOfferHistorySection
+                entries={counterOffer?.counterOfferHistory}
+                currency={displayCurrency}
+                loading={counterOfferLoading}
+              />
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+                <div className="mb-4 flex items-center gap-2 border-b border-slate-100 pb-3">
+                  <Banknote size={18} className="text-indigo-600" />
+                  <h4 className="text-sm font-semibold text-slate-900">Charge breakdown</h4>
+                </div>
+                <div className="space-y-4">
                 <ReadOnlyChargeTable
+                  variant="modal"
                   title="SSL charges"
                   rows={quote.lineItems}
                   totalAmount={quote.baseTotalAmount ?? calculateLineItemsTotal(Array.isArray(quote.lineItems) ? quote.lineItems : [])}
                   currency={quote.currency}
                 />
                 <ReadOnlyChargeTable
+                  variant="modal"
                   title="Trucking charges"
                   rows={quote.truckingLineItems}
                   totalAmount={quote.truckingTotalAmount}
                   currency={quote.currency}
                 />
+                </div>
               </div>
+
+              {quote.remarks && String(quote.remarks).trim() !== "" && (
+                <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+                  <div className="flex items-center gap-2">
+                    <MessageSquare size={16} className="text-slate-500" />
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Remarks</p>
+                  </div>
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-slate-700">{quote.remarks}</p>
+                </div>
+              )}
             </div>
           </div>
-        </div>
 
-        <aside className="w-full shrink-0 border-t border-slate-200 bg-slate-50/80 p-4 lg:w-[320px] lg:border-l lg:border-t-0">
-          <div className="space-y-4">
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <h4 className="text-sm font-semibold text-slate-900">Shipment summary</h4>
-              <div className="mt-4 space-y-3 text-sm">
-                {shipmentSummaryItems.map(([label, value]) => (
-                  <div key={label}>
-                    <p className="text-xs font-medium text-slate-500">{label}</p>
-                    <p className="mt-0.5 text-sm font-semibold text-slate-900">{value}</p>
+        <aside className="w-full shrink-0 border-t border-slate-200 bg-[#f8fafc] lg:w-[300px] lg:border-l lg:border-t-0">
+          <div className="max-h-[40vh] overflow-y-auto p-4 lg:max-h-none lg:p-5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">• Context</p>
+
+            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+              <div className="flex items-center gap-2 text-slate-900">
+                <Package size={16} className="text-slate-500" />
+                <h4 className="text-sm font-semibold">Shipment</h4>
+              </div>
+              <dl className="mt-3 space-y-3">
+                {[
+                  ["Request", requestData?.requestId || requestId],
+                  ["Route", `${requestData?.originPort || "—"} → ${requestData?.destinationPort || "—"}`],
+                  ["Cargo", requestData?.cargoType || shipmentLabel],
+                  ["Container", requestData?.containerType || "—"],
+                  ["Weight / vol.", requestData?.weightOrVolume || "—"],
+                ].map(([dt, dd]) => (
+                  <div key={dt}>
+                    <dt className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{dt}</dt>
+                    <dd className="mt-0.5 text-sm font-medium text-slate-900">{dd}</dd>
                   </div>
                 ))}
-              </div>
+              </dl>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <h4 className="text-sm font-semibold text-slate-900">Offer details</h4>
-              <div className="mt-4 space-y-3 text-sm">
-                {offerSummaryItems.map(([label, value]) => (
-                  <div key={label}>
-                    <p className="text-xs font-medium text-slate-500">{label}</p>
-                    <p className={`mt-0.5 text-sm font-semibold text-slate-900 ${label === "Remarks" ? "whitespace-pre-wrap" : ""}`}>
-                      {value}
-                    </p>
+            <div className="mt-4 rounded-xl border border-indigo-100 bg-indigo-50/40 p-4">
+              <div className="flex items-center gap-2 text-indigo-950">
+                <MapPin size={16} className="text-indigo-500" />
+                <h4 className="text-sm font-semibold">Offer snapshot</h4>
+              </div>
+              <dl className="mt-3 space-y-3">
+                {[
+                  ["Amount", snapshotAmount || quoteAmount],
+                  ["Status", decisionMeta.label],
+                  ["Transit", transitLabel],
+                  ["Valid till", validityLabel],
+                ].map(([dt, dd]) => (
+                  <div key={dt}>
+                    <dt className="text-[11px] font-medium uppercase tracking-wide text-indigo-400/90">{dt}</dt>
+                    <dd className="mt-0.5 text-sm font-semibold text-indigo-950">
+                      {dt === "Status" ? (
+                        <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${decisionMeta.badgeClass}`}>
+                          {dd}
+                        </span>
+                      ) : (
+                        dd
+                      )}
+                    </dd>
                   </div>
                 ))}
-              </div>
+              </dl>
+              {addedByLabel && (
+                <p className="mt-4 border-t border-indigo-200/60 pt-3 text-xs text-indigo-700">Submitted by {addedByLabel}</p>
+              )}
             </div>
+
+            {showCounterOfferActions && (
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={Boolean(submittingDecision)}
+                className="mt-4 w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50 lg:hidden"
+              >
+                Close
+              </button>
+            )}
           </div>
         </aside>
+        </div>
+
+        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-5 py-3 text-xs text-slate-500">
+          <span className="flex items-center gap-1.5">
+            <Shield size={14} className="shrink-0 text-slate-400" />
+            All data is secure and confidential
+          </span>
+          <span className="shrink-0 text-slate-500">Last updated: {lastUpdatedLabel}</span>
+        </div>
       </div>
     </div>
   );
@@ -1278,11 +1658,14 @@ function resolveInitialSslValue(options, quote) {
   return matched?.value || "";
 }
 
-function ReadOnlyChargeTable({ title, rows, totalAmount, currency = "" }) {
+function ReadOnlyChargeTable({ title, rows, totalAmount, currency = "", variant = "default" }) {
   if ((!Array.isArray(rows) || rows.length === 0) && !(Number(totalAmount) > 0)) return null;
+  const isModal = variant === "modal";
+  const amountHeader = currency ? `Amount (${currency})` : "Amount";
+  const totalHeader = currency ? `Total (${currency})` : "Total";
   return (
-    <div className="rounded-lg border border-slate-100 bg-slate-50/70 p-3">
-      <div className="mb-2 flex items-center justify-between gap-3">
+    <div className={isModal ? "rounded-xl border border-slate-200 bg-slate-50/50 p-4" : "rounded-lg border border-slate-100 bg-slate-50/70 p-3"}>
+      <div className="mb-3 flex items-center justify-between gap-3">
         <p className="text-sm font-semibold text-slate-800">{title}</p>
         {Number(totalAmount) > 0 && (
           <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">
@@ -1292,23 +1675,23 @@ function ReadOnlyChargeTable({ title, rows, totalAmount, currency = "" }) {
         )}
       </div>
       {Array.isArray(rows) && rows.length > 0 ? (
-        <div className="overflow-x-auto rounded-lg border border-slate-100 bg-white">
+        <div className={`overflow-x-auto rounded-lg border bg-white ${isModal ? "border-slate-200 shadow-sm" : "border-slate-100"}`}>
           <table className="w-full min-w-[400px] text-sm">
-            <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
+            <thead className="bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
               <tr>
-                <th className="px-3 py-2">Name</th>
-                <th className="px-3 py-2">Qty</th>
-                <th className="px-3 py-2">Amount</th>
-                <th className="px-3 py-2">Total</th>
+                <th className="px-4 py-2.5">Name</th>
+                <th className="px-4 py-2.5">Qty</th>
+                <th className="px-4 py-2.5">{amountHeader}</th>
+                <th className="px-4 py-2.5">{totalHeader}</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((li, i) => (
                 <tr key={i} className="border-t border-slate-100">
-                  <td className="px-3 py-2 font-medium text-slate-800">{li.name ?? "—"}</td>
-                  <td className="px-3 py-2 text-slate-700">{li.quantity ?? "—"}</td>
-                  <td className="px-3 py-2 text-slate-700">{li.amount != null ? Number(li.amount).toLocaleString() : "—"}</td>
-                  <td className="px-3 py-2 font-semibold text-slate-900">{li.total != null ? Number(li.total).toLocaleString() : "—"}</td>
+                  <td className="px-4 py-2.5 font-medium text-slate-800">{li.name ?? "—"}</td>
+                  <td className="px-4 py-2.5 text-slate-700">{li.quantity ?? "—"}</td>
+                  <td className="px-4 py-2.5 text-slate-700">{li.amount != null ? Number(li.amount).toLocaleString() : "—"}</td>
+                  <td className="px-4 py-2.5 font-semibold text-slate-900">{li.total != null ? Number(li.total).toLocaleString() : "—"}</td>
                 </tr>
               ))}
             </tbody>
@@ -1617,13 +2000,13 @@ export function GiveRateModal({ open, onClose, requestId, requestData, authHeade
         await axios.patch(
           `${API_CONFIG.BASE_URL}/api/v1/exporter-rate-requst/${requestId}/operation-ssl-rates/${activeQuote._id}`,
           payload,
-          { headers: { ...authHeaders, "Content-Type": "application/json" } },
+          buildAuthRequestConfig(),
         );
       } else {
         await axios.post(
           `${API_CONFIG.BASE_URL}/api/v1/exporter-rate-requst/${requestId}/operation-ssl-rates`,
           payload,
-          { headers: { ...authHeaders, "Content-Type": "application/json" } },
+          buildAuthRequestConfig(),
         );
       }
       alertify.success(isEditMode ? "SSL rate updated" : "SSL rate submitted");
