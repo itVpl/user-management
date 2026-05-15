@@ -1,29 +1,34 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 
 const getRecipientId = (recipient) => recipient?._id || recipient?.userId || recipient?.id;
 
-const RecipientSelector = ({ recipients, selectedRecipientIds, onChange, error }) => {
-  const [query, setQuery] = useState("");
+const RecipientSelector = ({
+  recipients,
+  selectedRecipientIds,
+  onChange,
+  searchQuery = "",
+  onSearchChange,
+  isLoading = false,
+  error,
+}) => {
+  const selectAllRef = useRef(null);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return recipients;
-    return recipients.filter((r) => {
-      const hay = [
-        r.personName,
-        r.companyName,
-        r.email,
-        r.whatsappNumber,
-        r.contactNumber,
-        r.customerId,
-        r.eventName,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      return hay.includes(q);
-    });
-  }, [recipients, query]);
+  const visibleIds = useMemo(
+    () => recipients.map(getRecipientId).filter(Boolean),
+    [recipients],
+  );
+
+  const allVisibleSelected =
+    visibleIds.length > 0 && visibleIds.every((id) => selectedRecipientIds.includes(id));
+
+  const someVisibleSelected =
+    !allVisibleSelected && visibleIds.some((id) => selectedRecipientIds.includes(id));
+
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = someVisibleSelected;
+    }
+  }, [someVisibleSelected]);
 
   const handleToggle = (id) => {
     const next = selectedRecipientIds.includes(id)
@@ -31,6 +36,20 @@ const RecipientSelector = ({ recipients, selectedRecipientIds, onChange, error }
       : [...selectedRecipientIds, id];
     onChange(next);
   };
+
+  const handleSelectAllToggle = () => {
+    if (allVisibleSelected) {
+      const visibleSet = new Set(visibleIds);
+      onChange(selectedRecipientIds.filter((id) => !visibleSet.has(id)));
+      return;
+    }
+    onChange([...new Set([...selectedRecipientIds, ...visibleIds])]);
+  };
+
+  const handleClearSelection = () => onChange([]);
+
+  const trimmedSearch = searchQuery.trim();
+  const showSelectAll = !isLoading && visibleIds.length > 0;
 
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm ring-1 ring-slate-900/5">
@@ -52,23 +71,57 @@ const RecipientSelector = ({ recipients, selectedRecipientIds, onChange, error }
         <div className="mt-3">
           <input
             type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            value={searchQuery}
+            onChange={(e) => onSearchChange?.(e.target.value)}
             placeholder="Search by name, email, phone, company…"
             className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20"
           />
         </div>
+        {showSelectAll ? (
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200/80 bg-white px-3 py-2">
+            <label className="flex cursor-pointer items-center gap-2.5 text-sm font-medium text-slate-800">
+              <input
+                ref={selectAllRef}
+                type="checkbox"
+                checked={allVisibleSelected}
+                onChange={handleSelectAllToggle}
+                className="h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500"
+              />
+              <span>
+                Select all
+                {trimmedSearch ? (
+                  <span className="font-normal text-slate-500"> ({visibleIds.length} matching)</span>
+                ) : (
+                  <span className="font-normal text-slate-500"> ({visibleIds.length})</span>
+                )}
+              </span>
+            </label>
+            {selectedRecipientIds.length > 0 ? (
+              <button
+                type="button"
+                onClick={handleClearSelection}
+                className="text-xs font-semibold text-violet-700 transition hover:text-violet-900"
+              >
+                Clear selection
+              </button>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       <div className="max-h-72 space-y-2 overflow-y-auto p-4">
-        {recipients.length === 0 ? (
+        {isLoading ? (
           <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50/80 px-4 py-8 text-center text-sm text-slate-500">
-            No recipients loaded. Check permissions or try again later.
+            Searching contacts…
           </p>
-        ) : filtered.length === 0 ? (
-          <p className="text-center text-sm text-slate-500">No matches for “{query}”.</p>
+        ) : recipients.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50/80 px-4 py-8 text-center text-sm text-slate-500">
+            {trimmedSearch
+              ? `No matches for “${trimmedSearch}”.`
+              : "No recipients loaded. Check permissions or try again later."}
+          </p>
         ) : (
-          filtered.map((recipient) => {
+          recipients.map((recipient) => {
             const id = getRecipientId(recipient);
             if (!id) return null;
             const checked = selectedRecipientIds.includes(id);
