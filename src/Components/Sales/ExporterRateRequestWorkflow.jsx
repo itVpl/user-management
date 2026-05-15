@@ -109,6 +109,10 @@ function defaultEmptyLocation() {
   return { address: "", city: "", pincode: "" };
 }
 
+function defaultEmptyTruckingLocation() {
+  return { address: "", city: "", state: "", zipcode: "" };
+}
+
 function cloneDefaultExtraDetailsForm() {
   return {
     productName: "",
@@ -126,6 +130,12 @@ function cloneDefaultExtraDetailsForm() {
     pickupTime: "",
     deliveryTimeAppointment: "",
     specialEquipmentRequired: "",
+    originTruckingRequired: "",
+    originTruckingPickupLocation: defaultEmptyTruckingLocation(),
+    originTruckingDeliveryLocation: defaultEmptyTruckingLocation(),
+    destinationTruckingRequired: "",
+    destinationTruckingPickupLocation: defaultEmptyTruckingLocation(),
+    destinationTruckingDeliveryLocation: defaultEmptyTruckingLocation(),
   };
 }
 
@@ -144,6 +154,22 @@ function normalizeLocationFromApi(v) {
   return defaultEmptyLocation();
 }
 
+function normalizeTruckingLocationFromApi(v) {
+  if (v == null) return defaultEmptyTruckingLocation();
+  if (typeof v === "string" && v.trim()) {
+    return { address: v.trim(), city: "", state: "", zipcode: "" };
+  }
+  if (typeof v === "object") {
+    return {
+      address: v.address != null ? String(v.address) : "",
+      city: v.city != null ? String(v.city) : "",
+      state: v.state != null ? String(v.state) : "",
+      zipcode: getLocationZipcode(v),
+    };
+  }
+  return defaultEmptyTruckingLocation();
+}
+
 function locationHasAnyValue(loc) {
   if (loc == null) return false;
   if (typeof loc === "string") return loc.trim() !== "";
@@ -160,6 +186,36 @@ function buildLocationPayload(loc) {
   const pincode = (loc.pincode || "").trim();
   if (!address && !city && !pincode) return null;
   return { address, city, pincode };
+}
+
+function buildTruckingLocationPayload(loc) {
+  if (!loc || typeof loc !== "object") return null;
+  const address = (loc.address || "").trim();
+  const city = (loc.city || "").trim();
+  const state = (loc.state || "").trim();
+  const zipcode = getLocationZipcode(loc);
+  if (!address && !city && !state && !zipcode) return null;
+  return { address, city, state, zipcode };
+}
+
+function validateTruckingSection(requiredValue, pickupLocation, deliveryLocation, sectionLabel) {
+  if (String(requiredValue || "").trim().toLowerCase() !== "yes") return null;
+
+  const pickup = buildTruckingLocationPayload(pickupLocation);
+  const delivery = buildTruckingLocationPayload(deliveryLocation);
+
+  if (!pickup || !delivery) {
+    return `${sectionLabel}: pickup and delivery locations are required when trucking is Yes.`;
+  }
+
+  const hasFullPickup = pickup.address && pickup.city && pickup.state && pickup.zipcode;
+  const hasFullDelivery = delivery.address && delivery.city && delivery.state && delivery.zipcode;
+
+  if (!hasFullPickup || !hasFullDelivery) {
+    return `${sectionLabel}: address, city, state, and zipcode are required for both pickup and delivery.`;
+  }
+
+  return null;
 }
 
 function formatLocationForView(loc) {
@@ -269,6 +325,14 @@ function detailToExtraForm(detail) {
 
   f.exactPickupLocation = normalizeLocationFromApi(detail.exactPickupLocation);
   f.exactDeliveryLocation = normalizeLocationFromApi(detail.exactDeliveryLocation);
+  f.originTruckingPickupLocation = normalizeTruckingLocationFromApi(detail.originTruckingPickupLocation);
+  f.originTruckingDeliveryLocation = normalizeTruckingLocationFromApi(detail.originTruckingDeliveryLocation);
+  f.destinationTruckingPickupLocation = normalizeTruckingLocationFromApi(
+    detail.destinationTruckingPickupLocation,
+  );
+  f.destinationTruckingDeliveryLocation = normalizeTruckingLocationFromApi(
+    detail.destinationTruckingDeliveryLocation,
+  );
 
   const scalarKeys = [
     "productName",
@@ -284,6 +348,8 @@ function detailToExtraForm(detail) {
     "pickupTime",
     "deliveryTimeAppointment",
     "specialEquipmentRequired",
+    "originTruckingRequired",
+    "destinationTruckingRequired",
   ];
 
   for (const key of scalarKeys) {
@@ -341,6 +407,26 @@ function buildExtraDetailsPayload(form) {
 
   if (form.deliveryTimeAppointment?.trim()) out.deliveryTimeAppointment = form.deliveryTimeAppointment.trim();
   if (form.specialEquipmentRequired?.trim()) out.specialEquipmentRequired = form.specialEquipmentRequired.trim();
+
+  if (form.originTruckingRequired) {
+    out.originTruckingRequired = form.originTruckingRequired;
+    if (String(form.originTruckingRequired).toLowerCase() !== "no") {
+      const originPickup = buildTruckingLocationPayload(form.originTruckingPickupLocation);
+      const originDelivery = buildTruckingLocationPayload(form.originTruckingDeliveryLocation);
+      if (originPickup) out.originTruckingPickupLocation = originPickup;
+      if (originDelivery) out.originTruckingDeliveryLocation = originDelivery;
+    }
+  }
+
+  if (form.destinationTruckingRequired) {
+    out.destinationTruckingRequired = form.destinationTruckingRequired;
+    if (String(form.destinationTruckingRequired).toLowerCase() !== "no") {
+      const destinationPickup = buildTruckingLocationPayload(form.destinationTruckingPickupLocation);
+      const destinationDelivery = buildTruckingLocationPayload(form.destinationTruckingDeliveryLocation);
+      if (destinationPickup) out.destinationTruckingPickupLocation = destinationPickup;
+      if (destinationDelivery) out.destinationTruckingDeliveryLocation = destinationDelivery;
+    }
+  }
 
   return out;
 }
@@ -494,10 +580,51 @@ function formatOwnerRef(owner) {
   return name || id || owner._id || null;
 }
 
+function formatYesNoValue(value) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+  const s = raw.toLowerCase();
+  if (s === "yes" || s === "true") return "Yes";
+  if (s === "no" || s === "false") return "No";
+  return raw;
+}
+
+function getExtraDetailsGetUrl(kind, identifier) {
+  const safe = encodeURIComponent(identifier);
+  if (kind === "agent") {
+    return `${API_CONFIG.BASE_URL}/api/v1/agent-customer/rate-requests/${safe}`;
+  }
+  return `${API_CONFIG.BASE_URL}/api/v1/exporter-rate-requst/${safe}`;
+}
+
+function getExtraDetailsPatchUrl(kind, identifier) {
+  const safe = encodeURIComponent(identifier);
+  if (kind === "agent") {
+    return `${API_CONFIG.BASE_URL}/api/v1/agent-customer/rate-requests/${safe}`;
+  }
+  return `${API_CONFIG.BASE_URL}/api/v1/exporter-rate-requst/${safe}/extra-details`;
+}
+
 /** Shared read-only body for exporter + agent rate request detail modals */
 function RateRequestDetailBody({ detail }) {
   if (!detail) return null;
   const isAgentStyle = Boolean(detail.submissionChannel || detail.capturedByRef || detail.receivedAt);
+  const exporterRef =
+    detail.exporterCompany && typeof detail.exporterCompany === "object" ? detail.exporterCompany : null;
+  const hasOriginTruckingBlock =
+    detail.originTruckingRequired != null ||
+    detail.originTruckingPickupLocation != null ||
+    detail.originTruckingDeliveryLocation != null;
+  const hasDestinationTruckingBlock =
+    detail.destinationTruckingRequired != null ||
+    detail.destinationTruckingPickupLocation != null ||
+    detail.destinationTruckingDeliveryLocation != null;
+  const hasModernTruckingBlocks = hasOriginTruckingBlock || hasDestinationTruckingBlock;
+  const hasLegacyTruckingBlock =
+    !hasModernTruckingBlocks &&
+    (detail.truckingRequired != null ||
+      detail.truckingPickupLocation != null ||
+      detail.truckingDeliveryLocation != null);
   return (
     <>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -555,6 +682,8 @@ function RateRequestDetailBody({ detail }) {
             <DetailField label="Captured by" value={formatExporterCompany(detail.capturedBy)} />
             <DetailField label="Received at" value={formatDateTime(detail.receivedAt)} />
             <DetailField label="Quote due" value={formatDateTime(detail.quoteDueAt)} />
+            <DetailField label="Created at" value={formatDateTime(detail.createdAt)} />
+            <DetailField label="Updated at" value={formatDateTime(detail.updatedAt)} />
           </div>
         </div>
       )}
@@ -566,9 +695,13 @@ function RateRequestDetailBody({ detail }) {
         </h4>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <DetailField label="Exporter company" value={formatExporterCompany(detail.exporterCompany)} />
+          <DetailField label="Customer ID" value={exporterRef?.customerId} />
+          <DetailField label="Exporter person" value={exporterRef?.personName} />
           <DetailField label="Contact person" value={detail.contactPerson} />
           <DetailField label="Contact email" value={detail.contactEmail} />
           <DetailField label="Contact phone" value={detail.contactPhone} />
+          <DetailField label="Exporter email" value={exporterRef?.email} />
+          <DetailField label="Exporter phone" value={exporterRef?.contactNumber} />
         </div>
       </div>
 
@@ -592,16 +725,51 @@ function RateRequestDetailBody({ detail }) {
         <ContainerTypeDisplay value={detail.containerType} />
       </div>
 
-      {isYesValue(detail.truckingRequired) && (
+      {hasModernTruckingBlocks && (
+        <div className="rounded-2xl border border-amber-100 bg-amber-50/80 p-5">
+          <h4 className="mb-4 flex items-center gap-2 text-sm font-semibold text-amber-900">
+            <Truck size={18} className="text-amber-700" />
+            Trucking details
+          </h4>
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            {hasOriginTruckingBlock && (
+              <ReadonlyTruckingSectionCard
+                title="Origin trucking"
+                requiredValue={detail.originTruckingRequired}
+                pickupLocation={detail.originTruckingPickupLocation}
+                deliveryLocation={detail.originTruckingDeliveryLocation}
+              />
+            )}
+            {hasDestinationTruckingBlock && (
+              <ReadonlyTruckingSectionCard
+                title="Destination trucking"
+                requiredValue={detail.destinationTruckingRequired}
+                pickupLocation={detail.destinationTruckingPickupLocation}
+                deliveryLocation={detail.destinationTruckingDeliveryLocation}
+              />
+            )}
+          </div>
+        </div>
+      )}
+
+      {hasLegacyTruckingBlock && (
         <div className="rounded-2xl border border-amber-100 bg-amber-50/80 p-5">
           <h4 className="mb-4 flex items-center gap-2 text-sm font-semibold text-amber-900">
             <Truck size={18} className="text-amber-700" />
             Trucking details
           </h4>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <DetailField label="Trucking required" value="Yes" />
-            <DetailField label="Pickup location" value={formatLocationForView(detail.truckingPickupLocation) || "-"} multiline />
-            <DetailField label="Delivery location" value={formatLocationForView(detail.truckingDeliveryLocation) || "-"} multiline />
+            <DetailField label="Trucking required" value={formatYesNoValue(detail.truckingRequired) || "N/A"} />
+            <DetailField
+              label="Pickup location"
+              value={formatLocationForView(detail.truckingPickupLocation) || "-"}
+              multiline
+            />
+            <DetailField
+              label="Delivery location"
+              value={formatLocationForView(detail.truckingDeliveryLocation) || "-"}
+              multiline
+            />
           </div>
         </div>
       )}
@@ -688,6 +856,7 @@ export default function ExporterRateRequestWorkflow() {
   const [showCreate, setShowCreate] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showExtraDetailsModal, setShowExtraDetailsModal] = useState(false);
+  const [extraDetailsMode, setExtraDetailsMode] = useState("rate");
   const [extraDetailsRequestId, setExtraDetailsRequestId] = useState("");
   const [extraDetailsForm, setExtraDetailsForm] = useState(() => cloneDefaultExtraDetailsForm());
   const [extraDetailsLoading, setExtraDetailsLoading] = useState(false);
@@ -1004,13 +1173,14 @@ export default function ExporterRateRequestWorkflow() {
     setShowDetailModal(true);
   };
 
-  const openExtraDetailsModal = async (requestId) => {
+  const openExtraDetailsModal = async (requestId, mode = "rate") => {
+    setExtraDetailsMode(mode);
     setExtraDetailsRequestId(requestId);
     setShowExtraDetailsModal(true);
     setExtraDetailsLoading(true);
     setExtraDetailsForm(cloneDefaultExtraDetailsForm());
     try {
-      const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/exporter-rate-requst/${requestId}`, {
+      const res = await axios.get(getExtraDetailsGetUrl(mode, requestId), {
         headers: authHeaders,
       });
       const d = res.data?.data;
@@ -1024,6 +1194,30 @@ export default function ExporterRateRequestWorkflow() {
 
   const submitExtraDetails = async (e) => {
     e.preventDefault();
+    if (extraDetailsMode === "agent") {
+      const originError = validateTruckingSection(
+        extraDetailsForm.originTruckingRequired,
+        extraDetailsForm.originTruckingPickupLocation,
+        extraDetailsForm.originTruckingDeliveryLocation,
+        "Origin trucking",
+      );
+      if (originError) {
+        alertify.error(originError);
+        return;
+      }
+
+      const destinationError = validateTruckingSection(
+        extraDetailsForm.destinationTruckingRequired,
+        extraDetailsForm.destinationTruckingPickupLocation,
+        extraDetailsForm.destinationTruckingDeliveryLocation,
+        "Destination trucking",
+      );
+      if (destinationError) {
+        alertify.error(destinationError);
+        return;
+      }
+    }
+
     const payload = buildExtraDetailsPayload(extraDetailsForm);
     if (Object.keys(payload).length === 0) {
       alertify.error("Enter at least one field to save.");
@@ -1032,13 +1226,17 @@ export default function ExporterRateRequestWorkflow() {
     setExtraDetailsSubmitting(true);
     try {
       await axios.patch(
-        `${API_CONFIG.BASE_URL}/api/v1/exporter-rate-requst/${extraDetailsRequestId}/extra-details`,
+        getExtraDetailsPatchUrl(extraDetailsMode, extraDetailsRequestId),
         payload,
         { headers: { ...authHeaders, "Content-Type": "application/json" } },
       );
-      alertify.success("Customs details saved");
+      alertify.success(extraDetailsMode === "agent" ? "Rate request updated successfully." : "Customs details saved");
       setShowExtraDetailsModal(false);
-      fetchList();
+      if (extraDetailsMode === "agent") {
+        await loadAgentRequests();
+      } else {
+        await fetchList();
+      }
     } catch (err) {
       alertify.error(err.response?.data?.message || "Failed to save customs details");
     } finally {
@@ -1229,7 +1427,7 @@ export default function ExporterRateRequestWorkflow() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => openExtraDetailsModal(item._id)}
+                          onClick={() => openExtraDetailsModal(item._id, "rate")}
                           className="px-4 py-1 rounded border border-purple-500 text-purple-500 text-sm font-medium hover:bg-purple-50 transition-colors min-w-[70px] inline-flex items-center justify-center gap-1"
                         >
                           <ClipboardList size={14} /> Customs
@@ -1314,40 +1512,49 @@ export default function ExporterRateRequestWorkflow() {
                 {agentRequests.map((item) => {
                   const requestUnreadCount = getExporterQuoteRequestUnreadCount(requestUnreadMap, item);
                   return (
-                  <tr key={item._id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                    <td className="py-4 px-4">
-                      <span className="text-sm text-gray-600 font-medium">{item.requestId || item._id}</span>
-                    </td>
-                    <td className="py-4 px-4">
-                      <span className="text-sm font-medium text-gray-800 block">
-                        {formatExporterCompany(item.exporterCompany)}
-                      </span>
-                      <span className="text-xs text-gray-500">{item.contactPerson || "N/A"}</span>
-                    </td>
-                    <td className="py-4 px-4">
-                      <span className="text-sm font-medium text-gray-800">
-                        {item.originPort || "-"} to {item.destinationPort || "-"}
-                      </span>
-                    </td>
-                    <td className="py-4 px-4">
-                      <span className="text-sm font-medium text-gray-800">{formatStatusLabel(item.status)}</span>
-                    </td>
-                    <td className="py-4 px-4">
-                      <span className="text-sm font-medium text-gray-800">{formatDateTime(item.quoteDueAt)}</span>
-                    </td>
-                    <td className="py-4 px-4">
-                      <button
-                        type="button"
-                        onClick={() => openAgentDetail(item)}
-                        className="px-4 py-1 rounded border border-green-500 text-green-500 text-sm font-medium hover:bg-green-50 transition-colors min-w-[70px] inline-flex items-center justify-center gap-1"
-                        title={requestUnreadCount > 0 ? `${requestUnreadCount} unread message${requestUnreadCount === 1 ? "" : "s"} in this request` : "View"}
-                      >
-                        <Eye size={14} /> View
-                        <BlinkingUnreadDot count={requestUnreadCount} className="ml-1" />
-                      </button>
-                    </td>
-                  </tr>
-                );
+                    <tr key={item._id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                      <td className="py-4 px-4">
+                        <span className="text-sm text-gray-600 font-medium">{item.requestId || item._id}</span>
+                      </td>
+                      <td className="py-4 px-4">
+                        <span className="text-sm font-medium text-gray-800 block">
+                          {formatExporterCompany(item.exporterCompany)}
+                        </span>
+                        <span className="text-xs text-gray-500">{item.contactPerson || "N/A"}</span>
+                      </td>
+                      <td className="py-4 px-4">
+                        <span className="text-sm font-medium text-gray-800">
+                          {item.originPort || "-"} to {item.destinationPort || "-"}
+                        </span>
+                      </td>
+                      <td className="py-4 px-4">
+                        <span className="text-sm font-medium text-gray-800">{formatStatusLabel(item.status)}</span>
+                      </td>
+                      <td className="py-4 px-4">
+                        <span className="text-sm font-medium text-gray-800">{formatDateTime(item.quoteDueAt)}</span>
+                      </td>
+                      <td className="py-4 px-4">
+                        <div className="flex flex-wrap gap-3">
+                          <button
+                            type="button"
+                            onClick={() => openAgentDetail(item)}
+                            className="px-4 py-1 rounded border border-green-500 text-green-500 text-sm font-medium hover:bg-green-50 transition-colors min-w-[70px] inline-flex items-center justify-center gap-1"
+                            title={requestUnreadCount > 0 ? `${requestUnreadCount} unread message${requestUnreadCount === 1 ? "" : "s"} in this request` : "View"}
+                          >
+                            <Eye size={14} /> View
+                            <BlinkingUnreadDot count={requestUnreadCount} className="ml-1" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openExtraDetailsModal(item.requestId || item._id, "agent")}
+                            className="px-4 py-1 rounded border border-purple-500 text-purple-500 text-sm font-medium hover:bg-purple-50 transition-colors min-w-[70px] inline-flex items-center justify-center gap-1"
+                          >
+                            <ClipboardList size={14} /> Customs
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
                 })}
               </tbody>
             </table>
@@ -1693,7 +1900,9 @@ export default function ExporterRateRequestWorkflow() {
                 <div className="min-w-0">
                   <h3 className="text-lg font-semibold truncate">Customs & shipment extras</h3>
                   <p className="text-violet-100 text-xs truncate">
-                    PATCH extra-details · Request ID optional — fill any fields you have
+                    {extraDetailsMode === "agent"
+                      ? "PATCH agent-customer/rate-requests/:identifier"
+                      : "PATCH extra-details · Request ID optional — fill any fields you have"}
                   </p>
                 </div>
               </div>
@@ -1843,6 +2052,114 @@ export default function ExporterRateRequestWorkflow() {
                     </div>
                   </ExtraSection>
 
+                  {extraDetailsMode === "agent" && (
+                    <>
+                      <EditableTruckingSection
+                        tone="amber"
+                        title="Origin trucking"
+                        requiredLabel="Origin trucking required"
+                        requiredValue={extraDetailsForm.originTruckingRequired}
+                        onRequiredChange={(value) =>
+                          setExtraDetailsForm((p) => ({
+                            ...p,
+                            originTruckingRequired: value,
+                            ...(String(value).toLowerCase() === "no"
+                              ? {
+                                  originTruckingPickupLocation: defaultEmptyTruckingLocation(),
+                                  originTruckingDeliveryLocation: defaultEmptyTruckingLocation(),
+                                }
+                              : {}),
+                          }))
+                        }
+                        pickupLocation={extraDetailsForm.originTruckingPickupLocation}
+                        deliveryLocation={extraDetailsForm.originTruckingDeliveryLocation}
+                        onPickupChange={(field, value) =>
+                          setExtraDetailsForm((p) => ({
+                            ...p,
+                            originTruckingPickupLocation: {
+                              ...p.originTruckingPickupLocation,
+                              [field]: value,
+                            },
+                          }))
+                        }
+                        onDeliveryChange={(field, value) =>
+                          setExtraDetailsForm((p) => ({
+                            ...p,
+                            originTruckingDeliveryLocation: {
+                              ...p.originTruckingDeliveryLocation,
+                              [field]: value,
+                            },
+                          }))
+                        }
+                        disabled={String(extraDetailsForm.originTruckingRequired).toLowerCase() === "no"}
+                        pickupPlaceholders={{
+                          address: "Updated pickup address",
+                          city: "Gurugram",
+                          state: "Haryana",
+                          zipcode: "122016",
+                        }}
+                        deliveryPlaceholders={{
+                          address: "Updated delivery address",
+                          city: "New Delhi",
+                          state: "Delhi",
+                          zipcode: "110037",
+                        }}
+                      />
+
+                      <EditableTruckingSection
+                        tone="slate"
+                        title="Destination trucking"
+                        requiredLabel="Destination trucking required"
+                        requiredValue={extraDetailsForm.destinationTruckingRequired}
+                        onRequiredChange={(value) =>
+                          setExtraDetailsForm((p) => ({
+                            ...p,
+                            destinationTruckingRequired: value,
+                            ...(String(value).toLowerCase() === "no"
+                              ? {
+                                  destinationTruckingPickupLocation: defaultEmptyTruckingLocation(),
+                                  destinationTruckingDeliveryLocation: defaultEmptyTruckingLocation(),
+                                }
+                              : {}),
+                          }))
+                        }
+                        pickupLocation={extraDetailsForm.destinationTruckingPickupLocation}
+                        deliveryLocation={extraDetailsForm.destinationTruckingDeliveryLocation}
+                        onPickupChange={(field, value) =>
+                          setExtraDetailsForm((p) => ({
+                            ...p,
+                            destinationTruckingPickupLocation: {
+                              ...p.destinationTruckingPickupLocation,
+                              [field]: value,
+                            },
+                          }))
+                        }
+                        onDeliveryChange={(field, value) =>
+                          setExtraDetailsForm((p) => ({
+                            ...p,
+                            destinationTruckingDeliveryLocation: {
+                              ...p.destinationTruckingDeliveryLocation,
+                              [field]: value,
+                            },
+                          }))
+                        }
+                        disabled={String(extraDetailsForm.destinationTruckingRequired).toLowerCase() === "no"}
+                        pickupPlaceholders={{
+                          address: "Port terminal yard",
+                          city: "Los Angeles",
+                          state: "California",
+                          zipcode: "90731",
+                        }}
+                        deliveryPlaceholders={{
+                          address: "Customer warehouse",
+                          city: "Long Beach",
+                          state: "California",
+                          zipcode: "90802",
+                        }}
+                      />
+                    </>
+                  )}
+
                   <ExtraSection tone="amber" icon={Clock3} title="Schedule & timing">
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                       <FieldLabel label="Cargo ready date">
@@ -1969,7 +2286,11 @@ export default function ExporterRateRequestWorkflow() {
                 disabled={extraDetailsSubmitting || extraDetailsLoading}
                 className="px-4 py-2 text-sm rounded-lg bg-violet-600 text-white font-medium hover:bg-violet-700 disabled:opacity-50"
               >
-                {extraDetailsSubmitting ? "Saving…" : "Save customs details"}
+                {extraDetailsSubmitting
+                  ? "Saving…"
+                  : extraDetailsMode === "agent"
+                    ? "Save request details"
+                    : "Save customs details"}
               </button>
             </div>
           </form>
@@ -1990,6 +2311,58 @@ function DetailField({ label, value, multiline }) {
       >
         {display}
       </p>
+    </div>
+  );
+}
+
+function ReadonlyTruckingSectionCard({ title, requiredValue, pickupLocation, deliveryLocation }) {
+  const normalizedRequired = formatYesNoValue(requiredValue) || "No";
+  const shouldShowLocations =
+    normalizedRequired === "Yes" ||
+    formatLocationForView(pickupLocation) ||
+    formatLocationForView(deliveryLocation);
+
+  return (
+    <div className="rounded-xl border border-amber-200 bg-white p-4 shadow-sm">
+      <h5 className="mb-3 text-sm font-semibold text-amber-900">{title}</h5>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <DetailField label="Trucking required" value={normalizedRequired} />
+        {shouldShowLocations && (
+          <div className="md:col-span-2 grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <ReadonlyTruckingLocationBlock title="Pickup location" location={pickupLocation} />
+            <ReadonlyTruckingLocationBlock title="Delivery location" location={deliveryLocation} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ReadonlyTruckingLocationBlock({ title, location }) {
+  const normalizedLocation =
+    location && typeof location === "object"
+      ? {
+          address: String(location.address ?? "").trim(),
+          city: String(location.city ?? "").trim(),
+          state: String(location.state ?? "").trim(),
+          zipcode: getLocationZipcode(location),
+        }
+      : {
+          address: typeof location === "string" ? location.trim() : "",
+          city: "",
+          state: "",
+          zipcode: "",
+        };
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+      <h6 className="mb-3 text-sm font-semibold text-slate-900">{title}</h6>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <DetailField label="Address" value={normalizedLocation.address || "N/A"} />
+        <DetailField label="City" value={normalizedLocation.city || "N/A"} />
+        <DetailField label="State" value={normalizedLocation.state || "N/A"} />
+        <DetailField label="Zipcode" value={normalizedLocation.zipcode || "N/A"} />
+      </div>
     </div>
   );
 }
@@ -2223,6 +2596,124 @@ function FieldLabel({ label, required = false, className = "", hint, children })
       </label>
       {hint ? <p className="text-xs text-slate-500 mb-2">{hint}</p> : null}
       {children}
+    </div>
+  );
+}
+
+function EditableTruckingSection({
+  tone,
+  title,
+  requiredLabel,
+  requiredValue,
+  onRequiredChange,
+  pickupLocation,
+  deliveryLocation,
+  onPickupChange,
+  onDeliveryChange,
+  disabled,
+  pickupPlaceholders,
+  deliveryPlaceholders,
+}) {
+  const toneMap = {
+    amber: {
+      cardBorder: "border-amber-100",
+      cardHeading: "text-amber-900",
+    },
+    slate: {
+      cardBorder: "border-slate-200",
+      cardHeading: "text-slate-900",
+    },
+  };
+  const currentTone = toneMap[tone] || toneMap.slate;
+
+  return (
+    <ExtraSection tone={tone} icon={Truck} title={title}>
+      <div className="grid grid-cols-1 gap-4">
+        <FieldLabel label={requiredLabel}>
+          <SearchableSelect
+            value={requiredValue}
+            onChange={onRequiredChange}
+            options={YES_NO_SEARCH_OPTIONS}
+            placeholder="Select..."
+            className="w-full"
+            compact
+          />
+        </FieldLabel>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <TruckingLocationCard
+            title="Pickup location"
+            borderClass={currentTone.cardBorder}
+            headingClass={currentTone.cardHeading}
+            location={pickupLocation}
+            disabled={disabled}
+            onChange={onPickupChange}
+            placeholders={pickupPlaceholders}
+          />
+          <TruckingLocationCard
+            title="Delivery location"
+            borderClass={currentTone.cardBorder}
+            headingClass={currentTone.cardHeading}
+            location={deliveryLocation}
+            disabled={disabled}
+            onChange={onDeliveryChange}
+            placeholders={deliveryPlaceholders}
+          />
+        </div>
+      </div>
+    </ExtraSection>
+  );
+}
+
+function TruckingLocationCard({
+  title,
+  borderClass,
+  headingClass,
+  location,
+  disabled,
+  onChange,
+  placeholders,
+}) {
+  return (
+    <div className={`rounded-xl border bg-white p-4 ${borderClass}`}>
+      <h5 className={`mb-3 text-sm font-semibold ${headingClass}`}>{title}</h5>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <FieldLabel label="Address" className="md:col-span-3">
+          <input
+            className={extraInputClass}
+            value={location.address}
+            disabled={disabled}
+            onChange={(e) => onChange("address", e.target.value)}
+            placeholder={placeholders.address}
+          />
+        </FieldLabel>
+        <FieldLabel label="City">
+          <input
+            className={extraInputClass}
+            value={location.city}
+            disabled={disabled}
+            onChange={(e) => onChange("city", e.target.value)}
+            placeholder={placeholders.city}
+          />
+        </FieldLabel>
+        <FieldLabel label="State">
+          <input
+            className={extraInputClass}
+            value={location.state}
+            disabled={disabled}
+            onChange={(e) => onChange("state", e.target.value)}
+            placeholder={placeholders.state}
+          />
+        </FieldLabel>
+        <FieldLabel label="Zipcode">
+          <input
+            className={extraInputClass}
+            value={location.zipcode}
+            disabled={disabled}
+            onChange={(e) => onChange("zipcode", e.target.value)}
+            placeholder={placeholders.zipcode}
+          />
+        </FieldLabel>
+      </div>
     </div>
   );
 }
