@@ -18,7 +18,20 @@ import {
   Search,
   Paperclip,
   Eye,
+  RefreshCw,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
 } from "lucide-react";
+import AppModal, {
+  ModalSection,
+  SECTION_TONES,
+  MODAL_INPUT,
+  MODAL_LABEL,
+  MODAL_BTN_CANCEL,
+  MODAL_BTN_PRIMARY,
+} from "../common/AppModal";
+import { ViewActionButton, PayActionButton } from "../common/InvoiceTableActions";
 import API_CONFIG from "../../config/api.js";
 import alertify from "alertifyjs";
 import "alertifyjs/build/css/alertify.css";
@@ -638,78 +651,75 @@ const AcountentPayable = () => {
     }
   };
 
+  const handleRefresh = () => {
+    dispatch(
+      fetchDOs({
+        page: currentPage,
+        limit: itemsPerPage,
+        status: selectedStatus,
+        forceRefresh: true,
+      }),
+    );
+  };
+
   return (
-    <div className="p-6">
+    <div className="p-6 bg-white min-h-screen">
       {/* Header Section */}
       <div className="flex flex-col gap-6 mb-6 border border-gray-200 rounded-xl p-6 bg-white">
         {/* Stats Cards - full width */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white rounded-xl border border-gray-200 p-6 h-[90px]">
-            <div className="flex items-center gap-4 w-full">
-              <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-gray-700 font-bold text-2xl shrink-0">
-                {statistics.total || dos.length}
-              </div>
-              <div className="flex-1 text-center">
-                <span className="text-gray-700 font-semibold text-lg">
-                  Total DO
-                </span>
-              </div>
-              <div className="w-12 shrink-0" />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-white rounded-xl border border-gray-200 p-6 h-[90px] flex items-center relative">
+            <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-gray-700 font-bold text-xl">
+              {statistics.total || dos.length}
+            </div>
+            <div className="absolute inset-0 flex items-center justify-center text-gray-700 font-semibold">
+              Total DO
             </div>
           </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-6 h-[90px]">
-            <div className="flex items-center gap-4 w-full">
-              <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center text-gray-700 font-bold text-2xl shrink-0">
-                {statistics.sales_verified ?? 0}
-              </div>
-              <div className="flex-1 text-center">
-                <span className="text-gray-700 font-semibold text-lg">
-                  Sales Verified
-                </span>
-              </div>
-              <div className="w-12 shrink-0" />
+          <div className="bg-white rounded-xl border border-gray-200 p-6 h-[90px] flex items-center relative">
+            <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-gray-700 font-bold text-xl">
+              {statistics.sales_verified ?? 0}
+            </div>
+            <div className="absolute inset-0 flex items-center justify-center text-gray-700 font-semibold">
+              Sales Verified
             </div>
           </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-6 h-[90px]">
-            <div className="flex items-center gap-4 w-full">
-              <div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center text-gray-700 font-bold text-2xl shrink-0">
-                {statistics.cmt_verified ?? 0}
-              </div>
-              <div className="flex-1 text-center">
-                <span className="text-gray-700 font-semibold text-lg">
-                  CMT Verified
-                </span>
-              </div>
-              <div className="w-12 shrink-0" />
+          <div className="bg-white rounded-xl border border-gray-200 p-6 h-[90px] flex items-center relative">
+            <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-gray-700 font-bold text-xl">
+              {statistics.cmt_verified ?? 0}
+            </div>
+            <div className="absolute inset-0 flex items-center justify-center text-gray-700 font-semibold">
+              CMT Verified
             </div>
           </div>
         </div>
 
         {/* Search + Status Filter */}
-        <div className="flex items-stretch gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           <div className="relative flex-1 min-w-0">
+            <Search
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+              size={22}
+            />
             <input
               type="text"
-              placeholder="Search DOs..."
+              placeholder="Search DOs (Load No / Bill To / Carrier)..."
               value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value);
                 dispatch(setCurrentPage(1));
               }}
-              className="w-full h-[45px] pl-10 pr-4 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-colors text-gray-700 placeholder-gray-400 text-sm"
-            />
-            <Search
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-              size={20}
+              className="w-full pl-6 pr-12 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-colors text-gray-600 placeholder-gray-400"
             />
           </div>
-          <div className="w-[220px] shrink-0">
+          <div className="w-full sm:w-[220px] shrink-0">
             <select
               value={selectedStatus}
               onChange={(e) => {
                 dispatch(setSelectedStatus(e.target.value));
+                dispatch(setCurrentPage(1));
               }}
-              className="w-full h-[45px] px-4 border border-gray-300 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
+              className="w-full h-11 px-4 border border-gray-200 rounded-xl bg-gray-50 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
             >
               <option value="all">All Statuses</option>
               <option value="sales_verified">Sales Verified</option>
@@ -718,76 +728,50 @@ const AcountentPayable = () => {
               <option value="accountant_rejected">Accountant Rejected</option>
             </select>
           </div>
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={loading}
+            className="inline-flex items-center justify-center gap-2 h-11 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shrink-0"
+          >
+            <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
+            <span>Refresh</span>
+          </button>
         </div>
       </div>
 
-      {/* Payment Modal - DO Selection */}
-      {showPaymentModal && (
-        <div
-          className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
-          onClick={() => {
-            setShowPaymentModal(false);
-            setSelectedDoId("");
-          }}
-        >
-          <div
-            className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-t-3xl">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                    <DollarSign className="text-white" size={24} />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-bold">Make Payment</h2>
-                    <p className="text-green-100">Select a Delivery Order</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => {
-                    setShowPaymentModal(false);
-                    setSelectedDoId("");
-                  }}
-                  className="text-white hover:text-gray-200 text-2xl font-bold"
-                >
-                  ×
-                </button>
-              </div>
-            </div>
-
-            {/* Content */}
-            <div className="p-6 relative">
-              {loadingDetails && (
-                <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center z-10 rounded-b-3xl">
-                  <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-3"></div>
-                    <p className="text-gray-600 font-medium">
-                      Loading DO details...
-                    </p>
-                  </div>
-                </div>
-              )}
-              <p className="text-gray-600 mb-4">
-                Select a delivery order to manage payment details
-              </p>
-              <SearchableDropdown
-                value={selectedDoId}
-                onChange={(doId) => {
-                  setSelectedDoId(doId);
-                  handleDoSelect(doId);
-                }}
-                options={doOptions}
-                placeholder="Select a Delivery Order"
-                loading={loading}
-                searchPlaceholder="Search DOs..."
-              />
-            </div>
+      <AppModal
+        open={showPaymentModal}
+        onClose={() => {
+          setShowPaymentModal(false);
+          setSelectedDoId("");
+        }}
+        title="Make Payment"
+        subtitle="Select a Delivery Order"
+        icon={DollarSign}
+        size="md"
+      >
+        {loadingDetails && (
+          <div className="mb-4 flex items-center gap-2 text-sm text-gray-600">
+            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600" />
+            Loading DO details...
           </div>
-        </div>
-      )}
+        )}
+        <p className="text-sm text-gray-600 mb-4">
+          Select a delivery order to manage payment details
+        </p>
+        <SearchableDropdown
+          value={selectedDoId}
+          onChange={(doId) => {
+            setSelectedDoId(doId);
+            handleDoSelect(doId);
+          }}
+          options={doOptions}
+          placeholder="Select a Delivery Order"
+          loading={loading}
+          searchPlaceholder="Search DOs..."
+        />
+      </AppModal>
 
       {/* Loading Modal */}
       {loadingDetails && (
@@ -804,66 +788,34 @@ const AcountentPayable = () => {
         </div>
       )}
 
-      {/* DO Details Modal */}
-      {showDetailsModal && selectedDoDetails && (
-        <div
-          className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
-          onClick={() => {
-            setShowDetailsModal(false);
-            setSelectedDoDetails(null);
-            setSelectedDoId("");
-            setAccountantImgs(null);
-            setAccountantImgsErr("");
-          }}
-        >
-          <div
-            className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-6 rounded-t-3xl">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                    <FileText className="text-white" size={24} />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-bold">DO Details</h2>
-                    <p className="text-blue-100">Payment Management</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => {
-                    setShowDetailsModal(false);
-                    setSelectedDoDetails(null);
-                    setSelectedDoId("");
-                    setAccountantImgs(null);
-                    setAccountantImgsErr("");
-                  }}
-                  className="text-white hover:text-gray-200 text-2xl font-bold"
-                >
-                  ×
-                </button>
-              </div>
-            </div>
-
-            {/* Content */}
-            <div className="p-6 space-y-6">
+      <AppModal
+        open={showDetailsModal && !!selectedDoDetails}
+        onClose={() => {
+          setShowDetailsModal(false);
+          setSelectedDoDetails(null);
+          setSelectedDoId("");
+          setAccountantImgs(null);
+          setAccountantImgsErr("");
+        }}
+        title="DO Details"
+        subtitle={
+          selectedDoDetails?.customers?.[0]?.loadNo
+            ? `Load #${selectedDoDetails.customers[0].loadNo}`
+            : "Payment management"
+        }
+        icon={FileText}
+        size="xl"
+        contentClassName="!py-5"
+      >
+        <div className="space-y-5">
               {/* Customer Information */}
               {selectedDoDetails?.customers?.length > 0 && (
-                <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6">
-                  <div className="flex items-center gap-2 mb-4">
-                    <User className="text-green-600" size={20} />
-                    <h3 className="text-lg font-bold text-gray-800">
-                      Customer Information
-                    </h3>
-                  </div>
-
-                  <div className="space-y-4">
+                <ModalSection title="Customer Information" icon={User} tone="customer">
+                  <div className="space-y-3">
                     {selectedDoDetails.customers.map((customer, index) => (
                       <div
                         key={customer?._id || index}
-                        className="bg-white rounded-xl p-4 border border-green-200"
+                        className={`rounded-lg p-3.5 border ${SECTION_TONES.customer.card}`}
                       >
                         <div className="flex items-center gap-2 mb-3">
                           <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
@@ -954,20 +906,13 @@ const AcountentPayable = () => {
                       </div>
                     ))}
                   </div>
-                </div>
+                </ModalSection>
               )}
 
               {/* Carrier Information */}
               {selectedDoDetails?.carrier && (
-                <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Truck className="text-purple-600" size={20} />
-                    <h3 className="text-lg font-bold text-gray-800">
-                      Carrier Information
-                    </h3>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-6">
+                <ModalSection title="Carrier Information" icon={Truck} tone="carrier">
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
                         <Truck className="text-purple-600" size={16} />
@@ -1040,12 +985,12 @@ const AcountentPayable = () => {
                       </div>
                     </div>
                   )}
-                </div>
+                </ModalSection>
               )}
 
               {/* Shipper Information */}
               {selectedDoDetails?.shipper && (
-                <div className="bg-gradient-to-br from-orange-50 to-yellow-50 rounded-2xl p-6">
+                <ModalSection title="Shipper Information" icon={Truck} tone="shipper">
                   <div className="flex items-center gap-2 mb-4">
                     <Truck className="text-orange-600" size={20} />
                     <h3 className="text-lg font-bold text-gray-800">
@@ -1200,7 +1145,7 @@ const AcountentPayable = () => {
                       </div>
                     </div>
                   )}
-                </div>
+                </ModalSection>
               )}
 
               {/* Shipment Images */}
@@ -1752,10 +1697,8 @@ const AcountentPayable = () => {
                     </div>
                   </div>
                 )}
-            </div>
-          </div>
         </div>
-      )}
+      </AppModal>
 
       {/* Loading overlay for pagination changes */}
       {loading && dos.length > 0 && (
@@ -1770,41 +1713,21 @@ const AcountentPayable = () => {
       )}
 
       {/* DOs Table */}
-      <div className="bg-white rounded-2xl border border-gray-200 p-4">
+      <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full border-separate border-spacing-y-4">
-            <thead>
-              <tr className="bg-gray-100">
-                <th className="text-left px-5 py-3 text-gray-600 font-medium first:rounded-l-xl border-y border-gray-200 first:border-l first:border-gray-200">
-                  Load No.
-                </th>
-                <th className="text-left px-5 py-3 text-gray-600 font-medium border-y border-gray-200">
-                  Container No.
-                </th>
-                <th className="text-left px-5 py-3 text-gray-600 font-medium border-y border-gray-200">
-                  Bill To
-                </th>
-                <th className="text-left px-5 py-3 text-gray-600 font-medium border-y border-gray-200">
-                  Carrier Name
-                </th>
-                <th className="text-left px-5 py-3 text-gray-600 font-medium border-y border-gray-200">
-                  Carrier Fees
-                </th>
-                <th className="text-left px-5 py-3 text-gray-600 font-medium border-y border-gray-200">
-                  Created By
-                </th>
-                <th className="text-center px-5 py-3 text-gray-600 font-medium border-y border-gray-200">
-                  Invoice
-                </th>
-                <th className="text-center px-5 py-3 text-gray-600 font-medium border-y border-gray-200">
-                  Payment Due Date
-                </th>
-                <th className="text-center px-5 py-3 text-gray-600 font-medium border-y border-gray-200">
-                  Pay
-                </th>
-                <th className="text-center px-5 py-3 text-gray-600 font-medium text-[15px] last:rounded-r-xl border-y border-gray-200 last:border-r last:border-gray-200">
-                  Actions
-                </th>
+          <table className="w-full">
+            <thead className="bg-white border-b border-gray-200">
+              <tr>
+                <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Load No.</th>
+                <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Container No.</th>
+                <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Bill To</th>
+                <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Carrier Name</th>
+                <th className="text-right py-4 px-4 text-gray-800 font-medium text-base">Carrier Fees</th>
+                <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">Created By</th>
+                <th className="text-center py-4 px-4 text-gray-800 font-medium text-base">Invoice</th>
+                <th className="text-center py-4 px-4 text-gray-800 font-medium text-base">Payment Due</th>
+                <th className="text-center py-4 px-4 text-gray-800 font-medium text-base">Pay</th>
+                <th className="text-center py-4 px-4 text-gray-800 font-medium text-base">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -1835,272 +1758,255 @@ const AcountentPayable = () => {
         )}
       </div>
 
-      {/* Pagination - Show when there's data */}
+      {/* Pagination */}
       {(currentDOs.length > 0 || dos.length > 0) && (
-        <div className="flex justify-between items-center mt-6 bg-white rounded-2xl border border-gray-200 p-4">
+        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-6 bg-white rounded-2xl border border-gray-200 px-4 py-3">
           <div className="text-sm text-gray-600">
             Showing {currentDOs.length ? startIndex + 1 : 0} to{" "}
             {startIndex + currentDOs.length} of{" "}
-            {isSearching
-              ? filteredDOs.length
-              : pagination?.totalItems || dos.length}{" "}
-            DOs
+            {isSearching ? filteredDOs.length : pagination?.totalItems || dos.length} DOs
             {totalPages > 1 && ` (Page ${currentPage} of ${totalPages})`}
           </div>
-          <div className="flex gap-2 items-center">
+          <div className="flex items-center gap-1">
             <button
+              type="button"
               onClick={() => handlePageChange(currentPage - 1)}
               disabled={currentPage === 1}
-              className="px-3 h-[36px] border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-50 transition-colors text-gray-700 cursor-pointer"
+              className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
             >
-              Previous
+              <ChevronLeft size={18} />
+              <span>Previous</span>
             </button>
-            {Array.from({ length: Math.min(totalPages, 10) }, (_, i) => {
-              let page;
-              if (totalPages <= 10) {
-                page = i + 1;
-              } else if (currentPage <= 5) {
-                page = i + 1;
-              } else if (currentPage >= totalPages - 4) {
-                page = totalPages - 9 + i;
-              } else {
-                page = currentPage - 5 + i;
-              }
+            {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+              let p;
+              if (totalPages <= 7) p = i + 1;
+              else if (currentPage <= 4) p = i + 1;
+              else if (currentPage >= totalPages - 3) p = totalPages - 6 + i;
+              else p = currentPage - 3 + i;
               return (
                 <button
-                  key={page}
-                  onClick={() => handlePageChange(page)}
-                  className={`px-3 h-[36px] rounded-lg transition-colors cursor-pointer ${
-                    currentPage === page
-                      ? "border border-gray-400 text-gray-800 bg-white"
-                      : "text-gray-700 hover:bg-blue-50 hover:text-blue-600"
+                  key={p}
+                  type="button"
+                  onClick={() => handlePageChange(p)}
+                  className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-all ${
+                    currentPage === p
+                      ? "bg-white border border-black shadow-sm text-black"
+                      : "text-gray-600 hover:bg-gray-50"
                   }`}
                 >
-                  {page}
+                  {p}
                 </button>
               );
             })}
             <button
+              type="button"
               onClick={() => handlePageChange(currentPage + 1)}
               disabled={currentPage >= totalPages}
-              className="px-3 h-[36px] border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-50 transition-colors text-gray-700 cursor-pointer"
+              className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
             >
-              Next
+              <span>Next</span>
+              <ChevronRight size={18} />
             </button>
           </div>
         </div>
       )}
 
-      {/* Payment Modal */}
-      {paymentModalOpen && (
-        <>
-          <div
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-            onClick={() => setPaymentModalOpen(false)}
-          >
-            <div
-              className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
-              onClick={(e) => e.stopPropagation()}
+      <AppModal
+        open={paymentModalOpen}
+        onClose={() => setPaymentModalOpen(false)}
+        title="Pay to Carrier"
+        subtitle={
+          paymentData
+            ? `${paymentData.carrierName || "Carrier"} · Load ${paymentData.doNum || "—"}`
+            : undefined
+        }
+        icon={DollarSign}
+        size="md"
+        footer={
+          <div className="flex gap-3 w-full">
+            <button
+              type="button"
+              onClick={() => setPaymentModalOpen(false)}
+              className={MODAL_BTN_CANCEL}
+              disabled={paymentLoading}
             >
-              {/* Header */}
-              <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-t-3xl">
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                      <DollarSign size={24} className="text-white" />
-                    </div>
-                    <div>
-                      <h2 className="text-2xl font-bold">Pay to Carrier</h2>
-                      <p className="text-white/80 text-sm">
-                        DO ID: {paymentData?.id || "N/A"}
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setPaymentModalOpen(false)}
-                    className="text-white hover:text-gray-200 text-2xl font-bold"
-                  >
-                    ×
-                  </button>
-                </div>
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handlePaymentSubmit}
+              disabled={
+                paymentLoading ||
+                !paymentForm.paymentMethod ||
+                !paymentForm.carrierPaymentProof
+              }
+              className={MODAL_BTN_PRIMARY}
+            >
+              {paymentLoading ? (
+                <span className="inline-flex items-center gap-2">
+                  <Loader2 size={16} className="animate-spin" />
+                  Processing...
+                </span>
+              ) : (
+                "Pay to Carrier"
+              )}
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          {paymentData && (
+            <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm">
+              <div className="flex flex-wrap justify-between gap-x-6 gap-y-1 text-gray-600">
+                <span>
+                  Carrier:{" "}
+                  <span className="font-medium text-gray-900">
+                    {paymentData.carrierName || "—"}
+                  </span>
+                </span>
+                <span>
+                  Load:{" "}
+                  <span className="font-medium text-gray-900">
+                    {paymentData.doNum || "—"}
+                  </span>
+                </span>
               </div>
-
-              {/* Form Content */}
-              <div className="p-6">
-                <div className="space-y-4">
-                  {/* Payment Method */}
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Payment Method <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={paymentForm.paymentMethod}
-                      onChange={(e) =>
-                        setPaymentForm({
-                          ...paymentForm,
-                          paymentMethod: e.target.value,
-                        })
-                      }
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
-                      required
-                    >
-                      <option value="">Select Payment Method</option>
-                      <option value="cash">Cash</option>
-                      <option value="check">Check</option>
-                      <option value="bank_transfer">Bank Transfer</option>
-                      <option value="online">Online</option>
-                      <option value="other">Other</option>
-                    </select>
-                  </div>
-
-                  {/* Payment Reference */}
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Payment Reference (Optional)
-                    </label>
-                    <input
-                      type="text"
-                      value={paymentForm.paymentReference}
-                      onChange={(e) =>
-                        setPaymentForm({
-                          ...paymentForm,
-                          paymentReference: e.target.value,
-                        })
-                      }
-                      placeholder="Transaction ID, Check Number, etc."
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
-                    />
-                  </div>
-
-                  {/* Payment Notes */}
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Payment Notes (Optional)
-                    </label>
-                    <textarea
-                      value={paymentForm.paymentNotes}
-                      onChange={(e) =>
-                        setPaymentForm({
-                          ...paymentForm,
-                          paymentNotes: e.target.value,
-                        })
-                      }
-                      placeholder="Additional notes about the payment"
-                      rows={3}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none resize-none"
-                    />
-                  </div>
-
-                  {/* Carrier Payment Proof Upload */}
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Carrier Payment Proof{" "}
-                      <span className="text-red-500">*</span>
-                    </label>
-                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-green-500 transition-colors">
-                      <input
-                        type="file"
-                        accept=".pdf,.jpg,.jpeg,.png"
-                        onChange={(e) => {
-                          const file = e.target.files[0];
-                          if (file) {
-                            if (file.size > 10 * 1024 * 1024) {
-                              alertify.error(
-                                "File size must be less than 10MB",
-                              );
-                              return;
-                            }
-                            setPaymentForm({
-                              ...paymentForm,
-                              carrierPaymentProof: file,
-                            });
-                          }
-                        }}
-                        className="hidden"
-                        id="carrier-payment-proof-upload"
-                        required
-                      />
-                      <label
-                        htmlFor="carrier-payment-proof-upload"
-                        className="cursor-pointer flex flex-col items-center justify-center"
-                      >
-                        {paymentForm.carrierPaymentProof ? (
-                          <div className="text-center">
-                            <CheckCircle
-                              size={32}
-                              className="text-green-500 mx-auto mb-2"
-                            />
-                            <p className="text-sm font-medium text-gray-700">
-                              {paymentForm.carrierPaymentProof.name}
-                            </p>
-                            <p className="text-xs text-gray-500 mt-1">
-                              {(
-                                paymentForm.carrierPaymentProof.size / 1024
-                              ).toFixed(2)}{" "}
-                              KB
-                            </p>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setPaymentForm({
-                                  ...paymentForm,
-                                  carrierPaymentProof: null,
-                                });
-                                document.getElementById(
-                                  "carrier-payment-proof-upload",
-                                ).value = "";
-                              }}
-                              className="mt-2 text-sm text-red-500 hover:text-red-700"
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="text-center">
-                            <Paperclip
-                              className="text-gray-400 mb-2"
-                              size={40}
-                            />
-                            <p className="text-sm font-medium text-gray-700">
-                              Click to upload carrier payment proof
-                            </p>
-                            <p className="text-xs text-gray-500 mt-1">
-                              PDF, JPG, PNG (Max 10MB)
-                            </p>
-                          </div>
-                        )}
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Submit Button */}
-                  <div className="flex gap-3 pt-4">
-                    <button
-                      onClick={() => setPaymentModalOpen(false)}
-                      className="flex-1 px-4 py-2.5 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition-colors"
-                      disabled={paymentLoading}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handlePaymentSubmit}
-                      disabled={
-                        paymentLoading ||
-                        !paymentForm.paymentMethod ||
-                        !paymentForm.carrierPaymentProof
-                      }
-                      className="flex-1 px-4 py-2.5 bg-gradient-to-r from-green-500 to-green-600 text-white font-semibold rounded-lg hover:from-green-600 hover:to-green-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
-                    >
-                      {paymentLoading ? "Processing..." : "Pay to Carrier"}
-                    </button>
-                  </div>
-                </div>
+              <div className="mt-2 pt-2 border-t border-gray-200 flex justify-between items-center">
+                <span className="text-gray-600">Carrier fees</span>
+                <span className="font-semibold text-gray-900">
+                  ${fmtMoney(Number(paymentData.carrierFees) || 0)}
+                </span>
               </div>
             </div>
+          )}
+
+          <div>
+            <label className={MODAL_LABEL}>
+              Payment Method <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={paymentForm.paymentMethod}
+              onChange={(e) =>
+                setPaymentForm({
+                  ...paymentForm,
+                  paymentMethod: e.target.value,
+                })
+              }
+              className={MODAL_INPUT}
+            >
+              <option value="">Select payment method</option>
+              <option value="cash">Cash</option>
+              <option value="check">Check</option>
+              <option value="bank_transfer">Bank Transfer</option>
+              <option value="online">Online</option>
+              <option value="other">Other</option>
+            </select>
           </div>
-        </>
-      )}
+
+          <div>
+            <label className={MODAL_LABEL}>Payment Reference (optional)</label>
+            <input
+              type="text"
+              value={paymentForm.paymentReference}
+              onChange={(e) =>
+                setPaymentForm({
+                  ...paymentForm,
+                  paymentReference: e.target.value,
+                })
+              }
+              placeholder="Transaction ID, check number, etc."
+              className={MODAL_INPUT}
+            />
+          </div>
+
+          <div>
+            <label className={MODAL_LABEL}>Notes (optional)</label>
+            <textarea
+              value={paymentForm.paymentNotes}
+              onChange={(e) =>
+                setPaymentForm({
+                  ...paymentForm,
+                  paymentNotes: e.target.value,
+                })
+              }
+              placeholder="Additional notes"
+              rows={2}
+              className={`${MODAL_INPUT} resize-none`}
+            />
+          </div>
+
+          <div>
+            <label className={MODAL_LABEL}>
+              Payment Proof <span className="text-red-500">*</span>
+            </label>
+            <div className="mt-1 border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-blue-400 transition-colors">
+              <input
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png"
+                onChange={(e) => {
+                  const file = e.target.files[0];
+                  if (file) {
+                    if (file.size > 10 * 1024 * 1024) {
+                      alertify.error("File size must be less than 10MB");
+                      return;
+                    }
+                    setPaymentForm({
+                      ...paymentForm,
+                      carrierPaymentProof: file,
+                    });
+                  }
+                }}
+                className="hidden"
+                id="carrier-payment-proof-upload"
+              />
+              <label
+                htmlFor="carrier-payment-proof-upload"
+                className="cursor-pointer flex flex-col items-center text-center"
+              >
+                {paymentForm.carrierPaymentProof ? (
+                  <>
+                    <CheckCircle size={28} className="text-green-600 mb-2" />
+                    <p className="text-sm font-medium text-gray-800">
+                      {paymentForm.carrierPaymentProof.name}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {(paymentForm.carrierPaymentProof.size / 1024).toFixed(2)} KB
+                    </p>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setPaymentForm({
+                          ...paymentForm,
+                          carrierPaymentProof: null,
+                        });
+                        const el = document.getElementById(
+                          "carrier-payment-proof-upload",
+                        );
+                        if (el) el.value = "";
+                      }}
+                      className="mt-2 text-xs text-red-600 hover:text-red-700"
+                    >
+                      Remove
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <Paperclip size={32} className="text-gray-400 mb-2" />
+                    <p className="text-sm text-gray-700">
+                      Click to upload proof
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      PDF, JPG, PNG (max 10MB)
+                    </p>
+                  </>
+                )}
+              </label>
+            </div>
+          </div>
+        </div>
+      </AppModal>
     </div>
   );
 };
@@ -2129,13 +2035,13 @@ const TableRow = memo(({ deliveryOrder, index, onViewDetails, onPayClick }) => {
 
   return (
     <tr className="hover:bg-gray-50 transition-colors">
-      <td className="px-5 py-3 border-y border-gray-200 first:rounded-l-xl first:border-l first:border-gray-200">
+      <td className="py-4 px-4">
         <span className="font-medium text-gray-700">{deliveryOrder.doNum}</span>
       </td>
-      <td className="px-5 py-3 border-y border-gray-200">
+      <td className="py-4 px-4">
         <span className="font-medium text-gray-700">{containerNo}</span>
       </td>
-      <td className="px-5 py-3 border-y border-gray-200">
+      <td className="py-4 px-4">
         <div className="relative group max-w-[100px]">
           <span className="font-medium text-gray-700 block truncate">
             {deliveryOrder.clientName || "-"}
@@ -2157,7 +2063,7 @@ const TableRow = memo(({ deliveryOrder, index, onViewDetails, onPayClick }) => {
         </div>
       </td>
 
-      <td className="px-5 py-3 border-y border-gray-200">
+      <td className="py-4 px-4">
         <div className="relative group max-w-[100px]">
           <span className="font-medium text-gray-700 block truncate">
             {deliveryOrder.carrierName || "-"}
@@ -2178,7 +2084,7 @@ const TableRow = memo(({ deliveryOrder, index, onViewDetails, onPayClick }) => {
           )}
         </div>
       </td>
-      <td className="px-5 py-3 border-y border-gray-200">
+      <td className="py-4 px-4">
         <div className="relative group max-w-[60px]">
           {/* Truncated Text */}
           <span className="font-medium text-gray-700 block truncate">
@@ -2199,7 +2105,7 @@ const TableRow = memo(({ deliveryOrder, index, onViewDetails, onPayClick }) => {
           </div>
         </div>
       </td>
-      <td className="px-5 py-3 border-y border-gray-200">
+      <td className="py-4 px-4">
         {(() => {
           const salesUser =
             deliveryOrder.createdBySalesUser?.employeeName ||
@@ -2231,7 +2137,7 @@ const TableRow = memo(({ deliveryOrder, index, onViewDetails, onPayClick }) => {
           );
         })()}
       </td>
-      <td className="px-5 py-3 border-y border-gray-200">
+      <td className="py-4 px-4">
         <div className="flex items-center justify-center">
           {invoice ? (
             <div className="flex flex-col items-center gap-1">
@@ -2256,7 +2162,7 @@ const TableRow = memo(({ deliveryOrder, index, onViewDetails, onPayClick }) => {
           )}
         </div>
       </td>
-      <td className="px-5 py-3 border-y border-gray-200">
+      <td className="py-4 px-4">
         {(() => {
           if (!invoice || !invoice.dueDate) {
             return <span className="text-gray-400">—</span>;
@@ -2323,7 +2229,7 @@ const TableRow = memo(({ deliveryOrder, index, onViewDetails, onPayClick }) => {
           );
         })()}
       </td>
-      <td className="px-5 py-3 border-y border-gray-200">
+      <td className="py-4 px-4">
         <div className="flex items-center justify-center">
           {isPaid ? (
             <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-semibold bg-green-100 text-green-700">
@@ -2331,25 +2237,13 @@ const TableRow = memo(({ deliveryOrder, index, onViewDetails, onPayClick }) => {
               Paid
             </span>
           ) : (
-            <button
-              onClick={() => onPayClick(deliveryOrder)}
-              className="px-5 py-1 border border-green-600 text-green-700 bg-white rounded-xl text-base font-semibold transition-colors cursor-pointer hover:bg-green-600 hover:text-white hover:border-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Pay to Carrier"
-            >
-              Pay
-            </button>
+            <PayActionButton onClick={() => onPayClick(deliveryOrder)} />
           )}
         </div>
       </td>
-      <td className="px-5 py-3 border-y border-gray-200 last:rounded-r-xl last:border-r last:border-gray-200">
-        <div className="flex items-center justify-center">
-          <button
-            onClick={() => onViewDetails(deliveryOrder.originalId)}
-            className="px-5 py-1 border border-blue-600 text-blue-700 bg-white rounded-xl text-base font-semibold transition-colors cursor-pointer hover:bg-blue-600 hover:text-white hover:border-blue-600"
-            title="View"
-          >
-            View
-          </button>
+      <td className="py-4 px-4">
+        <div className="flex items-center justify-center gap-1.5">
+          <ViewActionButton onClick={() => onViewDetails(deliveryOrder.originalId)} />
         </div>
       </td>
     </tr>

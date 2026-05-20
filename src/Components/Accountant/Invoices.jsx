@@ -28,7 +28,24 @@ import {
   Calendar,
   Send,
   PlusCircle,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
+import AppModal, {
+  ModalSection,
+  ViewField,
+  SECTION_TONES,
+  COMPACT_FIELD_SX,
+  COMPACT_READONLY_SX,
+  MODAL_INPUT,
+  MODAL_LABEL,
+  MODAL_BTN_CANCEL,
+  MODAL_BTN_PRIMARY,
+} from "../common/AppModal";
+import {
+  ViewActionButton,
+  EditActionButton,
+} from "../common/InvoiceTableActions";
 
 import {
   Box,
@@ -90,7 +107,7 @@ import API_CONFIG_IMPORT from "../../config/api";
 const API_CONFIG = {
   BASE_URL: API_CONFIG_IMPORT.BASE_URL,
 };
-const BRAND = "#16A34A"; // Tailwind green-600 type
+const BRAND = "#2563EB"; // blue-600 — match DeliveryOrder
 const theme = createTheme({
   palette: {
     mode: "light",
@@ -369,13 +386,33 @@ function EditForm({ data, onSubmit, loading, onClose }) {
 
   // Charges popup state
   const [showChargesPopup, setShowChargesPopup] = useState(false);
+  const [chargesPopupType, setChargesPopupType] = useState(null); // 'customer' | 'carrier'
   const [customerCharges, setCustomerCharges] = useState([
+    { name: "", quantity: "", amt: "", total: 0 },
+  ]);
+  const [carrierCharges, setCarrierCharges] = useState([
     { name: "", quantity: "", amt: "", total: 0 },
   ]);
   const [currentCustomerIndex, setCurrentCustomerIndex] = useState(null);
   const [customerChargeErrors, setCustomerChargeErrors] = useState([
     { name: "", quantity: "", amt: "" },
   ]);
+  const [carrierChargeErrors, setCarrierChargeErrors] = useState([
+    { name: "", quantity: "", amt: "" },
+  ]);
+
+  const charges =
+    chargesPopupType === "carrier" ? carrierCharges : customerCharges;
+  const setCharges =
+    chargesPopupType === "carrier" ? setCarrierCharges : setCustomerCharges;
+  const chargeErrors =
+    chargesPopupType === "carrier"
+      ? carrierChargeErrors
+      : customerChargeErrors;
+  const setChargeErrors =
+    chargesPopupType === "carrier"
+      ? setCarrierChargeErrors
+      : setCustomerChargeErrors;
 
   // Update form data when data prop changes
   React.useEffect(() => {
@@ -384,12 +421,20 @@ function EditForm({ data, onSubmit, loading, onClose }) {
 
   // Keep errors array size in sync with charges rows
   React.useEffect(() => {
-    setCustomerChargeErrors((prev) =>
-      (customerCharges || []).map(
-        (_, i) => prev[i] || { name: "", quantity: "", amt: "" },
-      ),
-    );
-  }, [customerCharges]);
+    if (chargesPopupType === "customer") {
+      setCustomerChargeErrors((prev) =>
+        (customerCharges || []).map(
+          (_, i) => prev[i] || { name: "", quantity: "", amt: "" },
+        ),
+      );
+    } else if (chargesPopupType === "carrier") {
+      setCarrierChargeErrors((prev) =>
+        (carrierCharges || []).map(
+          (_, i) => prev[i] || { name: "", quantity: "", amt: "" },
+        ),
+      );
+    }
+  }, [customerCharges, carrierCharges, chargesPopupType]);
 
   const handleCustomerChange = (index, field, value) => {
     const newCustomers = [...formData.customers];
@@ -422,7 +467,7 @@ function EditForm({ data, onSubmit, loading, onClose }) {
 
   // Handle charges input change
   const handleChargeChange = (index, field, value) => {
-    const updated = [...customerCharges];
+    const updated = [...charges];
 
     if (field === "name") value = onlyAlpha(value);
     if (field === "quantity") value = clampPosInt(value);
@@ -447,10 +492,10 @@ function EditForm({ data, onSubmit, loading, onClose }) {
     const a = parseFloat(updated[index].amt) || 0;
     updated[index].total = q * a;
 
-    setCustomerCharges(updated);
+    setCharges(updated);
 
     // clear inline error as user fixes the field
-    setCustomerChargeErrors((prev) => {
+    setChargeErrors((prev) => {
       const next = [...prev];
       next[index] = { ...next[index] };
       if (field === "name") next[index].name = "";
@@ -462,26 +507,21 @@ function EditForm({ data, onSubmit, loading, onClose }) {
 
   // Add charge row
   const addCharge = () => {
-    setCustomerCharges((prev) => [
-      ...prev,
-      { name: "", quantity: "", amt: "", total: 0 },
-    ]);
-    setCustomerChargeErrors((prev) => [
-      ...prev,
-      { name: "", quantity: "", amt: "" },
-    ]);
+    setCharges((prev) => [...prev, { name: "", quantity: "", amt: "", total: 0 }]);
+    setChargeErrors((prev) => [...prev, { name: "", quantity: "", amt: "" }]);
   };
 
   // Remove charge row
   const removeCharge = (index) => {
-    if (customerCharges.length > 1) {
-      setCustomerCharges((prev) => prev.filter((_, i) => i !== index));
-      setCustomerChargeErrors((prev) => prev.filter((_, i) => i !== index));
+    if (charges.length > 1) {
+      setCharges((prev) => prev.filter((_, i) => i !== index));
+      setChargeErrors((prev) => prev.filter((_, i) => i !== index));
     }
   };
 
   // Handle customer charges click
   const handleCustomerChargesClick = (customerIndex) => {
+    setChargesPopupType("customer");
     setCurrentCustomerIndex(customerIndex);
     // Load existing customer charges if available
     const customer = formData.customers[customerIndex];
@@ -501,16 +541,40 @@ function EditForm({ data, onSubmit, loading, onClose }) {
     setShowChargesPopup(true);
   };
 
+  // Handle carrier charges click
+  const handleCarrierChargesClick = () => {
+    setChargesPopupType("carrier");
+    setCurrentCustomerIndex(null);
+    const existingCharges = formData.carrier?.carrierFees || [];
+    if (existingCharges.length > 0 && Array.isArray(existingCharges)) {
+      setCarrierCharges(
+        existingCharges.map((ch) => ({
+          name: ch.name || "",
+          quantity: String(ch.quantity || ""),
+          amt: String(ch.amount || ch.amt || ""),
+          total: ch.total || 0,
+        })),
+      );
+    } else {
+      setCarrierCharges([{ name: "", quantity: "", amt: "", total: 0 }]);
+    }
+    setShowChargesPopup(true);
+  };
+
   // Close charges popup
   const closeChargesPopup = () => {
     setShowChargesPopup(false);
+    setChargesPopupType(null);
     setCurrentCustomerIndex(null);
   };
 
   // Apply charges
   const applyCharges = () => {
+    const currentCharges =
+      chargesPopupType === "carrier" ? carrierCharges : customerCharges;
+
     // 1) Check if all rows are empty
-    const allEmpty = (customerCharges || []).every(
+    const allEmpty = (currentCharges || []).every(
       (ch) =>
         !ch?.name?.trim() &&
         !(String(ch?.quantity ?? "") !== "") &&
@@ -519,7 +583,7 @@ function EditForm({ data, onSubmit, loading, onClose }) {
 
     if (allEmpty) {
       // Show errors on row 0
-      const errs = (customerCharges || []).map((_, i) =>
+      const errs = (currentCharges || []).map((_, i) =>
         i === 0
           ? {
               name: "Please enter the charge name",
@@ -528,12 +592,12 @@ function EditForm({ data, onSubmit, loading, onClose }) {
             }
           : { name: "", quantity: "", amt: "" },
       );
-      setCustomerChargeErrors(errs);
+      setChargeErrors(errs);
       return;
     }
 
     // 2) Row-by-row validation
-    const nextErrs = (customerCharges || []).map((ch) => {
+    const nextErrs = (currentCharges || []).map((ch) => {
       const row = { name: "", quantity: "", amt: "" };
       const hasAny = ch?.name || ch?.quantity || ch?.amt;
 
@@ -557,20 +621,20 @@ function EditForm({ data, onSubmit, loading, onClose }) {
     });
 
     const hasErrors = nextErrs.some((r) => r.name || r.quantity || r.amt);
-    setCustomerChargeErrors(nextErrs);
+    setChargeErrors(nextErrs);
 
     if (hasErrors) {
       return;
     }
 
     // 3) Valid -> apply totals
-    const totalCharges = (customerCharges || []).reduce(
+    const totalCharges = (currentCharges || []).reduce(
       (sum, ch) => sum + (Number(ch.total) || 0),
       0,
     );
 
     // Apply to customer
-    if (currentCustomerIndex !== null) {
+    if (chargesPopupType === "customer" && currentCustomerIndex !== null) {
       setFormData((prev) => {
         const updatedCustomers = [...prev.customers];
         if (updatedCustomers[currentCustomerIndex]) {
@@ -585,7 +649,7 @@ function EditForm({ data, onSubmit, loading, onClose }) {
           updatedCustomers[currentCustomerIndex] = {
             ...updatedCustomers[currentCustomerIndex],
             other: String(totalCharges),
-            chargeRows: customerCharges.map((ch) => ({
+            chargeRows: currentCharges.map((ch) => ({
               name: ch.name.trim(),
               quantity: parseInt(ch.quantity, 10) || 0,
               amount: parseFloat(ch.amt) || 0,
@@ -598,44 +662,25 @@ function EditForm({ data, onSubmit, loading, onClose }) {
         return { ...prev, customers: updatedCustomers };
       });
       setCurrentCustomerIndex(null);
+    } else if (chargesPopupType === "carrier") {
+      setFormData((prev) => ({
+        ...prev,
+        carrier: {
+          ...prev.carrier,
+          carrierFees: currentCharges.map((ch) => ({
+            name: ch.name.trim(),
+            quantity: parseInt(ch.quantity, 10) || 0,
+            amount: parseFloat(ch.amt) || 0,
+            total:
+              (parseInt(ch.quantity, 10) || 0) * (parseFloat(ch.amt) || 0),
+          })),
+          totalCarrierFees: toNum2(totalCharges),
+        },
+      }));
     }
 
     setShowChargesPopup(false);
-  };
-
-  const handleCarrierChange = (field, value) => {
-    setFormData({
-      ...formData,
-      carrier: { ...formData.carrier, [field]: value },
-    });
-  };
-
-  const handleCarrierFeeChange = (index, field, value) => {
-    const newFees = [...(formData.carrier.carrierFees || [])];
-    newFees[index] = { ...newFees[index], [field]: value };
-
-    // Auto-calculate total for carrier fee when quantity or amount changes
-    if (field === "quantity" || field === "amount") {
-      const quantity =
-        field === "quantity" ? value : newFees[index].quantity || 0;
-      const amount = field === "amount" ? value : newFees[index].amount || 0;
-      newFees[index].total = quantity * amount;
-    }
-
-    // Calculate total carrier fees
-    const totalCarrierFees = newFees.reduce(
-      (sum, fee) => sum + (fee.total || 0),
-      0,
-    );
-
-    setFormData({
-      ...formData,
-      carrier: {
-        ...formData.carrier,
-        carrierFees: newFees,
-        totalCarrierFees: totalCarrierFees,
-      },
-    });
+    setChargesPopupType(null);
   };
 
   const handleSubmit = (e) => {
@@ -685,85 +730,74 @@ function EditForm({ data, onSubmit, loading, onClose }) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={handleSubmit} className="space-y-4">
       {/* Customer Details */}
-      <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6 border border-green-200">
-        <div className="flex items-center gap-2 mb-4">
-          <User className="text-green-600" size={20} />
-          <h3 className="text-lg font-bold text-gray-800">Customer Details</h3>
+      <section className={`rounded-xl border shadow-sm overflow-hidden ${SECTION_TONES.customer.wrap}`}>
+        <div className={`flex items-center gap-2.5 px-4 py-2.5 border-b ${SECTION_TONES.customer.header}`}>
+          <span className={`flex h-7 w-7 items-center justify-center rounded-lg ${SECTION_TONES.customer.icon}`}>
+            <User size={15} />
+          </span>
+          <h3 className="text-sm font-semibold text-gray-900">Customer Details</h3>
         </div>
-        <div className="space-y-4">
+        <div className="p-4 space-y-3">
           {formData.customers.map((customer, index) => (
             <div
               key={index}
-              className="bg-white rounded-xl p-4 border border-green-200"
+              className={`rounded-lg p-3.5 border ${SECTION_TONES.customer.card}`}
             >
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
-                  <span className="text-green-600 font-bold text-sm">
-                    {index + 1}
-                  </span>
+              <div className="flex items-center gap-2 mb-2.5">
+                <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${SECTION_TONES.customer.badge}`}>
+                  {index + 1}
                 </div>
                 <h4 className="font-semibold text-gray-800">
                   Customer {index + 1}
                 </h4>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                 <TextField
                   fullWidth
+                  size="small"
                   label="Load No"
                   value={customer.loadNo || ""}
                   InputProps={{
                     readOnly: true,
                   }}
-                  sx={{
-                    "& .MuiInputBase-input": {
-                      backgroundColor: "#f5f5f5",
-                    },
-                  }}
+                  sx={COMPACT_READONLY_SX}
                 />
                 <TextField
                   fullWidth
+                  size="small"
                   label="Bill To"
                   value={customer.billTo || ""}
                   InputProps={{
                     readOnly: true,
                   }}
-                  sx={{
-                    "& .MuiInputBase-input": {
-                      backgroundColor: "#f5f5f5",
-                    },
-                  }}
+                  sx={COMPACT_READONLY_SX}
                 />
                 <TextField
                   fullWidth
+                  size="small"
                   label="Dispatcher Name"
                   value={customer.dispatcherName || ""}
                   InputProps={{
                     readOnly: true,
                   }}
-                  sx={{
-                    "& .MuiInputBase-input": {
-                      backgroundColor: "#f5f5f5",
-                    },
-                  }}
+                  sx={COMPACT_READONLY_SX}
                 />
                 <TextField
                   fullWidth
+                  size="small"
                   label="Work Order No"
                   value={customer.workOrderNo || ""}
                   InputProps={{
                     readOnly: true,
                   }}
-                  sx={{
-                    "& .MuiInputBase-input": {
-                      backgroundColor: "#f5f5f5",
-                    },
-                  }}
+                  sx={COMPACT_READONLY_SX}
                 />
                 <div className="md:col-span-2">
                   <TextField
                     fullWidth
+                    size="small"
                     label="Line Haul"
                     type="number"
                     value={customer.lineHaul || ""}
@@ -774,10 +808,12 @@ function EditForm({ data, onSubmit, loading, onClose }) {
                         parseFloat(e.target.value) || 0,
                       )
                     }
+                    sx={COMPACT_FIELD_SX}
                   />
                 </div>
                 <TextField
                   fullWidth
+                  size="small"
                   label="FSC"
                   type="number"
                   value={customer.fsc || ""}
@@ -788,181 +824,94 @@ function EditForm({ data, onSubmit, loading, onClose }) {
                       parseFloat(e.target.value) || 0,
                     )
                   }
+                  sx={COMPACT_FIELD_SX}
                 />
                 <TextField
                   fullWidth
+                  size="small"
                   label="Other"
                   value={customer.other || ""}
                   onClick={() => handleCustomerChargesClick(index)}
                   InputProps={{
                     readOnly: true,
                   }}
-                  sx={{
-                    "& .MuiInputBase-input": {
-                      backgroundColor: "#f5f5f5",
-                      cursor: "pointer",
-                    },
-                    "& .MuiInputBase-root": {
-                      cursor: "pointer",
-                    },
-                  }}
+                  sx={{ ...COMPACT_READONLY_SX, "& .MuiInputBase-input": { cursor: "pointer" }, "& .MuiInputBase-root": { cursor: "pointer" } }}
                   placeholder="Click to add charges"
                 />
                 <TextField
                   fullWidth
+                  size="small"
                   label="Total Amount"
                   type="number"
                   value={customer.totalAmount || ""}
                   InputProps={{
                     readOnly: true,
                   }}
-                  sx={{
-                    "& .MuiInputBase-input": {
-                      backgroundColor: "#f5f5f5",
-                      fontWeight: "bold",
-                    },
-                  }}
+                  sx={{ ...COMPACT_READONLY_SX, "& .MuiInputBase-input": { fontWeight: 600 } }}
                 />
               </div>
             </div>
           ))}
         </div>
-      </div>
+      </section>
 
       {/* Carrier Details */}
-      <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6 border border-purple-200">
-        <div className="flex items-center gap-2 mb-4">
-          <Truck className="text-purple-600" size={20} />
-          <h3 className="text-lg font-bold text-gray-800">Carrier Details</h3>
+      <section className={`rounded-xl border shadow-sm overflow-hidden ${SECTION_TONES.carrier.wrap}`}>
+        <div className={`flex items-center gap-2.5 px-4 py-2.5 border-b ${SECTION_TONES.carrier.header}`}>
+          <span className={`flex h-7 w-7 items-center justify-center rounded-lg ${SECTION_TONES.carrier.icon}`}>
+            <Truck size={15} />
+          </span>
+          <h3 className="text-sm font-semibold text-gray-900">Carrier Details</h3>
         </div>
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="p-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <TextField
               fullWidth
+              size="small"
               label="Carrier Name"
               value={formData.carrier.carrierName || ""}
-              InputProps={{
-                readOnly: true,
-              }}
-              sx={{
-                "& .MuiInputBase-input": {
-                  backgroundColor: "#f5f5f5",
-                },
-              }}
+              InputProps={{ readOnly: true }}
+              sx={COMPACT_READONLY_SX}
             />
             <TextField
               fullWidth
+              size="small"
               label="Equipment Type"
               value={formData.carrier.equipmentType || ""}
-              InputProps={{
-                readOnly: true,
-              }}
+              InputProps={{ readOnly: true }}
+              sx={COMPACT_READONLY_SX}
+            />
+            <TextField
+              fullWidth
+              size="small"
+              label="Total Carrier Fees"
+              value={
+                formData.carrier.totalCarrierFees !== undefined &&
+                formData.carrier.totalCarrierFees !== null &&
+                formData.carrier.totalCarrierFees !== ""
+                  ? formData.carrier.totalCarrierFees
+                  : ""
+              }
+              onClick={handleCarrierChargesClick}
+              InputProps={{ readOnly: true }}
               sx={{
-                "& .MuiInputBase-input": {
-                  backgroundColor: "#f5f5f5",
-                },
+                ...COMPACT_READONLY_SX,
+                "& .MuiInputBase-input": { cursor: "pointer", fontWeight: 600 },
+                "& .MuiInputBase-root": { cursor: "pointer" },
               }}
+              placeholder="Click to add carrier charges"
             />
           </div>
-
-          {/* Carrier Fees */}
-          <div className="mt-4">
-            <h4 className="text-md font-semibold text-gray-800 mb-3">
-              Carrier Fees
-            </h4>
-            <div className="space-y-3">
-              {(formData.carrier.carrierFees || []).map((fee, index) => (
-                <div
-                  key={index}
-                  className="bg-white rounded-lg p-4 border border-purple-200"
-                >
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <TextField
-                      fullWidth
-                      label="Name"
-                      value={fee.name || ""}
-                      InputProps={{
-                        readOnly: true,
-                      }}
-                      sx={{
-                        "& .MuiInputBase-input": {
-                          backgroundColor: "#f5f5f5",
-                        },
-                      }}
-                    />
-                    <TextField
-                      fullWidth
-                      label="Quantity"
-                      type="number"
-                      value={fee.quantity || ""}
-                      onChange={(e) =>
-                        handleCarrierFeeChange(
-                          index,
-                          "quantity",
-                          parseFloat(e.target.value) || 0,
-                        )
-                      }
-                    />
-                    <TextField
-                      fullWidth
-                      label="Amount"
-                      type="number"
-                      value={fee.amount || ""}
-                      onChange={(e) =>
-                        handleCarrierFeeChange(
-                          index,
-                          "amount",
-                          parseFloat(e.target.value) || 0,
-                        )
-                      }
-                    />
-                    <TextField
-                      fullWidth
-                      label="Total"
-                      type="number"
-                      value={fee.total || ""}
-                      InputProps={{
-                        readOnly: true,
-                      }}
-                      sx={{
-                        "& .MuiInputBase-input": {
-                          backgroundColor: "#f5f5f5",
-                          fontWeight: "bold",
-                        },
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="mt-4">
-              <TextField
-                fullWidth
-                label="Total Carrier Fees"
-                type="number"
-                value={formData.carrier.totalCarrierFees || ""}
-                InputProps={{
-                  readOnly: true,
-                }}
-                sx={{
-                  "& .MuiInputBase-input": {
-                    backgroundColor: "#f5f5f5",
-                    fontWeight: "bold",
-                  },
-                }}
-              />
-            </div>
-          </div>
         </div>
-      </div>
+      </section>
 
       {/* Submit Button */}
-      <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+      <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 mt-1">
         {onClose && (
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 max-w-[200px] px-6 py-3 h-12 bg-white border-2 border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-50 transition-all duration-200 flex items-center justify-center"
+            className="px-5 py-2.5 text-sm font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
           >
             Cancel
           </button>
@@ -970,7 +919,7 @@ function EditForm({ data, onSubmit, loading, onClose }) {
         <button
           type="submit"
           disabled={loading}
-          className={`${onClose ? "flex-1 max-w-[200px]" : ""} px-6 py-3 h-12 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2`}
+          className="inline-flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? (
             <>
@@ -989,85 +938,64 @@ function EditForm({ data, onSubmit, loading, onClose }) {
       {/* Charges Popup */}
       {showChargesPopup && (
         <div
-          className="fixed inset-0 bg-black/30 flex items-center justify-center z-[60]"
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-[2px] flex items-center justify-center z-[60] p-4"
           onClick={closeChargesPopup}
         >
           <div
-            className="bg-white rounded-xl shadow-2xl border border-gray-200 p-8 w-full max-w-5xl max-h-[85vh] overflow-y-auto"
+            className="bg-white rounded-lg shadow-xl border border-slate-200 w-full max-w-2xl max-h-[78vh] flex flex-col overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="bg-gradient-to-r from-blue-500 to-blue-600 -m-8 mb-6 p-6 rounded-t-xl">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                  <div className="bg-white bg-opacity-20 p-2 rounded-lg">
-                    <DollarSign className="w-6 h-6 text-white" />
-                  </div>
-                  <div>
-                    <h2 className="text-2xl font-bold text-white">
-                      Customer Charges Calculator
-                    </h2>
-                    {currentCustomerIndex !== null && (
-                      <p className="text-white/80 text-sm mt-1">
-                        Customer {currentCustomerIndex + 1}
-                      </p>
-                    )}
-                  </div>
+            <div
+              className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 bg-slate-50/80 shrink-0"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div
+                  className={`w-1 h-9 rounded-full shrink-0 ${
+                    chargesPopupType === "carrier"
+                      ? "bg-emerald-600"
+                      : "bg-blue-600"
+                  }`}
+                />
+                <div className="min-w-0">
+                  <h2 className="text-base font-semibold text-slate-800">
+                    {chargesPopupType === "carrier"
+                      ? "Carrier Charges"
+                      : "Customer Charges"}
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {chargesPopupType === "carrier"
+                      ? "Line items for carrier fees"
+                      : currentCustomerIndex !== null
+                        ? `Customer ${currentCustomerIndex + 1}`
+                        : "Line items for other charges"}
+                  </p>
                 </div>
-                <button
-                  onClick={closeChargesPopup}
-                  className="text-white hover:text-gray-200 transition-colors p-2 rounded-full hover:bg-white hover:bg-opacity-20"
-                >
-                  <svg
-                    className="w-6 h-6"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M6 18L18 6M6 6l12 12"
-                    ></path>
-                  </svg>
-                </button>
               </div>
+              <button
+                type="button"
+                onClick={closeChargesPopup}
+                className="p-1.5 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 transition-colors shrink-0"
+                aria-label="Close"
+              >
+                <CloseIcon sx={{ fontSize: 20 }} />
+              </button>
             </div>
 
-            <div className="space-y-6">
-              {/* Table header */}
-              <div className="grid grid-cols-5 gap-4 bg-gradient-to-r from-gray-50 to-gray-100 p-4 rounded-xl font-semibold text-gray-700 border border-gray-200">
-                <div className="flex items-center gap-2">
-                  <FileText className="w-4 h-4" />
-                  <span>
-                    Name <span className="text-red-500">*</span>
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">#</span>
-                  <span>
-                    Quantity <span className="text-red-500">*</span>
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <DollarSign className="w-4 h-4" />
-                  <span>
-                    Amount <span className="text-red-500">*</span>
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-lg font-bold">$</span>
-                  <span>Total</span>
-                </div>
-                <div className="text-center">Action</div>
+            <div className="px-5 py-4 overflow-y-auto flex-1 space-y-3">
+              <div className="grid grid-cols-[1.4fr_0.65fr_0.85fr_0.75fr_2rem] gap-2 px-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                <span>Name *</span>
+                <span>Qty *</span>
+                <span>Amount *</span>
+                <span className="text-right">Total</span>
+                <span />
               </div>
 
               {/* Rows */}
-              {customerCharges.map((charge, index) => (
+              {charges.map((charge, index) => (
                 <div
                   key={index}
-                  className="grid grid-cols-5 gap-4 items-start p-4 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
+                  className="grid grid-cols-[1.4fr_0.65fr_0.85fr_0.75fr_2rem] gap-2 items-start"
                 >
                   {/* Name */}
                   <div>
@@ -1100,7 +1028,7 @@ function EditForm({ data, onSubmit, loading, onClose }) {
                           e.preventDefault();
                       }}
                       onBlur={() => {
-                        setCustomerChargeErrors((prev) => {
+                        setChargeErrors((prev) => {
                           const next = [...prev];
                           const v = (charge.name || "").trim();
                           next[index] = { ...(next[index] || {}) };
@@ -1113,17 +1041,21 @@ function EditForm({ data, onSubmit, loading, onClose }) {
                           return next;
                         });
                       }}
-                      aria-invalid={Boolean(customerChargeErrors[index]?.name)}
-                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all ${
-                        customerChargeErrors[index]?.name
-                          ? "border-red-500 bg-red-50 focus:ring-red-200"
-                          : "border-gray-300 focus:ring-blue-500 focus:border-transparent"
+                      aria-invalid={Boolean(chargeErrors[index]?.name)}
+                      className={`w-full text-sm py-2 px-3 border rounded-md focus:outline-none focus:ring-2 transition-colors ${
+                        chargeErrors[index]?.name
+                          ? "border-red-400 bg-red-50 focus:ring-red-200/50"
+                          : `border-slate-200 bg-white ${
+                              chargesPopupType === "carrier"
+                                ? "focus:ring-emerald-500/30 focus:border-emerald-500"
+                                : "focus:ring-blue-500/30 focus:border-blue-500"
+                            }`
                       }`}
-                      placeholder="Enter charge name"
+                      placeholder="Charge name"
                     />
-                    {customerChargeErrors[index]?.name && (
+                    {chargeErrors[index]?.name && (
                       <p className="mt-1 text-xs text-red-600">
-                        {customerChargeErrors[index].name}
+                        {chargeErrors[index].name}
                       </p>
                     )}
                   </div>
@@ -1141,7 +1073,7 @@ function EditForm({ data, onSubmit, loading, onClose }) {
                         handleChargeChange(index, "quantity", e.target.value)
                       }
                       onBlur={() => {
-                        setCustomerChargeErrors((prev) => {
+                        setChargeErrors((prev) => {
                           const next = [...prev];
                           const raw = String(charge.quantity ?? "");
                           next[index] = { ...(next[index] || {}) };
@@ -1155,18 +1087,22 @@ function EditForm({ data, onSubmit, loading, onClose }) {
                         });
                       }}
                       aria-invalid={Boolean(
-                        customerChargeErrors[index]?.quantity,
+                        chargeErrors[index]?.quantity,
                       )}
-                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all ${
-                        customerChargeErrors[index]?.quantity
-                          ? "border-red-500 bg-red-50 focus:ring-red-200"
-                          : "border-gray-300 focus:ring-blue-500 focus:border-transparent"
+                      className={`w-full text-sm py-2 px-3 border rounded-md focus:outline-none focus:ring-2 transition-colors ${
+                        chargeErrors[index]?.quantity
+                          ? "border-red-400 bg-red-50 focus:ring-red-200/50"
+                          : `border-slate-200 bg-white ${
+                              chargesPopupType === "carrier"
+                                ? "focus:ring-emerald-500/30 focus:border-emerald-500"
+                                : "focus:ring-blue-500/30 focus:border-blue-500"
+                            }`
                       }`}
                       placeholder="0"
                     />
-                    {customerChargeErrors[index]?.quantity && (
+                    {chargeErrors[index]?.quantity && (
                       <p className="mt-1 text-xs text-red-600">
-                        {customerChargeErrors[index].quantity}
+                        {chargeErrors[index].quantity}
                       </p>
                     )}
                   </div>
@@ -1187,7 +1123,7 @@ function EditForm({ data, onSubmit, loading, onClose }) {
                         handleChargeChange(index, "amt", e.target.value)
                       }
                       onBlur={() => {
-                        setCustomerChargeErrors((prev) => {
+                        setChargeErrors((prev) => {
                           const next = [...prev];
                           const raw = String(charge.amt ?? "");
                           next[index] = { ...(next[index] || {}) };
@@ -1200,104 +1136,92 @@ function EditForm({ data, onSubmit, loading, onClose }) {
                           return next;
                         });
                       }}
-                      aria-invalid={Boolean(customerChargeErrors[index]?.amt)}
-                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all ${
-                        customerChargeErrors[index]?.amt
-                          ? "border-red-500 bg-red-50 focus:ring-red-200"
-                          : "border-gray-300 focus:ring-blue-500 focus:border-transparent"
+                      aria-invalid={Boolean(chargeErrors[index]?.amt)}
+                      className={`w-full text-sm py-2 px-3 border rounded-md focus:outline-none focus:ring-2 transition-colors ${
+                        chargeErrors[index]?.amt
+                          ? "border-red-400 bg-red-50 focus:ring-red-200/50"
+                          : `border-slate-200 bg-white ${
+                              chargesPopupType === "carrier"
+                                ? "focus:ring-emerald-500/30 focus:border-emerald-500"
+                                : "focus:ring-blue-500/30 focus:border-blue-500"
+                            }`
                       }`}
                       placeholder="0.00"
                     />
-                    {customerChargeErrors[index]?.amt && (
+                    {chargeErrors[index]?.amt && (
                       <p className="mt-1 text-xs text-red-600">
-                        {customerChargeErrors[index].amt}
+                        {chargeErrors[index].amt}
                       </p>
                     )}
                   </div>
 
                   {/* Row total */}
-                  <div className="px-4 py-3 bg-gradient-to-r from-green-50 to-blue-50 rounded-lg font-semibold text-gray-800 border border-green-200">
+                  <div className="py-2 px-2 bg-slate-50 rounded-md text-sm font-semibold text-slate-700 text-right border border-slate-200">
                     ${Number(charge.total || 0).toFixed(2)}
                   </div>
 
                   {/* Delete */}
-                  <div className="flex justify-center pt-1">
+                  <div className="flex justify-center pt-1.5">
                     <button
                       type="button"
                       onClick={() => removeCharge(index)}
-                      disabled={customerCharges.length === 1}
-                      className={`p-2 rounded-full transition-all ${
-                        customerCharges.length === 1
-                          ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                          : "bg-red-100 text-red-500 hover:bg-red-200 hover:text-red-700"
+                      disabled={charges.length === 1}
+                      className={`p-1 rounded-md transition-colors ${
+                        charges.length === 1
+                          ? "text-slate-300 cursor-not-allowed"
+                          : "text-slate-400 hover:text-red-600 hover:bg-red-50"
                       }`}
+                      aria-label="Remove row"
                     >
-                      <svg
-                        className="w-5 h-5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth="2"
-                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                        ></path>
-                      </svg>
+                      <XCircle size={16} />
                     </button>
                   </div>
                 </div>
               ))}
 
               {/* Add row */}
-              <div className="flex justify-center">
+              <button
+                type="button"
+                onClick={addCharge}
+                className="w-full py-2 text-sm font-medium text-slate-600 border border-dashed border-slate-300 rounded-md hover:border-slate-400 hover:bg-slate-50 transition-colors flex items-center justify-center gap-1.5"
+              >
+                <PlusCircle className="w-4 h-4" />
+                Add line item
+              </button>
+
+            </div>
+
+            <div className="px-5 py-3.5 border-t border-slate-200 bg-slate-50/90 shrink-0 flex items-center justify-between gap-4">
+              <div>
+                <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                  Total
+                </p>
+                <p className="text-lg font-bold text-slate-800 tabular-nums">
+                  $
+                  {(charges || [])
+                    .reduce((sum, ch) => sum + (Number(ch.total) || 0), 0)
+                    .toFixed(2)}
+                </p>
+              </div>
+              <div className="flex gap-2">
                 <button
                   type="button"
-                  onClick={addCharge}
-                  className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all duration-300 flex items-center gap-3 shadow-lg hover:shadow-xl transform hover:scale-105"
+                  onClick={closeChargesPopup}
+                  className="px-3.5 py-2 text-sm font-medium text-slate-600 border border-slate-300 rounded-md hover:bg-white transition-colors"
                 >
-                  <PlusCircle className="w-5 h-5" />
-                  <span className="font-semibold">Add New Charge</span>
+                  Cancel
                 </button>
-              </div>
-
-              {/* Total & Apply */}
-              <div className="bg-gradient-to-r from-gray-50 to-blue-50 p-6 rounded-xl border border-gray-200">
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-3">
-                    <div className="bg-green-500 p-3 rounded-lg">
-                      <DollarSign className="w-6 h-6 text-white" />
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-600 font-medium">
-                        Total Charges
-                      </div>
-                      <div className="text-2xl font-bold text-gray-800">
-                        $
-                        {(customerCharges || [])
-                          .reduce((sum, ch) => sum + (Number(ch.total) || 0), 0)
-                          .toFixed(2)}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex gap-3">
-                    <button
-                      type="button"
-                      onClick={closeChargesPopup}
-                      className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all font-semibold"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={applyCharges}
-                      className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl transition-all duration-300 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105"
-                    >
-                      Apply to Customer Charges
-                    </button>
-                  </div>
-                </div>
+                <button
+                  type="button"
+                  onClick={applyCharges}
+                  className={`px-3.5 py-2 text-sm font-medium text-white rounded-md transition-colors ${
+                    chargesPopupType === "carrier"
+                      ? "bg-emerald-600 hover:bg-emerald-700"
+                      : "bg-blue-600 hover:bg-blue-700"
+                  }`}
+                >
+                  Apply
+                </button>
               </div>
             </div>
           </div>
@@ -4129,7 +4053,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
   // Status color helper
   const statusColor = (status) => {
     if (!status) return "bg-yellow-100 text-yellow-700";
-    if (status === "approved") return "bg-green-100 text-green-700";
+    if (status === "approved") return "bg-blue-50 text-green-700";
     if (status === "rejected") return "bg-red-100 text-red-700";
     if (status === "pending") return "bg-yellow-100 text-yellow-700";
     return "bg-blue-100 text-blue-700";
@@ -4287,54 +4211,96 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
 
   return (
     <ThemeProvider theme={theme}>
-      <div className="p-6">
-        {/* Top Sections (above tabs) */}
+      <div className="p-6 bg-white min-h-screen">
+        {/* Tabs */}
+        <div className="flex flex-wrap items-center gap-2 mb-6 border border-gray-200 rounded-xl p-3 bg-white">
+          <button
+            type="button"
+            onClick={() => setActiveTab(0)}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors cursor-pointer flex items-center gap-2 ${
+              activeTab === 0
+                ? "bg-blue-600 text-white"
+                : "text-gray-600 hover:bg-gray-50 border border-gray-200"
+            }`}
+          >
+            <Clock size={16} />
+            <span>Assigned to Accountant</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab(1)}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors cursor-pointer flex items-center gap-2 ${
+              activeTab === 1
+                ? "bg-blue-600 text-white"
+                : "text-gray-600 hover:bg-gray-50 border border-gray-200"
+            }`}
+          >
+            <CheckCircle size={16} />
+            <span>Accountant Approved</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab(2)}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors cursor-pointer flex items-center gap-2 ${
+              activeTab === 2
+                ? "bg-blue-600 text-white"
+                : "text-gray-600 hover:bg-gray-50 border border-gray-200"
+            }`}
+          >
+            <CheckCircle size={16} />
+            <span>Approved By Sales</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab(3)}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors cursor-pointer flex items-center gap-2 ${
+              activeTab === 3
+                ? "bg-blue-600 text-white"
+                : "text-gray-600 hover:bg-gray-50 border border-gray-200"
+            }`}
+          >
+            <XCircle size={16} />
+            <span>Rejected by Sales</span>
+          </button>
+        </div>
+
+        {/* Filters for active tab */}
         {activeTab === 0 && (
-          <div className="mb-6 bg-white rounded-2xl border border-gray-200 p-4">
-            <div className="flex items-center gap-6 mb-4">
-              <div className="bg-white rounded-2xl p-5 border border-gray-200 w-72 h-28">
-                <div className="flex items-center justify-between gap-6 h-full">
-                  <div className="space-y-2">
-                    <p className="text-lg font-medium text-gray-700">Total Invoices</p>
-                    <p className="text-2xl font-bold text-gray-900">
-                      {pagination?.totalItems || rows.length}
-                    </p>
-                  </div>
-                  <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center">
-                    <Clock className="text-blue-600" size={20} />
-                  </div>
+          <div className="flex flex-col gap-6 mb-6 border border-gray-200 rounded-xl p-6 bg-white">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-white rounded-xl border border-gray-200 p-6 h-[90px] flex items-center relative">
+                <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-gray-700 font-bold text-xl">
+                  {pagination?.totalItems || rows.length}
+                </div>
+                <div className="absolute inset-0 flex items-center justify-center text-gray-700 font-semibold">
+                  Total Invoices
                 </div>
               </div>
-              <div className="bg-white rounded-2xl p-5 border border-gray-200 w-72 h-28">
-                <div className="flex items-center justify-between gap-6 h-full">
-                  <div className="space-y-2">
-                    <p className="text-lg font-medium text-gray-700">Filtered</p>
-                    <p className="text-2xl font-bold text-gray-900">
-                      {(() => {
-                        const q = (search || "").trim();
-                        if (!q && statusFilter === "all") return pagination?.totalItems || rows.length;
-                        return assignedFilteredTotal ?? filtered.length;
-                      })()}
-                    </p>
-                  </div>
-                  <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center">
-                    <FileText className="text-blue-600" size={20} />
-                  </div>
+              <div className="bg-white rounded-xl border border-gray-200 p-6 h-[90px] flex items-center relative">
+                <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-gray-700 font-bold text-xl">
+                  {(() => {
+                    const q = (search || "").trim();
+                    if (!q && statusFilter === "all") return pagination?.totalItems || rows.length;
+                    return assignedFilteredTotal ?? filtered.length;
+                  })()}
+                </div>
+                <div className="absolute inset-0 flex items-center justify-center text-gray-700 font-semibold">
+                  Filtered
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
               <div className="relative flex-1">
                 <Search
-                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-                  size={18}
+                  className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none"
+                  size={22}
                 />
                 <input
                   type="text"
                   placeholder="Search (Load No / Bill To / Carrier / Shipper / DO ID)"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full h-11 pl-9 pr-4 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  className="w-full pl-6 pr-12 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-colors text-gray-600 placeholder-gray-400"
                 />
                 {search && (
                   <button
@@ -4348,7 +4314,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
               <button
                 onClick={() => fetchData(page)}
                 disabled={loading}
-                className="inline-flex items-center justify-center gap-2 h-11 px-4 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                className="inline-flex items-center justify-center gap-2 h-11 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
                 <RefreshCw
                   size={18}
@@ -4360,432 +4326,97 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
           </div>
         )}
         {activeTab === 1 && (
-          <div className="mb-6 bg-white rounded-2xl border border-gray-200 p-4">
-            <div className="flex items-center gap-6 mb-4">
-              <button
-                onClick={() => {
-                  setProcessedCarrierFilter("");
-                  setProcessedSearch("");
-                }}
-                className={`bg-white rounded-2xl p-5 border border-gray-200 w-72 h-28 transition-all duration-200 cursor-pointer ${
-                  processedStatusFilter === "all"
-                    ? "ring-2 ring-green-500"
-                    : ""
-                }`}
-              >
-                <div className="flex items-center justify-between gap-6 h-full">
-                  <div className="space-y-2">
-                    <p className="text-lg font-medium text-gray-700">Total Approved</p>
-                    <p className="text-2xl font-bold text-gray-900">
-                      {processedPagination?.totalItems || processedRows.length}
-                    </p>
-                  </div>
-                  <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center">
-                    <CheckCircle className="text-blue-600" size={20} />
-                  </div>
+          <div className="flex flex-col gap-6 mb-6 border border-gray-200 rounded-xl p-6 bg-white">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-white rounded-xl border border-gray-200 p-6 h-[90px] flex items-center relative">
+                <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-gray-700 font-bold text-xl">
+                  {processedPagination?.totalItems || processedRows.length}
                 </div>
-              </button>
-            </div>
-            {/* Controls: line 1 (primary search + Refresh) */}
-            <div className="flex items-center gap-3 mb-3">
-              <div className="relative flex-1">
-                <Search
-                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-                  size={18}
-                />
-                <input
-                  type="text"
-                  placeholder="Search (Load No / Bill To / Carrier / Shipper / DO ID)"
-                  value={processedSearch}
-                  onChange={(e) => setProcessedSearch(e.target.value)}
-                  className="w-full h-11 pl-9 pr-4 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                />
-                {processedSearch && (
-                  <button
-                    onClick={() => setProcessedSearch("")}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
-                  >
-                    ×
-                  </button>
-                )}
+                <div className="absolute inset-0 flex items-center justify-center text-gray-700 font-semibold">
+                  Total Approved
+                </div>
               </div>
-              <button
-                onClick={() => fetchProcessed(processedPage)}
-                disabled={processedLoading}
-                className="inline-flex items-center justify-center gap-2 h-11 px-4 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-              >
-                <RefreshCw
-                  size={18}
-                  className={processedLoading ? "animate-spin" : ""}
-                />
-                <span>Refresh</span>
-              </button>
+              <div className="bg-white rounded-xl border border-gray-200 p-6 h-[90px] flex items-center relative">
+                <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-gray-700 font-bold text-xl">
+                  {processedFiltered.length}
+                </div>
+                <div className="absolute inset-0 flex items-center justify-center text-gray-700 font-semibold">
+                  Filtered
+                </div>
+              </div>
             </div>
-            {/* Controls: line 2 (carrier search + Export) */}
-            <div className="flex items-center gap-3">
-              <Autocomplete
-                value={processedCarrierFilter || null}
-                onChange={(event, newValue) => {
-                  setProcessedCarrierFilter(newValue || "");
-                }}
-                options={["", ...getUniqueCarriers(processedRows)]}
-                getOptionLabel={(option) =>
-                  option === "" ? "All Carriers" : option
-                }
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    placeholder="Search carrier..."
-                    size="small"
-                    InputProps={{
-                      ...params.InputProps,
-                      startAdornment: (
-                        <>
-                          <SearchIcon
-                            sx={{ color: "text.secondary", mr: 1 }}
-                          />
-                          {params.InputProps.startAdornment}
-                        </>
-                      ),
-                    }}
-                    sx={{
-                      width: "100%",
-                      "& .MuiOutlinedInput-root": {
-                        borderRadius: "8px",
-                        backgroundColor: "white",
-                        height: 44,
-                      },
-                      "& .MuiOutlinedInput-input": {
-                        padding: "8px 14px",
-                      },
-                    }}
-                  />
-                )}
-                renderOption={(props, option) => (
-                  <Box component="li" {...props} sx={{ py: 1 }}>
-                    {option === "" ? "All Carriers" : option}
-                  </Box>
-                )}
-                sx={{
-                  width: "100%",
-                  "& .MuiAutocomplete-paper": {
-                    borderRadius: "8px",
-                    boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
-                  },
-                }}
-              />
-              <button
-                onClick={() =>
-                  exportToCSV(
-                    processedFiltered,
-                    `accountant-approved-${new Date().toISOString().split("T")[0]}.csv`,
-                  )
-                }
-                className="inline-flex items-center justify-center gap-2 h-11 px-4 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all duration-200 shadow-md hover:shadow-lg font-semibold cursor-pointer whitespace-nowrap"
-              >
-                <Download size={18} />
-                <span>Export CSV</span>
-              </button>
+            <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-3">
+              <div className="relative flex-1 min-w-0">
+                <Search className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" size={22} />
+                <input type="text" placeholder="Search (Load No / Bill To / Carrier / Shipper / DO ID)" value={processedSearch} onChange={(e) => setProcessedSearch(e.target.value)} className="w-full pl-4 pr-12 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-colors text-gray-600 placeholder-gray-400" />
+                {processedSearch && (<button type="button" onClick={() => setProcessedSearch("")} className="absolute right-10 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer">×</button>)}
+              </div>
+              <select value={processedCarrierFilter} onChange={(e) => setProcessedCarrierFilter(e.target.value)} className="w-full lg:w-56 px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 text-gray-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300">
+                <option value="">All Carriers</option>
+                {getUniqueCarriers(processedRows).map((carrier) => (<option key={carrier} value={carrier}>{carrier}</option>))}
+              </select>
+              <div className="flex flex-wrap gap-2 shrink-0">
+                <button type="button" onClick={() => fetchProcessed(processedPage)} disabled={processedLoading} className="inline-flex items-center justify-center gap-2 h-11 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"><RefreshCw size={18} className={processedLoading ? "animate-spin" : ""} /><span>Refresh</span></button>
+                <button type="button" onClick={() => exportToCSV(processedFiltered, `accountant-approved-${new Date().toISOString().split("T")[0]}.csv`)} className="inline-flex items-center justify-center gap-2 h-11 px-4 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-semibold cursor-pointer whitespace-nowrap"><Download size={18} /><span>Export</span></button>
+              </div>
             </div>
           </div>
         )}
         {activeTab === 2 && (
-          <div className="mb-6 bg-white rounded-2xl border border-gray-200 p-4">
-            <div className="flex items-center gap-6 mb-4">
-              <button
-                onClick={() => {
-                  setAcceptedPaymentFilter("all");
-                  setAcceptedCarrierFilter("");
-                  setAcceptedSearch("");
-                }}
-                className={`bg-white rounded-2xl p-5 border border-gray-200 w-72 h-28 transition-all duration-200 cursor-pointer ${
-                  acceptedPaymentFilter === "all" ? "ring-2 ring-blue-500" : ""
-                }`}
-              >
-                <div className="flex items-center justify-between gap-6 h-full">
-                  <div className="space-y-2">
-                    <p className="text-lg font-medium text-gray-700">Total Approved</p>
-                    <p className="text-2xl font-bold text-gray-900">{acceptedPagination?.totalItems || acceptedRows.length}</p>
-                  </div>
-                  <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center">
-                    <CheckCircle className="text-blue-600" size={20} />
-                  </div>
-                </div>
+          <div className="flex flex-col gap-6 mb-6 border border-gray-200 rounded-xl p-6 bg-white">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <button type="button" onClick={() => { setAcceptedPaymentFilter("all"); setAcceptedCarrierFilter(""); setAcceptedSearch(""); }} className={`bg-white rounded-xl border border-gray-200 p-6 h-[90px] flex items-center relative transition-all cursor-pointer ${acceptedPaymentFilter === "all" ? "ring-2 ring-blue-500" : "hover:border-gray-300"}`}>
+                <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-gray-700 font-bold text-xl">{acceptedPagination?.totalItems || acceptedRows.length}</div>
+                <div className="absolute inset-0 flex items-center justify-center text-gray-700 font-semibold">Total Approved</div>
               </button>
-              <button
-                onClick={() => {
-                  setAcceptedPaymentFilter("paid");
-                  setAcceptedCarrierFilter("");
-                  setAcceptedSearch("");
-                }}
-                className={`bg-white rounded-2xl p-5 border border-gray-200 w-72 h-28 transition-all duration-200 cursor-pointer ${
-                  acceptedPaymentFilter === "paid" ? "ring-2 ring-green-500" : ""
-                }`}
-              >
-                <div className="flex items-center justify-between gap-6 h-full">
-                  <div className="space-y-2">
-                    <p className="text-lg font-medium text-gray-700">Paid</p>
-                    <p className="text-2xl font-bold text-gray-900">
-                      {acceptedRows.filter(r => {
-                        const carrierPaymentStatus = r?.carrierPaymentStatus || {};
-                        const carrierStatus = (carrierPaymentStatus?.status || '').toLowerCase().trim();
-                        const carrierTotalPaid = parseFloat(carrierPaymentStatus?.totalPaidAmount || 0);
-                        const carrierTotal = parseFloat((r?.carrier?.totalCarrierFees || 0));
-                        const remainingAmount = carrierPaymentStatus?.remainingAmount || (carrierTotal - carrierTotalPaid);
-                        const isFullyPaidByAmount = carrierTotal > 0 && carrierTotalPaid >= carrierTotal - 0.01;
-                        const isFullyPaidByRemaining = parseFloat(remainingAmount) <= 0.01;
-                        return carrierStatus === 'paid' || isFullyPaidByAmount || isFullyPaidByRemaining;
-                      }).length}
-                    </p>
-                  </div>
-                  <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center">
-                    <CheckCircle className="text-blue-600" size={20} />
-                  </div>
-                </div>
+              <button type="button" onClick={() => { setAcceptedPaymentFilter("paid"); setAcceptedCarrierFilter(""); setAcceptedSearch(""); }} className={`bg-white rounded-xl border border-gray-200 p-6 h-[90px] flex items-center relative transition-all cursor-pointer ${acceptedPaymentFilter === "paid" ? "ring-2 ring-green-500" : "hover:border-gray-300"}`}>
+                <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-gray-700 font-bold text-xl">{acceptedRows.filter(r => { const cps = r?.carrierPaymentStatus || {}; const st = (cps?.status || '').toLowerCase().trim(); const paid = parseFloat(cps?.totalPaidAmount || 0); const total = parseFloat(r?.carrier?.totalCarrierFees || 0); const rem = cps?.remainingAmount ?? (total - paid); return st === 'paid' || (total > 0 && paid >= total - 0.01) || parseFloat(rem) <= 0.01; }).length}</div>
+                <div className="absolute inset-0 flex items-center justify-center text-gray-700 font-semibold">Paid</div>
               </button>
-              <button
-                onClick={() => {
-                  setAcceptedPaymentFilter("unpaid");
-                  setAcceptedCarrierFilter("");
-                  setAcceptedSearch("");
-                }}
-                className={`bg-white rounded-2xl p-5 border border-gray-200 w-72 h-28 transition-all duration-200 cursor-pointer ${
-                  acceptedPaymentFilter === "unpaid" ? "ring-2 ring-orange-500" : ""
-                }`}
-              >
-                <div className="flex items-center justify-between gap-6 h-full">
-                  <div className="space-y-2">
-                    <p className="text-lg font-medium text-gray-700">Unpaid/Partial</p>
-                    <p className="text-2xl font-bold text-gray-900">
-                      {acceptedRows.filter(r => {
-                        const carrierPaymentStatus = r?.carrierPaymentStatus || {};
-                        const carrierStatus = (carrierPaymentStatus?.status || '').toLowerCase().trim();
-                        const carrierTotalPaid = parseFloat(carrierPaymentStatus?.totalPaidAmount || 0);
-                        const carrierTotal = parseFloat((r?.carrier?.totalCarrierFees || 0));
-                        const remainingAmount = carrierPaymentStatus?.remainingAmount || (carrierTotal - carrierTotalPaid);
-                        const isFullyPaidByAmount = carrierTotal > 0 && carrierTotalPaid >= carrierTotal - 0.01;
-                        const isFullyPaidByRemaining = parseFloat(remainingAmount) <= 0.01;
-                        return !(carrierStatus === 'paid' || isFullyPaidByAmount || isFullyPaidByRemaining);
-                      }).length}
-                    </p>
-                  </div>
-                  <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center">
-                    <Clock className="text-blue-600" size={20} />
-                  </div>
-                </div>
+              <button type="button" onClick={() => { setAcceptedPaymentFilter("unpaid"); setAcceptedCarrierFilter(""); setAcceptedSearch(""); }} className={`bg-white rounded-xl border border-gray-200 p-6 h-[90px] flex items-center relative transition-all cursor-pointer ${acceptedPaymentFilter === "unpaid" ? "ring-2 ring-orange-500" : "hover:border-gray-300"}`}>
+                <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-gray-700 font-bold text-xl">{acceptedRows.filter(r => { const cps = r?.carrierPaymentStatus || {}; const st = (cps?.status || '').toLowerCase().trim(); const paid = parseFloat(cps?.totalPaidAmount || 0); const total = parseFloat(r?.carrier?.totalCarrierFees || 0); const rem = cps?.remainingAmount ?? (total - paid); const ok = st === 'paid' || (total > 0 && paid >= total - 0.01) || parseFloat(rem) <= 0.01; return !ok; }).length}</div>
+                <div className="absolute inset-0 flex items-center justify-center text-gray-700 font-semibold">Unpaid/Partial</div>
               </button>
             </div>
-            {/* Controls: line 1 (primary search + Refresh) */}
-            <div className="flex items-center gap-3 mb-3">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                <input
-                  type="text"
-                  placeholder="Search (Load No / Bill To / Carrier / Shipper / DO ID / Shipment#)"
-                  value={acceptedSearch}
-                  onChange={(e) => setAcceptedSearch(e.target.value)}
-                  className="w-full h-11 pl-9 pr-4 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                />
-                {acceptedSearch && (
-                  <button
-                    onClick={() => setAcceptedSearch("")}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
-                  >
-                    ×
-                  </button>
-                )}
+            <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-3">
+              <div className="relative flex-1 min-w-0">
+                <Search className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" size={22} />
+                <input type="text" placeholder="Search (Load No / Bill To / Carrier / Shipper / DO ID / Shipment#)" value={acceptedSearch} onChange={(e) => setAcceptedSearch(e.target.value)} className="w-full pl-4 pr-12 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-colors text-gray-600 placeholder-gray-400" />
+                {acceptedSearch && (<button type="button" onClick={() => setAcceptedSearch("")} className="absolute right-10 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer">×</button>)}
               </div>
-              <button
-                onClick={() => fetchAccepted(acceptedPage)}
-                disabled={acceptedLoading}
-                className="inline-flex items-center justify-center gap-2 h-11 px-4 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-              >
-                <RefreshCw size={18} className={acceptedLoading ? 'animate-spin' : ''} />
-                <span>Refresh</span>
-              </button>
-            </div>
-            {/* Controls: line 2 (carrier search + Export) */}
-            <div className="flex items-center gap-3">
-              <Autocomplete
-                value={acceptedCarrierFilter || null}
-                onChange={(event, newValue) => {
-                  setAcceptedCarrierFilter(newValue || "");
-                }}
-                options={["", ...getUniqueCarriers(acceptedRows)]}
-                getOptionLabel={(option) => option === "" ? "All Carriers" : option}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    placeholder="Search carrier..."
-                    size="small"
-                    InputProps={{
-                      ...params.InputProps,
-                      startAdornment: (
-                        <>
-                          <SearchIcon sx={{ color: 'text.secondary', mr: 1 }} />
-                          {params.InputProps.startAdornment}
-                        </>
-                      ),
-                    }}
-                    sx={{
-                      width: '100%',
-                      '& .MuiOutlinedInput-root': {
-                        borderRadius: '8px',
-                        backgroundColor: 'white',
-                        height: 44,
-                      },
-                      '& .MuiOutlinedInput-input': {
-                        padding: '8px 14px',
-                      }
-                    }}
-                  />
-                )}
-                renderOption={(props, option) => (
-                  <Box component="li" {...props} sx={{ py: 1 }}>
-                    {option === "" ? "All Carriers" : option}
-                  </Box>
-                )}
-                sx={{ 
-                  width: '100%',
-                  '& .MuiAutocomplete-paper': {
-                    borderRadius: '8px',
-                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                  }
-                }}
-              />
-              <button
-                onClick={() => exportToCSV(acceptedFiltered, `approved-by-sales-${new Date().toISOString().split('T')[0]}.csv`)}
-                className="inline-flex items-center justify-center gap-2 h-11 px-4 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all duration-200 shadow-md hover:shadow-lg font-semibold cursor-pointer whitespace-nowrap"
-              >
-                <Download size={18} />
-                <span>Export CSV</span>
-              </button>
+              <select value={acceptedCarrierFilter} onChange={(e) => setAcceptedCarrierFilter(e.target.value)} className="w-full lg:w-56 px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 text-gray-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300">
+                <option value="">All Carriers</option>
+                {getUniqueCarriers(acceptedRows).map((carrier) => (<option key={carrier} value={carrier}>{carrier}</option>))}
+              </select>
+              <div className="flex flex-wrap gap-2 shrink-0">
+                <button type="button" onClick={() => fetchAccepted(acceptedPage)} disabled={acceptedLoading} className="inline-flex items-center justify-center gap-2 h-11 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"><RefreshCw size={18} className={acceptedLoading ? 'animate-spin' : ''} /><span>Refresh</span></button>
+                <button type="button" onClick={() => exportToCSV(acceptedFiltered, `approved-by-sales-${new Date().toISOString().split('T')[0]}.csv`)} className="inline-flex items-center justify-center gap-2 h-11 px-4 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-semibold cursor-pointer whitespace-nowrap"><Download size={18} /><span>Export</span></button>
+              </div>
             </div>
           </div>
         )}
         {activeTab === 3 && (
-          <div className="mb-6 bg-white rounded-2xl border border-gray-200 p-4">
-            <div className="flex items-center gap-6 mb-4">
-              <div className="bg-white rounded-2xl p-5 border border-gray-200 w-72 h-28">
-                <div className="flex items-center justify-between gap-6 h-full">
-                  <div className="space-y-2">
-                    <p className="text-lg font-medium text-gray-700">Total Rejected</p>
-                    <p className="text-2xl font-bold text-gray-900">
-                      {rejectedPagination?.totalItems || rejectedRows.length}
-                    </p>
-                  </div>
-                  <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center">
-                    <XCircle className="text-blue-600" size={20} />
-                  </div>
-                </div>
+          <div className="flex flex-col gap-6 mb-6 border border-gray-200 rounded-xl p-6 bg-white">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-white rounded-xl border border-gray-200 p-6 h-[90px] flex items-center relative">
+                <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-gray-700 font-bold text-xl">{rejectedPagination?.totalItems || rejectedRows.length}</div>
+                <div className="absolute inset-0 flex items-center justify-center text-gray-700 font-semibold">Total Rejected</div>
               </div>
-              <div className="bg-white rounded-2xl p-5 border border-gray-200 w-72 h-28">
-                <div className="flex items-center justify-between gap-6 h-full">
-                  <div className="space-y-2">
-                    <p className="text-lg font-medium text-gray-700">Filtered</p>
-                    <p className="text-2xl font-bold text-gray-900">
-                      {rejectedFiltered.length}
-                    </p>
-                  </div>
-                  <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center">
-                    <FileText className="text-blue-600" size={20} />
-                  </div>
-                </div>
+              <div className="bg-white rounded-xl border border-gray-200 p-6 h-[90px] flex items-center relative">
+                <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-gray-700 font-bold text-xl">{rejectedFiltered.length}</div>
+                <div className="absolute inset-0 flex items-center justify-center text-gray-700 font-semibold">Filtered</div>
               </div>
             </div>
-            {/* Controls row (search and buttons) */}
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
               <div className="relative flex-1">
-                <Search
-                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-                  size={18}
-                />
-                <input
-                  type="text"
-                  placeholder="Search (Load No / Bill To / Carrier / Shipper / DO ID)"
-                  value={rejectedSearch}
-                  onChange={(e) => setRejectedSearch(e.target.value)}
-                  className="w-full h-11 pl-9 pr-4 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                />
-                {rejectedSearch && (
-                  <button
-                    onClick={() => setRejectedSearch("")}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
-                  >
-                    ×
-                  </button>
-                )}
+                <Search className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" size={22} />
+                <input type="text" placeholder="Search (Load No / Bill To / Carrier / Shipper / DO ID)" value={rejectedSearch} onChange={(e) => setRejectedSearch(e.target.value)} className="w-full pl-4 pr-12 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-colors text-gray-600 placeholder-gray-400" />
+                {rejectedSearch && (<button type="button" onClick={() => setRejectedSearch("")} className="absolute right-10 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer">×</button>)}
               </div>
-              <button
-                onClick={() => fetchRejected(rejectedPage)}
-                disabled={rejectedLoading}
-              className="inline-flex items-center justify-center gap-2 h-11 px-4 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-              >
-                <RefreshCw
-                  size={18}
-                  className={rejectedLoading ? "animate-spin" : ""}
-                />
-                <span>Refresh</span>
-              </button>
+              <button type="button" onClick={() => fetchRejected(rejectedPage)} disabled={rejectedLoading} className="inline-flex items-center justify-center gap-2 h-11 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"><RefreshCw size={18} className={rejectedLoading ? "animate-spin" : ""} /><span>Refresh</span></button>
             </div>
           </div>
         )}
-        {/* Tabs */}
-        <div className="flex items-center justify-center gap-4 mb-6 bg-white rounded-2xl border border-gray-200 p-4">
-          <button
-            onClick={() => setActiveTab(0)}
-            className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 cursor-pointer ${
-              activeTab === 0
-                ? "bg-gradient-to-r from-yellow-500 to-orange-600 text-white shadow-lg"
-                : "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              <Clock size={18} />
-              <span>Assigned to Accountant</span>
-            </div>
-          </button>
-          <button
-            onClick={() => setActiveTab(1)}
-            className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 cursor-pointer ${
-              activeTab === 1
-                ? "bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg"
-                : "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              <CheckCircle size={18} />
-              <span>Accountant Approved</span>
-            </div>
-          </button>
-          <button
-            onClick={() => setActiveTab(2)}
-            className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 cursor-pointer ${
-              activeTab === 2
-                ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg"
-                : "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              <CheckCircle size={18} />
-              <span>Approved By Sales</span>
-            </div>
-          </button>
-          <button
-            onClick={() => setActiveTab(3)}
-            className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 cursor-pointer ${
-              activeTab === 3
-                ? "bg-gradient-to-r from-red-500 to-rose-600 text-white shadow-lg"
-                : "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              <XCircle size={18} />
-              <span>Rejected by Sales</span>
-            </div>
-          </button>
-        </div>
-
         {/* Tab Content */}
         <div>
           {/* TAB 0: Assigned to Accountant */}
@@ -4796,7 +4427,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                 <div className="mb-4">
                   <div className="h-1 bg-gray-200 rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-gradient-to-r from-green-500 to-emerald-600 animate-pulse"
+                      className="h-full bg-blue-600 animate-pulse"
                       style={{ width: "100%" }}
                     ></div>
                   </div>
@@ -4804,7 +4435,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
               )}
 
               {!loading && filtered.length === 0 ? (
-                <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-12 text-center">
+                <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center">
                   <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                   <h3 className="text-lg font-semibold text-gray-700 mb-2">
                     No invoices found
@@ -4819,41 +4450,41 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
               ) : (
                 <>
                   <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-                    <div className="overflow-x-auto p-4">
-                      <table className="w-full border-separate border-spacing-y-4">
-                        <thead className="bg-slate-100">
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead className="bg-white border-b border-gray-200">
                           <tr>
-                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200 first:rounded-l-xl first:border-l first:border-gray-200">
+                            <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">
                               Load No
                             </th>
-                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                            <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">
                               Container No
                             </th>
-                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                            <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">
                               Bill To
                             </th>
-                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                            <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">
                               Carrier
                             </th>
-                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                            <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">
                               Agent Name
                             </th>
-                            <th className="text-right px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                            <th className="text-right py-4 px-4 text-gray-800 font-medium text-base">
                               Bill Amount
                             </th>
-                            <th className="text-right px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                            <th className="text-right py-4 px-4 text-gray-800 font-medium text-base">
                               Carrier Fees
                             </th>
-                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                            <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">
                               Status
                             </th>
-                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                            <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">
                               Forwarded By
                             </th>
-                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                            <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">
                               Updated
                             </th>
-                            <th className="text-center px-5 py-3 text-gray-700 font-medium border-y border-gray-200 last:rounded-r-xl last:border-r last:border-gray-200">
+                            <th className="text-center py-4 px-4 text-gray-800 font-medium text-base">
                               Actions
                             </th>
                           </tr>
@@ -4872,19 +4503,19 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                             return (
                               <tr
                                 key={row?._id}
-                                className="bg-white hover:bg-gray-100 transition-colors"
+                                className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
                               >
-                                <td className="px-5 py-3 border-y border-gray-200 first:rounded-l-xl first:border-l first:border-gray-200">
+                                <td className="py-4 px-4">
                                   <span className="font-medium text-gray-700">
                                     {cust?.loadNo || "—"}
                                   </span>
                                 </td>
-                                <td className="px-5 py-3 border-y border-gray-200">
+                                <td className="py-4 px-4">
                                   <span className="font-medium text-gray-700">
                                     {containerNo}
                                   </span>
                                 </td>
-                                <td className="px-5 py-3 border-y border-gray-200">
+                                <td className="py-4 px-4">
                                   <div className="relative group max-w-[70px]">
                                     {/* Truncated Text */}
                                     <span className="font-medium text-gray-700 block truncate">
@@ -4907,7 +4538,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                     )}
                                   </div>
                                 </td>
-                                <td className="px-5 py-3 border-y border-gray-200">
+                                <td className="py-4 px-4">
                                   <div className="relative group max-w-[70px]">
                                     {/* Truncated Text */}
                                     <span className="font-medium text-gray-700 block truncate">
@@ -4931,7 +4562,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                   </div>
                                 </td>
 
-                                <td className="px-5 py-3 border-y border-gray-200">
+                                <td className="py-4 px-4">
                                   <div className="relative group max-w-[70px]">
                                     {/* Truncated Text */}
                                     <span className="font-medium text-gray-700 block truncate">
@@ -4954,17 +4585,17 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                     )}
                                   </div>
                                 </td>
-                                <td className="px-5 py-3 border-y border-gray-200 text-right">
-                                  <span className="font-medium text-green-600">
+                                <td className="py-4 px-4 text-right">
+                                  <span className="font-medium text-blue-600">
                                     ${fmtMoney(totals.billTotal)}
                                   </span>
                                 </td>
-                                <td className="px-5 py-3 border-y border-gray-200 text-right">
+                                <td className="py-4 px-4 text-right">
                                   <span className="font-medium text-blue-600">
                                     ${fmtMoney(totals.carrierTotal)}
                                   </span>
                                 </td>
-                                <td className="px-5 py-3 border-y border-gray-200">
+                                <td className="py-4 px-4">
                                   <span
                                     className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-sm font-semibold ${statusColor(row?.accountantApproval?.status)}`}
                                   >
@@ -4979,7 +4610,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                       "Pending"}
                                   </span>
                                 </td>
-                                <td className="px-5 py-3 border-y border-gray-200">
+                                <td className="py-4 px-4">
                                   <div className="relative group max-w-[70px]">
                                     {/* Truncated Text */}
                                     <span className="font-medium text-gray-700 block truncate">
@@ -5002,7 +4633,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                     )}
                                   </div>
                                 </td>
-                                <td className="px-5 py-3 border-y border-gray-200">
+                                <td className="py-4 px-4">
                                   <div className="relative group max-w-[70px]">
                                     {/* Truncated Date */}
                                     <span className="font-medium text-gray-700 block truncate">
@@ -5025,24 +4656,10 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                     )}
                                   </div>
                                 </td>
-                                <td className="px-5 py-3 border-y border-gray-200 last:rounded-r-xl last:border-r last:border-gray-200">
+                                <td className="py-4 px-4">
                                   <div className="flex items-center justify-center gap-2">
-                                    <button
-                                      onClick={() => openDetails(row)}
-                                      className="border border-blue-300 text-blue-700 bg-white px-4 py-1 rounded-full transition-colors cursor-pointer hover:bg-blue-600 hover:text-white hover:border-blue-600"
-                                      title="View Details"
-                                    >
-                                      {/* <Eye size={16} /> */}
-                                      View
-                                    </button>
-                                    <button
-                                      onClick={() => openEditModal(row)}
-                                      className="border border-green-300 text-green-700 bg-white px-5 py-1 rounded-full transition-colors cursor-pointer hover:bg-green-600 hover:text-white hover:border-green-600"
-                                      title="Edit Details"
-                                    >
-                                      {/* <Edit size={16} /> */}
-                                      Edit
-                                    </button>
+                                    <ViewActionButton onClick={() => openDetails(row)} />
+                                    <EditActionButton onClick={() => openEditModal(row)} />
                                   </div>
                                 </td>
                               </tr>
@@ -5065,11 +4682,13 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                       </div>
                       <div className="flex items-center gap-2">
                         <button
+                          type="button"
                           onClick={() => setPage(page - 1)}
                           disabled={page === 1}
-                          className="px-3 h-[36px] rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-50 transition-colors text-gray-700 cursor-pointer"
+                          className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
                         >
-                          Previous
+                          <ChevronLeft size={18} />
+                          <span>Previous</span>
                         </button>
                         {(() => {
                           const total = pagination?.totalPages || 1;
@@ -5090,10 +4709,10 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                               <button
                                 key={p}
                                 onClick={() => setPage(p)}
-                                className={`px-3 py-1 text-sm ${
+                                className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-all ${
                                   page === p
-                                    ? "border border-black-300 rounded-lg text-black-600 font-semibold"
-                                    : "text-gray-700 hover:text-blue-600"
+                                    ? "bg-white border border-black shadow-sm text-black"
+                                    : "text-gray-600 hover:bg-gray-50"
                                 }`}
                               >
                                 {p}
@@ -5102,11 +4721,13 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                           );
                         })()}
                         <button
+                          type="button"
                           onClick={() => setPage(page + 1)}
                           disabled={page === (pagination?.totalPages || 1)}
-                          className="px-3 h-[36px] rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-50 transition-colors text-gray-700 cursor-pointer"
+                          className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
                         >
-                          Next
+                          <span>Next</span>
+                          <ChevronRight size={18} />
                         </button>
                       </div>
                     </div>
@@ -5126,7 +4747,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                 <div className="mb-4">
                   <div className="h-1 bg-gray-200 rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-gradient-to-r from-green-500 to-emerald-600 animate-pulse"
+                      className="h-full bg-blue-600 animate-pulse"
                       style={{ width: "100%" }}
                     ></div>
                   </div>
@@ -5134,7 +4755,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
               )}
 
               {!processedLoading && processedFiltered.length === 0 ? (
-                <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-12 text-center">
+                <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center">
                   <CheckCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                   <h3 className="text-lg font-semibold text-gray-700 mb-2">
                     No approved DOs
@@ -5151,41 +4772,41 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
               ) : (
                 <>
                   <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-                    <div className="overflow-x-auto p-4">
-                      <table className="w-full border-separate border-spacing-y-4">
-                        <thead className="bg-slate-100">
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead className="bg-white border-b border-gray-200">
                           <tr>
-                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200 first:rounded-l-xl first:border-l first:border-gray-200">
+                            <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">
                               Load No
                             </th>
-                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                            <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">
                               Container No
                             </th>
-                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                            <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">
                               Bill To
                             </th>
-                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                            <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">
                               Carrier
                             </th>
-                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                            <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">
                               Agent Name
                             </th>
-                            <th className="text-right px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                            <th className="text-right py-4 px-4 text-gray-800 font-medium text-base">
                               Bill Amount
                             </th>
-                            <th className="text-right px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                            <th className="text-right py-4 px-4 text-gray-800 font-medium text-base">
                               Carrier Fees
                             </th>
-                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                            <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">
                               Status
                             </th>
-                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                            <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">
                               Approved By
                             </th>
-                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                            <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">
                               Approved At
                             </th>
-                            <th className="text-center px-5 py-3 text-gray-700 font-medium border-y border-gray-200 last:rounded-r-xl last:border-r last:border-gray-200">
+                            <th className="text-center py-4 px-4 text-gray-800 font-medium text-base">
                               Actions
                             </th>
                           </tr>
@@ -5216,19 +4837,19 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                             return (
                               <tr
                                 key={row?._id}
-                                className="bg-white hover:bg-gray-100 transition-colors"
+                                className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
                               >
-                                <td className="px-5 py-3 border-y border-gray-200 first:rounded-l-xl first:border-l first:border-gray-200">
+                                <td className="py-4 px-4">
                                   <span className="font-medium text-gray-700">
                                     {cust?.loadNo || "—"}
                                   </span>
                                 </td>
-                                <td className="px-5 py-3 border-y border-gray-200">
+                                <td className="py-4 px-4">
                                   <span className="font-medium text-gray-700">
                                     {containerNo}
                                   </span>
                                 </td>
-                                <td className="px-5 py-3 border-y border-gray-200">
+                                <td className="py-4 px-4">
                                   <div className="relative group max-w-[90px]">
                                     {/* Truncated Text */}
                                     <span className="font-medium text-gray-700 block truncate">
@@ -5251,7 +4872,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                     )}
                                   </div>
                                 </td>
-                                <td className="px-5 py-3 border-y border-gray-200">
+                                <td className="py-4 px-4">
                                   <div className="relative group max-w-[80px]">
                                     {/* Truncated Text */}
                                     <span className="font-medium text-gray-700 block truncate">
@@ -5274,7 +4895,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                     )}
                                   </div>
                                 </td>
-                                <td className="px-5 py-3 border-y border-gray-200">
+                                <td className="py-4 px-4">
                                   <div className="relative group max-w-[80px]">
                                     {/* Truncated Text */}
                                     <span className="font-medium text-gray-700 block truncate">
@@ -5297,17 +4918,17 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                     )}
                                   </div>
                                 </td>
-                                <td className="px-5 py-3 border-y border-gray-200 text-right">
-                                  <span className="font-medium text-green-600">
+                                <td className="py-4 px-4 text-right">
+                                  <span className="font-medium text-blue-600">
                                     ${fmtMoney(totals.billTotal)}
                                   </span>
                                 </td>
-                                <td className="px-5 py-3 border-y border-gray-200 text-right">
+                                <td className="py-4 px-4 text-right">
                                   <span className="font-medium text-blue-600">
                                     ${fmtMoney(totals.carrierTotal)}
                                   </span>
                                 </td>
-                                <td className="px-5 py-3 border-y border-gray-200">
+                                <td className="py-4 px-4">
                                   <span
                                     className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-sm font-semibold ${statusColor(row?.accountantApproval?.status)}`}
                                   >
@@ -5322,7 +4943,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                       "Pending"}
                                   </span>
                                 </td>
-                                <td className="px-5 py-3 border-y border-gray-200">
+                                <td className="py-4 px-4">
                                   <div className="relative group max-w-[90px]">
                                     {/* Truncated Text */}
                                     <span className="font-medium text-gray-700 block truncate">
@@ -5345,7 +4966,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                     )}
                                   </div>
                                 </td>
-                                <td className="px-5 py-3 border-y border-gray-200">
+                                <td className="py-4 px-4">
                                   <div className="relative group max-w-[70px]">
                                     {/* Truncated Date */}
                                     <span className="font-medium text-gray-700 block truncate">
@@ -5368,16 +4989,9 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                     )}
                                   </div>
                                 </td>
-                                <td className="px-5 py-3 border-y border-gray-200 last:rounded-r-xl last:border-r last:border-gray-200">
+                                <td className="py-4 px-4">
                                   <div className="flex items-center justify-center gap-2">
-                                    <button
-                                      onClick={() => openDetails(row)}
-                                      className="border border-blue-300 text-blue-700 bg-white px-3 py-1 rounded-full transition-colors cursor-pointer hover:bg-blue-600 hover:text-white hover:border-blue-600"
-                                      title="View Details"
-                                    >
-                                      {/* <Eye size={16} /> */}
-                                      View
-                                    </button>
+                                    <ViewActionButton onClick={() => openDetails(row)} />
                                   </div>
                                 </td>
                               </tr>
@@ -5473,7 +5087,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 shadow-lg cursor-pointer ${
                   acceptedLoading || selectedDOs.size === 0
                     ? 'bg-gray-400 text-gray-200 cursor-not-allowed opacity-60'
-                    : 'bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700 hover:shadow-xl'
+                    : 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-xl'
                 }`}
               >
                 <DollarSign size={18} />
@@ -5484,13 +5098,13 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
             {acceptedLoading && (
               <div className="mb-4">
                 <div className="h-1 bg-gray-200 rounded-full overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-green-500 to-emerald-600 animate-pulse" style={{ width: '100%' }}></div>
+                  <div className="h-full bg-blue-600 animate-pulse" style={{ width: '100%' }}></div>
                 </div>
               </div>
             )}
 
             {!acceptedLoading && acceptedFiltered.length === 0 ? (
-              <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-12 text-center">
+              <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center">
                 <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                 <h3 className="text-lg font-semibold text-gray-700 mb-2">No approved DOs found</h3>
                 <p className="text-sm text-gray-500">Try adjusting filters or search.</p>
@@ -5500,7 +5114,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
               </div>
             ) : (
               <>
-                <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+                <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
                   <div className="overflow-x-auto">
                     <table className="w-full">
                       <thead className="bg-gradient-to-r from-gray-100 to-gray-200">
@@ -5617,7 +5231,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                 <span className="font-medium text-gray-700">{agentName}</span>
                               </td>
                               <td className="py-2 px-3 text-right">
-                                <span className="font-bold text-green-600">${fmtMoney(totals.billTotal)}</span>
+                                <span className="font-bold text-blue-600">${fmtMoney(totals.billTotal)}</span>
                               </td>
                               <td className="py-2 px-3 text-right">
                                 <span className="font-bold text-blue-600">${fmtMoney(totals.carrierTotal)}</span>
@@ -5677,17 +5291,10 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                               </td>
                               <td className="py-2 px-3">
                                 <div className="flex items-center justify-center gap-2 flex-wrap">
-                                  <button
-                                    onClick={() => openDetails(row)}
-                                    className="border border-blue-300 text-blue-700 bg-white px-3 py-1 rounded-full transition-colors cursor-pointer hover:bg-blue-600 hover:text-white hover:border-blue-600"
-                                    title="View Details"
-                                  >
-                                    {/* <Eye size={16} /> */}
-                                    View
-                                  </button>
+                                  <ViewActionButton onClick={() => openDetails(row)} />
                                   {row?.emailNotification?.sentToShipper ? (
                                     <div className="flex flex-col items-center gap-1">
-                                      <span className="text-xs text-green-600 font-semibold flex items-center gap-1">
+                                      <span className="text-xs text-blue-600 font-semibold flex items-center gap-1">
                                         <CheckCircle size={12} />
                                         Email Sent {row?.emailNotification?.sentAt ? `(${fmtDate(row.emailNotification.sentAt)})` : ''}
                                       </span>
@@ -5714,7 +5321,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                               <td className="py-2 px-3">
                                 <div className="flex items-center justify-center gap-2">
                                   {carrierIsPaid ? (
-                                    <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-semibold bg-green-100 text-green-700">
+                                    <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-semibold bg-blue-50 text-green-700">
                                       <CheckCircle size={14} />
                                       Paid
                                     </span>
@@ -5733,7 +5340,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                         </button>
                                         <button
                                           onClick={() => openPaymentModal(row)}
-                                          className="px-2 py-1 bg-gradient-to-r from-green-500 to-green-600 text-white text-xs font-semibold rounded hover:from-green-600 hover:to-green-700 transition-all shadow-sm"
+                                          className="px-2 py-1 bg-blue-600 text-white text-xs font-semibold rounded hover:bg-blue-700 transition-all shadow-sm"
                                           title="Mark as Paid"
                                         >
                                           Pay
@@ -5751,7 +5358,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                       </button>
                                       <button
                                         onClick={() => openPaymentModal(row)}
-                                        className="px-3 py-1.5 bg-gradient-to-r from-green-500 to-green-600 text-white text-sm font-semibold rounded-lg hover:from-green-600 hover:to-green-700 transition-all duration-200 shadow-md hover:shadow-lg"
+                                        className="px-3 py-1.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-all duration-200 shadow-md hover:shadow-lg"
                                         title="Mark as Paid"
                                       >
                                         Pay
@@ -5840,7 +5447,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                 <div className="mb-4">
                   <div className="h-1 bg-gray-200 rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-gradient-to-r from-green-500 to-emerald-600 animate-pulse"
+                      className="h-full bg-blue-600 animate-pulse"
                       style={{ width: "100%" }}
                     ></div>
                   </div>
@@ -5848,7 +5455,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
               )}
 
               {!rejectedLoading && rejectedFiltered.length === 0 ? (
-                <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-12 text-center">
+                <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center">
                   <XCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                   <h3 className="text-lg font-semibold text-gray-700 mb-2">
                     No rejected DOs found
@@ -5863,41 +5470,41 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
               ) : (
                 <>
                   <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-                    <div className="overflow-x-auto p-4">
-                      <table className="w-full border-separate border-spacing-y-4">
-                        <thead className="bg-slate-100">
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead className="bg-white border-b border-gray-200">
                           <tr>
-                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200 first:rounded-l-xl first:border-l first:border-gray-200">
+                            <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">
                               Load No
                             </th>
-                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                            <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">
                               Container No
                             </th>
-                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                            <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">
                               Bill To
                             </th>
-                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                            <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">
                               Carrier
                             </th>
-                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                            <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">
                               Agent Name
                             </th>
-                            <th className="text-right px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                            <th className="text-right py-4 px-4 text-gray-800 font-medium text-base">
                               Bill Amount
                             </th>
-                            <th className="text-right px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                            <th className="text-right py-4 px-4 text-gray-800 font-medium text-base">
                               Carrier Fees
                             </th>
-                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                            <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">
                               Status
                             </th>
-                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                            <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">
                               Rejected By
                             </th>
-                            <th className="text-left px-5 py-3 text-gray-700 font-medium border-y border-gray-200">
+                            <th className="text-left py-4 px-4 text-gray-800 font-medium text-base">
                               Rejected At
                             </th>
-                            <th className="text-center px-5 py-3 text-gray-700 font-medium border-y border-gray-200 last:rounded-r-xl last:border-r last:border-gray-200">
+                            <th className="text-center py-4 px-4 text-gray-800 font-medium text-base">
                               Actions
                             </th>
                           </tr>
@@ -5918,19 +5525,19 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                             return (
                               <tr
                                 key={row?._id}
-                                className="bg-white hover:bg-gray-100 transition-colors"
+                                className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
                               >
-                                <td className="px-5 py-3 border-y border-gray-200 first:rounded-l-xl first:border-l first:border-gray-200">
+                                <td className="py-4 px-4">
                                   <span className="font-medium text-gray-700">
                                     {cust?.loadNo || "—"}
                                   </span>
                                 </td>
-                                <td className="px-5 py-3 border-y border-gray-200">
+                                <td className="py-4 px-4">
                                   <span className="font-medium text-gray-700">
                                     {containerNo}
                                   </span>
                                 </td>
-                                <td className="px-5 py-3 border-y border-gray-200">
+                                <td className="py-4 px-4">
                                   <div className="relative group max-w-[70px]">
                                     {/* Truncated Text */}
                                     <span className="font-medium text-gray-700 block truncate">
@@ -5953,7 +5560,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                     )}
                                   </div>
                                 </td>
-                                <td className="px-5 py-3 border-y border-gray-200">
+                                <td className="py-4 px-4">
                                   <div className="relative group max-w-[80px]">
                                     {/* Truncated Carrier Name */}
                                     <span className="font-medium text-gray-700 block truncate">
@@ -5976,7 +5583,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                     )}
                                   </div>
                                 </td>
-                                <td className="px-5 py-3 border-y border-gray-200">
+                                <td className="py-4 px-4">
                                   <div className="relative group max-w-[80px]">
                                     {/* Truncated Text */}
                                     <span className="font-medium text-gray-700 block truncate">
@@ -5999,17 +5606,17 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                     )}
                                   </div>
                                 </td>
-                                <td className="px-5 py-3 border-y border-gray-200 text-right">
-                                  <span className="font-medium text-green-600">
+                                <td className="py-4 px-4 text-right">
+                                  <span className="font-medium text-blue-600">
                                     ${fmtMoney(totals.billTotal)}
                                   </span>
                                 </td>
-                                <td className="px-5 py-3 border-y border-gray-200 text-right">
+                                <td className="py-4 px-4 text-right">
                                   <span className="font-medium text-blue-600">
                                     ${fmtMoney(totals.carrierTotal)}
                                   </span>
                                 </td>
-                                <td className="px-5 py-3 border-y border-gray-200">
+                                <td className="py-4 px-4">
                                   <span
                                     className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-sm font-semibold ${statusColor(row?.salesApproval?.status)}`}
                                   >
@@ -6023,7 +5630,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                     {row?.salesApproval?.status || "Pending"}
                                   </span>
                                 </td>
-                                <td className="px-5 py-3 border-y border-gray-200">
+                                <td className="py-4 px-4">
                                   <div className="relative group max-w-[80px]">
                                     {/* Truncated Name */}
                                     <span className="font-medium text-gray-700 block truncate">
@@ -6047,7 +5654,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                   </div>
                                 </td>
 
-                                <td className="px-5 py-3 border-y border-gray-200">
+                                <td className="py-4 px-4">
                                   <div className="relative group max-w-[70px]">
                                     {/* Truncated Date */}
                                     <span className="font-medium text-gray-700 block truncate">
@@ -6070,24 +5677,10 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                     )}
                                   </div>
                                 </td>
-                                <td className="px-5 py-3 border-y border-gray-200 last:rounded-r-xl last:border-r last:border-gray-200">
+                                <td className="py-4 px-4">
                                   <div className="flex items-center justify-center gap-2">
-                                    <button
-                                      onClick={() => openDetails(row)}
-                                      className="border border-blue-300 text-blue-700 bg-white px-3 py-1 rounded-full transition-colors cursor-pointer hover:bg-blue-600 hover:text-white hover:border-blue-600"
-                                      title="View Details"
-                                    >
-                                      {/* <Eye size={16} /> */}
-                                      View
-                                    </button>
-                                    <button
-                                      onClick={() => openEditModal(row)}
-                                      className="border border-green-300 text-green-700 bg-white px-3 py-1 rounded-full transition-colors cursor-pointer hover:bg-green-600 hover:text-white hover:border-green-600"
-                                      title="Edit Details"
-                                    >
-                                      {/* <Edit size={16} /> */}
-                                      Edit
-                                    </button>
+                                    <ViewActionButton onClick={() => openDetails(row)} />
+                                    <EditActionButton onClick={() => openEditModal(row)} />
                                   </div>
                                 </td>
                               </tr>
@@ -6163,60 +5756,32 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
         </div>
 
         {/* Employee DO Data Modal */}
-        {detailsOpen && selected && (
-          <div
-            className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
-            onClick={() => setDetailsOpen(false)}
-          >
-            <div
-              className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
-              style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Header */}
-              <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-6 rounded-t-3xl">
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                      <Truck className="text-white" size={24} />
-                    </div>
-                    <div>
-                      <h2 className="text-xl font-bold">Employee DO Data</h2>
-                      <p className="text-blue-100">Delivery Order Details</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setDetailsOpen(false)}
-                    className="text-white hover:text-gray-200 text-2xl font-bold"
-                  >
-                    ×
-                  </button>
-                </div>
-              </div>
-
-              {/* Content */}
-              <div className="p-6 space-y-6">
+        <AppModal
+          open={detailsOpen && !!selected}
+          onClose={() => setDetailsOpen(false)}
+          title="Delivery Order Details"
+          subtitle={
+            selected?.customers?.[0]?.loadNo
+              ? `Load #${selected.customers[0].loadNo}`
+              : "Invoice & shipment information"
+          }
+          icon={FileText}
+          size="xl"
+          contentClassName="!py-5"
+        >
+          <div className="space-y-5">
                 {/* Customer Information */}
                 {selected?.customers?.length > 0 && (
-                  <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6">
-                    <div className="flex items-center gap-2 mb-4">
-                      <User className="text-green-600" size={20} />
-                      <h3 className="text-lg font-bold text-gray-800">
-                        Customer Information
-                      </h3>
-                    </div>
-
-                    <div className="space-y-4">
+                  <ModalSection title="Customer Information" icon={User} tone="customer">
+                    <div className="space-y-3">
                       {selected.customers.map((customer, index) => (
                         <div
                           key={customer?._id || index}
-                          className="bg-white rounded-xl p-4 border border-green-200"
+                          className={`rounded-lg p-3.5 border ${SECTION_TONES.customer.card}`}
                         >
-                          <div className="flex items-center gap-2 mb-3">
-                            <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
-                              <span className="text-green-600 font-bold text-sm">
-                                {index + 1}
-                              </span>
+                          <div className="flex items-center gap-2 mb-2.5">
+                            <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${SECTION_TONES.customer.badge}`}>
+                              {index + 1}
                             </div>
                             <h4 className="font-semibold text-gray-800">
                               Customer {index + 1}
@@ -6225,7 +5790,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
 
                           <div className="grid grid-cols-2 gap-4">
                             <div>
-                              <p className="text-sm text-gray-600">Bill To</p>
+                              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Bill To</p>
                               <p className="font-medium text-gray-800">
                                 {customer?.billTo ||
                                   selected?.customerName ||
@@ -6233,7 +5798,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                               </p>
                             </div>
                             <div>
-                              <p className="text-sm text-gray-600">
+                              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                                 Dispatcher Name
                               </p>
                               <p className="font-medium text-gray-800">
@@ -6241,13 +5806,13 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                               </p>
                             </div>
                             <div>
-                              <p className="text-sm text-gray-600">Load No</p>
+                              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Load No</p>
                               <p className="font-medium text-gray-800">
                                 {customer?.loadNo || "N/A"}
                               </p>
                             </div>
                             <div>
-                              <p className="text-sm text-gray-600">
+                              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                                 Work Order No
                               </p>
                               <p className="font-medium text-gray-800">
@@ -6255,19 +5820,19 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                               </p>
                             </div>
                             <div>
-                              <p className="text-sm text-gray-600">Line Haul</p>
+                              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Line Haul</p>
                               <p className="font-medium text-gray-800">
                                 ${fmtMoney(customer?.lineHaul || 0)}
                               </p>
                             </div>
                             <div>
-                              <p className="text-sm text-gray-600">FSC</p>
+                              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">FSC</p>
                               <p className="font-medium text-gray-800">
                                 ${fmtMoney(customer?.fsc || 0)}
                               </p>
                             </div>
                             <div>
-                              <p className="text-sm text-gray-600">Other</p>
+                              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Other</p>
                               <p className="font-medium text-gray-800">
                                 $
                                 {fmtMoney(
@@ -6285,10 +5850,10 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                               </p>
                             </div>
                             <div className="col-span-2">
-                              <p className="text-sm text-gray-600">
+                              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                                 Total Amount
                               </p>
-                              <p className="font-bold text-lg text-green-600">
+                              <p className="font-bold text-base text-emerald-600">
                                 $
                                 {fmtMoney(
                                   customer?.calculatedTotal ??
@@ -6301,25 +5866,16 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                         </div>
                       ))}
                     </div>
-                  </div>
+                  </ModalSection>
                 )}
 
                 {/* Company Information */}
                 {selected?.addDispature && (
-                  <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl p-6">
-                    <div className="flex items-center gap-2 mb-4">
-                      <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
-                        <Truck className="text-indigo-600" size={20} />
-                      </div>
-                      <h3 className="text-lg font-bold text-gray-800">
-                        Company Information
-                      </h3>
-                    </div>
-
-                    <div className="bg-white rounded-xl p-4 border border-indigo-200">
+                  <ModalSection title="Company Information" icon={Truck} tone="company">
+                    <div className={`rounded-lg p-3.5 border ${SECTION_TONES.company.card}`}>
                       <div className="grid grid-cols-1 gap-4">
                         <div>
-                          <p className="text-sm text-gray-600 mb-1">
+                          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-0.5">
                             Company Name
                           </p>
                           <p className="font-semibold text-gray-800 text-lg">
@@ -6330,23 +5886,16 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                         </div>
                       </div>
                     </div>
-                  </div>
+                  </ModalSection>
                 )}
 
                 {/* Agent Information */}
                 {selected?.loadReference?.createdBySalesUser && (
-                  <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6">
-                    <div className="flex items-center gap-2 mb-4">
-                      <User className="text-blue-600" size={20} />
-                      <h3 className="text-lg font-bold text-gray-800">
-                        Agent Information
-                      </h3>
-                    </div>
-
-                    <div className="bg-white rounded-xl p-4 border border-blue-200">
+                  <ModalSection title="Agent Information" icon={User} tone="agent">
+                    <div className={`rounded-lg p-3.5 border ${SECTION_TONES.agent.card}`}>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <p className="text-sm text-gray-600">Agent Name</p>
+                          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Agent Name</p>
                           <p className="font-semibold text-gray-800">
                             {selected?.loadReference?.createdBySalesUser
                               ?.empName || "N/A"}
@@ -6354,7 +5903,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                         </div>
                         {selected?.loadReference?.createdBySalesUser?.empId && (
                           <div>
-                            <p className="text-sm text-gray-600">Employee ID</p>
+                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Employee ID</p>
                             <p className="font-semibold text-gray-800">
                               {
                                 selected?.loadReference?.createdBySalesUser
@@ -6366,7 +5915,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                         {selected?.loadReference?.createdBySalesUser
                           ?.department && (
                           <div className="col-span-2">
-                            <p className="text-sm text-gray-600">Department</p>
+                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Department</p>
                             <p className="font-semibold text-gray-800">
                               {
                                 selected?.loadReference?.createdBySalesUser
@@ -6377,24 +5926,18 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                         )}
                       </div>
                     </div>
-                  </div>
+                  </ModalSection>
                 )}
 
                 {/* Rejection Information - Only show for rejected DOs */}
                 {activeTab === 3 &&
                   selected?.salesApproval?.status === "rejected" &&
                   selected?.salesApproval?.rejectionReason && (
-                    <div className="bg-gradient-to-br from-red-50 to-rose-50 rounded-2xl p-6 border border-red-200">
-                      <div className="flex items-center gap-2 mb-4">
-                        <XCircle className="text-red-600" size={20} />
-                        <h3 className="text-lg font-bold text-gray-800">
-                          Rejection Details
-                        </h3>
-                      </div>
-                      <div className="bg-white rounded-xl p-4 border border-red-200">
-                        <div className="grid grid-cols-1 gap-4">
+                    <ModalSection title="Rejection Details" icon={XCircle} tone="rejection">
+                      <div className={`rounded-lg p-3.5 border ${SECTION_TONES.rejection.card}`}>
+                        <div className="grid grid-cols-1 gap-3">
                           <div>
-                            <p className="text-sm text-gray-600 mb-1">
+                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-0.5">
                               Rejected By
                             </p>
                             <p className="font-medium text-gray-800">
@@ -6405,7 +5948,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                             </p>
                           </div>
                           <div>
-                            <p className="text-sm text-gray-600 mb-1">
+                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-0.5">
                               Rejected At
                             </p>
                             <p className="font-medium text-gray-800">
@@ -6415,7 +5958,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                             </p>
                           </div>
                           <div>
-                            <p className="text-sm text-gray-600 mb-1">
+                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-0.5">
                               Rejection Reason
                             </p>
                             <p className="font-medium text-gray-800 bg-red-50 p-3 rounded-lg border border-red-200">
@@ -6425,7 +5968,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                           </div>
                           {selected?.salesApproval?.remarks && (
                             <div>
-                              <p className="text-sm text-gray-600 mb-1">
+                              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-0.5">
                                 Remarks
                               </p>
                               <p className="font-medium text-gray-800 bg-gray-50 p-3 rounded-lg border border-gray-200">
@@ -6435,26 +5978,20 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                           )}
                         </div>
                       </div>
-                    </div>
+                    </ModalSection>
                   )}
 
                 {/* Carrier Information */}
                 {selected?.carrier && (
-                  <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6">
-                    <div className="flex items-center gap-2 mb-4">
-                      <Truck className="text-purple-600" size={20} />
-                      <h3 className="text-lg font-bold text-gray-800">
-                        Carrier Information
-                      </h3>
-                    </div>
+                  <ModalSection title="Carrier Information" icon={Truck} tone="carrier">
 
                     <div className="grid grid-cols-2 gap-6">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                          <Truck className="text-purple-600" size={16} />
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${SECTION_TONES.carrier.badge}`}>
+                          <Truck size={16} className={SECTION_TONES.carrier.accent} />
                         </div>
                         <div>
-                          <p className="text-sm text-gray-600">Carrier Name</p>
+                          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Carrier Name</p>
                           <p className="font-semibold text-gray-800">
                             {selected.carrier?.carrierName || "N/A"}
                           </p>
@@ -6462,11 +5999,11 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                       </div>
 
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-pink-100 rounded-full flex items-center justify-center">
-                          <Truck className="text-pink-600" size={16} />
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${SECTION_TONES.carrier.badge}`}>
+                          <Truck size={16} className={SECTION_TONES.carrier.accent} />
                         </div>
                         <div>
-                          <p className="text-sm text-gray-600">
+                          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                             Equipment Type
                           </p>
                           <p className="font-semibold text-gray-800">
@@ -6476,11 +6013,11 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                       </div>
 
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                          <DollarSign className="text-green-600" size={16} />
+                        <div className="w-8 h-8 bg-blue-50 rounded-full flex items-center justify-center">
+                          <DollarSign className="text-blue-600" size={16} />
                         </div>
                         <div>
-                          <p className="text-sm text-gray-600">
+                          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                             Total Carrier Fees
                           </p>
                           <p className="font-semibold text-gray-800">
@@ -6499,13 +6036,13 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                           {selected.carrier.carrierFees.map((charge, i) => (
                             <div
                               key={i}
-                              className="bg-white rounded-lg p-3 border border-purple-200"
+                              className="bg-white rounded-lg p-3 border border-gray-100"
                             >
                               <div className="flex justify-between items-center">
                                 <span className="font-medium text-gray-800">
                                   {charge?.name}
                                 </span>
-                                <span className="font-bold text-green-600">
+                                <span className="font-bold text-blue-600">
                                   ${fmtMoney(charge?.total || 0)}
                                 </span>
                               </div>
@@ -6518,26 +6055,20 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                         </div>
                       </div>
                     )}
-                  </div>
+                  </ModalSection>
                 )}
 
                 {/* Shipper Information */}
                 {selected?.shipper && (
-                  <div className="bg-gradient-to-br from-orange-50 to-yellow-50 rounded-2xl p-6">
-                    <div className="flex items-center gap-2 mb-4">
-                      <Truck className="text-orange-600" size={20} />
-                      <h3 className="text-lg font-bold text-gray-800">
-                        Shipper Information
-                      </h3>
-                    </div>
+                  <ModalSection title="Shipper Information" icon={MapPin} tone="shipper">
 
                     <div className="grid grid-cols-2 gap-6 mb-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
-                          <User className="text-orange-600" size={16} />
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${SECTION_TONES.shipper.badge}`}>
+                          <User size={16} className={SECTION_TONES.shipper.accent} />
                         </div>
                         <div>
-                          <p className="text-sm text-gray-600">Shipper Name</p>
+                          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Shipper Name</p>
                           <p className="font-semibold text-gray-800">
                             {selected.shipper?.name || "N/A"}
                           </p>
@@ -6556,11 +6087,11 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                             (location, index) => (
                               <div
                                 key={location?._id || index}
-                                className="bg-white rounded-lg p-3 border border-orange-200"
+                                className="bg-white rounded-lg p-3 border border-gray-100"
                               >
                                 <div className="grid grid-cols-2 gap-4">
                                   <div>
-                                    <p className="text-sm text-gray-600">
+                                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                                       Name
                                     </p>
                                     <p className="font-medium text-gray-800">
@@ -6568,7 +6099,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                     </p>
                                   </div>
                                   <div>
-                                    <p className="text-sm text-gray-600">
+                                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                                       Address
                                     </p>
                                     <p className="font-medium text-gray-800">
@@ -6576,7 +6107,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                     </p>
                                   </div>
                                   <div>
-                                    <p className="text-sm text-gray-600">
+                                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                                       City
                                     </p>
                                     <p className="font-medium text-gray-800">
@@ -6584,7 +6115,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                     </p>
                                   </div>
                                   <div>
-                                    <p className="text-sm text-gray-600">
+                                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                                       State
                                     </p>
                                     <p className="font-medium text-gray-800">
@@ -6592,7 +6123,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                     </p>
                                   </div>
                                   <div>
-                                    <p className="text-sm text-gray-600">
+                                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                                       Zip Code
                                     </p>
                                     <p className="font-medium text-gray-800">
@@ -6600,7 +6131,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                     </p>
                                   </div>
                                   <div>
-                                    <p className="text-sm text-gray-600">
+                                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                                       Weight (lbs)
                                     </p>
                                     <p className="font-medium text-gray-800">
@@ -6613,7 +6144,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                     </p>
                                   </div>
                                   <div>
-                                    <p className="text-sm text-gray-600">
+                                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                                       Pickup Date
                                     </p>
                                     <p className="font-medium text-gray-800">
@@ -6641,11 +6172,11 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                             (location, index) => (
                               <div
                                 key={location?._id || index}
-                                className="bg-white rounded-lg p-3 border border-yellow-200"
+                                className="bg-white rounded-lg p-3 border border-gray-100"
                               >
                                 <div className="grid grid-cols-2 gap-4">
                                   <div>
-                                    <p className="text-sm text-gray-600">
+                                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                                       Name
                                     </p>
                                     <p className="font-medium text-gray-800">
@@ -6653,7 +6184,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                     </p>
                                   </div>
                                   <div>
-                                    <p className="text-sm text-gray-600">
+                                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                                       Address
                                     </p>
                                     <p className="font-medium text-gray-800">
@@ -6661,7 +6192,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                     </p>
                                   </div>
                                   <div>
-                                    <p className="text-sm text-gray-600">
+                                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                                       City
                                     </p>
                                     <p className="font-medium text-gray-800">
@@ -6669,7 +6200,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                     </p>
                                   </div>
                                   <div>
-                                    <p className="text-sm text-gray-600">
+                                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                                       State
                                     </p>
                                     <p className="font-medium text-gray-800">
@@ -6677,7 +6208,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                     </p>
                                   </div>
                                   <div>
-                                    <p className="text-sm text-gray-600">
+                                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                                       Zip Code
                                     </p>
                                     <p className="font-medium text-gray-800">
@@ -6685,7 +6216,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                     </p>
                                   </div>
                                   <div>
-                                    <p className="text-sm text-gray-600">
+                                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                                       Weight (lbs)
                                     </p>
                                     <p className="font-medium text-gray-800">
@@ -6698,7 +6229,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                     </p>
                                   </div>
                                   <div>
-                                    <p className="text-sm text-gray-600">
+                                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                                       Drop Date
                                     </p>
                                     <p className="font-medium text-gray-800">
@@ -6714,7 +6245,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                         </div>
                       </div>
                     )}
-                  </div>
+                  </ModalSection>
                 )}
 
                 {/* Load Reference */}
@@ -7293,21 +6824,21 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
 
                 {/* Payment Information - Only show for paid DOs */}
                 {selected?.paymentStatus?.status === "paid" && (
-                  <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6 border border-green-200">
+                  <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
                     <div className="flex items-center gap-2 mb-4">
-                      <CheckCircle className="text-green-600" size={20} />
+                      <CheckCircle className="text-blue-600" size={20} />
                       <h3 className="text-lg font-bold text-gray-800">
                         Payment Information
                       </h3>
-                      <span className="ml-auto inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold bg-green-100 text-green-700">
+                      <span className="ml-auto inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold bg-blue-50 text-green-700">
                         <CheckCircle size={14} />
                         Paid
                       </span>
                     </div>
-                    <div className="bg-white rounded-xl p-4 border border-green-200">
+                    <div className="bg-white rounded-xl p-4 border border-gray-100">
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <p className="text-sm text-gray-600 mb-1">
+                          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-0.5">
                             Payment Method
                           </p>
                           <p className="font-medium text-gray-800 capitalize">
@@ -7319,7 +6850,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                         </div>
                         {selected?.paymentStatus?.paymentReference && (
                           <div>
-                            <p className="text-sm text-gray-600 mb-1">
+                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-0.5">
                               Payment Reference
                             </p>
                             <p className="font-medium text-gray-800">
@@ -7328,7 +6859,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                           </div>
                         )}
                         <div>
-                          <p className="text-sm text-gray-600 mb-1">Paid At</p>
+                          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-0.5">Paid At</p>
                           <p className="font-medium text-gray-800">
                             {selected?.paymentStatus?.paidAt
                               ? fmtDateTime(selected.paymentStatus.paidAt)
@@ -7337,7 +6868,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                         </div>
                         {selected?.paymentStatus?.paymentNotes && (
                           <div className="col-span-2">
-                            <p className="text-sm text-gray-600 mb-1">
+                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-0.5">
                               Payment Notes
                             </p>
                             <p className="font-medium text-gray-800 bg-gray-50 p-3 rounded-lg border border-gray-200">
@@ -7476,7 +7007,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                       <div className="flex items-center gap-2 mb-4">
                         <DollarSign
                           className={
-                            isFullyPaid ? "text-green-600" : "text-orange-600"
+                            isFullyPaid ? "text-blue-600" : "text-orange-600"
                           }
                           size={20}
                         />
@@ -7486,7 +7017,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                         <span
                           className={`ml-auto inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold ${
                             isFullyPaid
-                              ? "bg-green-100 text-green-700"
+                              ? "bg-blue-50 text-green-700"
                               : "bg-orange-100 text-orange-700"
                           }`}
                         >
@@ -7506,7 +7037,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                       <div className="bg-white rounded-xl p-4 border border-gray-200 mb-4">
                         <div className="grid grid-cols-2 gap-4 mb-4">
                           <div>
-                            <p className="text-sm text-gray-600 mb-1">
+                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-0.5">
                               Total Carrier Fees
                             </p>
                             <p className="text-lg font-bold text-gray-800">
@@ -7514,21 +7045,21 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                             </p>
                           </div>
                           <div>
-                            <p className="text-sm text-gray-600 mb-1">
+                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-0.5">
                               Total Paid
                             </p>
                             <p
-                              className={`text-lg font-bold ${isFullyPaid ? "text-green-600" : "text-orange-600"}`}
+                              className={`text-lg font-bold ${isFullyPaid ? "text-blue-600" : "text-orange-600"}`}
                             >
                               ${fmtMoney(totalPaid)}
                             </p>
                           </div>
                           <div className="col-span-2">
-                            <p className="text-sm text-gray-600 mb-1">
+                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-0.5">
                               Remaining Amount
                             </p>
                             <p
-                              className={`text-xl font-bold ${isFullyPaid ? "text-green-600" : "text-orange-600"}`}
+                              className={`text-xl font-bold ${isFullyPaid ? "text-blue-600" : "text-orange-600"}`}
                             >
                               ${fmtMoney(remaining)}
                             </p>
@@ -7536,7 +7067,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                         </div>
                         {isFullyPaid && carrierPaymentStatus?.paidAt && (
                           <div>
-                            <p className="text-sm text-gray-600 mb-1">
+                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-0.5">
                               Fully Paid At
                             </p>
                             <p className="font-medium text-gray-800">
@@ -7563,7 +7094,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                                     <p className="font-semibold text-gray-800">
                                       Payment #{index + 1}
                                     </p>
-                                    <p className="text-sm text-gray-600">
+                                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                                       {fmtDateTime(payment.paidAt)}
                                     </p>
                                   </div>
@@ -7724,7 +7255,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                 {(activeTab === 0 || activeTab === 1) &&
                   (selected?.accountantApproval?.corrections ||
                     selected?.accountantApproval?.resubmissionRemarks) && (
-                    <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl p-6 border border-blue-200">
+                    <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl p-6 border border-gray-100">
                       <div className="flex items-center gap-2 mb-4">
                         <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
                           <FileText className="text-blue-600" size={20} />
@@ -7733,7 +7264,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                           <h3 className="text-lg font-bold text-gray-800">
                             Corrections & Resubmission Details
                           </h3>
-                          <p className="text-sm text-gray-600">
+                          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                             Information from previous resubmission
                           </p>
                         </div>
@@ -7742,7 +7273,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                       <div className="space-y-4">
                         {/* Corrections */}
                         {selected?.accountantApproval?.corrections && (
-                          <div className="bg-white rounded-xl p-4 border border-blue-200">
+                          <div className="bg-white rounded-xl p-4 border border-gray-100">
                             <div className="flex items-center gap-2 mb-2">
                               <CheckCircle
                                 className="text-blue-600"
@@ -7796,128 +7327,114 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
 
                 {/* Final Approval - Only show for Assigned to Accountant tab (tab 0) */}
                 {activeTab === 0 && (
-                  <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-2xl p-6 border border-orange-200">
-                    <div className="flex items-center gap-2 mb-6">
-                      <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
-                        <CheckCircle className="text-orange-600" size={20} />
-                      </div>
+                  <ModalSection
+                    title="Final Approval"
+                    icon={CheckCircle}
+                    tone="approval"
+                  >
+                    <p className="text-xs text-gray-500 mb-4 -mt-1">
+                      Review and approve this delivery order before sending to
+                      sales.
+                    </p>
+
+                    <div
+                      className={`rounded-lg border p-4 space-y-3 ${SECTION_TONES.approval.card}`}
+                    >
                       <div>
-                        <h3 className="text-lg font-bold text-gray-800">
-                          Final Approval
-                        </h3>
-                        <p className="text-sm text-gray-600">
-                          Review and approve this delivery order
-                        </p>
+                        <label className={MODAL_LABEL}>Remarks</label>
+                        <textarea
+                          placeholder="All charges verified and approved"
+                          value={approvalRemarks}
+                          onChange={(e) => setApprovalRemarks(e.target.value)}
+                          rows={3}
+                          className={`${MODAL_INPUT} resize-none min-h-[72px]`}
+                        />
                       </div>
-                    </div>
-
-                    {/* Remarks */}
-                    <div className="mb-4">
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
-                        Remarks
-                      </label>
-                      <textarea
-                        placeholder="All charges verified and approved"
-                        value={approvalRemarks}
-                        onChange={(e) => setApprovalRemarks(e.target.value)}
-                        rows={6}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent resize-none"
-                      />
-                    </div>
-
-                    {/* Send to Sales Button */}
-                    <div className="space-y-4">
                       <button
+                        type="button"
                         onClick={postAccountantApproval}
                         disabled={posting || rejectingToCMT}
-                        className="w-full flex items-center justify-center gap-2 px-6 py-3 h-12 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full inline-flex items-center justify-center gap-2 px-3.5 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {posting ? (
                           <>
-                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                             <span>Sending...</span>
                           </>
                         ) : (
                           <>
-                            <Send size={18} />
+                            <Send size={15} />
                             <span>Send to Sales</span>
                           </>
                         )}
                       </button>
                     </div>
 
-                    {/* Divider */}
-                    <div className="my-6 flex items-center">
-                      <div className="flex-1 border-t border-orange-300"></div>
-                      <span className="px-4 text-sm text-gray-500 font-medium">
-                        OR
+                    <div className="flex items-center gap-3 py-3">
+                      <div className="flex-1 border-t border-gray-200" />
+                      <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                        or
                       </span>
-                      <div className="flex-1 border-t border-orange-300"></div>
+                      <div className="flex-1 border-t border-gray-200" />
                     </div>
 
-                    {/* Rejection Section */}
-                    <div className="mt-6">
-                      <div className="flex items-center gap-2 mb-4">
-                        <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
-                          <XCircle className="text-red-600" size={16} />
-                        </div>
-                        <h4 className="text-md font-bold text-gray-800">
-                          Reject Load
+                    <div
+                      className={`rounded-lg border p-4 space-y-3 ${SECTION_TONES.rejection.card}`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`flex h-7 w-7 items-center justify-center rounded-lg ${SECTION_TONES.rejection.icon}`}
+                        >
+                          <XCircle size={14} />
+                        </span>
+                        <h4 className="text-sm font-semibold text-gray-900">
+                          Reject load
                         </h4>
                       </div>
-
-                      {/* Rejection Reason */}
-                      <div className="mb-4">
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                          Rejection Reason{" "}
+                      <div>
+                        <label className={MODAL_LABEL}>
+                          Rejection reason{" "}
                           <span className="text-red-500">*</span>
                         </label>
                         <textarea
-                          placeholder="Enter reason for rejecting this load (e.g., Incorrect rates, missing documents, etc.)"
+                          placeholder="e.g. Incorrect rates, missing documents…"
                           value={rejectionReason}
                           onChange={(e) => setRejectionReason(e.target.value)}
-                          rows={4}
-                          className="w-full px-4 py-3 border border-red-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none"
+                          rows={3}
+                          className={`${MODAL_INPUT} resize-none min-h-[72px] border-red-200 focus:ring-red-100 focus:border-red-400`}
                         />
                       </div>
-
-                      {/* Reject to CMT Button */}
                       <button
+                        type="button"
                         onClick={postRejectToCMT}
                         disabled={
                           rejectingToCMT || posting || !rejectionReason.trim()
                         }
-                        className="w-full flex items-center justify-center gap-2 px-6 py-3 h-12 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full inline-flex items-center justify-center gap-2 px-3.5 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {rejectingToCMT ? (
                           <>
-                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                             <span>Rejecting...</span>
                           </>
                         ) : (
                           <>
-                            <XCircle size={18} />
-                            <span>Rejected Load with reason</span>
+                            <XCircle size={15} />
+                            <span>Reject &amp; send to CMT</span>
                           </>
                         )}
                       </button>
                     </div>
-                  </div>
+                  </ModalSection>
                 )}
 
                 {/* Generate PDFs */}
-                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6">
-                  <div className="flex items-center gap-2 mb-4">
-                    <FileText className="text-blue-600" size={20} />
-                    <h3 className="text-lg font-bold text-gray-800">
-                      Generate PDFs
-                    </h3>
-                  </div>
+                <ModalSection title="Generate PDFs" icon={FileText} tone="pdf">
                   <div className="flex flex-wrap gap-3">
                     <button
                       onClick={() => generatePDF("invoice")}
                       disabled={pdfLoading.invoice}
-                      className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2.5 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="bg-blue-600 text-white px-4 py-2.5 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {pdfLoading.invoice ? (
                         <>
@@ -7934,7 +7451,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                     <button
                       onClick={() => generatePDF("rate")}
                       disabled={pdfLoading.rate}
-                      className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 py-2.5 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="bg-white border border-gray-300 text-gray-800 hover:bg-gray-50 px-4 py-2.5 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {pdfLoading.rate ? (
                         <>
@@ -7951,7 +7468,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                     <button
                       onClick={() => generatePDF("bol")}
                       disabled={pdfLoading.bol}
-                      className="bg-gradient-to-r from-amber-500 to-orange-600 text-white px-4 py-2.5 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="bg-white border border-gray-300 text-gray-800 hover:bg-gray-50 px-4 py-2.5 rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {pdfLoading.bol ? (
                         <>
@@ -7966,7 +7483,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                       )}
                     </button>
                   </div>
-                </div>
+                </ModalSection>
 
                 {/* Resubmit to Sales - Only show for rejected DOs */}
                 {activeTab === 3 && (
@@ -8096,51 +7613,18 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                     </CardContent>
                   </Card>
                 )}
-              </div>
-            </div>
           </div>
-        )}
+        </AppModal>
 
         {/* Edit DO Details Modal */}
-        {editOpen && (
-          <>
-            <style>{`
-            .hide-scrollbar::-webkit-scrollbar { display: none; }
-            .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
-          `}</style>
-            <div
-              className="fixed inset-0 backdrop-blur-sm bg-black/30 z-50 flex justify-center items-center p-4"
-              onClick={() => setEditOpen(false)}
-            >
-              <div
-                className="bg-white rounded-3xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* Header */}
-                <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-t-3xl">
-                  <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                        <Edit className="text-white" size={24} />
-                      </div>
-                      <div>
-                        <h2 className="text-xl font-bold">Edit DO Details</h2>
-                        <p className="text-green-100">
-                          Update delivery order details
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setEditOpen(false)}
-                      className="text-white hover:text-gray-200 text-2xl font-bold"
-                    >
-                      ×
-                    </button>
-                  </div>
-                </div>
-
-                {/* Form Content */}
-                <div className="p-6">
+        <AppModal
+          open={editOpen}
+          onClose={() => setEditOpen(false)}
+          title="Edit DO Details"
+          subtitle="Update customer and carrier billing"
+          icon={Edit}
+          size="xl"
+        >
                   {editData ? (
                     <EditForm
                       data={editData}
@@ -8155,53 +7639,20 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                       </p>
                     </div>
                   )}
-                </div>
-              </div>
-            </div>
-          </>
-        )}
+        </AppModal>
 
         {/* Payment Modal */}
-        {paymentModalOpen && (
-          <>
-            <div
-              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-              onClick={() => setPaymentModalOpen(false)}
-            >
-              <div
-                className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* Header */}
-                <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-t-3xl">
-                  <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                        <DollarSign size={24} className="text-white" />
-                      </div>
-                      <div>
-                        <h2 className="text-2xl font-bold">Mark as Paid</h2>
-                        <p className="text-white/80 text-sm">
-                          DO ID:{" "}
-                          {paymentData?._id ? shortId(paymentData._id) : "N/A"}
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setPaymentModalOpen(false)}
-                      className="text-white hover:text-gray-200 text-2xl font-bold"
-                    >
-                      ×
-                    </button>
-                  </div>
-                </div>
-
-                {/* Form Content */}
-                <div className="p-6">
-                  <div className="space-y-4">
+        <AppModal
+          open={paymentModalOpen}
+          onClose={() => setPaymentModalOpen(false)}
+          title="Mark as Paid"
+          subtitle={paymentData?._id ? `DO ID: ${shortId(paymentData._id)}` : undefined}
+          icon={DollarSign}
+          size="md"
+        >                  <div className="space-y-4">
                     {/* Payment Method */}
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      <label className={MODAL_LABEL}>
                         Payment Method <span className="text-red-500">*</span>
                       </label>
                       <select
@@ -8212,7 +7663,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                             paymentMethod: e.target.value,
                           })
                         }
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
+                        className={MODAL_INPUT}
                         required
                       >
                         <option value="">Select Payment Method</option>
@@ -8226,7 +7677,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
 
                     {/* Payment Reference */}
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      <label className={MODAL_LABEL}>
                         Payment Reference (Optional)
                       </label>
                       <input
@@ -8239,13 +7690,13 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                           })
                         }
                         placeholder="Transaction ID, Check Number, etc."
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
+                        className={MODAL_INPUT}
                       />
                     </div>
 
                     {/* Payment Notes */}
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      <label className={MODAL_LABEL}>
                         Payment Notes (Optional)
                       </label>
                       <textarea
@@ -8258,16 +7709,16 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                         }
                         placeholder="Additional notes about the payment"
                         rows={3}
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none resize-none"
+                        className={`${MODAL_INPUT} resize-none`}
                       />
                     </div>
 
                     {/* Payment Proof Upload */}
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      <label className={MODAL_LABEL}>
                         Payment Proof <span className="text-red-500">*</span>
                       </label>
-                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-green-500 transition-colors">
+                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-blue-400 transition-colors">
                         <input
                           type="file"
                           accept=".pdf,.jpg,.jpeg,.png"
@@ -8350,7 +7801,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                     <div className="flex gap-3 pt-4">
                       <button
                         onClick={() => setPaymentModalOpen(false)}
-                        className="flex-1 px-4 py-2.5 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition-colors"
+                        className={MODAL_BTN_CANCEL}
                         disabled={paymentLoading}
                       >
                         Cancel
@@ -8362,70 +7813,36 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                           !paymentForm.paymentMethod ||
                           !paymentForm.paymentProof
                         }
-                        className="flex-1 px-4 py-2.5 bg-gradient-to-r from-green-500 to-green-600 text-white font-semibold rounded-lg hover:from-green-600 hover:to-green-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
+                        className={MODAL_BTN_PRIMARY}
                       >
                         {paymentLoading ? "Processing..." : "Mark as Paid"}
                       </button>
                     </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </>
-        )}
+          </div>
+        </AppModal>
 
         {/* Email Modal */}
-        {emailModalOpen && (
-          <>
-            <div
-              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-              onClick={() => setEmailModalOpen(false)}
-            >
-              <div
-                className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* Header */}
-                <div className="bg-gradient-to-r from-purple-500 to-purple-600 text-white p-6 rounded-t-3xl">
-                  <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                        <Send size={24} className="text-white" />
-                      </div>
-                      <div>
-                        <h2 className="text-2xl font-bold">
-                          Send Email to Customer
-                        </h2>
-                        <p className="text-white/80 text-sm">
-                          DO ID:{" "}
-                          {emailData?._id ? shortId(emailData._id) : "N/A"}
-                        </p>
-                        {emailData?.customers?.[0]?.loadNo && (
-                          <p className="text-white/80 text-sm">
-                            Load No: {emailData.customers[0].loadNo}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setEmailModalOpen(false)}
-                      className="text-white hover:text-gray-200 text-2xl font-bold"
-                      disabled={emailLoading}
-                    >
-                      ×
-                    </button>
-                  </div>
-                </div>
-
-                {/* Form Content */}
-                <div className="p-6">
-                  <div className="space-y-4">
+        <AppModal
+          open={emailModalOpen}
+          onClose={() => setEmailModalOpen(false)}
+          title="Send Email to Customer"
+          subtitle={
+            emailData?.customers?.[0]?.loadNo
+              ? `Load #${emailData.customers[0].loadNo}`
+              : emailData?._id
+                ? `DO ${shortId(emailData._id)}`
+                : undefined
+          }
+          icon={Send}
+          size="md"
+        >
+          <div className="space-y-4">
                     {/* PDF Upload */}
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      <label className={MODAL_LABEL}>
                         PDF File <span className="text-red-500">*</span>
                       </label>
-                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-purple-500 transition-colors">
+                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-blue-400 transition-colors">
                         <input
                           type="file"
                           accept=".pdf"
@@ -8498,7 +7915,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                     <div className="flex gap-3 pt-4">
                       <button
                         onClick={() => setEmailModalOpen(false)}
-                        className="flex-1 px-4 py-2.5 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition-colors"
+                        className={MODAL_BTN_CANCEL}
                         disabled={emailLoading || pdfUploading}
                       >
                         Cancel
@@ -8508,7 +7925,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                         disabled={
                           emailLoading || pdfUploading || !emailForm.pdfFile
                         }
-                        className="flex-1 px-4 py-2.5 bg-gradient-to-r from-purple-500 to-purple-600 text-white font-semibold rounded-lg hover:from-purple-600 hover:to-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg flex items-center justify-center gap-2"
+                        className="flex-1 px-4 py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg flex items-center justify-center gap-2"
                       >
                         {pdfUploading ? (
                           <>
@@ -8528,55 +7945,21 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                         )}
                       </button>
                     </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </>
-        )}
+          </div>
+        </AppModal>
 
         {/* Bulk Payment Modal */}
-        {bulkPaymentModalOpen && (
-          <>
-            <div
-              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-              onClick={() => setBulkPaymentModalOpen(false)}
-            >
-              <div
-                className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* Header */}
-                <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-t-3xl">
-                  <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                        <DollarSign size={24} className="text-white" />
-                      </div>
-                      <div>
-                        <h2 className="text-2xl font-bold">
-                          Bulk Mark as Paid
-                        </h2>
-                        <p className="text-white/80 text-sm">
-                          {bulkPaymentDOIds.length || selectedDOs.size} DO(s)
-                          selected
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setBulkPaymentModalOpen(false)}
-                      className="text-white hover:text-gray-200 text-2xl font-bold"
-                    >
-                      ×
-                    </button>
-                  </div>
-                </div>
-
-                {/* Form Content */}
-                <div className="p-6">
-                  <div className="space-y-4">
+        <AppModal
+          open={bulkPaymentModalOpen}
+          onClose={() => setBulkPaymentModalOpen(false)}
+          title="Bulk Mark as Paid"
+          subtitle={`${bulkPaymentDOIds.length || selectedDOs.size} delivery order(s) selected`}
+          icon={DollarSign}
+          size="md"
+        >
+          <div className="space-y-4">
                     {/* Selected DOs Info */}
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                    <div className="bg-blue-50 border border-gray-100 rounded-lg p-4 mb-4">
                       <p className="text-sm font-semibold text-blue-800 mb-2">
                         Selected DOs:
                       </p>
@@ -8606,7 +7989,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
 
                     {/* Payment Method */}
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      <label className={MODAL_LABEL}>
                         Payment Method <span className="text-red-500">*</span>
                       </label>
                       <select
@@ -8617,7 +8000,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                             paymentMethod: e.target.value,
                           })
                         }
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
+                        className={MODAL_INPUT}
                         required
                       >
                         <option value="">Select Payment Method</option>
@@ -8631,7 +8014,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
 
                     {/* Payment Reference */}
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      <label className={MODAL_LABEL}>
                         Payment Reference (Optional)
                       </label>
                       <input
@@ -8644,13 +8027,13 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                           })
                         }
                         placeholder="Transaction ID, Check Number, etc."
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
+                        className={MODAL_INPUT}
                       />
                     </div>
 
                     {/* Payment Notes */}
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      <label className={MODAL_LABEL}>
                         Payment Notes (Optional)
                       </label>
                       <textarea
@@ -8663,16 +8046,16 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                         }
                         placeholder="Additional notes about the payment"
                         rows={3}
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none resize-none"
+                        className={`${MODAL_INPUT} resize-none`}
                       />
                     </div>
 
                     {/* Payment Proof Upload */}
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      <label className={MODAL_LABEL}>
                         Payment Proof <span className="text-red-500">*</span>
                       </label>
-                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-green-500 transition-colors">
+                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-blue-400 transition-colors">
                         <input
                           type="file"
                           accept=".pdf,.jpg,.jpeg,.png"
@@ -8755,7 +8138,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                     <div className="flex gap-3 pt-4">
                       <button
                         onClick={() => setBulkPaymentModalOpen(false)}
-                        className="flex-1 px-4 py-2.5 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition-colors"
+                        className={MODAL_BTN_CANCEL}
                         disabled={bulkPaymentLoading}
                       >
                         Cancel
@@ -8767,61 +8150,25 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                           !bulkPaymentForm.paymentMethod ||
                           !bulkPaymentForm.paymentProof
                         }
-                        className="flex-1 px-4 py-2.5 bg-gradient-to-r from-green-500 to-green-600 text-white font-semibold rounded-lg hover:from-green-600 hover:to-green-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
+                        className={MODAL_BTN_PRIMARY}
                       >
                         {bulkPaymentLoading
                           ? "Processing..."
                           : `Mark ${bulkPaymentDOIds.length || selectedDOs.size} DO(s) as Paid`}
                       </button>
                     </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </>
-        )}
+          </div>
+        </AppModal>
 
         {/* Short Pay Modal */}
-        {shortPayModalOpen && shortPayData && (
-          <>
-            <div
-              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-              onClick={() => setShortPayModalOpen(false)}
-            >
-              <div
-                className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[95vh] overflow-y-auto hide-scrollbar"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* Header */}
-                <div className="bg-gradient-to-r from-orange-500 to-orange-600 text-white p-6 rounded-t-3xl">
-                  <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                        <DollarSign size={24} className="text-white" />
-                      </div>
-                      <div>
-                        <h2 className="text-2xl font-bold">
-                          Short Pay Carrier
-                        </h2>
-                        <p className="text-white/80 text-sm">
-                          DO ID:{" "}
-                          {shortPayData?._id
-                            ? shortId(shortPayData._id)
-                            : "N/A"}
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setShortPayModalOpen(false)}
-                      className="text-white hover:text-gray-200 text-2xl font-bold"
-                    >
-                      ×
-                    </button>
-                  </div>
-                </div>
-
-                {/* Form Content */}
-                <div className="p-6">
+        <AppModal
+          open={shortPayModalOpen && !!shortPayData}
+          onClose={() => setShortPayModalOpen(false)}
+          title="Short Pay Carrier"
+          subtitle={shortPayData?._id ? `DO ID: ${shortId(shortPayData._id)}` : undefined}
+          icon={DollarSign}
+          size="md"
+        >
                   {(() => {
                     const totals = computeTotals(shortPayData);
                     const carrierPaymentStatus =
@@ -8833,10 +8180,10 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                     return (
                       <div className="space-y-4">
                         {/* Payment Summary */}
-                        <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl p-4 border border-orange-200">
+                        <div className="bg-slate-50 border border-gray-200 rounded-xl p-4 border border-gray-100">
                           <div className="grid grid-cols-2 gap-4">
                             <div>
-                              <p className="text-sm text-gray-600 mb-1">
+                              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-0.5">
                                 Total Carrier Fees
                               </p>
                               <p className="text-lg font-bold text-gray-800">
@@ -8844,15 +8191,15 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                               </p>
                             </div>
                             <div>
-                              <p className="text-sm text-gray-600 mb-1">
+                              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-0.5">
                                 Already Paid
                               </p>
-                              <p className="text-lg font-bold text-green-600">
+                              <p className="text-lg font-bold text-blue-600">
                                 ${fmtMoney(totalPaid)}
                               </p>
                             </div>
                             <div className="col-span-2">
-                              <p className="text-sm text-gray-600 mb-1">
+                              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-0.5">
                                 Remaining Amount
                               </p>
                               <p className="text-xl font-bold text-orange-600">
@@ -8864,7 +8211,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
 
                         {/* Payment Amount */}
                         <div>
-                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          <label className={MODAL_LABEL}>
                             Payment Amount{" "}
                             <span className="text-red-500">*</span>
                           </label>
@@ -8992,7 +8339,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
 
                         {/* Payment Method */}
                         <div>
-                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          <label className={MODAL_LABEL}>
                             Payment Method{" "}
                             <span className="text-red-500">*</span>
                           </label>
@@ -9006,7 +8353,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                             }
                             className={`w-full px-4 py-3 border-2 rounded-xl transition-all ${
                               shortPayForm.paymentMethod
-                                ? "border-green-300 bg-green-50 focus:ring-green-500 focus:border-green-500"
+                                ? "border-green-300 bg-green-50 focus:ring-blue-100 focus:border-blue-400"
                                 : "border-gray-300 bg-white focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                             } outline-none font-medium`}
                             required
@@ -9021,7 +8368,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                             <option value="other">📄 Other</option>
                           </select>
                           {shortPayForm.paymentMethod && (
-                            <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                            <p className="text-xs text-blue-600 mt-1 flex items-center gap-1">
                               <CheckCircle size={12} />
                               Payment method selected
                             </p>
@@ -9030,7 +8377,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
 
                         {/* Payment Reference */}
                         <div>
-                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          <label className={MODAL_LABEL}>
                             Payment Reference{" "}
                             <span className="text-gray-400 text-xs font-normal">
                               (Optional)
@@ -9055,7 +8402,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
 
                         {/* Payment Notes */}
                         <div>
-                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          <label className={MODAL_LABEL}>
                             Payment Notes{" "}
                             <span className="text-gray-400 text-xs font-normal">
                               (Optional)
@@ -9088,7 +8435,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
 
                         {/* Payment Proof Upload */}
                         <div>
-                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          <label className={MODAL_LABEL}>
                             Payment Proof{" "}
                             <span className="text-red-500">*</span>
                           </label>
@@ -9129,10 +8476,10 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                             >
                               {shortPayForm.carrierPaymentProof ? (
                                 <div className="text-center w-full">
-                                  <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-3">
+                                  <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-50 rounded-full mb-3">
                                     <CheckCircle
                                       size={32}
-                                      className="text-green-600"
+                                      className="text-blue-600"
                                     />
                                   </div>
                                   <p className="text-sm font-semibold text-gray-800 mb-1">
@@ -9301,7 +8648,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                               shortPayForm.carrierPaymentProof
                             ) {
                               return (
-                                <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                                <div className="mt-3 p-3 bg-green-50 border border-gray-100 rounded-lg">
                                   <p className="text-xs text-green-800 font-medium">
                                     ✅ Ready to submit! You're about to record a
                                     payment of{" "}
@@ -9327,11 +8674,7 @@ export default function Invoices({ accountantEmpId: propEmpId }) {
                       </div>
                     );
                   })()}
-                </div>
-              </div>
-            </div>
-          </>
-        )}
+        </AppModal>
 
         {/* Snackbar */}
         <Snackbar
