@@ -54,6 +54,7 @@ import {
 import RateRequestDocumentsPanel, {
   formatDocumentProgressLabel,
 } from "./RateRequestDocumentsPanel.jsx";
+import { RateRequestSslRatesBlock } from "./exporterRateRequestReadOnly.jsx";
 
 /** Matches `GET /meta` — see `exporter-rate-request-frontend-api.md` */
 const STATUS_OPTIONS = [
@@ -1008,20 +1009,114 @@ function formatYesNoValue(value) {
   return raw;
 }
 
-function getExtraDetailsGetUrl(kind, identifier) {
+/** agent-customer = day-shift sales + agent portal; exporter-extra-details = legacy exporter PATCH */
+function resolveExtraDetailsApiKind(tabMode, user) {
+  if (tabMode === "agent") return "agent-customer";
+  if (isSalesDayShiftTiming(user)) return "agent-customer";
+  return "exporter-extra-details";
+}
+
+function getExtraDetailsGetUrl(apiKind, identifier) {
   const safe = encodeURIComponent(identifier);
-  if (kind === "agent") {
+  if (apiKind === "agent-customer") {
     return `${API_CONFIG.BASE_URL}/api/v1/agent-customer/rate-requests/${safe}`;
   }
   return `${API_CONFIG.BASE_URL}/api/v1/exporter-rate-requst/${safe}`;
 }
 
-function getExtraDetailsPatchUrl(kind, identifier) {
+function parseApiPagination(res, page, limit, listLength) {
+  const raw = res.data?.pagination ?? res.data?.data?.pagination ?? null;
+  if (raw && typeof raw === "object") {
+    const totalPages = Math.max(1, Number(raw.totalPages) || 1);
+    return {
+      currentPage: Number(raw.currentPage) || page,
+      totalPages,
+      totalItems: Number(raw.totalItems) ?? listLength,
+      itemsPerPage: Number(raw.itemsPerPage) || limit,
+    };
+  }
+  const totalPages = listLength < limit ? Math.max(1, page) : page + 1;
+  return {
+    currentPage: page,
+    totalPages,
+    totalItems: listLength,
+    itemsPerPage: limit,
+  };
+}
+
+function RateRequestsListPagination({
+  page,
+  totalPages,
+  totalItems,
+  search,
+  onPrevious,
+  onNext,
+  canGoPrevious,
+  canGoNext,
+}) {
+  const showNav = canGoPrevious || canGoNext;
+
+  return (
+    <div className="mt-6 flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="text-sm text-gray-600">
+        Page {page} of {totalPages || 1}
+        {totalItems != null ? ` · ${totalItems} total` : ""}
+        {search?.trim() ? ` · search: "${search.trim()}"` : ""}
+      </div>
+      {showNav ? (
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={onPrevious}
+            disabled={!canGoPrevious}
+            className="flex items-center gap-1 px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <ChevronLeft size={18} />
+            <span>Previous</span>
+          </button>
+          <button
+            type="button"
+            onClick={onNext}
+            disabled={!canGoNext}
+            className="flex items-center gap-1 px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <span>Next</span>
+            <ChevronRight size={18} />
+          </button>
+        </div>
+      ) : (
+        <p className="text-xs text-gray-500">All results on this page</p>
+      )}
+    </div>
+  );
+}
+
+function getExtraDetailsPatchUrl(apiKind, identifier) {
   const safe = encodeURIComponent(identifier);
-  if (kind === "agent") {
+  if (apiKind === "agent-customer") {
     return `${API_CONFIG.BASE_URL}/api/v1/agent-customer/rate-requests/${safe}`;
   }
   return `${API_CONFIG.BASE_URL}/api/v1/exporter-rate-requst/${safe}/extra-details`;
+}
+
+async function fetchExtraDetailsForForm(identifier, apiKind, authHeaders) {
+  const config = { headers: authHeaders, withCredentials: true };
+  if (apiKind !== "agent-customer") {
+    const res = await axios.get(getExtraDetailsGetUrl(apiKind, identifier), config);
+    return resolveExtraDetailsDetail(res);
+  }
+  try {
+    const res = await axios.get(getExtraDetailsGetUrl("agent-customer", identifier), config);
+    return resolveExtraDetailsDetail(res);
+  } catch (err) {
+    if (err.response?.status !== 404) throw err;
+    const safe = encodeURIComponent(identifier);
+    const fallback = await axios.get(
+      `${API_CONFIG.BASE_URL}/api/v1/sales-day-agent/rate-requests/${safe}`,
+      config,
+    );
+    return resolveExtraDetailsDetail(fallback);
+  }
 }
 
 /** Shared read-only body for exporter + agent rate request detail modals */
@@ -1289,6 +1384,7 @@ export default function ExporterRateRequestWorkflow() {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showExtraDetailsModal, setShowExtraDetailsModal] = useState(false);
   const [extraDetailsMode, setExtraDetailsMode] = useState("rate");
+  const [extraDetailsApiKind, setExtraDetailsApiKind] = useState("exporter-extra-details");
   const [extraDetailsRequestId, setExtraDetailsRequestId] = useState("");
   const [extraDetailsForm, setExtraDetailsForm] = useState(() => cloneDefaultExtraDetailsForm());
   const [extraDetailsLoading, setExtraDetailsLoading] = useState(false);
@@ -1308,6 +1404,12 @@ export default function ExporterRateRequestWorkflow() {
     limit: 20,
     search: "",
     source: "",
+  });
+  const [ratePagination, setRatePagination] = useState({
+    currentPage: 1,
+    totalPages: 1,
+    totalItems: 0,
+    itemsPerPage: 20,
   });
   /** `rate` = exporter rate requests (current API); `agent` = sales-day-agent inbox */
   const [mainTab, setMainTab] = useState("rate");
@@ -1331,6 +1433,7 @@ export default function ExporterRateRequestWorkflow() {
   });
   const [showAgentDetailModal, setShowAgentDetailModal] = useState(false);
   const [selectedAgentDetail, setSelectedAgentDetail] = useState(null);
+  const [loadingAgentDetail, setLoadingAgentDetail] = useState(false);
 
   const authHeaders = useMemo(() => {
     const token = getToken();
@@ -1468,15 +1571,17 @@ export default function ExporterRateRequestWorkflow() {
     }
   };
 
-  const fetchList = async () => {
+  const fetchList = async (override = null) => {
+    const page = override?.page ?? filters.page;
+    const limit = override?.limit ?? filters.limit;
+    const search = override?.search !== undefined ? override.search : filters.search;
+    const source = override?.source !== undefined ? override.source : filters.source;
+
     setLoadingList(true);
     try {
-      const params = {
-        page: filters.page,
-        limit: filters.limit,
-      };
-      if (filters.search.trim()) params.search = filters.search.trim();
-      if (filters.source) params.source = filters.source;
+      const params = { page, limit };
+      if (String(search).trim()) params.search = String(search).trim();
+      if (source) params.source = source;
 
       const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/exporter-rate-requst`, {
         headers: authHeaders,
@@ -1491,10 +1596,18 @@ export default function ExporterRateRequestWorkflow() {
           : Array.isArray(res.data?.requests)
             ? res.data.requests
             : [];
-      setRequests(Array.isArray(list) ? list : []);
+      const rows = Array.isArray(list) ? list : [];
+      setRequests(rows);
+      setRatePagination(parseApiPagination(res, page, limit, rows.length));
     } catch (error) {
       alertify.error(error.response?.data?.message || "Failed to fetch rate requests");
       setRequests([]);
+      setRatePagination({
+        currentPage: page,
+        totalPages: 1,
+        totalItems: 0,
+        itemsPerPage: limit,
+      });
     } finally {
       setLoadingList(false);
     }
@@ -1502,8 +1615,24 @@ export default function ExporterRateRequestWorkflow() {
 
   const fetchDetail = async (id) => {
     if (!id) return;
+    const safeId = encodeURIComponent(id);
     setLoadingDetail(true);
     try {
+      const user = getUserFromStorage();
+      if (isSalesDayShiftTiming(user)) {
+        try {
+          const agentRes = await axios.get(
+            `${API_CONFIG.BASE_URL}/api/v1/sales-day-agent/rate-requests/${safeId}`,
+            { headers: authHeaders, withCredentials: true },
+          );
+          setSelectedDetail(agentRes.data?.data || null);
+          return;
+        } catch (agentErr) {
+          if (agentErr.response?.status !== 404) {
+            throw agentErr;
+          }
+        }
+      }
       const res = await axios.get(`${API_CONFIG.BASE_URL}/api/v1/exporter-rate-requst/${id}`, {
         headers: authHeaders,
       });
@@ -1540,21 +1669,7 @@ export default function ExporterRateRequestWorkflow() {
           totalRateRequests: res.data.summary.totalRateRequests ?? list.length,
         });
       }
-      if (res.data?.pagination) {
-        setAgentPagination({
-          currentPage: res.data.pagination.currentPage ?? page,
-          totalPages: res.data.pagination.totalPages ?? 1,
-          totalItems: res.data.pagination.totalItems ?? list.length,
-          itemsPerPage: res.data.pagination.itemsPerPage ?? limit,
-        });
-      } else {
-        setAgentPagination({
-          currentPage: page,
-          totalPages: 1,
-          totalItems: list.length,
-          itemsPerPage: limit,
-        });
-      }
+      setAgentPagination(parseApiPagination(res, page, limit, list.length));
     } catch (error) {
       alertify.error(error.response?.data?.message || "Failed to fetch agent rate requests");
       setAgentRequests([]);
@@ -1622,8 +1737,9 @@ export default function ExporterRateRequestWorkflow() {
 
   const applySearch = () => {
     if (mainTab === "rate") {
-      setFilters((prev) => ({ ...prev, page: 1, search: prev.search }));
-      fetchList();
+      const q = filters.search.trim();
+      setFilters((prev) => ({ ...prev, page: 1 }));
+      void fetchList({ page: 1, limit: filters.limit, search: q, source: filters.source });
     } else {
       const q = agentFilters.search.trim();
       setAgentFilters((prev) => ({ ...prev, page: 1 }));
@@ -1790,7 +1906,9 @@ export default function ExporterRateRequestWorkflow() {
     }).length;
   }, [requests]);
 
-  const canGoNextPage = requests.length >= filters.limit;
+  const canGoPrevRatePage = filters.page > 1;
+  const canGoNextRatePage = filters.page < (ratePagination.totalPages || 1);
+  const canGoPrevAgentPage = agentFilters.page > 1;
   const canGoNextAgentPage = agentFilters.page < (agentPagination.totalPages || 1);
 
   const handleViewRequest = async (id) => {
@@ -1799,17 +1917,19 @@ export default function ExporterRateRequestWorkflow() {
     setShowDetailModal(true);
   };
 
-  const openExtraDetailsModal = async (requestId, mode = "rate") => {
-    setExtraDetailsMode(mode);
-    setExtraDetailsRequestId(requestId);
+  const openExtraDetailsModal = async (requestId, tabMode = "rate") => {
+    const identifier = String(requestId || "").trim();
+    if (!identifier) return;
+    const user = getUserFromStorage();
+    const apiKind = resolveExtraDetailsApiKind(tabMode, user);
+    setExtraDetailsMode(tabMode);
+    setExtraDetailsApiKind(apiKind);
+    setExtraDetailsRequestId(identifier);
     setShowExtraDetailsModal(true);
     setExtraDetailsLoading(true);
     setExtraDetailsForm(cloneDefaultExtraDetailsForm());
     try {
-      const res = await axios.get(getExtraDetailsGetUrl(mode, requestId), {
-        headers: authHeaders,
-      });
-      const d = resolveExtraDetailsDetail(res);
+      const d = await fetchExtraDetailsForForm(identifier, apiKind, authHeaders);
       if (d) setExtraDetailsForm(detailToExtraForm(d));
     } catch (e) {
       alertify.error(e.response?.data?.message || "Could not load request for customs details");
@@ -1828,21 +1948,21 @@ export default function ExporterRateRequestWorkflow() {
     }
     setExtraDetailsSubmitting(true);
     try {
-      await axios.patch(
-        getExtraDetailsPatchUrl(extraDetailsMode, extraDetailsRequestId),
-        payload,
-        { headers: { ...authHeaders, "Content-Type": "application/json" } },
-      );
+      await axios.patch(getExtraDetailsPatchUrl(extraDetailsApiKind, extraDetailsRequestId), payload, {
+        headers: { ...authHeaders, "Content-Type": "application/json" },
+        withCredentials: true,
+      });
       try {
-        const refresh = await axios.get(getExtraDetailsGetUrl(extraDetailsMode, extraDetailsRequestId), {
-          headers: authHeaders,
-        });
-        const d = resolveExtraDetailsDetail(refresh);
+        const d = await fetchExtraDetailsForForm(extraDetailsRequestId, extraDetailsApiKind, authHeaders);
         if (d) setExtraDetailsForm(detailToExtraForm(d));
       } catch {
         // Save succeeded; refresh is best-effort.
       }
-      alertify.success(extraDetailsMode === "agent" ? "Rate request updated successfully." : "Customs details saved");
+      alertify.success(
+        extraDetailsApiKind === "agent-customer"
+          ? "Customs & shipment extras saved."
+          : "Customs details saved",
+      );
       setShowExtraDetailsModal(false);
       if (extraDetailsMode === "agent") {
         await loadAgentRequests();
@@ -1858,7 +1978,7 @@ export default function ExporterRateRequestWorkflow() {
 
   const handleRatePageChange = (nextPage) => {
     if (nextPage < 1) return;
-    if (nextPage > filters.page && !canGoNextPage) return;
+    if (nextPage > filters.page && !canGoNextRatePage) return;
     setFilters((p) => ({ ...p, page: nextPage }));
   };
 
@@ -1868,9 +1988,26 @@ export default function ExporterRateRequestWorkflow() {
     setAgentFilters((p) => ({ ...p, page: nextPage }));
   };
 
-  const openAgentDetail = (row) => {
-    setSelectedAgentDetail(row);
+  const openAgentDetail = async (row) => {
+    const identifier = row?.requestId || row?._id;
+    if (!identifier) return;
     setShowAgentDetailModal(true);
+    setSelectedAgentDetail(row);
+    setLoadingAgentDetail(true);
+    try {
+      const safeId = encodeURIComponent(identifier);
+      const res = await axios.get(
+        `${API_CONFIG.BASE_URL}/api/v1/sales-day-agent/rate-requests/${safeId}`,
+        { headers: authHeaders, withCredentials: true },
+      );
+      setSelectedAgentDetail(res.data?.data || row);
+    } catch (error) {
+      alertify.error(error.response?.data?.message || "Failed to load agent rate request detail");
+      setShowAgentDetailModal(false);
+      setSelectedAgentDetail(null);
+    } finally {
+      setLoadingAgentDetail(false);
+    }
   };
 
   const handleAgentDocumentProgress = useCallback((progress) => {
@@ -1885,6 +2022,32 @@ export default function ExporterRateRequestWorkflow() {
       return { ...prev, documentProgress: progress };
     });
   }, []);
+
+  const syncRateRequestRow = useCallback((updated, setList) => {
+    if (!updated) return;
+    const id = updated.requestId || updated._id;
+    setList((rows) =>
+      rows.map((row) => ((row.requestId || row._id) === id ? { ...row, ...updated } : row)),
+    );
+  }, []);
+
+  const handleRateDetailUpdated = useCallback(
+    (updated) => {
+      if (!updated) return;
+      setSelectedDetail((prev) => (prev ? { ...prev, ...updated } : updated));
+      syncRateRequestRow(updated, setRequests);
+    },
+    [syncRateRequestRow],
+  );
+
+  const handleAgentDetailUpdated = useCallback(
+    (updated) => {
+      if (!updated) return;
+      setSelectedAgentDetail((prev) => (prev ? { ...prev, ...updated } : updated));
+      syncRateRequestRow(updated, setAgentRequests);
+    },
+    [syncRateRequestRow],
+  );
 
   return (
     <div className="p-6 bg-white min-h-screen">
@@ -2052,7 +2215,7 @@ export default function ExporterRateRequestWorkflow() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => openExtraDetailsModal(item._id, "rate")}
+                          onClick={() => openExtraDetailsModal(item.requestId || item._id, "rate")}
                           className="px-4 py-1 rounded border border-purple-500 text-purple-500 text-sm font-medium hover:bg-purple-50 transition-colors min-w-[70px] inline-flex items-center justify-center gap-1"
                         >
                           <ClipboardList size={14} /> Customs
@@ -2081,33 +2244,17 @@ export default function ExporterRateRequestWorkflow() {
         </div>
       )}
 
-      {mainTab === "rate" && !loadingList && requests.length > 0 && (filters.page > 1 || canGoNextPage) && (
-        <div className="flex justify-between items-center mt-6 bg-white rounded-2xl border border-gray-200 p-4">
-          <div className="text-sm text-gray-600">
-            Page {filters.page}
-            {filters.search.trim() ? ` · search: "${filters.search.trim()}"` : ""}
-          </div>
-          <div className="flex gap-1 items-center">
-            <button
-              type="button"
-              onClick={() => handleRatePageChange(filters.page - 1)}
-              disabled={filters.page <= 1}
-              className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
-            >
-              <ChevronLeft size={18} />
-              <span>Previous</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleRatePageChange(filters.page + 1)}
-              disabled={!canGoNextPage}
-              className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
-            >
-              <span>Next</span>
-              <ChevronRight size={18} />
-            </button>
-          </div>
-        </div>
+      {mainTab === "rate" && !loadingList && requests.length > 0 && (
+        <RateRequestsListPagination
+          page={filters.page}
+          totalPages={ratePagination.totalPages}
+          totalItems={ratePagination.totalItems}
+          search={filters.search}
+          canGoPrevious={canGoPrevRatePage}
+          canGoNext={canGoNextRatePage}
+          onPrevious={() => handleRatePageChange(filters.page - 1)}
+          onNext={() => handleRatePageChange(filters.page + 1)}
+        />
       )}
 
       {mainTab === "agent" && agentLoadingList && (
@@ -2173,7 +2320,7 @@ export default function ExporterRateRequestWorkflow() {
                         <div className="flex flex-wrap gap-3">
                           <button
                             type="button"
-                            onClick={() => openAgentDetail(item)}
+                            onClick={() => void openAgentDetail(item)}
                             className="px-4 py-1 rounded border border-green-500 text-green-500 text-sm font-medium hover:bg-green-50 transition-colors min-w-[70px] inline-flex items-center justify-center gap-1"
                             title={requestUnreadCount > 0 ? `${requestUnreadCount} unread message${requestUnreadCount === 1 ? "" : "s"} in this request` : "View"}
                           >
@@ -2211,34 +2358,17 @@ export default function ExporterRateRequestWorkflow() {
         </div>
       )}
 
-      {mainTab === "agent" && !agentLoadingList && agentRequests.length > 0 && (agentFilters.page > 1 || canGoNextAgentPage) && (
-        <div className="flex justify-between items-center mt-6 bg-white rounded-2xl border border-gray-200 p-4">
-          <div className="text-sm text-gray-600">
-            Page {agentFilters.page} of {agentPagination.totalPages}
-            {agentPagination.totalItems != null && ` · ${agentPagination.totalItems} total`}
-            {agentFilters.search.trim() ? ` · search: "${agentFilters.search.trim()}"` : ""}
-          </div>
-          <div className="flex gap-1 items-center">
-            <button
-              type="button"
-              onClick={() => handleAgentPageChange(agentFilters.page - 1)}
-              disabled={agentFilters.page <= 1}
-              className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
-            >
-              <ChevronLeft size={18} />
-              <span>Previous</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleAgentPageChange(agentFilters.page + 1)}
-              disabled={!canGoNextAgentPage}
-              className="flex items-center gap-1 px-3 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
-            >
-              <span>Next</span>
-              <ChevronRight size={18} />
-            </button>
-          </div>
-        </div>
+      {mainTab === "agent" && !agentLoadingList && agentRequests.length > 0 && (
+        <RateRequestsListPagination
+          page={agentFilters.page}
+          totalPages={agentPagination.totalPages}
+          totalItems={agentPagination.totalItems}
+          search={agentFilters.search}
+          canGoPrevious={canGoPrevAgentPage}
+          canGoNext={canGoNextAgentPage}
+          onPrevious={() => handleAgentPageChange(agentFilters.page - 1)}
+          onNext={() => handleAgentPageChange(agentFilters.page + 1)}
+        />
       )}
 
       {showDetailModal && (
@@ -2284,6 +2414,16 @@ export default function ExporterRateRequestWorkflow() {
               ) : (
                 <>
                   <RateRequestDetailBody detail={selectedDetail} />
+                  <RateRequestSslRatesBlock
+                    detail={selectedDetail}
+                    sslQuotes={
+                      Array.isArray(selectedDetail.operationSslQuotes)
+                        ? selectedDetail.operationSslQuotes
+                        : []
+                    }
+                    allowSslRateEdit={false}
+                    onDetailUpdated={handleRateDetailUpdated}
+                  />
                   <RateRequestDocumentsPanel
                     requestIdentifier={selectedDetail.requestId || selectedDetail._id}
                     authHeaders={authHeaders}
@@ -2332,13 +2472,34 @@ export default function ExporterRateRequestWorkflow() {
             </div>
 
             <div className="p-6 space-y-5 bg-gray-50">
-              <RateRequestDetailBody detail={selectedAgentDetail} />
-              <RateRequestDocumentsPanel
-                requestIdentifier={selectedAgentDetail.requestId || selectedAgentDetail._id}
-                authHeaders={authHeaders}
-                readOnly
-                onProgressChange={handleAgentDocumentProgress}
-              />
+              {loadingAgentDetail ? (
+                <div className="flex items-center justify-center py-16">
+                  <div className="text-center">
+                    <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-b-2 border-teal-600" />
+                    <p className="text-sm text-gray-600">Loading rate request…</p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <RateRequestDetailBody detail={selectedAgentDetail} />
+                  <RateRequestSslRatesBlock
+                    detail={selectedAgentDetail}
+                    sslQuotes={
+                      Array.isArray(selectedAgentDetail.operationSslQuotes)
+                        ? selectedAgentDetail.operationSslQuotes
+                        : []
+                    }
+                    allowSslRateEdit={false}
+                    onDetailUpdated={handleAgentDetailUpdated}
+                  />
+                  <RateRequestDocumentsPanel
+                    requestIdentifier={selectedAgentDetail.requestId || selectedAgentDetail._id}
+                    authHeaders={authHeaders}
+                    readOnly
+                    onProgressChange={handleAgentDocumentProgress}
+                  />
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -2815,9 +2976,9 @@ export default function ExporterRateRequestWorkflow() {
                 <div className="min-w-0">
                   <h3 className="text-lg font-semibold truncate">Customs & shipment extras</h3>
                   <p className="text-violet-100 text-xs truncate">
-                    {extraDetailsMode === "agent"
-                      ? "PATCH agent-customer/rate-requests/:identifier"
-                      : "PATCH extra-details · Request ID optional — fill any fields you have"}
+                    {extraDetailsApiKind === "agent-customer"
+                      ? `PATCH agent-customer/rate-requests/${extraDetailsRequestId || ":identifier"} · day-shift / agent`
+                      : "PATCH exporter-rate-requst/.../extra-details"}
                   </p>
                 </div>
               </div>

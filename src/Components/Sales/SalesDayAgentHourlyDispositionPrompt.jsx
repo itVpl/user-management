@@ -360,8 +360,8 @@ function SalesDayDispositionModal({ customers, dispositions, loading, onClose, o
                       <td className={`${HOURLY_TD} whitespace-nowrap`}>
                         {c.remark != null && String(c.remark).trim() !== '' ? (
                           String(c.remark).trim().toUpperCase() === 'OLD' ? (
-                            <span className="inline-flex rounded-lg bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700 ring-1 ring-slate-200/90">
-                              OLD
+                            <span className="inline-flex rounded-lg bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-900 ring-1 ring-amber-200/90">
+                              Follow Up
                             </span>
                           ) : (
                             <span className="inline-flex rounded-lg bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-800 ring-1 ring-indigo-100/90">

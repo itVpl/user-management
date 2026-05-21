@@ -8,7 +8,10 @@ import { Search, Eye, Package, ChevronLeft, ChevronRight, DollarSign } from "luc
 import BlinkingUnreadDot from "../common/BlinkingUnreadDot.jsx";
 import {
   RateRequestDetailBody,
+  RateRequestSslRatesBlock,
   GiveRateModal,
+  ForwardToOwnerPanel,
+  mergeForwardMetaIntoDetail,
   formatExporterCompany,
   formatDateTime,
   formatStatusLabel,
@@ -159,6 +162,23 @@ export default function AllExporterRR() {
       return { ...prev, documentProgress: progress };
     });
   }, []);
+
+  const applyDetailForwardMeta = useCallback((patch) => {
+    if (!patch) return;
+    setSelected((prev) => {
+      const merged = mergeForwardMetaIntoDetail(prev, patch);
+      if (!merged) return prev;
+      const id = merged.requestId || merged._id;
+      setRows((list) => list.map((row) => ((row.requestId || row._id) === id ? { ...row, ...merged } : row)));
+      return merged;
+    });
+  }, []);
+
+  const handleForwardToOwnerSuccess = (updated) => {
+    if (!updated) return;
+    applyDetailForwardMeta(updated);
+    void loadList();
+  };
 
   const openDetailById = useCallback(
     async (id, options = {}) => {
@@ -381,7 +401,20 @@ export default function AllExporterRR() {
         requestData={giveRateRequest}
         authHeaders={authHeaders}
         onClose={() => setGiveRateRequestId(null)}
-        onSuccess={() => void loadList()}
+        onSuccess={(forwardMeta) => {
+          void loadList();
+          if (!showDetail) return;
+          if (forwardMeta) {
+            applyDetailForwardMeta(forwardMeta);
+            return;
+          }
+          setSelected((prev) => {
+            if (!prev) return prev;
+            const id = prev.requestId || prev._id;
+            if (id) void openDetailById(id);
+            return prev;
+          });
+        }}
       />
 
       {showDetail && selected && (
@@ -405,7 +438,7 @@ export default function AllExporterRR() {
                   </div>
                   <div>
                     <h3 className="text-xl font-semibold">All Exporter RR — Detail</h3>
-                    <p className="text-sm text-blue-100">Read-only · operation team</p>
+                    <p className="text-sm text-blue-100">Operation team · view & forward rates</p>
                   </div>
                 </div>
                 <button
@@ -422,7 +455,16 @@ export default function AllExporterRR() {
               </div>
             </div>
             <div className="space-y-5 bg-gray-50 p-6">
-              <RateRequestDetailBody detail={selected} initialNegotiationQuoteId={initialNegotiationQuoteId} />
+              <ForwardToOwnerPanel
+                detail={selected}
+                authHeaders={authHeaders}
+                onSuccess={handleForwardToOwnerSuccess}
+              />
+              <RateRequestDetailBody detail={selected} />
+              <RateRequestSslRatesBlock
+                detail={selected}
+                initialNegotiationQuoteId={initialNegotiationQuoteId}
+              />
               <RateRequestDocumentsPanel
                 requestIdentifier={selected.requestId || selected._id}
                 authHeaders={authHeaders}
