@@ -5,6 +5,14 @@ import alertify from "alertifyjs";
 import "alertifyjs/build/css/alertify.css";
 import API_CONFIG from "../../config/api.js";
 import { fetchSalesDayList } from "../../services/salesDayAgentService.js";
+import CountryFlagImg from "../common/CountryFlagImg.jsx";
+import {
+  FALLBACK_COUNTRIES,
+  listShipmentCountries,
+  listShipmentPorts,
+  shipmentCountriesToSelectOptions,
+  shipmentPortsToSelectOptions,
+} from "../../services/shipmentLookupService.js";
 import BlinkingUnreadDot from "../common/BlinkingUnreadDot.jsx";
 import {
   getUserFromStorage,
@@ -59,6 +67,20 @@ const STATUS_OPTIONS = [
 ];
 
 const INCOTERM_OPTIONS = ["DAP", "DPU", "DDP"];
+const CREATE_INCOTERM_OPTIONS = [
+  "EXW",
+  "FCA",
+  "FAS",
+  "FOB",
+  "CFR",
+  "CIF",
+  "CPT",
+  "CIP",
+  "DAP",
+  "DPU",
+  "DDP",
+].map((term) => ({ value: term, label: term }));
+
 const CONTAINER_TYPE_OPTIONS = [
   { value: "S20", label: "20FT Standard", image: containerS20 },
   { value: "S40", label: "40FT Standard", image: containerS40 },
@@ -66,81 +88,189 @@ const CONTAINER_TYPE_OPTIONS = [
   { value: "HC45", label: "45FT High Cube", image: containerHc45 },
 ];
 
-/** PATCH /:id/extra-details — cargo / customs fields */
+const CREATE_CONTAINER_OPTIONS = CONTAINER_TYPE_OPTIONS.map((c) => ({
+  value: c.value,
+  label: c.label,
+}));
+
+const CARGO_TYPE_CREATE_OPTIONS = [
+  { value: "general", label: "General Cargo" },
+  { value: "reefer", label: "Reefer" },
+  { value: "hazardous", label: "Hazardous / DG" },
+  { value: "project", label: "Project Cargo" },
+  { value: "vehicles", label: "Vehicles" },
+];
+
+const SERVICE_TYPE_OPTIONS = [
+  { value: "port_to_port", label: "Port to Port" },
+  { value: "door_to_door", label: "Door to Door" },
+  { value: "door_to_port", label: "Door to Port" },
+  { value: "port_to_door", label: "Port to Door" },
+];
+
+const SHIPMENT_TYPE_OPTIONS = [
+  { value: "FCL", label: "FCL (Full Container Load)" },
+  { value: "LCL", label: "LCL (Less than Container Load)" },
+];
+
+/** PATCH /api/v1/exporter-rate-requst/:id/extra-details — cargo / customs fields */
 const EXTRA_DETAILS_LABELS = {
-  productName: "Commodity name",
-  cargoWeight: "Weight",
-  cargoGrossWeight: "Gross weight",
-  cargoGrossWeightUnit: "Unit (KG / LBS)",
-  dimensionLength: "Length (cm)",
-  dimensionWidth: "Width (cm)",
-  dimensionHeight: "Height (cm)",
-  packageCount: "Number of packages",
-  cargoStackable: "Stackable",
-  packagingType: "Packaging type",
+  commodityName: "Commodity name",
+  weight: "Gross weight",
+  unit: "Unit (KG / LBS)",
+  dimensions: "Dimensions (cm)",
+  noOfPkgs: "Number of packages",
+  stackable: "Stackable",
+  pkgType: "Packaging type",
   ispm15Compliance: "ISPM-15 compliance",
   treatmentType: "Treatment type",
   ippcStampVerified: "IPPC stamp verified",
   hsCode: "HS code",
-  cargoHazardous: "Cargo hazardous",
+  customsClearanceRequirement: "Customer clearance requirement",
+  customsBondRequirement: "Customs bond requirement",
   cargoReadyDate: "Cargo ready date",
   pickupTime: "Pickup time",
-  commercialInvoiceAvailable: "Commercial invoice available",
   deliveryLocationType: "Delivery location type",
   deliveryTimeAppointment: "Delivery time / appointment",
 };
 
 const EXTRA_DETAILS_DISPLAY_KEYS = [
-  "productName",
-  "cargoWeight",
-  "cargoGrossWeight",
-  "cargoGrossWeightUnit",
-  "dimensionLength",
-  "dimensionWidth",
-  "dimensionHeight",
-  "packageCount",
-  "cargoStackable",
-  "packagingType",
+  "commodityName",
+  "weight",
+  "unit",
+  "dimensions",
+  "noOfPkgs",
+  "stackable",
+  "pkgType",
   "ispm15Compliance",
   "treatmentType",
   "ippcStampVerified",
   "hsCode",
-  "cargoHazardous",
+  "customsClearanceRequirement",
+  "customsBondRequirement",
   "cargoReadyDate",
   "pickupTime",
-  "commercialInvoiceAvailable",
   "deliveryLocationType",
   "deliveryTimeAppointment",
 ];
 
-const GROSS_WEIGHT_UNIT_OPTIONS = [
+const WEIGHT_UNIT_OPTIONS = [
   { value: "KG", label: "KG" },
   { value: "LBS", label: "LBS" },
 ];
 
 const STACKABLE_OPTIONS = [
-  { value: "Stackable", label: "Stackable" },
-  { value: "Non-stackable", label: "Non-stackable" },
-];
-
-const PACKAGING_TYPE_OPTIONS = [
-  { value: "Cartons / boxes", label: "Cartons / boxes" },
-  { value: "Pallets (wood)", label: "Pallets (wood)" },
-  { value: "Crates (wood)", label: "Crates (wood)" },
-  { value: "Wooden cases", label: "Wooden cases" },
-  { value: "Drums", label: "Drums" },
-  { value: "Bags / sacks", label: "Bags / sacks" },
-  { value: "Rolls", label: "Rolls" },
-  { value: "Bundles", label: "Bundles" },
-  { value: "Loose cargo", label: "Loose cargo" },
-  { value: "Other", label: "Other" },
+  { value: "stackable", label: "Stackable" },
+  { value: "non-stackable", label: "Non-stackable" },
 ];
 
 const ISPM15_COMPLIANCE_OPTIONS = [
-  { value: "Yes", label: "Yes" },
-  { value: "No", label: "No" },
-  { value: "Pending Confirmation", label: "Pending Confirmation" },
+  { value: "yes", label: "Yes" },
+  { value: "no", label: "No" },
+  { value: "pending_confirmation", label: "Pending Confirmation" },
 ];
+
+const IPPC_STAMP_OPTIONS = [
+  { value: "yes", label: "Yes" },
+  { value: "no", label: "No" },
+];
+
+/** API enum values for customsClearanceRequirement */
+const CUSTOMS_CLEARANCE_REQUIREMENT_OPTIONS = [
+  { value: "export_customs_clearance", label: "Export Customs Clearance" },
+  { value: "import_customs_clearance", label: "Import Customs Clearance" },
+  { value: "both", label: "Both" },
+  { value: "none", label: "None" },
+];
+
+/** API enum values for customsBondRequirement */
+const CUSTOMS_BOND_REQUIREMENT_OPTIONS = [
+  { value: "single_entry_bond", label: "Single Entry Bond" },
+  { value: "continuous_bond", label: "Continuous Bond" },
+  { value: "none", label: "None" },
+];
+
+function normalizeSelectOptionValue(value, options) {
+  const s = String(value ?? "").trim();
+  if (!s) return "";
+  const exact = options.find((o) => o.value === s);
+  if (exact) return exact.value;
+  const lower = s.toLowerCase();
+  const byValue = options.find((o) => o.value.toLowerCase() === lower);
+  if (byValue) return byValue.value;
+  const byLabel = options.find((o) => o.label.toLowerCase() === lower);
+  if (byLabel) return byLabel.value;
+  return "";
+}
+
+function normalizeCustomsClearanceFromApi(value) {
+  const mapped = normalizeSelectOptionValue(value, CUSTOMS_CLEARANCE_REQUIREMENT_OPTIONS);
+  if (mapped) return mapped;
+  const s = String(value ?? "").trim().toLowerCase();
+  if (!s) return "";
+  if (s === "export customs clearance") return "export_customs_clearance";
+  if (s === "import customs clearance" || s === "import custons clearance") return "import_customs_clearance";
+  if (s === "yes" || s === "export") return "export_customs_clearance";
+  if (s === "import") return "import_customs_clearance";
+  if (s.includes("both")) return "both";
+  if (s.includes("none") || s === "no") return "none";
+  if (s.includes("export") && s.includes("import")) return "both";
+  if (s.includes("export")) return "export_customs_clearance";
+  if (s.includes("import")) return "import_customs_clearance";
+  return "";
+}
+
+function normalizeCustomsBondFromApi(value) {
+  const mapped = normalizeSelectOptionValue(value, CUSTOMS_BOND_REQUIREMENT_OPTIONS);
+  if (mapped) return mapped;
+  const s = String(value ?? "").trim().toLowerCase();
+  if (!s) return "";
+  if (s === "single entry bond") return "single_entry_bond";
+  if (s === "continuous bond") return "continuous_bond";
+  if (s.includes("single")) return "single_entry_bond";
+  if (s.includes("continuous")) return "continuous_bond";
+  if (s.includes("none") || s === "no") return "none";
+  return "";
+}
+
+function appendSelectField(out, key, formValue, options) {
+  const raw = String(formValue ?? "").trim();
+  if (!raw) return;
+  const normalized = normalizeSelectOptionValue(raw, options);
+  out[key] = normalized || raw;
+}
+
+function resolveExtraDetailsDetail(response) {
+  const d = response?.data?.data;
+  if (!d || typeof d !== "object") return null;
+  if (d.extraDetails && typeof d.extraDetails === "object" && !Array.isArray(d.extraDetails)) {
+    return { ...d, ...d.extraDetails };
+  }
+  return d;
+}
+
+/** Must match backend enum for pkgType */
+const PKG_TYPE_OPTIONS = [
+  { value: "Carton/Boxes", label: "Carton / Boxes" },
+  { value: "Pallet", label: "Pallet" },
+  { value: "Crates", label: "Crates" },
+  { value: "Wooden Cases", label: "Wooden Cases" },
+  { value: "Drums", label: "Drums" },
+];
+
+function normalizePkgTypeFromApi(value) {
+  const s = String(value ?? "").trim();
+  if (!s) return "";
+  const exact = PKG_TYPE_OPTIONS.find((o) => o.value === s);
+  if (exact) return exact.value;
+  const lower = s.toLowerCase();
+  if (/carton|box/.test(lower)) return "Carton/Boxes";
+  if (/pallet/.test(lower)) return "Pallet";
+  if (/crate/.test(lower)) return "Crates";
+  if (/wooden\s*case/.test(lower)) return "Wooden Cases";
+  if (/drum/.test(lower)) return "Drums";
+  return "";
+}
 
 const YES_NO_EXTRA_OPTIONS = [
   { value: "Yes", label: "Yes" },
@@ -155,9 +285,112 @@ const DELIVERY_LOCATION_TYPE_OPTIONS = [
   { value: "Port", label: "Port" },
 ];
 
-function packagingTypeRequiresWoodCompliance(packagingType) {
-  const v = String(packagingType || "").toLowerCase();
-  return v.includes("wood") || v.includes("pallet") || v.includes("crate");
+function packagingTypeRequiresWoodCompliance(pkgType) {
+  const v = String(pkgType || "").trim();
+  return v === "Pallet" || v === "Crates" || v === "Wooden Cases";
+}
+
+function defaultEmptyDimensions() {
+  return { length: "", width: "", height: "" };
+}
+
+function normalizeStackableFromApi(value) {
+  const s = String(value ?? "").trim().toLowerCase();
+  if (!s) return "";
+  if (s === "stackable" || s === "yes" || s === "true") return "stackable";
+  if (s === "non-stackable" || s === "non stackable" || s.includes("non")) return "non-stackable";
+  if (s.includes("stack")) return "stackable";
+  return "";
+}
+
+function normalizeYesNoApiValue(value) {
+  const s = String(value ?? "").trim().toLowerCase();
+  if (s === "yes" || s === "true") return "yes";
+  if (s === "no" || s === "false") return "no";
+  return "";
+}
+
+function normalizeIspm15FromApi(value) {
+  const s = String(value ?? "").trim().toLowerCase();
+  if (s === "yes" || s === "true") return "yes";
+  if (s === "no" || s === "false") return "no";
+  if (s.includes("pending")) return "pending_confirmation";
+  return "";
+}
+
+function applyTreatmentTypeToForm(detail, form) {
+  form.treatmentHeatTreated = false;
+  form.treatmentMethylBromide = false;
+  if (!detail || typeof detail !== "object") return;
+  if (detail.treatmentHeatTreated === true) form.treatmentHeatTreated = true;
+  if (detail.treatmentMethylBromide === true) form.treatmentMethylBromide = true;
+  const tt = detail.treatmentType;
+  if (Array.isArray(tt)) {
+    form.treatmentHeatTreated =
+      form.treatmentHeatTreated || tt.some((t) => /heat|ht/i.test(String(t)));
+    form.treatmentMethylBromide =
+      form.treatmentMethylBromide || tt.some((t) => /methyl|mb/i.test(String(t)));
+  } else if (tt != null && String(tt).trim()) {
+    const normalized = normalizeTreatmentTypeFromApi(tt);
+    if (normalized === "heat_treated") form.treatmentHeatTreated = true;
+    if (normalized === "methyl_bromide") form.treatmentMethylBromide = true;
+  }
+}
+
+function buildTreatmentTypePayload(form) {
+  if (form.treatmentHeatTreated) return "heat_treated";
+  if (form.treatmentMethylBromide) return "methyl_bromide";
+  return "";
+}
+
+function normalizeTreatmentTypeFromApi(value) {
+  if (value == null || value === "") return "";
+  if (Array.isArray(value)) {
+    const joined = value.map((v) => String(v).toLowerCase()).join(" ");
+    if (/heat|ht/.test(joined)) return "heat_treated";
+    if (/methyl|mb/.test(joined)) return "methyl_bromide";
+    return "";
+  }
+  const s = String(value).trim().toLowerCase();
+  if (/heat|ht|heat_treated/.test(s)) return "heat_treated";
+  if (/methyl|mb|methyl_bromide/.test(s)) return "methyl_bromide";
+  return "";
+}
+
+function readDimensionsFromDetail(detail) {
+  const dim = detail?.dimensions;
+  if (dim && typeof dim === "object" && !Array.isArray(dim)) {
+    return {
+      length: dim.length != null ? String(dim.length) : "",
+      width: dim.width != null ? String(dim.width) : "",
+      height: dim.height != null ? String(dim.height) : "",
+    };
+  }
+  if (Array.isArray(dim) && dim[0] && typeof dim[0] === "object") {
+    return {
+      length: dim[0].length != null ? String(dim[0].length) : "",
+      width: dim[0].width != null ? String(dim[0].width) : "",
+      height: dim[0].height != null ? String(dim[0].height) : "",
+    };
+  }
+  return {
+    length: detail?.dimensionLength != null ? String(detail.dimensionLength) : "",
+    width: detail?.dimensionWidth != null ? String(detail.dimensionWidth) : "",
+    height: detail?.dimensionHeight != null ? String(detail.dimensionHeight) : "",
+  };
+}
+
+function buildDimensionsObjectPayload(dimensions) {
+  if (!dimensions || typeof dimensions !== "object") return null;
+  const length = Number(String(dimensions.length ?? "").replace(/,/g, ""));
+  const width = Number(String(dimensions.width ?? "").replace(/,/g, ""));
+  const height = Number(String(dimensions.height ?? "").replace(/,/g, ""));
+  if ([length, width, height].every((n) => Number.isNaN(n))) return null;
+  const out = {};
+  if (!Number.isNaN(length)) out.length = length;
+  if (!Number.isNaN(width)) out.width = width;
+  if (!Number.isNaN(height)) out.height = height;
+  return Object.keys(out).length ? out : null;
 }
 
 function toSelectLabel(value, options) {
@@ -180,25 +413,22 @@ function defaultEmptyTruckingLocation() {
 
 function cloneDefaultExtraDetailsForm() {
   return {
-    productName: "",
-    cargoWeight: "",
-    cargoGrossWeight: "",
-    cargoGrossWeightUnit: "",
-    dimensionLength: "",
-    dimensionWidth: "",
-    dimensionHeight: "",
-    packageCount: "",
-    cargoStackable: "",
-    packagingType: "",
+    commodityName: "",
+    weight: "",
+    unit: "",
+    dimensions: defaultEmptyDimensions(),
+    noOfPkgs: "",
+    stackable: "",
+    pkgType: "",
     ispm15Compliance: "",
     treatmentHeatTreated: false,
     treatmentMethylBromide: false,
     ippcStampVerified: "",
     hsCode: "",
-    cargoHazardous: "",
+    customsClearanceRequirement: "",
+    customsBondRequirement: "",
     cargoReadyDate: "",
     pickupTime: "",
-    commercialInvoiceAvailable: "",
     deliveryLocationType: "",
     deliveryTimeAppointment: "",
     originTruckingRequired: "",
@@ -269,8 +499,21 @@ function buildTruckingLocationPayload(loc) {
   return { address, city, state, zipcode };
 }
 
+function isTruckingYes(value) {
+  return String(value || "").trim().toLowerCase() === "yes";
+}
+
+function appendTruckingLocationFormData(payload, fieldPrefix, location) {
+  const built = buildTruckingLocationPayload(location);
+  if (!built) return;
+  payload.append(`${fieldPrefix}[address]`, built.address);
+  payload.append(`${fieldPrefix}[city]`, built.city);
+  payload.append(`${fieldPrefix}[state]`, built.state);
+  payload.append(`${fieldPrefix}[zipcode]`, built.zipcode);
+}
+
 function validateTruckingSection(requiredValue, pickupLocation, deliveryLocation, sectionLabel) {
-  if (String(requiredValue || "").trim().toLowerCase() !== "yes") return null;
+  if (!isTruckingYes(requiredValue)) return null;
 
   const pickup = buildTruckingLocationPayload(pickupLocation);
   const delivery = buildTruckingLocationPayload(deliveryLocation);
@@ -313,9 +556,13 @@ function isYesValue(value) {
 
 function hasExtraDetails(detail) {
   if (!detail || typeof detail !== "object") return false;
+  const legacyKeys = ["productName", "cargoGrossWeight", "packageCount", "packagingType"];
+  if (legacyKeys.some((key) => detail[key] != null && String(detail[key]).trim() !== "")) return true;
+  if (detail.dimensions && typeof detail.dimensions === "object") return true;
   return EXTRA_DETAILS_DISPLAY_KEYS.some((key) => {
     const v = detail[key];
     if (v === undefined || v === null) return false;
+    if (key === "dimensions" && typeof v === "object") return true;
     if (typeof v === "number" && !Number.isNaN(v)) return true;
     if (typeof v === "boolean") return v;
     return String(v).trim() !== "";
@@ -323,16 +570,22 @@ function hasExtraDetails(detail) {
 }
 
 function formatExtraDetailDisplay(key, detail) {
+  if (key === "dimensions") {
+    const dim = readDimensionsFromDetail(detail);
+    if (!dim.length && !dim.width && !dim.height) return null;
+    return `${dim.length} × ${dim.width} × ${dim.height} cm`;
+  }
+
   if (key === "treatmentType") {
     const parts = [];
     if (detail.treatmentHeatTreated) parts.push("Heat Treated (HT)");
     if (detail.treatmentMethylBromide) parts.push("Methyl Bromide (MB)");
-    if (Array.isArray(detail.treatmentType) && detail.treatmentType.length) {
-      return detail.treatmentType.join(", ");
-    }
-    const legacy = detail.treatmentType;
-    if (legacy && typeof legacy === "string" && legacy.trim()) return legacy.trim();
-    return parts.length ? parts.join(", ") : null;
+    if (parts.length) return parts.join(", ");
+    const normalized = normalizeTreatmentTypeFromApi(detail.treatmentType);
+    if (normalized === "heat_treated") return "Heat Treated (HT)";
+    if (normalized === "methyl_bromide") return "Methyl Bromide (MB)";
+    if (detail.treatmentType) return String(detail.treatmentType);
+    return null;
   }
 
   if (key === "hsCode") {
@@ -343,7 +596,24 @@ function formatExtraDetailDisplay(key, detail) {
     return opt ? opt.label : String(hc).trim();
   }
 
-  const raw = detail[key];
+  const raw =
+    key === "commodityName"
+      ? (detail.commodityName ?? detail.productName)
+      : key === "weight"
+        ? (detail.weight ?? detail.cargoGrossWeight)
+        : key === "unit"
+          ? (detail.unit ?? detail.cargoGrossWeightUnit)
+          : key === "noOfPkgs"
+            ? (detail.noOfPkgs ?? detail.packageCount)
+            : key === "stackable"
+              ? (detail.stackable ?? detail.cargoStackable)
+              : key === "pkgType"
+                ? (detail.pkgType ?? detail.packagingType)
+                : key === "customsClearanceRequirement"
+                  ? (detail.customsClearanceRequirement ??
+                    detail.customerClearanceRequirement ??
+                    detail.customsClearanceOriginRequired)
+                  : detail[key];
   if (raw === undefined || raw === null) return null;
   if (typeof raw === "number" && Number.isNaN(raw)) return null;
   if (typeof raw !== "number" && typeof raw !== "boolean" && String(raw).trim() === "") return null;
@@ -359,12 +629,12 @@ function formatExtraDetailDisplay(key, detail) {
     return formatDateTime(raw);
   }
 
-  if (
-    key === "cargoHazardous" ||
-    key === "commercialInvoiceAvailable" ||
-    key === "ippcStampVerified" ||
-    key === "ispm15Compliance"
-  ) {
+  if (key === "ispm15Compliance") {
+    const v = normalizeIspm15FromApi(raw) || String(raw).trim();
+    const opt = ISPM15_COMPLIANCE_OPTIONS.find((o) => o.value === v);
+    return opt ? opt.label : String(raw);
+  }
+  if (key === "ippcStampVerified") {
     const s = String(raw).toLowerCase();
     if (s === "yes") return "Yes";
     if (s === "no") return "No";
@@ -372,19 +642,24 @@ function formatExtraDetailDisplay(key, detail) {
     if (s === "false") return "No";
     return String(raw);
   }
-  if (
-    key === "cargoWeight" ||
-    key === "cargoGrossWeight" ||
-    key === "dimensionLength" ||
-    key === "dimensionWidth" ||
-    key === "dimensionHeight" ||
-    key === "packageCount"
-  ) {
+  if (key === "weight" || key === "noOfPkgs") {
     return typeof raw === "number" ? String(raw) : String(raw).trim();
   }
-  if (key === "cargoGrossWeightUnit") return toSelectLabel(String(raw).trim(), GROSS_WEIGHT_UNIT_OPTIONS);
-  if (key === "cargoStackable") return toSelectLabel(String(raw).trim(), STACKABLE_OPTIONS);
-  if (key === "packagingType") return toSelectLabel(String(raw).trim(), PACKAGING_TYPE_OPTIONS);
+  if (key === "unit") return toSelectLabel(String(raw).trim(), WEIGHT_UNIT_OPTIONS);
+  if (key === "stackable") return toSelectLabel(normalizeStackableFromApi(raw), STACKABLE_OPTIONS);
+  if (key === "pkgType") return toSelectLabel(normalizePkgTypeFromApi(raw) || String(raw).trim(), PKG_TYPE_OPTIONS);
+  if (key === "customsClearanceRequirement") {
+    return toSelectLabel(
+      normalizeCustomsClearanceFromApi(raw) || String(raw).trim(),
+      CUSTOMS_CLEARANCE_REQUIREMENT_OPTIONS,
+    );
+  }
+  if (key === "customsBondRequirement") {
+    return toSelectLabel(
+      normalizeCustomsBondFromApi(raw) || String(raw).trim(),
+      CUSTOMS_BOND_REQUIREMENT_OPTIONS,
+    );
+  }
   if (key === "deliveryLocationType") {
     return toSelectLabel(String(raw).trim(), DELIVERY_LOCATION_TYPE_OPTIONS);
   }
@@ -423,21 +698,6 @@ function isoToTimeInput(iso) {
   return `${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
 }
 
-function parseTreatmentFromApi(detail, form) {
-  if (!detail || typeof detail !== "object") return;
-  if (detail.treatmentHeatTreated === true) form.treatmentHeatTreated = true;
-  if (detail.treatmentMethylBromide === true) form.treatmentMethylBromide = true;
-  const tt = detail.treatmentType;
-  if (Array.isArray(tt)) {
-    form.treatmentHeatTreated = form.treatmentHeatTreated || tt.some((t) => /heat|ht/i.test(String(t)));
-    form.treatmentMethylBromide =
-      form.treatmentMethylBromide || tt.some((t) => /methyl|mb/i.test(String(t)));
-  } else if (typeof tt === "string" && tt.trim()) {
-    form.treatmentHeatTreated = form.treatmentHeatTreated || /heat|ht/i.test(tt);
-    form.treatmentMethylBromide = form.treatmentMethylBromide || /methyl|mb/i.test(tt);
-  }
-}
-
 /** Normalize stored HS labels like "6907.21" / "6907 21" to 6-digit keys matching HS_CODE_OPTIONS */
 function normalizeHsDigits(raw) {
   if (raw == null || raw === "") return "";
@@ -454,6 +714,17 @@ function detailToExtraForm(detail) {
   const f = cloneDefaultExtraDetailsForm();
   if (!detail || typeof detail !== "object") return f;
 
+  f.commodityName = String(detail.commodityName ?? detail.productName ?? "").trim();
+  f.weight = String(detail.weight ?? detail.cargoGrossWeight ?? "").trim();
+  f.unit = String(detail.unit ?? detail.cargoGrossWeightUnit ?? "").trim().toUpperCase();
+  f.dimensions = readDimensionsFromDetail(detail);
+  f.noOfPkgs = String(detail.noOfPkgs ?? detail.packageCount ?? "").trim();
+  f.stackable = normalizeStackableFromApi(detail.stackable ?? detail.cargoStackable);
+  f.pkgType = normalizePkgTypeFromApi(detail.pkgType ?? detail.packagingType);
+  f.ispm15Compliance = normalizeIspm15FromApi(detail.ispm15Compliance);
+  applyTreatmentTypeToForm(detail, f);
+  f.ippcStampVerified = normalizeYesNoApiValue(detail.ippcStampVerified);
+
   f.originTruckingPickupLocation = normalizeTruckingLocationFromApi(detail.originTruckingPickupLocation);
   f.originTruckingDeliveryLocation = normalizeTruckingLocationFromApi(detail.originTruckingDeliveryLocation);
   f.destinationTruckingPickupLocation = normalizeTruckingLocationFromApi(
@@ -463,44 +734,23 @@ function detailToExtraForm(detail) {
     detail.destinationTruckingDeliveryLocation,
   );
 
-  const scalarKeys = [
-    "productName",
-    "cargoWeight",
-    "cargoGrossWeight",
-    "cargoGrossWeightUnit",
-    "dimensionLength",
-    "dimensionWidth",
-    "dimensionHeight",
-    "packageCount",
-    "cargoStackable",
-    "packagingType",
-    "ispm15Compliance",
-    "ippcStampVerified",
-    "cargoHazardous",
-    "commercialInvoiceAvailable",
+  f.customsClearanceRequirement = normalizeCustomsClearanceFromApi(
+    detail.customsClearanceRequirement ??
+      detail.customerClearanceRequirement ??
+      detail.customsClearanceOriginRequired,
+  );
+  f.customsBondRequirement = normalizeCustomsBondFromApi(detail.customsBondRequirement);
+
+  const otherScalarKeys = [
     "deliveryLocationType",
     "deliveryTimeAppointment",
     "originTruckingRequired",
     "destinationTruckingRequired",
   ];
-
-  const numericKeys = [
-    "cargoWeight",
-    "cargoGrossWeight",
-    "dimensionLength",
-    "dimensionWidth",
-    "dimensionHeight",
-    "packageCount",
-  ];
-
-  for (const key of scalarKeys) {
+  for (const key of otherScalarKeys) {
     const v = detail[key];
     if (v === undefined || v === null || v === "") continue;
-    if (numericKeys.includes(key)) {
-      f[key] = String(v);
-    } else {
-      f[key] = String(v);
-    }
+    f[key] = String(v);
   }
 
   if (detail.hsCode) {
@@ -510,7 +760,6 @@ function detailToExtraForm(detail) {
   if (detail.cargoReadyDate) f.cargoReadyDate = isoToDateInput(detail.cargoReadyDate);
   if (detail.pickupTime) f.pickupTime = isoToTimeInput(detail.pickupTime);
 
-  parseTreatmentFromApi(detail, f);
   return f;
 }
 
@@ -523,31 +772,28 @@ function appendNumericField(out, key, raw) {
 function buildExtraDetailsPayload(form) {
   const out = {};
 
-  if (form.productName?.trim()) out.productName = form.productName.trim();
-  appendNumericField(out, "cargoWeight", form.cargoWeight);
-  appendNumericField(out, "cargoGrossWeight", form.cargoGrossWeight);
-  if (form.cargoGrossWeightUnit) out.cargoGrossWeightUnit = form.cargoGrossWeightUnit;
-  appendNumericField(out, "dimensionLength", form.dimensionLength);
-  appendNumericField(out, "dimensionWidth", form.dimensionWidth);
-  appendNumericField(out, "dimensionHeight", form.dimensionHeight);
-  appendNumericField(out, "packageCount", form.packageCount);
-  if (form.cargoStackable) out.cargoStackable = form.cargoStackable;
-  if (form.packagingType) out.packagingType = form.packagingType;
+  if (form.commodityName?.trim()) out.commodityName = form.commodityName.trim();
+  appendNumericField(out, "weight", form.weight);
+  if (form.unit) out.unit = String(form.unit).trim().toUpperCase();
 
-  if (packagingTypeRequiresWoodCompliance(form.packagingType)) {
+  const dimensions = buildDimensionsObjectPayload(form.dimensions);
+  if (dimensions) out.dimensions = dimensions;
+
+  appendNumericField(out, "noOfPkgs", form.noOfPkgs);
+  if (form.stackable) out.stackable = form.stackable;
+  const pkgType = normalizePkgTypeFromApi(form.pkgType);
+  if (pkgType) out.pkgType = pkgType;
+
+  if (packagingTypeRequiresWoodCompliance(form.pkgType)) {
     if (form.ispm15Compliance) out.ispm15Compliance = form.ispm15Compliance;
     if (form.ippcStampVerified) out.ippcStampVerified = form.ippcStampVerified;
-    const treatment = [];
-    if (form.treatmentHeatTreated) treatment.push("Heat Treated (HT)");
-    if (form.treatmentMethylBromide) treatment.push("Methyl Bromide (MB)");
-    if (treatment.length) out.treatmentType = treatment;
-    out.treatmentHeatTreated = Boolean(form.treatmentHeatTreated);
-    out.treatmentMethylBromide = Boolean(form.treatmentMethylBromide);
+    const treatmentType = buildTreatmentTypePayload(form);
+    if (treatmentType) out.treatmentType = treatmentType;
   }
 
   if (form.hsCode?.trim()) out.hsCode = form.hsCode.trim();
-  if (form.cargoHazardous) out.cargoHazardous = form.cargoHazardous;
-  if (form.commercialInvoiceAvailable) out.commercialInvoiceAvailable = form.commercialInvoiceAvailable;
+  appendSelectField(out, "customsClearanceRequirement", form.customsClearanceRequirement, CUSTOMS_CLEARANCE_REQUIREMENT_OPTIONS);
+  appendSelectField(out, "customsBondRequirement", form.customsBondRequirement, CUSTOMS_BOND_REQUIREMENT_OPTIONS);
   if (form.deliveryLocationType) out.deliveryLocationType = form.deliveryLocationType;
 
   if (form.cargoReadyDate) {
@@ -652,13 +898,24 @@ const defaultCreateForm = {
   contactPerson: "",
   contactEmail: "",
   contactPhone: "",
+  originCountry: "IN",
+  destinationCountry: "US",
   originPort: "",
   destinationPort: "",
   cargoType: "",
   containerType: "",
-  weightOrVolume: "",
-  expectedDispatchDate: "",
+  shipmentType: "FCL",
+  serviceType: "",
   incoterm: "",
+  originTruckingRequired: "",
+  originTruckingPickupLocation: defaultEmptyTruckingLocation(),
+  originTruckingDeliveryLocation: defaultEmptyTruckingLocation(),
+  destinationTruckingRequired: "",
+  destinationTruckingPickupLocation: defaultEmptyTruckingLocation(),
+  destinationTruckingDeliveryLocation: defaultEmptyTruckingLocation(),
+  commercialInvoiceValue: "",
+  customsClearanceRequirement: "",
+  expectedDispatchDate: "",
   channelMessageText: "",
   attachments: [],
 };
@@ -873,11 +1130,29 @@ function RateRequestDetailBody({ detail }) {
           Shipment details
         </h4>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <DetailField label="Origin country" value={detail.originCountry} />
+          <DetailField label="Destination country" value={detail.destinationCountry} />
           <DetailField label="Origin port" value={detail.originPort} />
           <DetailField label="Destination port" value={detail.destinationPort} />
           <DetailField label="Cargo type" value={detail.cargoType} />
-          <DetailField label="Weight / volume" value={detail.weightOrVolume} />
+          <DetailField label="Container type" value={detail.containerType} />
+          <DetailField label="Shipment type" value={detail.shipmentType} />
+          <DetailField label="Service type" value={detail.serviceType} />
           <DetailField label="Incoterm" value={detail.incoterm} />
+          <DetailField
+            label="Origin trucking"
+            value={formatYesNoValue(detail.originTruckingRequired)}
+          />
+          <DetailField
+            label="Destination trucking"
+            value={formatYesNoValue(detail.destinationTruckingRequired)}
+          />
+          <DetailField label="Commercial invoice value" value={detail.commercialInvoiceValue} />
+          <DetailField
+            label="Customs clearance"
+            value={formatExtraDetailDisplay("customsClearanceRequirement", detail)}
+          />
+          <DetailField label="Weight / volume" value={detail.weightOrVolume} />
           {detail.commodity ? <DetailField label="Commodity" value={detail.commodity} /> : null}
         </div>
       </div>
@@ -1019,6 +1294,14 @@ export default function ExporterRateRequestWorkflow() {
   const [extraDetailsLoading, setExtraDetailsLoading] = useState(false);
   const [extraDetailsSubmitting, setExtraDetailsSubmitting] = useState(false);
   const [createForm, setCreateForm] = useState(defaultCreateForm);
+  const [shipmentCountryOptions, setShipmentCountryOptions] = useState(() =>
+    shipmentCountriesToSelectOptions(FALLBACK_COUNTRIES),
+  );
+  const [countriesLoading, setCountriesLoading] = useState(false);
+  const [originPortOptions, setOriginPortOptions] = useState([]);
+  const [destinationPortOptions, setDestinationPortOptions] = useState([]);
+  const [originPortsLoading, setOriginPortsLoading] = useState(false);
+  const [destinationPortsLoading, setDestinationPortsLoading] = useState(false);
   const [attachmentPreviews, setAttachmentPreviews] = useState([]);
   const [filters, setFilters] = useState({
     page: 1,
@@ -1058,6 +1341,102 @@ export default function ExporterRateRequestWorkflow() {
     const user = getUserFromStorage();
     return isSalesDepartment(user) && isEmployeeActiveForHandoff(user) && isSalesDayShiftTiming(user);
   }, []);
+
+  const shipmentCountryByCode = useMemo(() => {
+    const map = {};
+    for (const opt of shipmentCountryOptions) {
+      map[opt.value] = opt.label;
+    }
+    return map;
+  }, [shipmentCountryOptions]);
+
+  const shipmentCountryMetaByCode = useMemo(() => {
+    const map = {};
+    for (const opt of shipmentCountryOptions) {
+      if (!opt?.value) continue;
+      map[opt.value] = {
+        countryId: opt.countryId,
+        name: opt.displayLabel || opt.label,
+      };
+    }
+    return map;
+  }, [shipmentCountryOptions]);
+
+  const originCountryName =
+    shipmentCountryByCode[createForm.originCountry] || createForm.originCountry;
+  const destinationCountryName =
+    shipmentCountryByCode[createForm.destinationCountry] || createForm.destinationCountry;
+
+  useEffect(() => {
+    if (!showCreate) return undefined;
+    const controller = new AbortController();
+    setCountriesLoading(true);
+    listShipmentCountries(getToken(), { fetchAllPages: true, signal: controller.signal })
+      .then(({ items }) => {
+        setShipmentCountryOptions(shipmentCountriesToSelectOptions(items));
+      })
+      .catch(() => {
+        setShipmentCountryOptions(shipmentCountriesToSelectOptions(FALLBACK_COUNTRIES));
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setCountriesLoading(false);
+      });
+    return () => controller.abort();
+  }, [showCreate]);
+
+  useEffect(() => {
+    if (!showCreate || !createForm.originCountry) {
+      setOriginPortOptions([]);
+      return undefined;
+    }
+    const controller = new AbortController();
+    setOriginPortsLoading(true);
+    const originMeta = shipmentCountryMetaByCode[createForm.originCountry];
+    listShipmentPorts(getToken(), {
+      countryCode: createForm.originCountry,
+      countryId: originMeta?.countryId,
+      countryName: originMeta?.name || shipmentCountryByCode[createForm.originCountry],
+      limit: 500,
+      signal: controller.signal,
+    })
+      .then(({ items }) => {
+        setOriginPortOptions(shipmentPortsToSelectOptions(items));
+      })
+      .catch(() => {
+        setOriginPortOptions([]);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setOriginPortsLoading(false);
+      });
+    return () => controller.abort();
+  }, [showCreate, createForm.originCountry, shipmentCountryByCode, shipmentCountryMetaByCode]);
+
+  useEffect(() => {
+    if (!showCreate || !createForm.destinationCountry) {
+      setDestinationPortOptions([]);
+      return undefined;
+    }
+    const controller = new AbortController();
+    setDestinationPortsLoading(true);
+    const destinationMeta = shipmentCountryMetaByCode[createForm.destinationCountry];
+    listShipmentPorts(getToken(), {
+      countryCode: createForm.destinationCountry,
+      countryId: destinationMeta?.countryId,
+      countryName: destinationMeta?.name || shipmentCountryByCode[createForm.destinationCountry],
+      limit: 500,
+      signal: controller.signal,
+    })
+      .then(({ items }) => {
+        setDestinationPortOptions(shipmentPortsToSelectOptions(items));
+      })
+      .catch(() => {
+        setDestinationPortOptions([]);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setDestinationPortsLoading(false);
+      });
+    return () => controller.abort();
+  }, [showCreate, createForm.destinationCountry, shipmentCountryByCode, shipmentCountryMetaByCode]);
 
   const fetchMeta = async () => {
     try {
@@ -1266,8 +1645,60 @@ export default function ExporterRateRequestWorkflow() {
       alertify.error("Provide at least one of contact email or contact phone");
       return;
     }
+    if (!createForm.originCountry?.trim()) {
+      alertify.error("Select origin country");
+      return;
+    }
+    if (!createForm.destinationCountry?.trim()) {
+      alertify.error("Select destination country");
+      return;
+    }
+    if (!createForm.originPort?.trim()) {
+      alertify.error("Select origin port / city / ICD");
+      return;
+    }
+    if (!createForm.destinationPort?.trim()) {
+      alertify.error("Select destination port / city / ICD");
+      return;
+    }
+    if (!createForm.cargoType) {
+      alertify.error("Select cargo type");
+      return;
+    }
     if (!createForm.containerType) {
       alertify.error("Please select a container type");
+      return;
+    }
+    if (!createForm.shipmentType) {
+      alertify.error("Select shipment type (FCL or LCL)");
+      return;
+    }
+    if (!createForm.serviceType) {
+      alertify.error("Select service type");
+      return;
+    }
+    if (!createForm.incoterm) {
+      alertify.error("Select incoterm");
+      return;
+    }
+    const originTruckingError = validateTruckingSection(
+      createForm.originTruckingRequired,
+      createForm.originTruckingPickupLocation,
+      createForm.originTruckingDeliveryLocation,
+      "Origin trucking",
+    );
+    if (originTruckingError) {
+      alertify.error(originTruckingError);
+      return;
+    }
+    const destinationTruckingError = validateTruckingSection(
+      createForm.destinationTruckingRequired,
+      createForm.destinationTruckingPickupLocation,
+      createForm.destinationTruckingDeliveryLocation,
+      "Destination trucking",
+    );
+    if (destinationTruckingError) {
+      alertify.error(destinationTruckingError);
       return;
     }
     setSubmitting(true);
@@ -1276,16 +1707,54 @@ export default function ExporterRateRequestWorkflow() {
       payload.append("source", createForm.source);
       payload.append("exporterCompany", createForm.exporterCompany.trim());
       payload.append("contactPerson", createForm.contactPerson);
-      payload.append("originPort", createForm.originPort);
-      payload.append("destinationPort", createForm.destinationPort);
+      payload.append("originCountry", originCountryName);
+      payload.append("originCountryCode", createForm.originCountry.trim());
+      payload.append("destinationCountry", destinationCountryName);
+      payload.append("destinationCountryCode", createForm.destinationCountry.trim());
+      payload.append("originPort", createForm.originPort.trim());
+      payload.append("destinationPort", createForm.destinationPort.trim());
       payload.append("cargoType", createForm.cargoType);
       payload.append("containerType", createForm.containerType);
+      payload.append("shipmentType", createForm.shipmentType);
+      payload.append("serviceType", createForm.serviceType);
+      payload.append("incoterm", createForm.incoterm);
+      if (createForm.originTruckingRequired)
+        payload.append("originTruckingRequired", createForm.originTruckingRequired);
+      if (isTruckingYes(createForm.originTruckingRequired)) {
+        appendTruckingLocationFormData(
+          payload,
+          "originTruckingPickupLocation",
+          createForm.originTruckingPickupLocation,
+        );
+        appendTruckingLocationFormData(
+          payload,
+          "originTruckingDeliveryLocation",
+          createForm.originTruckingDeliveryLocation,
+        );
+      }
+      if (createForm.destinationTruckingRequired)
+        payload.append("destinationTruckingRequired", createForm.destinationTruckingRequired);
+      if (isTruckingYes(createForm.destinationTruckingRequired)) {
+        appendTruckingLocationFormData(
+          payload,
+          "destinationTruckingPickupLocation",
+          createForm.destinationTruckingPickupLocation,
+        );
+        appendTruckingLocationFormData(
+          payload,
+          "destinationTruckingDeliveryLocation",
+          createForm.destinationTruckingDeliveryLocation,
+        );
+      }
+      if (createForm.commercialInvoiceValue?.trim())
+        payload.append("commercialInvoiceValue", createForm.commercialInvoiceValue.trim());
+      if (createForm.customsClearanceRequirement)
+        payload.append("customsClearanceRequirement", createForm.customsClearanceRequirement);
       if (createForm.expectedDispatchDate) payload.append("expectedDispatchDate", createForm.expectedDispatchDate);
       if (createForm.contactEmail?.trim()) payload.append("contactEmail", createForm.contactEmail.trim());
       if (createForm.contactPhone?.trim()) payload.append("contactPhone", createForm.contactPhone.trim());
-      if (createForm.weightOrVolume) payload.append("weightOrVolume", createForm.weightOrVolume);
-      if (createForm.incoterm) payload.append("incoterm", createForm.incoterm);
-      if (createForm.channelMessageText) payload.append("channelMessageText", createForm.channelMessageText);
+      if (createForm.channelMessageText?.trim())
+        payload.append("channelMessageText", createForm.channelMessageText.trim());
       (createForm.attachments || []).forEach((file) => payload.append("attachments", file));
 
       const res = await axios.post(`${API_CONFIG.BASE_URL}/api/v1/exporter-rate-requst`, payload, {
@@ -1340,7 +1809,7 @@ export default function ExporterRateRequestWorkflow() {
       const res = await axios.get(getExtraDetailsGetUrl(mode, requestId), {
         headers: authHeaders,
       });
-      const d = res.data?.data;
+      const d = resolveExtraDetailsDetail(res);
       if (d) setExtraDetailsForm(detailToExtraForm(d));
     } catch (e) {
       alertify.error(e.response?.data?.message || "Could not load request for customs details");
@@ -1364,6 +1833,15 @@ export default function ExporterRateRequestWorkflow() {
         payload,
         { headers: { ...authHeaders, "Content-Type": "application/json" } },
       );
+      try {
+        const refresh = await axios.get(getExtraDetailsGetUrl(extraDetailsMode, extraDetailsRequestId), {
+          headers: authHeaders,
+        });
+        const d = resolveExtraDetailsDetail(refresh);
+        if (d) setExtraDetailsForm(detailToExtraForm(d));
+      } catch {
+        // Save succeeded; refresh is best-effort.
+      }
       alertify.success(extraDetailsMode === "agent" ? "Rate request updated successfully." : "Customs details saved");
       setShowExtraDetailsModal(false);
       if (extraDetailsMode === "agent") {
@@ -1941,60 +2419,326 @@ export default function ExporterRateRequestWorkflow() {
               </div>
 
               <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-5">
-                <h4 className="text-sm font-semibold text-emerald-800 mb-4">Shipment Details</h4>
+                <div className="mb-4">
+                  <h4 className="text-sm font-semibold text-emerald-800">Shipment Details</h4>
+                  <p className="text-xs text-emerald-700/90 mt-1">
+                    Please provide the basic details of your shipment.
+                  </p>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <FieldLabel label="Origin Port" required>
-                    <InputReq placeholder="Enter origin port" value={createForm.originPort} onChange={(v) => setCreateForm((p) => ({ ...p, originPort: v }))} />
+                  <FieldLabel label="Origin Country" required>
+                    <SearchableSelect
+                      value={createForm.originCountry}
+                      onChange={(value) =>
+                        setCreateForm((p) => ({
+                          ...p,
+                          originCountry: value,
+                          originPort: "",
+                        }))
+                      }
+                      options={shipmentCountryOptions}
+                      placeholder={countriesLoading ? "Loading countries…" : "Select country"}
+                      required
+                      disabled={countriesLoading}
+                      largeList
+                    />
                   </FieldLabel>
-                  <FieldLabel label="Destination Port" required>
-                    <InputReq placeholder="Enter destination port" value={createForm.destinationPort} onChange={(v) => setCreateForm((p) => ({ ...p, destinationPort: v }))} />
+                  <FieldLabel label="Destination Country" required>
+                    <SearchableSelect
+                      value={createForm.destinationCountry}
+                      onChange={(value) =>
+                        setCreateForm((p) => ({
+                          ...p,
+                          destinationCountry: value,
+                          destinationPort: "",
+                        }))
+                      }
+                      options={shipmentCountryOptions}
+                      placeholder={countriesLoading ? "Loading countries…" : "Select country"}
+                      required
+                      disabled={countriesLoading}
+                      largeList
+                    />
                   </FieldLabel>
-                  <FieldLabel label="Cargo type" required>
-                    <InputReq placeholder="e.g. FCL" value={createForm.cargoType} onChange={(v) => setCreateForm((p) => ({ ...p, cargoType: v }))} />
+                  <FieldLabel label="Origin Port / City / ICD" required>
+                    <SearchableSelect
+                      value={createForm.originPort}
+                      onChange={(value) => setCreateForm((p) => ({ ...p, originPort: value }))}
+                      options={originPortOptions}
+                      placeholder={
+                        !createForm.originCountry
+                          ? "Select origin country first"
+                          : originPortsLoading
+                            ? "Loading ports & ICDs…"
+                            : `Select port or ICD (${originCountryName})`
+                      }
+                      required
+                      disabled={!createForm.originCountry || originPortsLoading}
+                      largeList
+                    />
                   </FieldLabel>
-                  <FieldLabel label="Weight / Volume">
-                    <input className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200" placeholder="Enter weight or volume" value={createForm.weightOrVolume} onChange={(e) => setCreateForm((p) => ({ ...p, weightOrVolume: e.target.value }))} />
+                  <FieldLabel label="Destination Port / City / ICD" required>
+                    <SearchableSelect
+                      value={createForm.destinationPort}
+                      onChange={(value) => setCreateForm((p) => ({ ...p, destinationPort: value }))}
+                      options={destinationPortOptions}
+                      placeholder={
+                        !createForm.destinationCountry
+                          ? "Select destination country first"
+                          : destinationPortsLoading
+                            ? "Loading ports & ICDs…"
+                            : `Select port or ICD (${destinationCountryName})`
+                      }
+                      required
+                      disabled={!createForm.destinationCountry || destinationPortsLoading}
+                      largeList
+                    />
                   </FieldLabel>
-                  <FieldLabel label="Incoterm">
+                  <FieldLabel label="Cargo Type" required>
+                    <SearchableSelect
+                      value={createForm.cargoType}
+                      onChange={(value) => setCreateForm((p) => ({ ...p, cargoType: value }))}
+                      options={CARGO_TYPE_CREATE_OPTIONS}
+                      placeholder="Select cargo type"
+                      required
+                    />
+                  </FieldLabel>
+                  <FieldLabel label="Container Type" required>
+                    <SearchableSelect
+                      value={createForm.containerType}
+                      onChange={(value) => setCreateForm((p) => ({ ...p, containerType: value }))}
+                      options={CREATE_CONTAINER_OPTIONS}
+                      placeholder="Select container type"
+                      required
+                    />
+                  </FieldLabel>
+                  <FieldLabel label="Shipment Type" required>
+                    <div className="rounded-lg border border-gray-200 bg-white p-3 min-h-[46px] flex items-center">
+                      <div className="flex flex-col gap-2 w-full">
+                        {SHIPMENT_TYPE_OPTIONS.map((opt) => (
+                          <label
+                            key={opt.value}
+                            className="flex items-center gap-2 cursor-pointer text-sm text-gray-800"
+                          >
+                            <input
+                              type="radio"
+                              name="createShipmentType"
+                              value={opt.value}
+                              checked={createForm.shipmentType === opt.value}
+                              onChange={() =>
+                                setCreateForm((p) => ({ ...p, shipmentType: opt.value }))
+                              }
+                              className="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                            />
+                            {opt.label}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </FieldLabel>
+                  <FieldLabel label="Service Type" required>
+                    <SearchableSelect
+                      value={createForm.serviceType}
+                      onChange={(value) => setCreateForm((p) => ({ ...p, serviceType: value }))}
+                      options={SERVICE_TYPE_OPTIONS}
+                      placeholder="Select service type"
+                      required
+                    />
+                  </FieldLabel>
+                  <FieldLabel label="Incoterm" required className="md:col-span-2">
                     <SearchableSelect
                       value={createForm.incoterm}
                       onChange={(value) => setCreateForm((p) => ({ ...p, incoterm: value }))}
-                      options={INCOTERM_OPTIONS.map((term) => ({ value: term, label: term }))}
-                      placeholder="Select Incoterm"
+                      options={CREATE_INCOTERM_OPTIONS}
+                      placeholder="Select incoterm"
+                      required
                     />
                   </FieldLabel>
-                  <FieldLabel label="Channel Message Text" className="md:col-span-2">
-                    <textarea className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200" rows={3} placeholder="Enter channel message text" value={createForm.channelMessageText} onChange={(e) => setCreateForm((p) => ({ ...p, channelMessageText: e.target.value }))} />
+                  <FieldLabel label="Origin Trucking (Yes/No)" required>
+                    <SearchableSelect
+                      value={createForm.originTruckingRequired}
+                      onChange={(value) =>
+                        setCreateForm((p) => ({
+                          ...p,
+                          originTruckingRequired: value,
+                          ...(String(value).toLowerCase() === "no"
+                            ? {
+                                originTruckingPickupLocation: defaultEmptyTruckingLocation(),
+                                originTruckingDeliveryLocation: defaultEmptyTruckingLocation(),
+                              }
+                            : {}),
+                        }))
+                      }
+                      options={YES_NO_SEARCH_OPTIONS}
+                      placeholder="Select option"
+                      required
+                    />
                   </FieldLabel>
-                </div>
-              </div>
+                  <FieldLabel label="Destination Trucking (Yes/No)" required>
+                    <SearchableSelect
+                      value={createForm.destinationTruckingRequired}
+                      onChange={(value) =>
+                        setCreateForm((p) => ({
+                          ...p,
+                          destinationTruckingRequired: value,
+                          ...(String(value).toLowerCase() === "no"
+                            ? {
+                                destinationTruckingPickupLocation: defaultEmptyTruckingLocation(),
+                                destinationTruckingDeliveryLocation: defaultEmptyTruckingLocation(),
+                              }
+                            : {}),
+                        }))
+                      }
+                      options={YES_NO_SEARCH_OPTIONS}
+                      placeholder="Select option"
+                      required
+                    />
+                  </FieldLabel>
 
-              <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-5">
-                <h4 className="text-sm font-semibold text-indigo-800 mb-4">Container Type</h4>
-                <div className="space-y-3">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                    {CONTAINER_TYPE_OPTIONS.map((container) => (
-                      <button
-                        key={container.value}
-                        type="button"
-                        onClick={() => setCreateForm((p) => ({ ...p, containerType: container.value }))}
-                        className={`rounded-xl border overflow-hidden text-left transition-all bg-white ${
-                          createForm.containerType === container.value
-                            ? "border-blue-500 ring-2 ring-blue-200 shadow-sm"
-                            : "border-gray-200 hover:border-blue-300"
-                        }`}
-                      >
-                        <img src={container.image} alt={container.label} className="w-full h-24 object-cover bg-slate-50" />
-                        <div className="px-3 py-2">
-                          <p className="text-sm font-semibold text-gray-800">{container.label}</p>
-                          <p className="text-xs text-gray-500">{container.value}</p>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                  {!createForm.containerType && (
-                    <p className="text-xs text-red-500">Please select a container type.</p>
+                  {isTruckingYes(createForm.originTruckingRequired) && (
+                    <div className="md:col-span-2 space-y-4 rounded-2xl border border-amber-200 bg-amber-50/80 p-4">
+                      <p className="flex items-center gap-2 text-sm font-semibold text-amber-900">
+                        <Truck size={16} />
+                        Origin trucking locations
+                      </p>
+                      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                        <TruckingLocationCard
+                          title="Origin trucking pickup location"
+                          borderClass="border-amber-100"
+                          headingClass="text-amber-900"
+                          location={createForm.originTruckingPickupLocation}
+                          showRequired
+                          onChange={(field, value) =>
+                            setCreateForm((p) => ({
+                              ...p,
+                              originTruckingPickupLocation: {
+                                ...p.originTruckingPickupLocation,
+                                [field]: value,
+                              },
+                            }))
+                          }
+                          placeholders={{
+                            address: "Enter origin trucking pickup address",
+                            city: "Enter city",
+                            state: "Enter state",
+                            zipcode: "Enter zipcode",
+                          }}
+                        />
+                        <TruckingLocationCard
+                          title="Origin trucking delivery location"
+                          borderClass="border-amber-100"
+                          headingClass="text-amber-900"
+                          location={createForm.originTruckingDeliveryLocation}
+                          showRequired
+                          onChange={(field, value) =>
+                            setCreateForm((p) => ({
+                              ...p,
+                              originTruckingDeliveryLocation: {
+                                ...p.originTruckingDeliveryLocation,
+                                [field]: value,
+                              },
+                            }))
+                          }
+                          placeholders={{
+                            address: "Enter origin trucking drop address",
+                            city: "Enter city",
+                            state: "Enter state",
+                            zipcode: "Enter zipcode",
+                          }}
+                        />
+                      </div>
+                    </div>
                   )}
+
+                  {isTruckingYes(createForm.destinationTruckingRequired) && (
+                    <div className="md:col-span-2 space-y-4 rounded-2xl border border-slate-200 bg-slate-50/90 p-4">
+                      <p className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                        <Truck size={16} />
+                        Destination trucking locations
+                      </p>
+                      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                        <TruckingLocationCard
+                          title="Destination trucking pickup location"
+                          borderClass="border-slate-200"
+                          headingClass="text-slate-900"
+                          location={createForm.destinationTruckingPickupLocation}
+                          showRequired
+                          onChange={(field, value) =>
+                            setCreateForm((p) => ({
+                              ...p,
+                              destinationTruckingPickupLocation: {
+                                ...p.destinationTruckingPickupLocation,
+                                [field]: value,
+                              },
+                            }))
+                          }
+                          placeholders={{
+                            address: "Enter destination trucking pickup address",
+                            city: "Enter city",
+                            state: "Enter state",
+                            zipcode: "Enter zipcode",
+                          }}
+                        />
+                        <TruckingLocationCard
+                          title="Destination trucking delivery location"
+                          borderClass="border-slate-200"
+                          headingClass="text-slate-900"
+                          location={createForm.destinationTruckingDeliveryLocation}
+                          showRequired
+                          onChange={(field, value) =>
+                            setCreateForm((p) => ({
+                              ...p,
+                              destinationTruckingDeliveryLocation: {
+                                ...p.destinationTruckingDeliveryLocation,
+                                [field]: value,
+                              },
+                            }))
+                          }
+                          placeholders={{
+                            address: "Enter destination trucking drop address",
+                            city: "Enter city",
+                            state: "Enter state",
+                            zipcode: "Enter zipcode",
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <FieldLabel label="Commercial Invoice Value">
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                      placeholder="Enter invoice value"
+                      value={createForm.commercialInvoiceValue}
+                      onChange={(e) =>
+                        setCreateForm((p) => ({ ...p, commercialInvoiceValue: e.target.value }))
+                      }
+                    />
+                  </FieldLabel>
+                  <FieldLabel label="Customs clearance">
+                    <SearchableSelect
+                      value={createForm.customsClearanceRequirement}
+                      onChange={(value) =>
+                        setCreateForm((p) => ({ ...p, customsClearanceRequirement: value }))
+                      }
+                      options={CUSTOMS_CLEARANCE_REQUIREMENT_OPTIONS}
+                      placeholder="Select operation"
+                    />
+                  </FieldLabel>
+                  <FieldLabel label="Additional Message (Optional)" className="md:col-span-2">
+                    <textarea
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 resize-none"
+                      rows={3}
+                      placeholder="Enter your additional message..."
+                      value={createForm.channelMessageText}
+                      onChange={(e) =>
+                        setCreateForm((p) => ({ ...p, channelMessageText: e.target.value }))
+                      }
+                    />
+                  </FieldLabel>
                 </div>
               </div>
 
@@ -2098,32 +2842,24 @@ export default function ExporterRateRequestWorkflow() {
                       <FieldLabel label="Commodity name" required>
                         <input
                           className={extraInputClass}
-                          value={extraDetailsForm.productName}
-                          onChange={(e) => setExtraDetailsForm((p) => ({ ...p, productName: e.target.value }))}
+                          value={extraDetailsForm.commodityName}
+                          onChange={(e) => setExtraDetailsForm((p) => ({ ...p, commodityName: e.target.value }))}
                           placeholder="Enter commodity name"
-                        />
-                      </FieldLabel>
-                      <FieldLabel label="Weight">
-                        <input
-                          className={extraInputClass}
-                          value={extraDetailsForm.cargoWeight}
-                          onChange={(e) => setExtraDetailsForm((p) => ({ ...p, cargoWeight: e.target.value }))}
-                          placeholder="Optional — net or reference weight"
                         />
                       </FieldLabel>
                       <FieldLabel label="Gross weight" required>
                         <input
                           className={extraInputClass}
-                          value={extraDetailsForm.cargoGrossWeight}
-                          onChange={(e) => setExtraDetailsForm((p) => ({ ...p, cargoGrossWeight: e.target.value }))}
+                          value={extraDetailsForm.weight}
+                          onChange={(e) => setExtraDetailsForm((p) => ({ ...p, weight: e.target.value }))}
                           placeholder="Enter gross weight"
                         />
                       </FieldLabel>
                       <FieldLabel label="Unit (KG / LBS)" required>
                         <SearchableSelect
-                          value={extraDetailsForm.cargoGrossWeightUnit}
-                          onChange={(value) => setExtraDetailsForm((p) => ({ ...p, cargoGrossWeightUnit: value }))}
-                          options={GROSS_WEIGHT_UNIT_OPTIONS}
+                          value={extraDetailsForm.unit}
+                          onChange={(value) => setExtraDetailsForm((p) => ({ ...p, unit: value }))}
+                          options={WEIGHT_UNIT_OPTIONS}
                           placeholder="Select unit"
                           className="w-full"
                           compact
@@ -2139,39 +2875,54 @@ export default function ExporterRateRequestWorkflow() {
                       <FieldLabel label="Length (cm)" required>
                         <input
                           className={extraInputClass}
-                          value={extraDetailsForm.dimensionLength}
-                          onChange={(e) => setExtraDetailsForm((p) => ({ ...p, dimensionLength: e.target.value }))}
+                          value={extraDetailsForm.dimensions.length}
+                          onChange={(e) =>
+                            setExtraDetailsForm((p) => ({
+                              ...p,
+                              dimensions: { ...p.dimensions, length: e.target.value },
+                            }))
+                          }
                           placeholder="Length"
                         />
                       </FieldLabel>
                       <FieldLabel label="Width (cm)" required>
                         <input
                           className={extraInputClass}
-                          value={extraDetailsForm.dimensionWidth}
-                          onChange={(e) => setExtraDetailsForm((p) => ({ ...p, dimensionWidth: e.target.value }))}
+                          value={extraDetailsForm.dimensions.width}
+                          onChange={(e) =>
+                            setExtraDetailsForm((p) => ({
+                              ...p,
+                              dimensions: { ...p.dimensions, width: e.target.value },
+                            }))
+                          }
                           placeholder="Width"
                         />
                       </FieldLabel>
                       <FieldLabel label="Height (cm)" required>
                         <input
                           className={extraInputClass}
-                          value={extraDetailsForm.dimensionHeight}
-                          onChange={(e) => setExtraDetailsForm((p) => ({ ...p, dimensionHeight: e.target.value }))}
+                          value={extraDetailsForm.dimensions.height}
+                          onChange={(e) =>
+                            setExtraDetailsForm((p) => ({
+                              ...p,
+                              dimensions: { ...p.dimensions, height: e.target.value },
+                            }))
+                          }
                           placeholder="Height"
                         />
                       </FieldLabel>
                       <FieldLabel label="Number of packages" required>
                         <input
                           className={extraInputClass}
-                          value={extraDetailsForm.packageCount}
-                          onChange={(e) => setExtraDetailsForm((p) => ({ ...p, packageCount: e.target.value }))}
+                          value={extraDetailsForm.noOfPkgs}
+                          onChange={(e) => setExtraDetailsForm((p) => ({ ...p, noOfPkgs: e.target.value }))}
                           placeholder="Total cartons / pallets / crates"
                         />
                       </FieldLabel>
                       <FieldLabel label="Stackable" required>
                         <SearchableSelect
-                          value={extraDetailsForm.cargoStackable}
-                          onChange={(value) => setExtraDetailsForm((p) => ({ ...p, cargoStackable: value }))}
+                          value={extraDetailsForm.stackable}
+                          onChange={(value) => setExtraDetailsForm((p) => ({ ...p, stackable: value }))}
                           options={STACKABLE_OPTIONS}
                           placeholder="Stackable or non-stackable"
                           className="w-full"
@@ -2180,11 +2931,11 @@ export default function ExporterRateRequestWorkflow() {
                       </FieldLabel>
                       <FieldLabel label="Packaging type" required>
                         <SearchableSelect
-                          value={extraDetailsForm.packagingType}
+                          value={extraDetailsForm.pkgType}
                           onChange={(value) => {
                             setExtraDetailsForm((p) => ({
                               ...p,
-                              packagingType: value,
+                              pkgType: value,
                               ...(!packagingTypeRequiresWoodCompliance(value)
                                 ? {
                                     ispm15Compliance: "",
@@ -2195,13 +2946,13 @@ export default function ExporterRateRequestWorkflow() {
                                 : {}),
                             }));
                           }}
-                          options={PACKAGING_TYPE_OPTIONS}
+                          options={PKG_TYPE_OPTIONS}
                           placeholder="Select packaging type"
                           className="w-full"
                           compact
                         />
                       </FieldLabel>
-                      {packagingTypeRequiresWoodCompliance(extraDetailsForm.packagingType) ? (
+                      {packagingTypeRequiresWoodCompliance(extraDetailsForm.pkgType) ? (
                         <>
                           <div className="md:col-span-2 rounded-xl border border-violet-200 bg-white/80 p-4 space-y-3">
                             <p className="text-sm font-semibold text-gray-700">
@@ -2261,7 +3012,7 @@ export default function ExporterRateRequestWorkflow() {
                               IPPC stamp verified <span className="text-red-500">*</span>
                             </p>
                             <div className="flex flex-wrap gap-4">
-                              {YES_NO_EXTRA_OPTIONS.map((opt) => (
+                              {IPPC_STAMP_OPTIONS.map((opt) => (
                                 <label key={opt.value} className="flex items-center gap-2 text-sm text-gray-700">
                                   <input
                                     type="radio"
@@ -2294,24 +3045,26 @@ export default function ExporterRateRequestWorkflow() {
                           largeList
                         />
                       </FieldLabel>
-                      <FieldLabel label="Cargo hazardous (Yes/No)" required>
+                      <FieldLabel label="Customer clearance requirement">
                         <SearchableSelect
-                          value={extraDetailsForm.cargoHazardous}
-                          onChange={(value) => setExtraDetailsForm((p) => ({ ...p, cargoHazardous: value }))}
-                          options={YES_NO_EXTRA_OPTIONS}
-                          placeholder="Select option"
+                          value={extraDetailsForm.customsClearanceRequirement}
+                          onChange={(value) =>
+                            setExtraDetailsForm((p) => ({ ...p, customsClearanceRequirement: value }))
+                          }
+                          options={CUSTOMS_CLEARANCE_REQUIREMENT_OPTIONS}
+                          placeholder="Select clearance requirement"
                           className="w-full"
                           compact
                         />
                       </FieldLabel>
-                      <FieldLabel label="Commercial invoice available (Yes/No)" required>
+                      <FieldLabel label="Customs bond requirement">
                         <SearchableSelect
-                          value={extraDetailsForm.commercialInvoiceAvailable}
+                          value={extraDetailsForm.customsBondRequirement}
                           onChange={(value) =>
-                            setExtraDetailsForm((p) => ({ ...p, commercialInvoiceAvailable: value }))
+                            setExtraDetailsForm((p) => ({ ...p, customsBondRequirement: value }))
                           }
-                          options={YES_NO_EXTRA_OPTIONS}
-                          placeholder="Select option"
+                          options={CUSTOMS_BOND_REQUIREMENT_OPTIONS}
+                          placeholder="Select bond requirement"
                           className="w-full"
                           compact
                         />
@@ -2741,6 +3494,19 @@ function AttachmentSection({ attachments, flat }) {
   );
 }
 
+function renderSelectOptionContent(option) {
+  if (!option) return null;
+  if (option.flagUrl) {
+    return (
+      <span className="flex min-w-0 items-center gap-2">
+        <CountryFlagImg countryCode={option.value} />
+        <span className="truncate">{option.displayLabel ?? option.label}</span>
+      </span>
+    );
+  }
+  return <span className="truncate">{option.displayLabel ?? option.label}</span>;
+}
+
 function SearchableSelect({
   value,
   onChange,
@@ -2762,14 +3528,14 @@ function SearchableSelect({
     if (!search.trim()) return options;
     const q = search.trim().toLowerCase();
     return options.filter((option) => {
-      const lab = String(option.label ?? "").toLowerCase();
+      const lab = String(option.searchText ?? option.displayLabel ?? option.label ?? "").toLowerCase();
       const val = String(option.value ?? "").toLowerCase();
       return lab.includes(q) || val.includes(q);
     });
   }, [options, search]);
 
   const selected = options.find((option) => option.value === value);
-  const displaySelected = selected?.label || (value ? String(value) : "");
+  const hasSelectedDisplay = Boolean(selected || value);
 
   const updateMenuBox = useCallback(() => {
     const el = rootRef.current;
@@ -2845,10 +3611,10 @@ function SearchableSelect({
           {filtered.length === 0 ? (
             <p className="px-3 py-2 text-sm text-gray-500">No option found</p>
           ) : (
-            filtered.map((option) => (
+            filtered.map((option, index) => (
               <button
                 type="button"
-                key={option.value}
+                key={`${option.locationKind || "port"}-${option.value}-${index}`}
                 className={`w-full px-3 py-2 text-left text-sm hover:bg-blue-50 ${option.value === value ? "bg-blue-50 font-medium text-blue-700" : "text-gray-700"}`}
                 onClick={() => {
                   onChange(option.value);
@@ -2856,7 +3622,7 @@ function SearchableSelect({
                   setSearch("");
                 }}
               >
-                {option.label}
+                {renderSelectOptionContent(option)}
               </button>
             ))
           )}
@@ -2879,9 +3645,13 @@ function SearchableSelect({
         onClick={() => !disabled && setOpen((prev) => !prev)}
       >
         <span
-          className={`min-w-0 truncate ${displaySelected ? "text-gray-800" : "text-gray-500"} ${compact ? "text-sm" : ""}`}
+          className={`min-w-0 flex-1 ${hasSelectedDisplay ? "text-gray-800" : "text-gray-500"} ${compact ? "text-sm" : ""}`}
         >
-          {displaySelected || placeholder}
+          {selected
+            ? renderSelectOptionContent(selected)
+            : value
+              ? <span className="truncate">{String(value)}</span>
+              : placeholder}
         </span>
         <ChevronDown
           size={compact ? 14 : 16}
@@ -2977,48 +3747,54 @@ function TruckingLocationCard({
   borderClass,
   headingClass,
   location,
-  disabled,
+  disabled = false,
   onChange,
-  placeholders,
+  placeholders = {},
+  showRequired = false,
+  inputClassName = extraInputClass,
 }) {
   return (
     <div className={`rounded-xl border bg-white p-4 ${borderClass}`}>
       <h5 className={`mb-3 text-sm font-semibold ${headingClass}`}>{title}</h5>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <FieldLabel label="Address" className="md:col-span-3">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <FieldLabel label="Address" required={showRequired} className="md:col-span-2">
           <input
-            className={extraInputClass}
+            className={inputClassName}
             value={location.address}
             disabled={disabled}
+            required={showRequired}
             onChange={(e) => onChange("address", e.target.value)}
-            placeholder={placeholders.address}
+            placeholder={placeholders.address || "Enter address"}
           />
         </FieldLabel>
-        <FieldLabel label="City">
+        <FieldLabel label="City" required={showRequired}>
           <input
-            className={extraInputClass}
+            className={inputClassName}
             value={location.city}
             disabled={disabled}
+            required={showRequired}
             onChange={(e) => onChange("city", e.target.value)}
-            placeholder={placeholders.city}
+            placeholder={placeholders.city || "Enter city"}
           />
         </FieldLabel>
-        <FieldLabel label="State">
+        <FieldLabel label="State" required={showRequired}>
           <input
-            className={extraInputClass}
+            className={inputClassName}
             value={location.state}
             disabled={disabled}
+            required={showRequired}
             onChange={(e) => onChange("state", e.target.value)}
-            placeholder={placeholders.state}
+            placeholder={placeholders.state || "Enter state"}
           />
         </FieldLabel>
-        <FieldLabel label="Zipcode">
+        <FieldLabel label="Zipcode" required={showRequired}>
           <input
-            className={extraInputClass}
+            className={inputClassName}
             value={location.zipcode}
             disabled={disabled}
+            required={showRequired}
             onChange={(e) => onChange("zipcode", e.target.value)}
-            placeholder={placeholders.zipcode}
+            placeholder={placeholders.zipcode || "Enter zipcode"}
           />
         </FieldLabel>
       </div>
