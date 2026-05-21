@@ -27,8 +27,10 @@ import {
   Shield,
   MessageSquare,
   History,
+  SendHorizontal,
 } from "lucide-react";
 import API_CONFIG from "../../config/api.js";
+import { getUserFromStorage, isSalesDayShiftTiming } from "../../utils/salesDayAgentEligibility.js";
 import { HS_CODE_OPTIONS } from "../../data/hsCodeOptions.js";
 import SearchableSelect from "../Dashboard/SearchableSelect.jsx";
 import { fetchShippingLineMaster } from "../../services/shippingLineMasterService.js";
@@ -472,10 +474,18 @@ function buildAuthRequestConfig(extraHeaders = {}) {
   };
 }
 
-/** GET operation SSL rates for a rate request (detail view). */
-function OperationSslRatesSection({ requestId, requestData, allowEdit = true, initialNegotiationQuoteId = null }) {
+/** GET operation SSL rates for a rate request (detail view), or render embedded quotes from day-shift detail API. */
+function OperationSslRatesSection({
+  requestId,
+  requestData,
+  allowEdit = true,
+  initialNegotiationQuoteId = null,
+  embeddedQuotes = null,
+  emptyMessage = null,
+}) {
+  const useEmbeddedQuotes = embeddedQuotes != null;
   const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!useEmbeddedQuotes);
   const [err, setErr] = useState(null);
   const [unreadSummaryByQuoteId, setUnreadSummaryByQuoteId] = useState({});
   const [editingQuote, setEditingQuote] = useState(null);
@@ -485,6 +495,14 @@ function OperationSslRatesSection({ requestId, requestData, allowEdit = true, in
   const summaryRequestId = requestData?.requestId || requestId || "";
 
   const loadRows = useCallback(async () => {
+    if (useEmbeddedQuotes) {
+      const list = Array.isArray(embeddedQuotes) ? embeddedQuotes : [];
+      const sorted = sortQuotesByCreatedAt(list);
+      setRows(sorted);
+      setErr(null);
+      setLoading(false);
+      return sorted;
+    }
     if (!requestId) {
       setRows([]);
       setLoading(false);
@@ -508,7 +526,7 @@ function OperationSslRatesSection({ requestId, requestData, allowEdit = true, in
     } finally {
       setLoading(false);
     }
-  }, [getAuthConfig, requestId]);
+  }, [embeddedQuotes, getAuthConfig, requestId, useEmbeddedQuotes]);
 
   useEffect(() => {
     void loadRows();
@@ -596,96 +614,37 @@ function OperationSslRatesSection({ requestId, requestData, allowEdit = true, in
 
   return (
     <div className="rounded-2xl border border-teal-200 bg-gradient-to-br from-teal-50/90 via-white to-cyan-50/40 p-5 shadow-sm">
-      <h4 className="mb-4 flex items-center gap-2 text-sm font-semibold text-teal-950">
-        <Banknote size={18} className="text-teal-600" />
-        Operation SSL rates
-      </h4>
+      <div className="mb-4">
+        <h4 className="flex items-center gap-2 text-sm font-semibold text-teal-950">
+          <Banknote size={18} className="text-teal-600" />
+          Shipping line rates
+        </h4>
+        <p className="mt-1 text-xs text-slate-600">
+          Each card is one carrier quote. The large amount is the total price; &quot;Initial quote&quot; means operation&apos;s
+          first price (not negotiated yet). &quot;Negotiating&quot; means a counter-offer is in progress.
+        </p>
+      </div>
       {loading && <p className="text-sm text-slate-600">Loading SSL rates…</p>}
       {!loading && err && <p className="text-sm text-red-600">{err}</p>}
       {!loading && !err && rows.length === 0 && (
-        <p className="text-sm text-slate-600">No SSL rates have been submitted for this request yet.</p>
+        <p className="text-sm text-slate-600">
+          {emptyMessage || "No SSL rates have been submitted for this request yet."}
+        </p>
       )}
       {!loading && !err && rows.length > 0 && (
         <div className="space-y-4">
           {rows.map((r) => {
             const unreadSummary = unreadSummaryByQuoteId[r._id] || null;
             const mergedQuote = unreadSummary ? { ...r, ...unreadSummary, decisionStatus: unreadSummary.decisionStatus ?? r.decisionStatus } : r;
-            const decisionMeta = getQuoteDecisionMeta(mergedQuote.decisionStatus);
-            const isDecisionLocked = decisionMeta.value === "accepted" || decisionMeta.value === "rejected";
             return (
-            <div key={r._id} className="rounded-xl border border-teal-100 bg-white p-4 shadow-sm">
-              <div className="mb-3 flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 pb-3">
-                <div>
-                  <p className="text-base font-bold text-slate-900">
-                    {mergedQuote.sslName || "—"}{" "}
-                    <span className="text-sm font-semibold text-teal-700">
-                      {mergedQuote.currency || ""} {mergedQuote.totalAmount != null ? Number(mergedQuote.totalAmount).toLocaleString() : "—"}
-                    </span>
-                  </p>
-                  {(mergedQuote.sslCode || mergedQuote.sslId) && (
-                    <p className="mt-1 text-xs text-slate-500">
-                      {mergedQuote.sslCode ? `Code: ${mergedQuote.sslCode}` : ""}
-                      {mergedQuote.sslCode && mergedQuote.sslId ? " · " : ""}
-                      {mergedQuote.sslId ? `ID: ${mergedQuote.sslId}` : ""}
-                    </p>
-                  )}
-                  <p className="mt-1 text-xs text-slate-500">
-                    Added {formatDateTime(mergedQuote.createdAt)}
-                    {mergedQuote.addedBy ? ` · ${fmtAddedBy(mergedQuote.addedBy)}` : ""}
-                  </p>
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <span className="text-xs font-medium text-slate-500">Decision status</span>
-                    <span
-                      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${decisionMeta.badgeClass}`}
-                    >
-                      {decisionMeta.label}
-                    </span>
-                  </div>
-                </div>
-                {allowEdit && (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setNegotiatingQuote(mergedQuote)}
-                      className={`inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
-                        isDecisionLocked
-                          ? "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
-                          : "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
-                      }`}
-                      title={isDecisionLocked ? "Review quote decision" : "Review sender rate"}
-                    >
-                      {isDecisionLocked ? "View decision" : "Review rate"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEditingQuote(r)}
-                      className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-100"
-                    >
-                      Edit quote
-                    </button>
-                  </div>
-                )}
-              </div>
-              <div className="mb-3 grid grid-cols-1 gap-2 text-sm md:grid-cols-3">
-                <DetailField label="Validity" value={formatDateOnly(r.validityDate) ?? formatDateTime(r.validityDate)} />
-                <DetailField label="Transit days" value={r.transitDays != null ? String(r.transitDays) : "N/A"} />
-                <DetailField label="Remarks" value={r.remarks} multiline />
-              </div>
-              <div className="space-y-3">
-                <ReadOnlyChargeTable
-                  title="SSL charges"
-                  rows={r.lineItems}
-                  totalAmount={r.baseTotalAmount ?? calculateLineItemsTotal(Array.isArray(r.lineItems) ? r.lineItems : [])}
-                  currency={r.currency}
-                />
-                <ReadOnlyChargeTable
-                  title="Trucking charges"
-                  rows={r.truckingLineItems}
-                  totalAmount={r.truckingTotalAmount}
-                  currency={r.currency}
-                />
-              </div>
-            </div>
+              <SslQuoteRateCard
+                key={r._id}
+                quote={mergedQuote}
+                allowEdit={allowEdit}
+                fmtAddedBy={fmtAddedBy}
+                onReview={() => setNegotiatingQuote(mergedQuote)}
+                onEdit={() => setEditingQuote(r)}
+              />
             );
           })}
         </div>
@@ -718,6 +677,161 @@ function OperationSslRatesSection({ requestId, requestData, allowEdit = true, in
 function formatQuoteMoney(currency, amount) {
   if (amount == null || Number.isNaN(Number(amount))) return "N/A";
   return `${currency || ""} ${Number(amount).toLocaleString()}`.trim();
+}
+
+/** User-friendly labels for SSL quote cards (avoids confusing "Offered" / "Decision status"). */
+function getSslQuoteRatePresentation(quote) {
+  const decisionMeta = getQuoteDecisionMeta(quote?.decisionStatus);
+  const currency = quote?.currency || "USD";
+  const operationQuote = formatQuoteMoney(currency, quote?.totalAmount);
+  const pendingCounter = quote?.pendingCounterOffer;
+  const counterAmount =
+    pendingCounter?.amount != null ? formatQuoteMoney(currency, pendingCounter.amount) : null;
+
+  if (decisionMeta.value === "accepted") {
+    return {
+      headline: "Agreed rate",
+      primaryAmount: operationQuote,
+      primaryHint: "Final total accepted for this shipping line",
+      statusLabel: "Confirmed",
+      statusHint: "This quote is locked in.",
+      badgeClass: decisionMeta.badgeClass,
+    };
+  }
+  if (decisionMeta.value === "rejected") {
+    return {
+      headline: "Declined quote",
+      primaryAmount: operationQuote,
+      primaryHint: "Last total quoted before this line was declined",
+      statusLabel: "Declined",
+      statusHint: "This shipping line quote was rejected.",
+      badgeClass: decisionMeta.badgeClass,
+    };
+  }
+  if (decisionMeta.value === "negotiating") {
+    return {
+      headline: counterAmount ? "Counter-offer (in review)" : "Under negotiation",
+      primaryAmount: counterAmount || operationQuote,
+      primaryHint: counterAmount
+        ? `Operation first quoted ${operationQuote} — customer/agent proposed a new price`
+        : `Operation quoted ${operationQuote} — negotiation is open`,
+      secondaryAmount: counterAmount ? operationQuote : null,
+      secondaryLabel: counterAmount ? "Original operation quote" : null,
+      statusLabel: "Negotiating",
+      statusHint: "Open Review rate to accept, reject, or see counter-offer history.",
+      badgeClass: decisionMeta.badgeClass,
+    };
+  }
+  return {
+    headline: "Operation quote",
+    primaryAmount: operationQuote,
+    primaryHint: "First price from operation team — not negotiated yet",
+    statusLabel: "Initial quote",
+    statusHint: "No counter-offer on this line yet.",
+    badgeClass: decisionMeta.badgeClass,
+  };
+}
+
+function SslQuoteRateCard({ quote, allowEdit, onReview, onEdit, fmtAddedBy }) {
+  const presentation = getSslQuoteRatePresentation(quote);
+  const decisionMeta = getQuoteDecisionMeta(quote.decisionStatus);
+  const isDecisionLocked = decisionMeta.value === "accepted" || decisionMeta.value === "rejected";
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-teal-100 bg-white shadow-sm">
+      <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-teal-50/40 p-4 sm:p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Shipping line</p>
+            <p className="mt-0.5 text-lg font-bold text-slate-900">{quote.sslName || "—"}</p>
+            {(quote.sslCode || quote.sslId) && (
+              <p className="mt-1 text-xs text-slate-500">
+                {[quote.sslCode && `Code: ${quote.sslCode}`, quote.sslId && `ID: ${quote.sslId}`]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
+            )}
+            <p className="mt-2 text-xs text-slate-500">
+              Added {formatDateTime(quote.createdAt)}
+              {quote.addedBy ? ` · ${fmtAddedBy(quote.addedBy)}` : ""}
+            </p>
+          </div>
+          <div className="shrink-0 rounded-2xl border-2 border-teal-200 bg-white px-4 py-3 text-center shadow-sm sm:min-w-[200px]">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-teal-800">{presentation.headline}</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-teal-900 sm:text-3xl">
+              {presentation.primaryAmount}
+            </p>
+            <p className="mt-1 text-xs leading-snug text-slate-600">{presentation.primaryHint}</p>
+            {presentation.secondaryAmount && (
+              <p className="mt-2 border-t border-slate-100 pt-2 text-xs text-slate-500">
+                <span className="font-medium text-slate-600">{presentation.secondaryLabel}: </span>
+                {presentation.secondaryAmount}
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span
+            className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${presentation.badgeClass}`}
+          >
+            {presentation.statusLabel}
+          </span>
+          <span className="text-xs text-slate-600">{presentation.statusHint}</span>
+        </div>
+      </div>
+
+      <div className="p-4 sm:p-5">
+        <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
+          {allowEdit && (
+            <>
+              <button
+                type="button"
+                onClick={onReview}
+                className={`inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                  isDecisionLocked
+                    ? "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
+                    : "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                }`}
+              >
+                {isDecisionLocked ? "View decision" : "Review rate"}
+              </button>
+              <button
+                type="button"
+                onClick={onEdit}
+                className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-100"
+              >
+                Edit quote
+              </button>
+            </>
+          )}
+        </div>
+        <div className="mb-3 grid grid-cols-1 gap-2 text-sm sm:grid-cols-3">
+          <DetailField label="Valid until" value={formatDateOnly(quote.validityDate) ?? formatDateTime(quote.validityDate)} />
+          <DetailField label="Transit time" value={quote.transitDays != null ? `${quote.transitDays} days` : "N/A"} />
+          <DetailField label="Remarks" value={quote.remarks} multiline />
+        </div>
+        <div className="space-y-3">
+          <ReadOnlyChargeTable
+            title="Freight & fees breakdown"
+            rows={quote.lineItems}
+            totalAmount={
+              quote.baseTotalAmount ??
+              calculateLineItemsTotal(Array.isArray(quote.lineItems) ? quote.lineItems : [])
+            }
+            currency={quote.currency}
+          />
+          {Array.isArray(quote.truckingLineItems) && quote.truckingLineItems.length > 0 && (
+            <ReadOnlyChargeTable
+              title="Trucking breakdown"
+              rows={quote.truckingLineItems}
+              totalAmount={quote.truckingTotalAmount}
+              currency={quote.currency}
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function getCounterOfferHistoryStatusMeta(status) {
@@ -1299,8 +1413,428 @@ function QuoteDecisionModal({ open, onClose, requestId, requestData, quote, onQu
   );
 }
 
-/** Read-only detail sections for exporter / operation-team rows */
-export function RateRequestDetailBody({ detail, initialNegotiationQuoteId = null }) {
+const CLOSED_EXPORTER_RATE_REQUEST_STATUSES = new Set(["won", "lost", "closed_no_response"]);
+
+export function isClosedExporterRateRequestStatus(status) {
+  return CLOSED_EXPORTER_RATE_REQUEST_STATUSES.has(String(status ?? "").trim().toLowerCase());
+}
+
+function getOwnerRatesReviewStatusLabel(status) {
+  const key = String(status ?? "").trim().toLowerCase();
+  if (key === "pending") return "Pending";
+  if (key === "confirmed") return "Confirmed";
+  if (key === "rejected") return "Rejected";
+  if (!key) return "—";
+  return formatStatusLabel(key);
+}
+
+export function getOwnerRatesReviewStatus(detail) {
+  return String(detail?.ownerRatesReviewStatus ?? detail?.ownerRatesReview?.status ?? "").trim().toLowerCase();
+}
+
+function getCurrentEmployeeEmpId(user) {
+  return String(
+    user?.empId || sessionStorage.getItem("empId") || localStorage.getItem("empId") || "",
+  ).trim();
+}
+
+export function isCurrentUserRateRequestOwner(detail, user) {
+  if (!detail?.ownerId || !user) return false;
+  const owner = detail.ownerId;
+  if (typeof owner !== "object") return false;
+  const myEmp = getCurrentEmployeeEmpId(user);
+  const ownerEmp = String(owner.empId || "").trim();
+  if (myEmp && ownerEmp && myEmp === ownerEmp) return true;
+  const myId = String(user._id || user.id || "").trim();
+  const ownerMongo = String(owner._id || "").trim();
+  return Boolean(myId && ownerMongo && myId === ownerMongo);
+}
+
+export function canOwnerActOnForwardedRates(detail, user = getUserFromStorage()) {
+  if (!detail?.forwardedToOwner?.isForwarded) return false;
+  if (!isSalesDayShiftTiming(user)) return false;
+  if (!isCurrentUserRateRequestOwner(detail, user)) return false;
+  const status = getOwnerRatesReviewStatus(detail);
+  return !status || status === "pending";
+}
+
+/** Day-shift owner: confirm or reject operation rates after forward */
+export function OwnerRatesReviewActions({ detail, onSuccess }) {
+  const [note, setNote] = useState("");
+  const [submitting, setSubmitting] = useState("");
+  const user = getUserFromStorage();
+  const requestIdentifier = detail?.requestId || detail?._id || "";
+  const reviewStatus = getOwnerRatesReviewStatus(detail);
+  const canAct = canOwnerActOnForwardedRates(detail, user);
+  const isPending = !reviewStatus || reviewStatus === "pending";
+
+  if (!detail?.forwardedToOwner?.isForwarded) return null;
+
+  const handleConfirm = async () => {
+    if (!requestIdentifier || submitting) return;
+    setSubmitting("confirm");
+    try {
+      const safeId = encodeURIComponent(requestIdentifier);
+      const body = note.trim() ? { note: note.trim() } : {};
+      const res = await axios.post(
+        `${API_CONFIG.BASE_URL}/api/v1/sales-day-agent/rate-requests/${safeId}/confirm-rates`,
+        body,
+        buildAuthRequestConfig(),
+      );
+      alertify.success(res.data?.message || "Rates confirmed successfully.");
+      setNote("");
+      onSuccess?.(res.data?.data || null);
+    } catch (err) {
+      alertify.error(err.response?.data?.message || "Failed to confirm rates");
+    } finally {
+      setSubmitting("");
+    }
+  };
+
+  const handleReject = async () => {
+    if (!requestIdentifier || submitting) return;
+    if (!note.trim()) {
+      alertify.error("A note is required when rejecting rates.");
+      return;
+    }
+    setSubmitting("reject");
+    try {
+      const safeId = encodeURIComponent(requestIdentifier);
+      const res = await axios.post(
+        `${API_CONFIG.BASE_URL}/api/v1/sales-day-agent/rate-requests/${safeId}/reject-rates`,
+        { note: note.trim() },
+        buildAuthRequestConfig(),
+      );
+      alertify.success(res.data?.message || "Rates rejected.");
+      setNote("");
+      onSuccess?.(res.data?.data || null);
+    } catch (err) {
+      alertify.error(err.response?.data?.message || "Failed to reject rates");
+    } finally {
+      setSubmitting("");
+    }
+  };
+
+  if (!isPending) {
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h4 className="mb-2 text-sm font-semibold text-slate-900">Review & confirm — your decision</h4>
+        <p className="text-sm text-slate-700">
+          <span className="font-medium text-slate-900">Status: </span>
+          {getOwnerRatesReviewStatusLabel(reviewStatus)}
+          {detail.ownerRatesReview?.reviewedAt
+            ? ` · ${formatDateTime(detail.ownerRatesReview.reviewedAt)}`
+            : ""}
+        </p>
+        {detail.ownerRatesReview?.note && String(detail.ownerRatesReview.note).trim() ? (
+          <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">
+            <span className="font-medium text-slate-700">Note: </span>
+            {detail.ownerRatesReview.note}
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (!canAct) {
+    const ownerLabel = formatOwnerRef(detail.ownerId) || "the assigned owner";
+    return (
+      <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-5 shadow-sm">
+        <h4 className="mb-2 text-sm font-semibold text-amber-950">Review & confirm — pending</h4>
+        <p className="text-sm text-amber-900">
+          <span className="font-medium">Status: Pending</span>
+          {" — "}
+          Waiting for {ownerLabel} (day-shift owner) to confirm or reject these rates.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border-2 border-indigo-300 bg-gradient-to-br from-indigo-50/90 to-white p-5 shadow-sm">
+      <h4 className="text-sm font-semibold text-indigo-950">Review & confirm rates</h4>
+      <p className="mt-1 text-xs font-medium text-amber-800">Status: Pending — no decision yet</p>
+      <p className="mt-1 text-xs text-slate-600">
+        Confirm to approve operation&apos;s rates, or reject so operation can revise and forward again.
+      </p>
+      <label className="mt-3 block text-xs font-medium text-slate-600">
+        Note <span className="font-normal text-slate-400">(optional for confirm, required for reject)</span>
+        <textarea
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          rows={2}
+          placeholder="e.g. Approved — share with customer"
+          className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+          disabled={Boolean(submitting)}
+        />
+      </label>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => void handleConfirm()}
+          disabled={Boolean(submitting)}
+          className="inline-flex items-center gap-2 rounded-xl border border-emerald-600 bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <CheckCircle2 size={16} />
+          {submitting === "confirm" ? "Confirming…" : "Confirm rates"}
+        </button>
+        <button
+          type="button"
+          onClick={() => void handleReject()}
+          disabled={Boolean(submitting)}
+          className="inline-flex items-center gap-2 rounded-xl border border-red-300 bg-white px-4 py-2.5 text-sm font-semibold text-red-700 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <XCircle size={16} />
+          {submitting === "reject" ? "Rejecting…" : "Reject rates"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const FORWARD_TO_OWNER_BLOCK_MESSAGES = {
+  no_ssl_quotes: "Add at least one operation SSL rate before forwarding to the owner.",
+  awaiting_owner_review: "Rates are with the owner — waiting for confirm or reject.",
+  owner_confirmed_rates:
+    "Owner confirmed the last forward. Add a new SSL quote after that forward to forward again.",
+  closed_rate_request: "Cannot forward on a closed rate request (won / lost / closed).",
+};
+
+function pickForwardMetaFields(source) {
+  if (!source || typeof source !== "object") return null;
+  const hasFlag =
+    typeof source.canForwardToOwner === "boolean" ||
+    source.forwardToOwnerBlockReason != null ||
+    source.hasNewSslQuotesSinceForward != null ||
+    source.operationSslQuoteCount != null;
+  if (!hasFlag) return null;
+  return {
+    canForwardToOwner: source.canForwardToOwner,
+    forwardToOwnerBlockReason: source.forwardToOwnerBlockReason ?? null,
+    hasNewSslQuotesSinceForward: source.hasNewSslQuotesSinceForward,
+    newSslQuotesSinceForwardCount: source.newSslQuotesSinceForwardCount,
+    operationSslQuoteCount: source.operationSslQuoteCount,
+    forwardedToOwner: source.forwardedToOwner,
+    ownerRatesReview: source.ownerRatesReview,
+    ownerRatesReviewStatus: source.ownerRatesReviewStatus,
+  };
+}
+
+/** Forward meta from GET detail, forward POST, or add/update SSL quote POST. */
+export function extractForwardMetaFromApiResponse(res) {
+  const body = res?.data;
+  if (!body || typeof body !== "object") return null;
+  return (
+    pickForwardMetaFields(body.data) ||
+    pickForwardMetaFields(body.rateRequest) ||
+    pickForwardMetaFields(body)
+  );
+}
+
+export function mergeForwardMetaIntoDetail(prev, patch) {
+  if (!patch) return prev;
+  if (!prev) return { ...patch };
+  const next = { ...prev, ...patch };
+  if (patch.forwardedToOwner !== undefined) next.forwardedToOwner = patch.forwardedToOwner;
+  if (patch.ownerRatesReview !== undefined) next.ownerRatesReview = patch.ownerRatesReview;
+  if (patch.ownerRatesReviewStatus !== undefined) next.ownerRatesReviewStatus = patch.ownerRatesReviewStatus;
+  if (patch.operationSslQuotes !== undefined) next.operationSslQuotes = patch.operationSslQuotes;
+  return next;
+}
+
+/** Client fallback when GET omits canForwardToOwner (older API). */
+export function canForwardRatesToOwner(detail) {
+  if (!detail || isClosedExporterRateRequestStatus(detail.status)) return false;
+  if (!detail.forwardedToOwner?.isForwarded) {
+    const count = Number(detail.operationSslQuoteCount);
+    if (Number.isFinite(count) && count < 1) return false;
+    return true;
+  }
+  if (detail.hasNewSslQuotesSinceForward === true) return true;
+  return getOwnerRatesReviewStatus(detail) === "rejected";
+}
+
+/** Prefer server flag from GET / POST forward-to-owner response. */
+export function resolveCanForwardToOwner(detail) {
+  if (detail && typeof detail.canForwardToOwner === "boolean") {
+    return detail.canForwardToOwner;
+  }
+  return canForwardRatesToOwner(detail);
+}
+
+export function getForwardToOwnerBlockReason(detail) {
+  const reason = String(detail?.forwardToOwnerBlockReason ?? "").trim();
+  if (reason) return reason;
+  if (!detail) return "";
+  if (isClosedExporterRateRequestStatus(detail.status)) return "closed_rate_request";
+  const count = Number(detail.operationSslQuoteCount);
+  if (Number.isFinite(count) && count < 1) return "no_ssl_quotes";
+  if (detail.forwardedToOwner?.isForwarded) {
+    if (detail.hasNewSslQuotesSinceForward === true) return "";
+    const review = getOwnerRatesReviewStatus(detail);
+    if (review === "confirmed") return "owner_confirmed_rates";
+    if (review === "pending" || !review) return "awaiting_owner_review";
+  }
+  return "";
+}
+
+export function getForwardToOwnerBlockMessage(detail) {
+  const reason = getForwardToOwnerBlockReason(detail);
+  if (reason && FORWARD_TO_OWNER_BLOCK_MESSAGES[reason]) {
+    return FORWARD_TO_OWNER_BLOCK_MESSAGES[reason];
+  }
+  return null;
+}
+
+function getForwardToOwnerButtonLabel({ forwarding, canForward, blockReason, hasNewQuotesSinceForward }) {
+  if (forwarding) return "Forwarding…";
+  if (canForward && hasNewQuotesSinceForward) return "Forward again";
+  if (canForward) return "Forward to owner";
+  if (blockReason === "no_ssl_quotes") return "Add SSL rates first";
+  if (blockReason === "awaiting_owner_review") return "Awaiting owner review";
+  if (blockReason === "owner_confirmed_rates") return "Owner confirmed";
+  if (blockReason === "closed_rate_request") return "Request closed";
+  return "Forward unavailable";
+}
+
+/** Operation team: POST forward SSL rates to day-shift owner for review */
+export function ForwardToOwnerPanel({ detail, authHeaders, onSuccess }) {
+  const [forwarding, setForwarding] = useState(false);
+  const requestIdentifier = detail?.requestId || detail?._id || "";
+  const forwarded = detail?.forwardedToOwner;
+  const review = detail?.ownerRatesReview;
+  const canForward = resolveCanForwardToOwner(detail);
+  const blockReason = getForwardToOwnerBlockReason(detail);
+  const blockMessage = getForwardToOwnerBlockMessage(detail);
+  const sslQuoteCount = Number(detail?.operationSslQuoteCount);
+  const showSslQuoteCount = Number.isFinite(sslQuoteCount);
+  const hasNewQuotesSinceForward = detail?.hasNewSslQuotesSinceForward === true;
+  const newQuotesCount = Number(detail?.newSslQuotesSinceForwardCount);
+  const showNewQuotesCount = hasNewQuotesSinceForward && Number.isFinite(newQuotesCount) && newQuotesCount > 0;
+
+  const handleForward = async () => {
+    if (!requestIdentifier || forwarding || !canForward) return;
+    setForwarding(true);
+    try {
+      const safeId = encodeURIComponent(requestIdentifier);
+      const res = await axios.post(
+        `${API_CONFIG.BASE_URL}/api/v1/exporter-rate-requst/${safeId}/forward-to-owner`,
+        {},
+        buildAuthRequestConfig(authHeaders),
+      );
+      alertify.success(res.data?.message || "Rates forwarded to the rate request owner successfully.");
+      onSuccess?.(res.data?.data || null);
+    } catch (err) {
+      alertify.error(err.response?.data?.message || "Failed to forward rates to owner");
+    } finally {
+      setForwarding(false);
+    }
+  };
+
+  return (
+    <div className="rounded-2xl border border-indigo-200 bg-gradient-to-br from-indigo-50/90 to-blue-50/60 p-5 shadow-sm">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1">
+          <h4 className="flex items-center gap-2 text-sm font-semibold text-indigo-900">
+            <SendHorizontal size={18} className="text-indigo-600" />
+            Forward rates to owner
+          </h4>
+          <p className="mt-1 text-xs text-slate-600">
+            Send operation SSL rates to the day-shift sales owner ({formatOwnerRef(detail?.ownerId) || "owner"}) for
+            review. At least one SSL quote is required.
+          </p>
+          {showSslQuoteCount && (
+            <p className="mt-2 text-xs text-slate-600">
+              <span className="font-medium text-slate-500">SSL quotes on request:</span> {sslQuoteCount}
+              {showNewQuotesCount ? (
+                <span className="text-emerald-700">
+                  {" "}
+                  · {newQuotesCount} new since last forward
+                </span>
+              ) : null}
+            </p>
+          )}
+          {forwarded?.isForwarded && (
+            <div className="mt-3 space-y-1 text-xs text-slate-700">
+              <p>
+                <span className="font-medium text-slate-500">Forwarded:</span>{" "}
+                {formatDateTime(forwarded.forwardedAt)}
+                {forwarded.forwardedBy ? ` · ${formatOwnerRef(forwarded.forwardedBy)}` : ""}
+              </p>
+              {(review?.status || detail.ownerRatesReviewStatus) && (
+                <p>
+                  <span className="font-medium text-slate-500">Owner review:</span>{" "}
+                  {getOwnerRatesReviewStatusLabel(review?.status ?? detail.ownerRatesReviewStatus)}
+                  {review?.reviewedAt ? ` · ${formatDateTime(review.reviewedAt)}` : ""}
+                </p>
+              )}
+              {review?.note && String(review.note).trim() ? (
+                <p className="whitespace-pre-wrap text-slate-600">{review.note}</p>
+              ) : null}
+            </div>
+          )}
+          {!canForward && blockMessage && (
+            <p
+              className={`mt-2 text-xs font-medium ${
+                blockReason === "owner_confirmed_rates" || blockReason === "closed_rate_request"
+                  ? "text-amber-900"
+                  : blockReason === "no_ssl_quotes"
+                    ? "text-red-700"
+                    : "text-indigo-800"
+              }`}
+            >
+              {blockMessage}
+            </p>
+          )}
+          {canForward && hasNewQuotesSinceForward && (
+            <p className="mt-2 text-xs font-medium text-emerald-800">
+              New SSL quote(s) were added after the last forward — you can forward again. Owner review will reset
+              to pending.
+            </p>
+          )}
+          {canForward &&
+            !hasNewQuotesSinceForward &&
+            forwarded?.isForwarded &&
+            getOwnerRatesReviewStatus(detail) === "rejected" && (
+              <p className="mt-2 text-xs font-medium text-emerald-800">
+                Owner rejected the last forward — revise SSL quotes if needed, then forward again.
+              </p>
+            )}
+        </div>
+        <button
+          type="button"
+          onClick={() => void handleForward()}
+          disabled={forwarding || !canForward || !requestIdentifier}
+          className={`inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+            canForward
+              ? "border-indigo-600 bg-indigo-600 text-white hover:bg-indigo-700"
+              : "border-slate-300 bg-slate-100 text-slate-600"
+          }`}
+          title={blockMessage || "Forward SSL rates to the day-shift owner for review"}
+        >
+          <SendHorizontal size={16} />
+          {getForwardToOwnerButtonLabel({ forwarding, canForward, blockReason, hasNewQuotesSinceForward })}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function getEmbeddedSslQuotes(detail, sslQuotes) {
+  if (Array.isArray(sslQuotes)) return sslQuotes;
+  if (Array.isArray(detail?.operationSslQuotes)) return detail.operationSslQuotes;
+  return null;
+}
+
+function getSslQuotesEmptyMessage(detail) {
+  if (detail?.forwardedToOwner?.isForwarded) {
+    return "No operation SSL rates on this request.";
+  }
+  return "SSL rates appear here after the operation team forwards them to you as owner.";
+}
+
+/** Read-only detail sections for exporter / operation-team / day-shift agent rows */
+export function RateRequestDetailBody({ detail }) {
   if (!detail) return null;
   const showAssignment = Boolean(
     detail.ownerId || detail.capturedBy || detail.capturedByRef || detail.receivedAt || detail.submissionChannel,
@@ -1530,11 +2064,70 @@ export function RateRequestDetailBody({ detail, initialNegotiationQuoteId = null
         <AttachmentSection attachments={detail.attachments} flat />
       </div>
 
+    </>
+  );
+}
+
+/** SSL rates + owner forward review — render before documents panel in detail modals */
+function mergeOwnerReviewDetailUpdate(prev, updated) {
+  return mergeForwardMetaIntoDetail(prev, updated);
+}
+
+export function RateRequestSslRatesBlock({
+  detail,
+  initialNegotiationQuoteId = null,
+  sslQuotes = null,
+  allowSslRateEdit = true,
+  onDetailUpdated = null,
+}) {
+  if (!detail) return null;
+  const embeddedSslQuotes = getEmbeddedSslQuotes(detail, sslQuotes);
+
+  const handleReviewSuccess = (updated) => {
+    if (!updated) return;
+    onDetailUpdated?.(mergeOwnerReviewDetailUpdate(detail, updated));
+  };
+
+  return (
+    <>
+      {detail.forwardedToOwner?.isForwarded && (
+        <div className="rounded-2xl border border-indigo-200 bg-indigo-50/80 p-5 shadow-sm">
+          <h4 className="mb-1 text-sm font-semibold text-indigo-900">Rates sent to you for review</h4>
+          <p className="mb-3 text-xs text-indigo-800/90">
+            Operation forwarded these shipping-line quotes. Review each total below, then confirm or reject in the
+            section after the rates.
+          </p>
+          <div className="grid grid-cols-1 gap-3 text-sm md:grid-cols-2">
+            <DetailField
+              label="Forwarded at"
+              value={formatDateTime(detail.forwardedToOwner.forwardedAt)}
+            />
+            <DetailField
+              label="Forwarded by"
+              value={formatOwnerRef(detail.forwardedToOwner.forwardedBy)}
+            />
+            <DetailField
+              label="Review status"
+              value={getOwnerRatesReviewStatusLabel(
+                detail.ownerRatesReviewStatus ?? detail.ownerRatesReview?.status,
+              )}
+            />
+          </div>
+        </div>
+      )}
+
       <OperationSslRatesSection
-        requestId={detail._id}
+        requestId={detail._id || detail.requestId}
         requestData={detail}
         initialNegotiationQuoteId={initialNegotiationQuoteId}
+        embeddedQuotes={embeddedSslQuotes}
+        allowEdit={allowSslRateEdit}
+        emptyMessage={embeddedSslQuotes != null ? getSslQuotesEmptyMessage(detail) : null}
       />
+
+      {detail.forwardedToOwner?.isForwarded && (
+        <OwnerRatesReviewActions detail={detail} onSuccess={handleReviewSuccess} />
+      )}
     </>
   );
 }
@@ -1996,21 +2589,22 @@ export function GiveRateModal({ open, onClose, requestId, requestData, authHeade
 
     setSubmitting(true);
     try {
+      let res;
       if (isEditMode) {
-        await axios.patch(
+        res = await axios.patch(
           `${API_CONFIG.BASE_URL}/api/v1/exporter-rate-requst/${requestId}/operation-ssl-rates/${activeQuote._id}`,
           payload,
           buildAuthRequestConfig(),
         );
       } else {
-        await axios.post(
+        res = await axios.post(
           `${API_CONFIG.BASE_URL}/api/v1/exporter-rate-requst/${requestId}/operation-ssl-rates`,
           payload,
           buildAuthRequestConfig(),
         );
       }
       alertify.success(isEditMode ? "SSL rate updated" : "SSL rate submitted");
-      onSuccess?.();
+      onSuccess?.(extractForwardMetaFromApiResponse(res));
       onClose();
     } catch (err) {
       alertify.error(err.response?.data?.message || (isEditMode ? "Failed to update SSL rate" : "Failed to submit SSL rate"));
@@ -2083,18 +2677,6 @@ export function GiveRateModal({ open, onClose, requestId, requestData, authHeade
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-semibold text-gray-600">
-                {hasTruckingRequest ? "Grand total amount (SSL + trucking)" : "Total amount (sum of line totals)"}
-              </label>
-              <input
-                type="text"
-                readOnly
-                tabIndex={-1}
-                className={`${inputClass} cursor-not-allowed bg-slate-100 text-slate-800`}
-                value={Number.isFinite(grandTotalAmount) ? String(Math.round(grandTotalAmount * 100) / 100) : "0"}
-              />
-            </div>
-            <div>
               <label className="mb-1 block text-xs font-semibold text-gray-600">Validity date *</label>
               <input className={inputClass} type="date" value={validityDate} onChange={(e) => setValidityDate(e.target.value)} />
             </div>
@@ -2146,8 +2728,49 @@ export function GiveRateModal({ open, onClose, requestId, requestData, authHeade
             </div>
           )}
 
+          <div className="overflow-hidden rounded-2xl border-2 border-teal-300 bg-gradient-to-br from-teal-50/95 via-white to-emerald-50/80 shadow-md ring-1 ring-teal-100">
+            <div className="flex items-center gap-2 border-b border-teal-200/80 bg-teal-600/10 px-5 py-3">
+              <Banknote size={20} className="text-teal-700" />
+              <p className="text-sm font-semibold text-teal-950">
+                {hasTruckingRequest ? "Grand total amount (SSL + trucking)" : "Total amount (SSL charges)"}
+              </p>
+            </div>
+            <div className="space-y-4 p-5">
+              {hasTruckingRequest ? (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3">
+                    <p className="text-xs font-medium uppercase tracking-wide text-blue-800/80">SSL charges</p>
+                    <p className="mt-1 text-lg font-bold tabular-nums text-slate-900">
+                      {currency} {totalFromLines.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-amber-100 bg-amber-50/60 px-4 py-3">
+                    <p className="text-xs font-medium uppercase tracking-wide text-amber-900/80">Trucking charges</p>
+                    <p className="mt-1 text-lg font-bold tabular-nums text-slate-900">
+                      {currency}{" "}
+                      {truckingTotalFromLines.toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-slate-600">Calculated from all SSL charge line totals below.</p>
+              )}
+              <div className="flex flex-col items-stretch justify-between gap-2 border-t border-teal-200/70 pt-4 sm:flex-row sm:items-center">
+                <p className="text-xs font-medium text-slate-500">Amount sent to the API as totalAmount</p>
+                <p className="text-right text-3xl font-bold tracking-tight tabular-nums text-teal-900 sm:text-4xl">
+                  {currency}{" "}
+                  {grandTotalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              </div>
+            </div>
+          </div>
+
           <p className="text-xs text-gray-500">
-            Main SSL charges are sent as `lineItems`. {hasTruckingRequest ? "Trucking charges are sent as `truckingLineItems` and included in the grand total." : "Total amount sent to the API is the sum of these line totals."}
+            Main SSL charges are sent as `lineItems`.
+            {hasTruckingRequest ? " Trucking charges are sent as `truckingLineItems` and included in the grand total above." : ""}
           </p>
 
         </div>
